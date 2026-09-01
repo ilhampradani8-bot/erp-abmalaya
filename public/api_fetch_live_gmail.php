@@ -556,7 +556,7 @@ try {
 
     $start_date_limit = '';
     if ($db_conn && !$db_conn->connect_error) {
-        $res_start = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key = 'INBOX_RULE_START_DATE'");
+        $res_start = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key IN ('INBOX_RULE_START_DATE', 'imap_start_date', 'info_start_date') AND credential_value != '' ORDER BY id DESC LIMIT 1");
         if ($res_start && $res_start->num_rows > 0) {
             $row_start = $res_start->fetch_assoc();
             $start_date_limit = trim($row_start['credential_value']);

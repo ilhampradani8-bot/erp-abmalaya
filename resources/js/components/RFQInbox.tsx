@@ -323,6 +323,17 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
       return false;
     }
 
+    if (inboxRules.fetchStartDate) {
+      const itemDateStr = item.created_at || item.received_at || item.date;
+      if (itemDateStr) {
+        const itemTime = new Date(itemDateStr).getTime();
+        const limitTime = new Date(inboxRules.fetchStartDate + 'T00:00:00').getTime();
+        if (!isNaN(itemTime) && !isNaN(limitTime) && itemTime < limitTime) {
+          return false;
+        }
+      }
+    }
+
 
 
     const isDetected = isDetectedClientEmail(item);

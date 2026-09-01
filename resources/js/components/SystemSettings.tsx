@@ -5,7 +5,7 @@ import {
   Key, Database, CheckCircle2, Eye, EyeOff, Save, 
   FileText, Sliders, Bot, AlertTriangle, 
   Plus, Edit3, Trash2, Percent, ExternalLink, 
-  Activity, Layers, FileSpreadsheet, Server, Cpu
+  Activity, Layers, FileSpreadsheet, Server, Cpu, Calendar
 } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
@@ -243,8 +243,9 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
       { credential_key: 'SMTP_EMAIL', credential_value: formConfig.from_email || formConfig.username, service_name: 'SMTP Credentials' },
       { credential_key: 'SMTP_APP_PASSWORD', credential_value: plainPassword, service_name: 'SMTP Credentials' },
       { credential_key: 'SMTP_HOST', credential_value: formConfig.host, service_name: 'SMTP Credentials' },
-      { credential_key: 'SMTP_PORT', credential_value: String(formConfig.port), service_name: 'SMTP Credentials' }
-    ], 'SMTP Credentials saved successfully!');
+      { credential_key: 'SMTP_PORT', credential_value: String(formConfig.port), service_name: 'SMTP Credentials' },
+      { credential_key: 'INBOX_RULE_START_DATE', credential_value: inboxRules.fetchStartDate, service_name: 'Inbox Rules' }
+    ], 'SMTP Credentials & Start Date Cutoff saved successfully!');
   };
 
   // Handler Tab 2: AI Keys CRUD
@@ -455,13 +456,35 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   />
                 </div>
 
+                {/* INFO START FROM (DATE CUTOFF) INPUT */}
+                <div className="col-span-2 bg-[#f0f9ff] border border-blue-200 p-3 rounded-md space-y-2 mt-1">
+                  <label className="block text-[10px] font-extrabold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Info Start From (Date Cutoff) — Batas Tanggal Ingest Email & AI Scan</span>
+                  </label>
+                  <p className="text-[10px] text-slate-600 font-sans">
+                    Sistem IMAP Gmail & Scanner AI hanya akan memproses email yang masuk <strong>mulai dari tanggal ini ke atas</strong>. Email lama sebelum tanggal ini diabaikan agar kuota API Gemini tidak cepat habis.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={inboxRules.fetchStartDate}
+                      onChange={(e) => setInboxRules({ ...inboxRules, fetchStartDate: e.target.value })}
+                      className="bg-white border border-blue-300 rounded px-3 py-1.5 font-mono text-xs font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
+                    />
+                    <span className="text-[10px] font-mono text-slate-500">
+                      {inboxRules.fetchStartDate ? `Cutoff Active: >= ${inboxRules.fetchStartDate}` : 'No cutoff set (ingesting all email history)'}
+                    </span>
+                  </div>
+                </div>
+
                 <div className="col-span-2 pt-2 flex justify-end gap-2">
                   <button
                     type="submit"
                     className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer"
                   >
                     <Save className="w-3.5 h-3.5" />
-                    <span>Save SMTP Credentials</span>
+                    <span>Save Credentials & Start Date</span>
                   </button>
                 </div>
               </form>
@@ -800,6 +823,27 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 <Sliders className="w-4 h-4 text-blue-600" />
                 <span>Inbox Filtering & AI Classification Rules</span>
               </h3>
+
+              <div className="bg-[#f0f9ff] border border-blue-200 p-3 rounded-md space-y-2 mb-3">
+                <label className="block text-[10px] font-extrabold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Info Start From (Date Cutoff) — Batas Tanggal Ingest Email & AI Scan</span>
+                </label>
+                <p className="text-[10px] text-slate-600 font-sans">
+                  Sistem IMAP Gmail & Scanner AI hanya akan memproses email yang masuk <strong>mulai dari tanggal ini ke atas</strong>. Email lama sebelum tanggal ini diabaikan agar kuota API Gemini tidak cepat habis.
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={inboxRules.fetchStartDate}
+                    onChange={(e) => setInboxRules({ ...inboxRules, fetchStartDate: e.target.value })}
+                    className="bg-white border border-blue-300 rounded px-3 py-1.5 font-mono text-xs font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs cursor-pointer"
+                  />
+                  <span className="text-[10px] font-mono text-slate-500">
+                    {inboxRules.fetchStartDate ? `Cutoff Active: >= ${inboxRules.fetchStartDate}` : 'No cutoff set (ingesting all email history)'}
+                  </span>
+                </div>
+              </div>
 
               <div className="space-y-2 pt-1">
                 {[

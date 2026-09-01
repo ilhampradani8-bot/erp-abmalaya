@@ -242,8 +242,21 @@ function autoGenerateQuotation($db_conn, $rfq_row, $items, $item_requested) {
     }
 }
 
+// Load start date cutoff filter
+$start_date_limit = '';
+$res_start = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key IN ('INBOX_RULE_START_DATE', 'imap_start_date', 'info_start_date') AND credential_value != '' ORDER BY id DESC LIMIT 1");
+if ($res_start && $res_start->num_rows > 0) {
+    $start_date_limit = trim($res_start->fetch_assoc()['credential_value']);
+}
+
+$where_clause = "WHERE ai_verified = 0";
+if (!empty($start_date_limit)) {
+    $where_clause .= " AND created_at >= '" . $db_conn->real_escape_string($start_date_limit) . " 00:00:00'";
+    daemon_log("Ingestion Date Cutoff Active: >= {$start_date_limit}");
+}
+
 // Main classification loop
-$res = $db_conn->query("SELECT id, rfq_number, subject, message_body, client_email, attachment_url FROM rfq_requests WHERE ai_verified = 0 ORDER BY id ASC LIMIT " . SCAN_LIMIT);
+$res = $db_conn->query("SELECT id, rfq_number, subject, message_body, client_email, attachment_url FROM rfq_requests {$where_clause} ORDER BY id ASC LIMIT " . SCAN_LIMIT);
 
 if (!$res || $res->num_rows === 0) {
     daemon_log('No pending emails to scan. Exiting.');
