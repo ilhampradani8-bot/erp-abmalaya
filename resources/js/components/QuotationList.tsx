@@ -58,6 +58,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   const [infoModalTab, setInfoModalTab] = useState<'sph' | 'categories' | 'errors'>('sph');
   const [aiErrors, setAiErrors] = useState<any[]>([]);
   const [dynamicDaemons, setDynamicDaemons] = useState<any[]>([]);
+  const [showAllDbColumns, setShowAllDbColumns] = useState<boolean>(false);
   const [isLoadingErrors, setIsLoadingErrors] = useState<boolean>(false);
   const [selectedFullDbQuotation, setSelectedFullDbQuotation] = useState<Quotation | null>(null);
   const [isFullDbModalOpen, setIsFullDbModalOpen] = useState<boolean>(false);
@@ -536,6 +537,18 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   <span>{isSelectionMode ? 'Exit Selection' : 'Select SPH Items'}</span>
                 </button>
 
+                {/* USER REQUESTED: Right below "Select SPH Items", add "Tampilkan Semua Kolom Database (Full)" */}
+                <button
+                  onClick={() => {
+                    setShowActionsMenu(false);
+                    setShowAllDbColumns(!showAllDbColumns);
+                  }}
+                  className="w-full text-left px-3.5 py-2 hover:bg-gradient-to-b hover:from-[#00b4ff] hover:to-[#0080d0] hover:text-white transition flex items-center gap-2 cursor-pointer font-bold text-indigo-700 bg-indigo-50/60 border-t border-slate-100"
+                >
+                  <Database className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>{showAllDbColumns ? 'Tampilan Tabel Standar' : 'Tampilkan Semua Kolom Database (Full)'}</span>
+                </button>
+
                 <button
                   onClick={() => {
                     setShowActionsMenu(false);
@@ -637,9 +650,12 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   </th>
                   <th className="p-2.5 border-r border-slate-800 w-28">SPH Number</th>
                   <th className="p-2.5 border-r border-slate-800 w-32">Client Name</th>
+                  {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-44">Client Email</th>}
                   <th className="p-2.5 border-r border-slate-800">Company</th>
                   <th className="p-2.5 border-r border-slate-800 w-28 text-center">Date Issued</th>
                   <th className="p-2.5 border-r border-slate-800 w-36 text-center">Status / Phase</th>
+                  {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-32 text-right">Subtotal</th>}
+                  {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-28 text-right">Pajak (11%)</th>}
                   <th className="p-2.5 border-r border-slate-800 w-44 text-right">Grand Total (RM)</th>
                   <th className="p-2.5 border-r border-slate-800 w-24 text-center">OCR Scan</th>
                   <th className="p-2.5 border-r border-slate-800 w-28 text-center">Alerts</th>
@@ -694,6 +710,12 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                         <div className={`font-bold text-xs truncate max-w-[120px]`}>{q.client_name}</div>
                       </td>
 
+                      {showAllDbColumns && (
+                        <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] font-mono text-[11px] text-slate-600">
+                          {q.client_email || '—'}
+                        </td>
+                      )}
+
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">
                         <div className="font-bold text-xs mb-0.5 truncate max-w-[160px]">{getQuotationCompany(q)}</div>
                       </td>
@@ -730,6 +752,18 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                           </span>
                         )}
                       </td>
+
+                      {showAllDbColumns && (
+                        <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-right font-mono text-xs text-slate-700 font-bold">
+                          {formatCurrency(q.subtotal || 0)}
+                        </td>
+                      )}
+
+                      {showAllDbColumns && (
+                        <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-right font-mono text-xs text-slate-600 font-bold">
+                          {formatCurrency(q.tax_amount || 0)}
+                        </td>
+                      )}
 
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-right font-mono font-extrabold text-xs">
                         <span className={isActive ? 'text-amber-300' : 'text-blue-700'}>
