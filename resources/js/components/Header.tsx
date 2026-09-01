@@ -16,23 +16,23 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleMobileSidebar,
 }) => {
   return (
-    <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-6 py-3 shadow-2xs w-full font-sans">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 w-full">
+    <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 py-1.5 shadow-2xs w-full font-sans">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2 w-full">
         
-        {/* Left: Active View Title | Metrics separated by | */}
-        <div className="flex flex-wrap items-center gap-3 text-xs">
+        {/* Left: Active View Title */}
+        <div className="flex flex-wrap items-center gap-2 text-xs">
           
           {onToggleMobileSidebar && (
             <button
               onClick={onToggleMobileSidebar}
               className="lg:hidden p-1 text-slate-600 hover:text-slate-900 rounded-none hover:bg-slate-100 cursor-pointer"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-4 h-4" />
             </button>
           )}
 
           {/* Active View Label */}
-          <span className="font-extrabold text-blue-700 uppercase tracking-wide text-sm">
+          <span className="font-extrabold text-blue-700 uppercase tracking-wide text-xs">
             {viewMode === 'inbox' && 'RFQ Inbox'}
             {viewMode === 'product_catalog' && 'Product Master Catalog'}
             {viewMode === 'quotation_list' && 'Quotation Data (SPH Records)'}
@@ -45,16 +45,14 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Right: Quick Action Button */}
-        <div className="flex items-center gap-3 shrink-0">
-          
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={onNewQuotation}
-            className="flex items-center gap-2 bg-[#0099ec] hover:bg-[#0080ce] text-white font-extrabold text-xs px-4 py-2 rounded-none transition cursor-pointer shadow-2xs"
+            className="flex items-center gap-1.5 bg-[#0099ec] hover:bg-[#0080ce] text-white font-extrabold text-[11px] px-3 py-1 rounded-none transition cursor-pointer shadow-2xs"
           >
-            <PlusCircle className="w-4 h-4" />
+            <PlusCircle className="w-3.5 h-3.5" />
             <span>Create New SPH Quotation</span>
           </button>
-
         </div>
 
       </div>

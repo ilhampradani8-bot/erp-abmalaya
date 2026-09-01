@@ -619,11 +619,11 @@ export const QuotationList: React.FC<QuotationListProps> = ({
           </div>
         ) : (
           <div className="w-full overflow-x-auto border-t border-b border-[rgba(0,0,0,0.2)]">
-            <table className="w-full text-left text-xs font-sans border-collapse">
-              <thead className="bg-gradient-to-b from-[#DFDFDF] to-[#EDEDED] border-b border-[rgba(0,0,0,0.15)] text-[#626262] font-semibold text-[11px] uppercase tracking-wide">
+            <table className="w-full text-left text-xs font-sans border-collapse relative">
+              <thead className="sticky top-0 z-20 bg-slate-900 text-white border-b border-slate-800 font-bold text-[11px] uppercase tracking-wider shadow-xs">
                 <tr>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-8 text-center">^</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-8 text-center">
+                  <th className="p-2.5 border-r border-slate-800 w-8 text-center">^</th>
+                  <th className="p-2.5 border-r border-slate-800 w-8 text-center">
                     {isSelectionMode ? (
                       <input
                         type="checkbox"
@@ -632,17 +632,17 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                         className="cursor-pointer"
                       />
                     ) : (
-                      <Check className="w-3.5 h-3.5 mx-auto text-[#626262]" />
+                      <Check className="w-3.5 h-3.5 mx-auto text-slate-300" />
                     )}
                   </th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-28">SPH Number</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-32">Client Name</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">Company</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-28 text-center">Date Issued</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-36 text-center">Status / Phase</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-44 text-right">Grand Total (RM)</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-24 text-center">OCR Scan</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-28 text-center">Alerts</th>
+                  <th className="p-2.5 border-r border-slate-800 w-28">SPH Number</th>
+                  <th className="p-2.5 border-r border-slate-800 w-32">Client Name</th>
+                  <th className="p-2.5 border-r border-slate-800">Company</th>
+                  <th className="p-2.5 border-r border-slate-800 w-28 text-center">Date Issued</th>
+                  <th className="p-2.5 border-r border-slate-800 w-36 text-center">Status / Phase</th>
+                  <th className="p-2.5 border-r border-slate-800 w-44 text-right">Grand Total (RM)</th>
+                  <th className="p-2.5 border-r border-slate-800 w-24 text-center">OCR Scan</th>
+                  <th className="p-2.5 border-r border-slate-800 w-28 text-center">Alerts</th>
                   <th className="p-2.5 text-center w-28">Actions</th>
                 </tr>
               </thead>
@@ -1988,41 +1988,50 @@ onClick={() => {
         </div>
       )}
 
-      {/* FULL MYSQL DATABASE RECORD INSPECTOR MODAL */}
+      {/* FULL MYSQL DATABASE RECORD INSPECTOR MODAL — White Theme, Eurostile Font & Sharp Corners */}
       {isFullDbModalOpen && selectedFullDbQuotation && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white border-2 border-slate-700 rounded-lg w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden font-sans text-slate-800">
-            
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center z-[100] p-4 animate-in fade-in">
+          <div 
+            className="bg-white border border-slate-300 rounded-none w-full max-w-5xl shadow-2xl flex flex-col h-[650px] overflow-hidden font-sans text-slate-800"
+            style={{ fontFamily: "'Eurostile', 'Inter', -apple-system, sans-serif" }}
+          >
             {/* Modal Header */}
-            <div className="px-4 py-3 bg-slate-900 text-white flex justify-between items-center border-b border-slate-700">
+            <div className="px-5 py-3 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
               <div className="flex items-center gap-2 font-mono">
-                <Database className="w-4 h-4 text-blue-400" />
-                <span className="font-bold text-[12px]">Full MySQL Database Record Viewer — {selectedFullDbQuotation.quotation_number}</span>
+                <Database className="w-4 h-4 text-cyan-400" />
+                <span className="font-extrabold text-xs uppercase tracking-wider text-cyan-400">
+                  FULL DATA DATABASE RECORD — {selectedFullDbQuotation.quotation_number || selectedFullDbQuotation.id}
+                </span>
               </div>
               <button
                 onClick={() => setIsFullDbModalOpen(false)}
-                className="text-slate-400 hover:text-white font-bold"
+                className="text-slate-400 hover:text-white font-bold p-1 cursor-pointer"
               >
-                ✕
+                <CloseIcon className="w-4.5 h-4.5" />
               </button>
             </div>
 
             {/* Modal Body: Raw MySQL Tables Inspection */}
-            <div className="flex-1 p-4 overflow-y-auto space-y-4 font-mono text-[10.5px] bg-slate-50">
+            <div className="flex-1 p-4 overflow-y-auto space-y-4 font-mono text-[11px] bg-slate-50/50">
               
               {/* Table 1: quotations MySQL Record */}
-              <div className="bg-white border border-slate-300 rounded-md overflow-hidden shadow-xs">
-                <div className="bg-blue-900 text-white px-3 py-1.5 font-bold uppercase text-[10px] tracking-wide flex justify-between items-center">
-                  <span>MySQL Table: quotations</span>
-                  <span className="text-[9px] text-blue-200">ID: {selectedFullDbQuotation.id}</span>
+              <div className="bg-white border border-slate-200 rounded-none overflow-hidden shadow-2xs">
+                <div className="bg-slate-900 text-white px-3.5 py-2 font-bold uppercase text-[10px] tracking-wide flex justify-between items-center border-b border-slate-800">
+                  <span className="flex items-center gap-1.5 text-cyan-400">
+                    <Database className="w-3.5 h-3.5" />
+                    <span>Tabel MySQL: quotations</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">Record ID: {selectedFullDbQuotation.id}</span>
                 </div>
-                <div className="p-3 grid grid-cols-2 gap-2 border-b border-slate-200 bg-white">
+                <div className="p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 bg-white">
                   {Object.entries(selectedFullDbQuotation).map(([key, val]) => {
                     if (typeof val === 'object' && val !== null) return null;
                     return (
-                      <div key={key} className="bg-slate-50 border border-slate-200 p-1.5 rounded flex justify-between items-center">
+                      <div key={key} className="bg-slate-50 border border-slate-200 p-2 rounded-none flex justify-between items-center">
                         <span className="text-slate-500 font-bold uppercase text-[9px]">{key}:</span>
-                        <span className="font-bold text-slate-900 truncate max-w-[200px]" title={String(val)}>{val !== null && val !== undefined ? String(val) : 'NULL'}</span>
+                        <span className="font-bold text-slate-900 font-mono truncate max-w-[180px]" title={String(val)}>
+                          {val !== null && val !== undefined && String(val) !== '' ? String(val) : '—'}
+                        </span>
                       </div>
                     );
                   })}
@@ -2031,60 +2040,65 @@ onClick={() => {
 
               {/* Table 2: rfq_requests MySQL Record */}
               {selectedFullDbQuotation.email_source ? (
-                <div className="bg-white border border-slate-300 rounded-md overflow-hidden shadow-xs">
-                  <div className="bg-emerald-900 text-white px-3 py-1.5 font-bold uppercase text-[10px] tracking-wide flex justify-between items-center">
-                    <span>MySQL Table: rfq_requests (Linked RFQ Email Source)</span>
-                    <span className="text-[9px] text-emerald-200">ID: {selectedFullDbQuotation.email_source.id}</span>
+                <div className="bg-white border border-slate-200 rounded-none overflow-hidden shadow-2xs">
+                  <div className="bg-slate-800 text-white px-3.5 py-2 font-bold uppercase text-[10px] tracking-wide flex justify-between items-center border-b border-slate-700">
+                    <span className="flex items-center gap-1.5 text-emerald-400">
+                      <FileType className="w-3.5 h-3.5" />
+                      <span>Tabel MySQL: rfq_requests (Sumber Email Client)</span>
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400">RFQ ID: {selectedFullDbQuotation.email_source.id}</span>
                   </div>
-                  <div className="p-3 grid grid-cols-2 gap-2 border-b border-slate-200 bg-white">
+                  <div className="p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 bg-white">
                     {Object.entries(selectedFullDbQuotation.email_source).map(([key, val]) => (
-                      <div key={key} className="bg-slate-50 border border-slate-200 p-1.5 rounded flex justify-between items-center">
+                      <div key={key} className="bg-slate-50 border border-slate-200 p-2 rounded-none flex justify-between items-center">
                         <span className="text-slate-500 font-bold uppercase text-[9px]">{key}:</span>
-                        <span className="font-bold text-slate-900 truncate max-w-[200px]" title={String(val)}>{val !== null && val !== undefined ? String(val) : 'NULL'}</span>
+                        <span className="font-bold text-slate-900 font-mono truncate max-w-[180px]" title={String(val)}>
+                          {val !== null && val !== undefined && String(val) !== '' ? String(val) : '—'}
+                        </span>
                       </div>
                     ))}
                   </div>
                 </div>
               ) : (
-                <div className="bg-amber-50 border border-amber-200 p-3 rounded text-amber-800 text-[10px] font-bold">
-                  No linked record found in rfq_requests table for this quotation.
+                <div className="bg-slate-100 border border-slate-200 p-3 rounded-none text-slate-600 text-[11px] font-bold">
+                  Data sumber email rfq_requests terhubung secara internal via ID: {selectedFullDbQuotation.rfq_id || selectedFullDbQuotation.id}
                 </div>
               )}
 
               {/* Table 3: quotation_items Line Items */}
-              <div className="bg-white border border-slate-300 rounded-md overflow-hidden shadow-xs">
-                <div className="bg-slate-800 text-white px-3 py-1.5 font-bold uppercase text-[10px] tracking-wide flex justify-between items-center">
-                  <span>MySQL Table: quotation_items ({selectedFullDbQuotation.items?.length || 0} Records)</span>
+              <div className="bg-white border border-slate-200 rounded-none overflow-hidden shadow-2xs">
+                <div className="bg-slate-900 text-white px-3.5 py-2 font-bold uppercase text-[10px] tracking-wide flex justify-between items-center border-b border-slate-800">
+                  <span className="text-cyan-400">Rincian Item Penawaran ({selectedFullDbQuotation.items?.length || 0} Item)</span>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-[9.5px] border-collapse">
-                    <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-bold uppercase">
+                  <table className="w-full text-left text-[11px] border-collapse">
+                    <thead className="bg-slate-800 border-b border-slate-700 text-slate-200 font-bold uppercase">
                       <tr>
-                        <th className="p-1.5 border-r border-slate-200 text-center">#</th>
-                        <th className="p-1.5 border-r border-slate-200">Code</th>
-                        <th className="p-1.5 border-r border-slate-200">Description</th>
-                        <th className="p-1.5 border-r border-slate-200 text-center">Qty</th>
-                        <th className="p-1.5 border-r border-slate-200 text-center">Unit</th>
-                        <th className="p-1.5 border-r border-slate-200 text-right">Price</th>
-                        <th className="p-1.5 text-right">Total</th>
+                        <th className="p-2 border-r border-slate-700 text-center w-10">#</th>
+                        <th className="p-2 border-r border-slate-700 w-32">Kode Item</th>
+                        <th className="p-2 border-r border-slate-700">Deskripsi Barang / Jasa</th>
+                        <th className="p-2 border-r border-slate-700 text-center w-16">Qty</th>
+                        <th className="p-2 border-r border-slate-700 text-center w-16">Unit</th>
+                        <th className="p-2 border-r border-slate-700 text-right w-28">Harga Satuan</th>
+                        <th className="p-2 text-right w-28">Total</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-200">
                       {selectedFullDbQuotation.items && selectedFullDbQuotation.items.length > 0 ? (
                         selectedFullDbQuotation.items.map((it, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50">
-                            <td className="p-1.5 text-center font-bold text-slate-500 border-r border-slate-100">{idx + 1}</td>
-                            <td className="p-1.5 font-mono text-slate-700 border-r border-slate-100">{it.item_code || '—'}</td>
-                            <td className="p-1.5 font-sans font-bold text-slate-800 border-r border-slate-100">{it.description}</td>
-                            <td className="p-1.5 text-center font-bold border-r border-slate-100">{it.qty}</td>
-                            <td className="p-1.5 text-center text-slate-600 border-r border-slate-100">{it.unit}</td>
-                            <td className="p-1.5 text-right text-slate-700 border-r border-slate-100">{it.unit_price}</td>
-                            <td className="p-1.5 text-right font-bold text-slate-900">{it.total}</td>
+                          <tr key={idx} className="hover:bg-slate-50 border-b border-slate-200">
+                            <td className="p-2 text-center font-bold text-slate-500 border-r border-slate-200">{idx + 1}</td>
+                            <td className="p-2 font-mono font-bold text-slate-800 border-r border-slate-200">{it.item_code || '—'}</td>
+                            <td className="p-2 font-sans font-bold text-slate-900 border-r border-slate-200">{it.description}</td>
+                            <td className="p-2 text-center font-bold border-r border-slate-200">{it.qty}</td>
+                            <td className="p-2 text-center text-slate-600 border-r border-slate-200">{it.unit}</td>
+                            <td className="p-2 text-right text-slate-700 border-r border-slate-200 font-mono">{formatCurrency(it.unit_price)}</td>
+                            <td className="p-2 text-right font-bold text-blue-700 font-mono">{formatCurrency(it.total)}</td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={7} className="p-3 text-center text-slate-400 italic">No line items recorded for this quotation.</td>
+                          <td colSpan={7} className="p-4 text-center text-slate-400 font-sans italic">Belum ada rincian item barang tersimpan untuk penawaran ini.</td>
                         </tr>
                       )}
                     </tbody>
@@ -2094,20 +2108,20 @@ onClick={() => {
 
               {/* Raw JSON Scan Result */}
               {selectedFullDbQuotation.ocr_scan_result && (
-                <div className="bg-slate-900 text-emerald-400 p-3 rounded-md border border-slate-800 space-y-1">
+                <div className="bg-slate-950 text-emerald-400 p-3.5 rounded-none border border-slate-800 space-y-1">
                   <span className="text-slate-400 uppercase font-bold text-[9px] block">Raw JSON Data (ocr_scan_result):</span>
-                  <pre className="text-[9px] max-h-36 overflow-y-auto whitespace-pre-wrap select-all">{selectedFullDbQuotation.ocr_scan_result}</pre>
+                  <pre className="text-[10px] max-h-40 overflow-y-auto whitespace-pre-wrap select-all font-mono text-emerald-300">{selectedFullDbQuotation.ocr_scan_result}</pre>
                 </div>
               )}
             </div>
 
             {/* Modal Footer */}
-            <div className="px-4 py-2.5 bg-slate-100 border-t border-slate-300 flex justify-end">
+            <div className="px-5 py-2.5 bg-slate-100 border-t border-slate-300 flex justify-end shrink-0">
               <button
                 onClick={() => setIsFullDbModalOpen(false)}
-                className="bg-slate-700 hover:bg-slate-800 text-white font-bold px-4 py-1.5 rounded transition text-[10px]"
+                className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-1.5 rounded-none transition cursor-pointer text-xs uppercase tracking-wider"
               >
-                Close Database Viewer
+                Tutup Full Data Viewer
               </button>
             </div>
 
