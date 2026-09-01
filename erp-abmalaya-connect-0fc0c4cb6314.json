@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "erp-abmalaya-connect",
+  "private_key_id": "0fc0c4cb631436c1823515c88d061b4ce868b8da",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCk/LkIhRl+8EW1\nsAyK+b96ouuZX6t0iswU8nwMI75BIqIF3C++dLIkkkZTmdHWxkOFOIocIrNE2WaZ\nEUcoCzgCdB3+rkGXKaceuaCcvIKbJkBW8rBfTmrXeKeVCmcRZjE8nQKdvN3Amrjf\naY5SRf3MR4jzvf5B6Odk+lyOKNZgWC1PB4G8fQ6ZjaEEdZvToYOJ5Zabe4UA0X1q\n0VUZwP5yiPHbBCttN6ooiIAls0YkRmNz2Nz5KugtsOSrQmqkMtIxMgPZMIOEocqN\nCJOqoekdU9jjgVKzITJFlQlxt0qf8kVf5MK2RarhpTrSjaxPXDkOMzh4XT5YsU+O\n6fpBcK2BAgMBAAECggEADxS0uyUjb/l5fcKSWu+6Q3T58SKQEw6O2glSMm/f96c5\nRSzbxl53XCVsvT6NskKcMGS7Jxg657uxh6NPLEdePscraLi38R/TEVlpZ3pJu/HS\npr/3RDbwSDLUqqhxRGNhc8dsUkvNv0nFRVKqOjYAnXgaeiEvSQoHgLDr3ei4s8Sm\nBiMqgnredL2VjVNaYMwFB3B70zoonxkeg/Jpw8wblbxedT6iK8SsX7GEWLdKeeda\nCg7UtfdZqGvymsYDvIEo0agIX7t+NkFF//VwV2zoSBrvpwnRcvTE1XfnLbCa3krJ\nSk/DFnTmIZruNyGorfquPvpnn9AbSQLEg+c/jruy+QKBgQDS2Z++/dI1h2WUUeFp\ng37PSyqk9BS+cnZkOEX6Amz17ZLfbUQKlMEPOsM23v2HV3zq/lkcOHRfNbxolDqP\nNOYQcRzQRIhnLdO7Lk6GeJmP3n3rZu0QM5oahzgmX7HTH/sV7EgKOuy7Au3HLU2M\njKRQqb5dyR+uDaZtAujgo/vJdQKBgQDIUPzP0LTZuocp6Qw/+0p5zr6QqMqArKpj\nGofdKlm405gnrybHnte799bZLJJwRG3Zv17xXytYEaJDQ+WKhDkFaBljXiIkFbMl\n3BctnX+yXgs01SstNGmt2/I8uRm4au8FAyIZSX+WILIeHC98s66PinvLT+7dOzUK\nj27i34jGXQKBgCK+R2tiSbQWVm+lOl53k3q26RT7PzvOgqGrACTdJ3Uyq4PzbkXM\nEy/eP/KXtfEKQoQ6WxaiWtKheSVGX4vfbJWC/ft3f354962dSMUxtCQXxmn2sNN9\nnUQHygHQvO2MFISdRZWh9gYuyl2Kon+pYR4Fil/L11OH3keSNitl+gRNAoGALsoc\nAz6wv5q+L5/r6JX9023jPU7v3hZ2xidQTOyzgGSMSdizqjUEFzfQy3GJ0wdo0U/O\nEXs1WKDl0ehuGWjBGO4z3+4A84TOD63VDCaZyUQGQhT4vNpdROr3Lg/eXiE8K2OL\n93QfhSWl9TqILQybXZPvTpIhLTPDM/BE6mFkRVECgYEAprMy/7Lg+oWXYWrR7AXO\nVmLAjCuic7q+I6ynyWXrO9f+dDmp+kYBghwnFPbhI38rYEiBZZyPdAwX9PjGzfC6\nqGPkne27Zi5Kogw7e/aGv+9d3c4rA7pbjCLX0vgmPIPvE3W9Zo1/CSvBBBHUMoEo\nRHlJnJZqRFaaLQInrdRPw0I=\n-----END PRIVATE KEY-----\n",
+  "client_email": "erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com",
+  "client_id": "100454433501209126864",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/erp-abmalaya%40erp-abmalaya-connect.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

@@ -1,0 +1,39 @@
+# Sensitive Project Credentials & Agent Instruction Rules (STRICT DO NOT PUSH)
+AGENTS.md
+AGENTS.override.md
+.env
+.env.local
+.env.*.local
+
+# Node Dependencies & Package Locks
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build Outputs & Temp Files
+dist/
+dist-ssr/
+*.local
+public/uploads/products/*
+!public/uploads/products/.gitkeep
+
+# IDE & Editor Files
+.gemini/
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS Generated Files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Local App Inbox Cache & Daemon Logs
+public/file_inbox/
+daemon/logs/
+
