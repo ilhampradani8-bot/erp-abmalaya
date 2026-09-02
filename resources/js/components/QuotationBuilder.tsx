@@ -27,8 +27,19 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
   const [isSavingMySQL, setIsSavingMySQL] = useState<boolean>(false);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
 
-  // Header Dropdown Menu State
+  // Header Dropdown Menu & Modals State
   const [isHeaderKebabOpen, setIsHeaderKebabOpen] = useState<boolean>(false);
+  const [isHistoryLogModalOpen, setIsHistoryLogModalOpen] = useState<boolean>(false);
+
+  // Helper: Clean generic default text like "Extract to...", "Summary:..." from AI notes
+  const cleanAiNotesText = (text: string | null | undefined): string => {
+    if (!text) return '';
+    return text
+      .replace(/^extract\s+to\s*:?\s*/i, '')
+      .replace(/^extracted\s+details\s*:?\s*/i, '')
+      .replace(/^summary\s*:?\s*/i, '')
+      .trim();
+  };
 
   // Source Pop-up Modal & AI Gemini OCR Scanning Log States
   const [isSourceModalOpen, setIsSourceModalOpen] = useState<boolean>(false);
@@ -272,40 +283,57 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
 
   // Run Authentic Google Gemini AI PDF OCR Scanning via PHP backend
   const handleScanPdfWithGeminiAiInModal = () => {
+    if (!quotation?.id) {
+      setScanOcrLog({ status: 'error', message: 'ID SPH Quotation tidak ditemukan.' });
+      return;
+    }
     setIsScanningModalOcr(true);
     setScanOcrLog({ status: 'connecting', message: 'Scanning authentic PDF binary via Gemini AI Engine...' });
 
-    fetch(getApiUrl('/api_pdf_ocr.php'), {
+    fetch(getApiUrl('/api_ocr_scan.php'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fn: 'msg_403_part_2_PD-ENG-2026-059_RO_water_maker_high_pressure_hose.pdf' })
+      body: JSON.stringify({
+        quo_id: quotation.id,
+        actor_name: currentUser?.name || 'Sales Engineer',
+        actor_email: currentUser?.email || null,
+      })
     })
       .then((res) => res.json())
       .then((resData) => {
         console.log('Gemini OCR backend response:', resData);
         setScanOcrLog(resData);
-        if (resData.status === 'success' && Array.isArray(resData.items) && resData.items.length > 0) {
-          const formattedItems: QuotationItem[] = resData.items.map((it: any, idx: number) => {
-            const price = 0;
-            const qty = it.quantity || 1;
+        const scanRes = resData.ocr_scan_result || resData;
+        const rawItems = scanRes?.items || resData?.items || [];
+        if (resData.status === 'success' && Array.isArray(rawItems) && rawItems.length > 0) {
+          const formattedItems: QuotationItem[] = rawItems.map((it: any, idx: number) => {
+            const qty = it.qty || it.quantity || 1;
+            const price = it.unit_price || 0;
             return {
               id: `gemini-live-${idx + 1}`,
-              description: it.description || 'RO WATER MAKER HIGH PRESSURE HOSE - Ref: PD-ENG-2026-059',
+              description: it.description || 'RFQ Equipment Item',
+              specification: it.specification || null,
               quantity: qty,
-              unit: it.unit || 'Package',
+              unit: it.unit || 'Pcs',
               unit_price: price,
               discount_percent: it.discount_percent || 0,
-              total: 0,
+              total: qty * price,
             };
           });
 
           setQuotation((prev) => ({
             ...prev,
             items: formattedItems,
+            category_name: scanRes?.category_name || prev.category_name,
+            impa_code: scanRes?.impa_code || prev.impa_code,
           }));
 
-          setSaveSuccessMessage('Hasil Scan AI Gemini PDF berhasil diisikan ke tabel SPH! (Harga = 0 / Kuning untuk diisi manual atau ditarik dari Katalog Produk)');
+          setSaveSuccessMessage(`Hasil Scan AI Gemini PDF (${formattedItems.length} item) berhasil diisikan ke tabel SPH!`);
           setTimeout(() => setSaveSuccessMessage(null), 4000);
+        } else if (resData.status === 'skipped') {
+          setScanOcrLog({ status: 'skipped', message: resData.message || 'File lampiran RFQ tidak ditemukan.' });
+        } else {
+          setScanOcrLog({ status: 'error', message: resData.message || scanRes?.reason || 'Gagal mengekstrak item dari dokumen.' });
         }
       })
       .catch((err) => {
@@ -315,6 +343,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
         setIsScanningModalOcr(false);
       });
   };
+
 
   // Recalculate totals
   const updateQuotationTotals = (items: QuotationItem[], taxPercent: number) => {
@@ -541,6 +570,41 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                   <span>Save & Preview PDF</span>
                 </button>
 
+                <button
+                  onClick={() => {
+                    setIsHeaderKebabOpen(false);
+                    setIsHistoryLogModalOpen(true);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-slate-800 hover:bg-amber-50 hover:text-amber-700 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
+                >
+                  <Terminal className="w-4 h-4 text-amber-600" />
+                  <span>History Audit Trail Log</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsHeaderKebabOpen(false);
+                    setIsSourceModalOpen(true);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-slate-800 hover:bg-sky-50 hover:text-sky-700 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
+                >
+                  <Paperclip className="w-4 h-4 text-sky-600" />
+                  <span>Source RFQ Details</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsHeaderKebabOpen(false);
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new CustomEvent('navigate_settings_tab', { detail: 'paper' }));
+                    }
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-slate-800 hover:bg-purple-50 hover:text-purple-700 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
+                >
+                  <Sliders className="w-4 h-4 text-purple-600" />
+                  <span>Advance SPH Settings</span>
+                </button>
+
               </div>
             )}
           </div>
@@ -554,6 +618,177 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
           <span>{saveSuccessMessage}</span>
         </div>
       )}
+
+      {/* SPH HEADER INFO CARD: LOGO, FROM (AB MALAYA), TO (CLIENT), & MYSQL METADATA */}
+      <div className="bg-white border-b border-[#dbdbdb] p-4 shadow-xs shrink-0 w-full font-sans">
+        
+        <div className="max-w-7xl mx-auto space-y-4">
+          
+          {/* Top Title & Branding Banner */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-slate-900 rounded-md flex items-center justify-center text-white font-extrabold text-lg tracking-wider border border-slate-800 shadow-xs">
+                ABM
+              </div>
+              <div>
+                <h2 className="font-extrabold text-base text-slate-900 tracking-tight">SURAT PENAWARAN HARGA (SPH) / QUOTATION</h2>
+                <p className="text-[11px] text-slate-500 font-mono">AB MALAYA SDN. BHD. • MALAYSIA INDUSTRIAL LOGISTICS</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 font-mono text-xs">
+              <div className="bg-slate-100 border border-slate-300 px-3 py-1.5 rounded text-right">
+                <span className="text-[10px] text-slate-500 block font-sans font-bold uppercase">No. SPH:</span>
+                <span className="font-extrabold text-blue-700">{quotation?.quotation_number || 'SPH-ABM/MY/2026/0403'}</span>
+              </div>
+              <div className="bg-slate-100 border border-slate-300 px-3 py-1.5 rounded text-right">
+                <span className="text-[10px] text-slate-500 block font-sans font-bold uppercase">Status / Phase:</span>
+                <span className="font-bold text-emerald-700 uppercase text-[11px]">{quotation?.status || 'Draft'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Grid: FROM vs TO Info Blocks */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            {/* FROM: AB MALAYA SENDER INFO */}
+            <div className="bg-slate-50 border border-slate-200 rounded-md p-3.5 space-y-2">
+              <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
+                <span className="font-extrabold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                  <span>FROM (Pengirim Penawaran):</span>
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono">Official Provider</span>
+              </div>
+              <div className="text-xs space-y-1">
+                <p className="font-extrabold text-slate-900 text-xs">AB MALAYA SDN. BHD. (Reg: 202601001234)</p>
+                <p className="text-slate-600">No. 12, Jalan Industrial Park, 50000 Kuala Lumpur, Malaysia</p>
+                <p className="text-slate-600 font-mono">Email: sales@abmalaya.com | Tel: +60 3-8000 1234</p>
+                <p className="text-slate-500 text-[11px]">Dibuat Oleh: <span className="font-bold text-slate-700">{quotation?.created_by || 'Ilham Pradani, S.T.'}</span></p>
+              </div>
+            </div>
+
+            {/* TO: CLIENT RECIPIENT INFO */}
+            <div className="bg-blue-50/50 border border-blue-200 rounded-md p-3.5 space-y-2">
+              <div className="flex justify-between items-center border-b border-blue-200 pb-1.5">
+                <span className="font-extrabold text-xs text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Send className="w-3.5 h-3.5 text-blue-600" />
+                  <span>TO (Tujuan Penawaran / Klien):</span>
+                </span>
+                <span className="text-[10px] text-blue-700 font-mono font-bold">Client Reply Target</span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Nama Klien:</label>
+                  <input
+                    type="text"
+                    value={quotation?.client_name || ''}
+                    onChange={(e) => setQuotation({ ...quotation, client_name: e.target.value })}
+                    placeholder="Nama Kontak Klien"
+                    className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Email Balasan Klien (JSON Selector):</label>
+                  {(() => {
+                    let currentVal = quotation?.client_email || '';
+                    let optionsList: Array<{ email: string; source: string }> = [];
+
+                    if (currentVal.startsWith('{') || currentVal.startsWith('[')) {
+                      try {
+                        const pJson = JSON.parse(currentVal);
+                        currentVal = pJson.selected || '';
+                        optionsList = pJson.options || [];
+                      } catch (e) {}
+                    }
+
+                    if (optionsList.length === 0 && currentVal) {
+                      optionsList.push({ email: currentVal, source: 'Entered Email' });
+                    }
+
+                    const updateEmailJson = (selected: string, newOpts: Array<{ email: string; source: string }>) => {
+                      const jsonPayload = JSON.stringify({
+                        selected,
+                        options: newOpts
+                      });
+                      setQuotation({ ...quotation, client_email: jsonPayload });
+                    };
+
+                    return (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1">
+                          <select
+                            value={currentVal}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              updateEmailJson(val, optionsList);
+                            }}
+                            className="w-full bg-white border border-blue-300 rounded px-2 py-1 text-xs font-mono font-bold text-blue-800 focus:outline-none cursor-pointer"
+                          >
+                            <option value="">-- Pilih Email Klien --</option>
+                            {optionsList.map((opt, oIdx) => (
+                              <option key={oIdx} value={opt.email}>
+                                {opt.email} ({opt.source})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="email"
+                            placeholder="+ Tambah Email Kustom"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const val = (e.target as HTMLInputElement).value.trim();
+                                if (val && val.includes('@')) {
+                                  const exists = optionsList.some(o => o.email.toLowerCase() === val.toLowerCase());
+                                  const updatedOpts = exists ? optionsList : [...optionsList, { email: val, source: 'Manual Added' }];
+                                  updateEmailJson(val, updatedOpts);
+                                  (e.target as HTMLInputElement).value = '';
+                                }
+                              }
+                            }}
+                            className="w-full bg-white/80 border border-slate-300 rounded px-2 py-0.5 text-[10px] font-mono text-slate-700"
+                            title="Tekan Enter untuk menambah email baru ke daftar JSON"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Nama Perusahaan Klien:</label>
+                  <input
+                    type="text"
+                    value={quotation?.company_name || ''}
+                    onChange={(e) => setQuotation({ ...quotation, company_name: e.target.value })}
+                    placeholder="PT / Sdn. Bhd. Perusahaan Klien"
+                    className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold text-slate-900"
+                  />
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Database Metadata Footer Line */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200 text-[10px] text-slate-500 font-mono">
+            <div>
+              <span>Date Issued: <strong className="text-slate-700">{quotation?.date_issued || date}</strong></span> • 
+              <span> Valid Until: <strong className="text-slate-700">{quotation?.valid_until || '14 Days'}</strong></span> • 
+              <span> Created At: <strong className="text-slate-700">{quotation?.created_at || '—'}</strong></span>
+            </div>
+            <div>
+              <span>ACC Status: <strong className={quotation?.approved_by ? 'text-emerald-700 font-bold' : 'text-amber-700'}>{quotation?.approved_by ? 'ACC Approved' : 'Pending ACC'}</strong></span>
+            </div>
+          </div>
+
+        </div>
+      </div>
 
       {/* ITUNES TABLE-WRAP CONTAINER */}
       <div className="flex-1 p-0 overflow-y-auto space-y-0 w-full bg-[#f0f0f0]">
@@ -603,12 +838,14 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                     <RefreshCw className="w-3.5 h-3.5 mx-auto text-[#626262]" />
                   </th>
                   <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-14 text-center">Photo</th>
-                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)]">Item Specification / Description</th>
-                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-24 text-center">Qty</th>
-                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-28">Unit</th>
-                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-44">Unit Price (Rp)</th>
+                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-28 font-mono">Kode Barang</th>
+                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-48">Nama Produk</th>
+                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)]">Spesifikasi Detail</th>
+                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-20 text-center">Qty</th>
+                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-24">Satuan</th>
+                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-36">Harga Unit (RM)</th>
                   <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-20 text-center">Disc (%)</th>
-                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-44 text-right">Subtotal (Rp)</th>
+                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-36 text-right">Subtotal (RM)</th>
                   <th className="p-2 text-center w-12">Action</th>
                 </tr>
               </thead>
@@ -621,6 +858,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
 
                   const matchedCatalogProduct = findCatalogMatch(item.description);
                   const displayPhotoUrl = (item as any).image_url || matchedCatalogProduct?.image_url;
+                  const displayProductCode = item.product_code || item.item_code || matchedCatalogProduct?.product_code || '—';
 
                   let rowBgClass = isEven ? 'bg-[#F1F4F7]' : 'bg-[#FAFAFA]';
                   if (isActive) rowBgClass = 'bg-[#3d3d3d] text-white';
@@ -666,18 +904,47 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                         )}
                       </td>
 
+                      {/* KODE BARANG COLUMN */}
                       <td className="p-1 border-r border-[rgba(0,0,0,0.1)]">
-                        <textarea
-                          rows={2}
+                        <input
+                          type="text"
+                          value={item.product_code || item.item_code || ''}
+                          onChange={(e) => handleItemChange(idx, 'product_code', e.target.value)}
+                          placeholder="Code (e.g. IMPA-49)"
+                          className={`w-full bg-transparent border-none outline-none focus:ring-0 p-1 text-xs font-mono font-bold ${
+                            isActive ? 'text-amber-300' : 'text-blue-700'
+                          }`}
+                        />
+                      </td>
+
+                      {/* NAMA PRODUK COLUMN */}
+                      <td className="p-1 border-r border-[rgba(0,0,0,0.1)]">
+                        <input
+                          type="text"
                           value={item.description}
                           onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
-                          placeholder="Type technical item specification..."
-                          className={`w-full bg-transparent border-none outline-none focus:ring-0 p-1 text-xs font-sans resize-none ${
+                          placeholder="Nama Produk..."
+                          className={`w-full bg-transparent border-none outline-none focus:ring-0 p-1 text-xs font-bold ${
                             isActive
                               ? 'text-white placeholder-slate-400'
                               : isDescEmpty
                               ? 'text-amber-800 font-medium placeholder-amber-600/70'
                               : 'text-slate-900 placeholder-slate-400'
+                          }`}
+                        />
+                      </td>
+
+                      {/* SPESIFIKASI DETAIL COLUMN */}
+                      <td className="p-1 border-r border-[rgba(0,0,0,0.1)]">
+                        <textarea
+                          rows={2}
+                          value={item.specification || ''}
+                          onChange={(e) => handleItemChange(idx, 'specification', e.target.value)}
+                          placeholder="Spesifikasi teknis, ukuran, material, garansi..."
+                          className={`w-full bg-transparent border-none outline-none focus:ring-0 p-1 text-xs font-sans resize-none ${
+                            isActive
+                              ? 'text-white placeholder-slate-400'
+                              : 'text-slate-700 placeholder-slate-400'
                           }`}
                         />
                       </td>
@@ -1072,20 +1339,23 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                   <span className="font-bold text-slate-500 uppercase text-[10px] block">Source Target Specification File:</span>
                   <div className="flex items-center gap-2 font-mono font-bold text-slate-900 text-sm">
                     <FileType className="w-4 h-4 text-red-600" />
-                    <span>msg_403_part_2_PD-ENG-2026-059_RO_water_maker_high_pressure_hose.pdf (159.7 KB)</span>
+                    <span>Attachment for {quotation?.quotation_number} ({quotation?.company_name || 'Client RFQ Document'})</span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  <a
-                    href={getApiUrl('/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=msg_403_part_2_PD-ENG-2026-059_RO_water_maker_high_pressure_hose.pdf')}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    onClick={() => {
+                      if (quotation?.id) {
+                        window.open(getApiUrl(`/api_ocr_scan.php?quo_id=${encodeURIComponent(quotation.id)}`), '_blank');
+                      }
+                    }}
                     className="flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-800 font-extrabold text-xs px-3.5 py-2 rounded-md border border-slate-300 shadow-xs cursor-pointer transition"
                   >
                     <Eye className="w-4 h-4 text-blue-600" />
-                    <span>View PDF</span>
-                  </a>
+                    <span>View Scan Result</span>
+                  </button>
+
 
                   <button
                     onClick={handleScanPdfWithGeminiAiInModal}
@@ -1176,6 +1446,60 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                 className="px-4 py-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] text-[#3d3d3d] border border-[#a0a0a0] font-bold text-xs rounded-sm cursor-pointer hover:bg-white"
               >
                 Close Inspection
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+      {/* POP-UP MODAL: HISTORY AUDIT TRAIL LOG VIEWER */}
+      {isHistoryLogModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in font-sans">
+          <div className="bg-white border border-slate-300 w-full max-w-3xl h-[80vh] flex flex-col shadow-2xl overflow-hidden rounded-md">
+            
+            <div className="p-3 bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] text-[#3d3d3d] flex items-center justify-between border-b border-[#7b7b7b] shrink-0">
+              <div className="flex items-center gap-2">
+                <Terminal className="w-4 h-4 text-amber-600" />
+                <h3 className="font-extrabold text-xs text-[#3d3d3d]">
+                  History Audit Trail Log — {quotation?.quotation_number}
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsHistoryLogModalOpen(false)}
+                className="p-1 text-slate-500 hover:text-slate-900 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto space-y-3 flex-1 bg-slate-50 text-xs">
+              <div className="bg-slate-950 border border-slate-800 rounded-md p-4 space-y-2 text-slate-200 font-mono shadow-inner">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2 text-slate-400">
+                  <span className="font-bold text-amber-400">MySQL Audit Log Events</span>
+                  <span>ID SPH: {quotation?.id}</span>
+                </div>
+
+                {quotation?.history_log ? (
+                  <pre className="text-[11px] text-emerald-400 whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto">
+                    {typeof quotation.history_log === 'string'
+                      ? quotation.history_log
+                      : JSON.stringify(quotation.history_log, null, 2)}
+                  </pre>
+                ) : (
+                  <div className="py-6 text-center text-slate-500 font-sans">
+                    <p className="font-bold text-slate-400">Belum ada jejak riwayat khusus tersimpan.</p>
+                    <p className="text-[11px]">Setiap tindakan pembuatan, pengubahan, approval ACC, dan pengiriman email akan dicatat di sini.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-3 bg-[#e9e9e9] border-t border-[#dbdbdb] flex justify-end shrink-0">
+              <button
+                onClick={() => setIsHistoryLogModalOpen(false)}
+                className="px-4 py-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] text-[#3d3d3d] border border-[#a0a0a0] font-bold text-xs rounded-sm cursor-pointer hover:bg-white"
+              >
+                Close Audit Log
               </button>
             </div>
 

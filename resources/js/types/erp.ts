@@ -38,7 +38,9 @@ export interface RFQ {
 
 export interface QuotationItem {
   id: string;
+  product_code?: string;
   description: string;
+  specification?: string;
   quantity: number;
   unit: string;
   unit_price: number;
@@ -57,6 +59,7 @@ export interface Quotation {
   quotation_number: string;
   client_name: string;
   client_email: string;
+  client_phone?: string;
   company_name: string;
   company_address?: string;
   date_issued: string;
@@ -72,6 +75,7 @@ export interface Quotation {
   terms_conditions?: string;
   status: QuotationStatus;
   created_by?: string;
+  created_at?: string;
   history_log?: string;
   total_items_count?: number;
   unregistered_items_count?: number;
@@ -89,7 +93,10 @@ export interface Quotation {
   ocr_scan_status?: 'pending' | 'processing' | 'done' | 'error' | 'skipped' | null;
   ocr_scan_result?: string | null; // JSON string
   approved_by?: string | null; // JSON string — array of approval entries
+  category_name?: string | null;
+  impa_code?: string | null;
 }
+
 
 export interface EmailReplyPayload {
   to: string;

@@ -200,15 +200,47 @@ try {
         exit;
     }
 
-    // Locate authentic PDF attachment in public/attachments
-    $attachments_dir = __DIR__ . '/attachments';
+    // Resolve target file based on quo_id or fn parameter
+    $quo_id = trim($input['quo_id'] ?? '');
+    $fn_req = trim($input['fn'] ?? '');
     $target_file = '';
 
-    if (is_dir($attachments_dir)) {
-        $files = scandir($attachments_dir);
+    require __DIR__ . '/db_connect.php';
+
+    if (!empty($quo_id)) {
+        $s_quo = $conn->prepare("SELECT r.attachment_url FROM quotations q LEFT JOIN rfq_requests r ON q.rfq_id = r.id WHERE q.id = ? OR q.quotation_number = ? LIMIT 1");
+        if ($s_quo) {
+            $s_quo->bind_param('ss', $quo_id, $quo_id);
+            $s_quo->execute();
+            $r_quo = $s_quo->get_result()->fetch_assoc();
+            $s_quo->close();
+            if (!empty($r_quo['attachment_url'])) {
+                $att_url = $r_quo['attachment_url'];
+                parse_str(parse_url($att_url, PHP_URL_QUERY) ?? '', $qp);
+                if (!empty($qp['msgno'])) {
+                    $msgno = $qp['msgno'];
+                    $matching_files = glob(__DIR__ . '/attachments/msg_' . $msgno . '_*');
+                    if (!empty($matching_files) && file_exists($matching_files[0])) {
+                        $target_file = $matching_files[0];
+                    }
+                }
+            }
+        }
+    }
+
+    if (empty($target_file) && !empty($fn_req)) {
+        $clean_fn = basename($fn_req);
+        if (file_exists(__DIR__ . '/attachments/' . $clean_fn)) {
+            $target_file = __DIR__ . '/attachments/' . $clean_fn;
+        }
+    }
+
+    // Fallback to any PDF in attachments if specifically requested without ID
+    if (empty($target_file) && is_dir(__DIR__ . '/attachments')) {
+        $files = scandir(__DIR__ . '/attachments');
         foreach ($files as $f) {
-            if (strpos($f, '.pdf') !== false) {
-                $target_file = $attachments_dir . '/' . $f;
+            if ($f !== '.' && $f !== '..' && strtolower(pathinfo($f, PATHINFO_EXTENSION)) === 'pdf') {
+                $target_file = __DIR__ . '/attachments/' . $f;
                 break;
             }
         }
@@ -218,12 +250,12 @@ try {
         ob_end_clean();
         echo json_encode([
             'status' => 'error',
-            'message' => 'File PDF asli belum ditemukan di folder attachments.'
+            'message' => 'File PDF asli tidak ditemukan.'
         ]);
         exit;
     }
 
-    // Send complete PDF binary file to Gemini Flash Multimodal AI
+    // Send complete PDF binary file to Gemini Multimodal AI
     $geminiRes = null;
     $activeKeyName = '';
 
@@ -247,35 +279,45 @@ try {
             'scanned_pdf_file' => basename($target_file),
             'scanned_file_size_kb' => round(filesize($target_file) / 1024, 1),
             'prompt_sent_to_gemini' => $geminiRes['prompt_sent'] ?? $default_prompt,
-            'extracted_raw_text' => "Entire 159.7 KB PDF binary base64 stream sent to Gemini Flash AI Engine for full-document analysis.",
+            'extracted_raw_text' => "Entire PDF binary stream sent to Gemini Flash AI Engine for full-document analysis.",
             'gemini_analysis' => $geminiRes['raw_text'],
             'items' => $geminiRes['items']
         ]);
         exit;
     }
 
-    // Authentic extraction from PDF without dummy price (0% Dummy Data Directive)
+    // Native pdftotext extraction fallback — 0% dummy data directive
+    $native_pdf_text = shell_exec("pdftotext -layout " . escapeshellarg($target_file) . " - 2>/dev/null");
+    $parsed_native_items = [];
+    if (!empty($native_pdf_text)) {
+        foreach (explode("\n", $native_pdf_text) as $line) {
+            if (preg_match('/^\s*(\d+)\s{2,}(.+?)\s{2,}(\d[\d.]*\s*\S*)/', $line, $m)) {
+                $qty_raw = trim($m[3]);
+                preg_match('/^([\d.]+)/', $qty_raw, $qm);
+                $parsed_native_items[] = [
+                    'id' => 'native-pdf-' . (count($parsed_native_items) + 1),
+                    'description' => trim($m[2]),
+                    'quantity' => isset($qm[1]) ? (float)$qm[1] : 1.0,
+                    'unit' => trim(preg_replace('/^[\d.]+\s*/', '', $qty_raw)) ?: 'Pcs',
+                    'unit_price' => 0,
+                    'discount_percent' => 0,
+                    'total' => 0
+                ];
+            }
+        }
+    }
+
     ob_end_clean();
     echo json_encode([
         'status' => 'success',
-        'ocr_engine' => 'ABM Malaya Full PDF Specification OCR Parser',
+        'ocr_engine' => 'ABM Malaya Native Layout PDF Parser',
         'scanned_pdf_file' => basename($target_file),
         'scanned_file_size_kb' => round(filesize($target_file) / 1024, 1),
-        'prompt_sent_to_gemini' => $default_prompt,
-        'extracted_raw_text' => "RO WATER MAKER HIGH PRESSURE HOSE SPECIFICATION Ref: PD-ENG-2026-059. High Pressure Flexible Rubber Hose with SS316 Fitting Ends. Operating Pressure: 350 BAR.",
-        'items' => [
-            [
-                'id' => 'gemini-pdf-1',
-                'description' => 'RO WATER MAKER HIGH PRESSURE HOSE - Ref: PD-ENG-2026-059 (SS316 Fitting Ends, Operating Pressure: 350 BAR)',
-                'quantity' => 1,
-                'unit' => 'Package',
-                'unit_price' => 0,
-                'discount_percent' => 0,
-                'total' => 0
-            ]
-        ]
+        'extracted_raw_text' => $native_pdf_text ?: 'Native text empty',
+        'items' => $parsed_native_items
     ]);
     exit;
+
 
 } catch (Exception $e) {
     ob_end_clean();

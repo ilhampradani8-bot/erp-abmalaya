@@ -235,6 +235,11 @@ function isObviousJunkEmail($subject, $body, $sender_email) {
     $sub = strtolower($subject);
     $b = strtolower($body);
 
+    // Auto-junk outgoing tender extension requests or internal sales emails
+    if (preg_match('/(extension of tender|request for extension|extension date|penangguhan tender|perpanjangan tender)/i', $sub . ' ' . $b)) {
+        return true;
+    }
+
     // Smart Override: If it contains bidding/RFQ/requisition keywords, do NOT auto-junk it
     if (preg_match('/(rfq|sebutharga|tender|bid|quotation|pelawaan|perolehan|estimating|specification|inquiry|requisition)/i', $sub . ' ' . $b)) {
         return false;

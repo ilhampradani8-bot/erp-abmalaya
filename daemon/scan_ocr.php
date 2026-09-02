@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Asia/Kuala_Lumpur');
 /**
  * ABM Malaya ERP — Background AI Vision OCR Scanner Daemon
  * daemon/scan_ocr.php
@@ -28,13 +29,24 @@ if (!$db_conn || $db_conn->connect_error) {
 
 daemon_log('AI OCR Scanner Daemon started.');
 
-// Load Gemini API Keys from DB
-$gemini_key = '';
-$res_key = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key = 'GEMINI_API_KEY'");
+// Load Gemini API Keys from DB — dibaca per baris (GEMINI_API_KEY_1, _2, _3, dst.)
+$key_list = [];
+$res_key = $db_conn->query("SELECT credential_key, credential_value FROM api_credentials WHERE credential_key LIKE 'GEMINI_API_KEY_%' ORDER BY credential_key ASC");
 if ($res_key && $res_key->num_rows > 0) {
-    $gemini_key = trim($res_key->fetch_assoc()['credential_value']);
+    while ($row = $res_key->fetch_assoc()) {
+        $v = trim($row['credential_value']);
+        if (!empty($v)) $key_list[] = $v;
+    }
 }
-$key_list = !empty($gemini_key) ? array_values(array_filter(array_map('trim', explode(',', $gemini_key)))) : [];
+
+// Fallback: format lama (satu baris, pisah koma)
+if (empty($key_list)) {
+    $res_key2 = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key = 'GEMINI_API_KEY'");
+    if ($res_key2 && $res_key2->num_rows > 0) {
+        $raw = trim($res_key2->fetch_assoc()['credential_value']);
+        $key_list = array_values(array_filter(array_map('trim', explode(',', $raw))));
+    }
+}
 
 if (empty($key_list)) {
     daemon_log('WARNING: No Gemini API keys found in database. Scan skipped.');
@@ -81,6 +93,17 @@ function performOCRScan($file_url, array $key_list, array $quo_context) {
 
     $prompt = "You are a precise OCR extraction engine for AB Malaya Industry ERP system.\n"
             . "Extract structured data from the attached document image or PDF.\n\n"
+            . "=== SPECIAL DOCUMENT STRUCTURE GUIDELINES ===\n"
+            . "1. ITEM DESCRIPTION & SPECIFICATION SPLITTING:\n"
+            . "   - 'description': Main product item name / ordering title (e.g. 'TOLUENE, ANALYTICAL REAGENT GRADE').\n"
+            . "   - 'product_code': Product/Article Number or CAS No or Ref No if printed (e.g. '1.08325.2500' or 'CAS: 108-88-3').\n"
+            . "   - 'specification': Combine all bullet points, brand, grade, formula, pack size, and technical parameters (e.g. 'Brand: EMSURE / Supelco, Grade: ACS ISO, Chemical Formula: C7H8, Pack Size: 2.5 Litres per bottle, UN No: UN 1294').\n"
+            . "2. NOTES & DISPATCH INSTRUCTIONS:\n"
+            . "   - 'notes': Capture ALL special remarks, submission instructions, or notes printed on document (e.g. 'Send to fleet@dutamarine.com and file copy onboard. Supplier shall provide latest SDS...').\n"
+            . "   - 'delivery_email': If document contains a specific destination/dispatch email in the notes or footer (e.g. 'fleet@dutamarine.com'), set it in 'delivery_email'.\n"
+            . "3. VESSEL & CLIENT METADATA:\n"
+            . "   - 'company_name': Vessel name or Ordering Company (e.g. 'PERMATA DULANG' or 'Duta Marine').\n"
+            . "   - 'client_name': Ordering Officer / Master name if present (e.g. 'Capt Faiz Bin Kamarolzaman').\n\n"
             . "=== CRITICAL ANTI-HALLUCINATION RULES ===\n"
             . "1. ONLY extract data that is EXPLICITLY and CLEARLY VISIBLE in the document.\n"
             . "2. If a field is NOT present or NOT readable, set its value to null. NEVER guess or invent values.\n"
@@ -97,9 +120,8 @@ function performOCRScan($file_url, array $key_list, array $quo_context) {
             . "  \"scan_status\": \"done\",\n"
             . "  \"scan_confidence\": \"high\",\n"
             . "  \"document_type\": \"RFQ\",\n"
-            . "  \"validity\": null,\n"
-            . "  \"valid_until\": null,\n"
-            . "  \"notes\": null,\n"
+            . "  \"client_name\": null,\n"
+            . "  \"company_name\": null,\n"
             . "  \"registration_number\": null,\n"
             . "  \"email\": null,\n"
             . "  \"phone\": null,\n"
@@ -109,18 +131,28 @@ function performOCRScan($file_url, array $key_list, array $quo_context) {
             . "  \"delivery_address_1\": null,\n"
             . "  \"delivery_address_2\": null,\n"
             . "  \"delivery_email\": null,\n"
+            . "  \"validity\": null,\n"
+            . "  \"valid_until\": null,\n"
+            . "  \"notes\": null,\n"
+            . "  \"subtotal\": null,\n"
+            . "  \"discount_total\": null,\n"
+            . "  \"tax_percent\": null,\n"
+            . "  \"tax_amount\": null,\n"
+            . "  \"grand_total\": null,\n"
             . "  \"items\": [\n"
             . "    {\n"
             . "      \"qty\": 1,\n"
             . "      \"unit\": \"Pcs\",\n"
-            . "      \"description\": \"Exact text from document\",\n"
+            . "      \"description\": \"Main product name\",\n"
+            . "      \"specification\": \"All technical details, brand, formula, pack size\",\n"
+            . "      \"product_code\": \"Article/CAS/Part No\",\n"
             . "      \"unit_price\": null,\n"
+            . "      \"discount_percent\": null,\n"
             . "      \"subtotal\": null,\n"
             . "      \"tax\": null,\n"
             . "      \"total\": null\n"
             . "    }\n"
             . "  ],\n"
-            . "  \"grand_total\": null,\n"
             . "  \"scanned_at\": \"{$scanned_at}\",\n"
             . "  \"file_url\": \"{$file_url}\"\n"
             . "}";
@@ -130,7 +162,7 @@ function performOCRScan($file_url, array $key_list, array $quo_context) {
 
     for ($i = 0; $i < $key_count * 2; $i++) {
         $api_key = $key_list[$i % $key_count];
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=' . urlencode($api_key);
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=' . urlencode($api_key);
 
         $payload = json_encode([
             'contents' => [[
@@ -147,7 +179,7 @@ function performOCRScan($file_url, array $key_list, array $quo_context) {
             'generationConfig' => [
                 'temperature'     => 0.0,
                 'topP'            => 0.8,
-                'maxOutputTokens' => 2048,
+                'maxOutputTokens' => 8192,
                 'responseMimeType' => 'application/json'
             ]
         ]);
@@ -210,8 +242,15 @@ if (!$res || $res->num_rows === 0) {
     exit(0);
 }
 
-$total = $res->num_rows;
-daemon_log("Found {$total} quotation(s) pending AI OCR scanning.");
+// Check if user is currently performing a priority manual scan
+$lock_check = $db_conn->query("SELECT lock_value FROM system_locks WHERE lock_key = 'manual_scan_active' LIMIT 1");
+if ($lock_check && $lock_check->num_rows > 0) {
+    $lock_time = (int)$lock_check->fetch_assoc()['lock_value'];
+    if (time() - $lock_time < 60) { // Active lock within 60s
+        daemon_log('Priority Manual User Scan in progress. Pausing background OCR daemon.');
+        exit(0);
+    }
+}
 
 while ($row = $res->fetch_assoc()) {
     $quo_id = $row['id'];

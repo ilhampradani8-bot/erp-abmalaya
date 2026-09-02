@@ -8,9 +8,9 @@
  * to the hosted domain automatically.
  */
 export const getApiUrl = (path: string): string => {
-  const hostname = window.location.hostname;
-  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '') {
-    return `http://localhost:8000${path}`;
-  }
-  return path;
+  // Always use relative paths — Vite proxy in dev mode forwards ^/api_.* to http://127.0.0.1:8000 internally,
+  // and production web servers serve relative API paths directly.
+  return path.startsWith('/') ? path : `/${path}`;
 };
+
+

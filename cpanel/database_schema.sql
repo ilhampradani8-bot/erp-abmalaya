@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS `quotations` (
   `rfq_id` INT DEFAULT NULL,
   `client_name` VARCHAR(100) NOT NULL,
   `client_email` VARCHAR(100) NOT NULL,
+  `client_phone` VARCHAR(50) DEFAULT NULL,
   `company_name` VARCHAR(100) NOT NULL,
   `date_issued` DATE NOT NULL,
   `valid_until` DATE NOT NULL,
@@ -70,7 +71,9 @@ CREATE TABLE IF NOT EXISTS `quotations` (
 CREATE TABLE IF NOT EXISTS `quotation_items` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `quotation_id` VARCHAR(50) NOT NULL,
+  `product_code` VARCHAR(100) DEFAULT NULL,
   `description` TEXT NOT NULL,
+  `specification` TEXT DEFAULT NULL,
   `quantity` DECIMAL(10, 2) NOT NULL DEFAULT 1.00,
   `unit` VARCHAR(30) DEFAULT 'Unit',
   `unit_price` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,

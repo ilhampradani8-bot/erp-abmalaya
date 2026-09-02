@@ -1,46 +1,54 @@
 # 🚀 ERP ABMALAYA - Executive RFQ & SPH Quotation Portal
 
-Portal ERP Modern & Komprehensif untuk **ABMALAYA.COM (MALAYSIA)** yang menangani seluruh alur operasional:
-**Penerimaan Email RFQ Live IMAP -> Katalog Produk Master (Koneksi Cloud Google Drive) -> Quotation Builder (Kalkulasi SPH & Pemilih Multi-Barang) -> Pengiriman Email Penawaran PDF Resmi**.
+Portal ERP Modern & Komprehensif untuk **ABMALAYA.COM (MALAYSIA)** yang menangani seluruh alur operasional maritim & industri:
+**Penerimaan Email RFQ Live IMAP ➔ Master Kategori IMPA (Standardisasi Internasional Maritim) ➔ Pemindaian AI Multimodal Gemini ➔ Quotation Builder (Kalkulasi SPH & Pemilih Multi-Barang) ➔ Pengiriman Penawaran PDF Resmi**.
 
 ---
 
 ## 🌟 Fitur Utama Sistem
 
-1. **RFQ Inbox & Live Gmail IMAP Reader**:
-   - Integrasi langsung dengan Live Gmail IMAP (`mijdigital2026@gmail.com`).
-   - Filter otomatis email RFQ klien terdeteksi (*Primary RFQ*) vs email umum.
-   - Pratinjau lampiran ganda langsung di tempat (*Lightbox Viewer* untuk PDF & Gambar PNG/JPG).
+1. **RFQ Inbox & Live Gmail IMAP Reader 24/7**:
+   - Integrasi langsung dengan Live Gmail IMAP (`abmalayaindustry@gmail.com`).
+   - Webhook realtime Pub/Sub & Cron Job Pemindai Latar Belakang (`daemon/run_all.php`).
+   - Filter Tanggal Cutoff (`Info Start From Date Cutoff`) & Filter Prioritas Lampiran PDF.
+   - Fitur inspeksi log kesalahan AI 3-titik (*Self-healing retry trace*).
 
-2. **Katalog Produk Master & Upload Foto Produk**:
-   - Tampilan tabel full-width skeuomorphic ala iTunes Classic (anti-ribet & muat banyak data).
-   - Kolom lengkap: Kode Barang, Nama Produk & Spesifikasi, Kategori, Stok (`stock_quantity`), Satuan, Harga Master resmi, dan Diskon Maksimal (%).
-   - Dukungan unggah foto produk langsung ke folder fisik `public/uploads/products/` dan link database MySQL.
+2. **Mesin AI Gemini Multimodal & Smart Key Rotation**:
+   - Rotasi otomatis hingga 4 Gemini API Keys tersimpan per baris database terpisah (`GEMINI_API_KEY_1..4`).
+   - Deteksi *Rate Limit (429)* pintar dengan *Cooldown Tracker 60-detik* per kunci untuk mencegah kebocoran kuota API.
+   - Pemindaian teks email lengkap (Subject, Sender, Body, Recipient) dan Vision OCR dokumen fisik (PDF, PNG, JPG).
+   - Aturan klasifikasi ketat untuk memfilter email permohonan perpanjangan tender internal / surat keluar Sales.
 
-3. **Google Drive Cloud Sync & Deteksi Konflik (Conflict Resolver)**:
-   - Sinkronisasi otomatis data katalog produk ke Google Drive Cloud Backup.
-   - Fitur deteksi otomatis jika terjadi perbedaan data antara Drive dan MySQL lokal, lengkap dengan tombol pilihan eksekusi: **"Gunakan Versi MySQL Lokal (Timpa Drive)"** atau **"Gunakan Versi Google Drive (Tarik ke MySQL)"**.
+3. **Master Katalog Produk & Standardisasi Kode Kategori IMPA**:
+   - Sinkronisasi otomatis dengan Google Sheets Cetak Biru Kategori (`Spreadsheet ID: 17oE102qBlTzXGeWxHMkNTCnz0CE4TKR_xxsq65QqFmI`).
+   - Pembersihan otomatis data mentah dari emoji dan karakter non-ASCII (0% Emojis Policy).
+   - Dukungan kode kategori internasional dunia maritim (contoh: IMPA `39` Medicine, IMPA `45` Petroleum, IMPA `49` Hardware).
 
-4. **Quotation Builder & Pop-Up Pemilih Multi-Barang (Multi-Select)**:
+4. **Quotation Builder & Pop-Up Pemilih Multi-Barang**:
    - Form pembuatan Surat Penawaran Harga (SPH) interaktif dengan kalkulasi PPN (11%), diskon, dan subtotal otomatis.
-   - **Pop-Up Pemilih Multi-Barang**: Pilih banyak produk sekaligus dari master database katalog untuk langsung dimasukkan ke tabel SPH.
-   - **Manual Price Entry (Prinsip Harga 0)**: Barang tanpa harga akan disorot warna kuning terkhusus untuk diisi manual atau ditarik dari katalog produk.
-   - **Gemini Flash AI OCR Scanner**: Pemindaian teks spesifikasi file PDF RFQ secara otomatis menggunakan AI.
+   - Pop-Up Pemilih Multi-Barang dari katalog master database.
+   - Kalkulasi otomatis mata uang (RM / IDR).
 
-5. **Tabel Quotation Data & Filter Phase (Siap Kirim)**:
-   - Tab filter khusus: **Quotation Build (Siap Kirim)** untuk mengelompokkan penawaran yang sudah melewati proses pembangun SPH dan siap dikirim ke klien.
+5. **Tabel Data SPH Quotation (Mode 21 Kolom Database MySQL & Header Sticky)**:
+   - Header tabel melayang permanen (*Sticky Top Header*) saat di-scroll down.
+   - Mode Opsi **"Tampilkan Semua Kolom Database (Full)"** pada menu 3-titik yang melebarkan tampilan hingga **21 Kolom MySQL LENGKAP** (`ID DB`, `SPH Number`, `RFQ ID`, `Client Name`, `Client Email`, `Company Name`, `Date Issued`, `Valid Until`, `Subtotal`, `Discount`, `Tax (%)`, `Tax Amount`, `Grand Total`, `Notes`, `Status`, `OCR Scan`, `Approved By`, `Created By`, `Created At`, dll.).
 
-6. **Proteksi Pemulihan Komponen (`ErrorBoundary`)**:
-   - Dilengkapi sistem pengaman React `ErrorBoundary` sehingga aplikasi tidak akan pernah mengalami *blank screen*. Jika terjadi kendala runtime di browser, sistem menampilkan kartu pemulihan otomatis beserta rincian error.
+6. **Layanan Server Mandiri 24/7 di Linux VPS (Systemd Services)**:
+   - Berjalan 24 jam non-stop di Linux VPS tanpa perlu membuka IDE / terminal SSH:
+     - `mariadb.service` (Port 3306)
+     - `erp-php.service` (Port 8000 Multi-Worker)
+     - `erp-vite.service` (Port 3000 / 3002 Frontend)
+     - `crontab` (`*/5 * * * * php daemon/run_all.php`)
 
 ---
 
 ## 🛠️ Arsitektur & Tech Stack
 
 - **Frontend UI:** React 18 + **TypeScript** (`strict mode`) + Vite 5 + Tailwind CSS.
-- **Backend API:** Native PHP Engine (`C:\xampp\php\php.exe`) — Kompatibel 100% dengan **Shared Hosting PHP / cPanel**.
-- **Database Engine:** MySQL (`127.0.0.1:3306`, Database: `abmalaya_erp`).
-- **Live Email Sync:** PHP IMAP SSL SSL (`imap.gmail.com:993`).
+- **Backend API:** Native PHP Engine (`/usr/bin/php`) — Multi-worker CLI Server & Router.
+- **Database Engine:** MariaDB / MySQL (`127.0.0.1:3306`, Database: `abmalaya_erp`).
+- **Live Email Sync:** PHP IMAP SSL (`imap.gmail.com:993`).
+- **AI Vision Engine:** Google Gemini 1.5 Flash Multimodal Vision API.
 - **Icons & Typography:** Lucide React Icons (0% Emoji) + Font Inter & Roboto.
 
 ---
@@ -51,74 +59,70 @@ Portal ERP Modern & Komprehensif untuk **ABMALAYA.COM (MALAYSIA)** yang menangan
 erp-abmalaya/
 ├── cpanel/
 │   └── database_schema.sql         # Skema database MySQL abmalaya_erp
+├── daemon/
+│   ├── run_all.php                 # Master runner daemon per 5 menit
+│   ├── scan_inbox.php              # Mesin AI Scanner Inbox + Smart Key Rotation
+│   ├── scan_ocr.php                # Mesin Vision OCR Scanner PDF/Gambar
+│   └── logs/                       # Folder log otomatis eksekusi daemon
 ├── public/
-│   ├── api_fetch_live_gmail.php    # Endpoint Live IMAP Gmail reader & background sync
-│   ├── api_gmail_webhook.php       # Webhook endpoint untuk menerima notifikasi Google Pub/Sub
+│   ├── api_fetch_live_gmail.php    # Live IMAP Reader & Webhook Sync
+│   ├── api_gmail_webhook.php       # Google Cloud Pub/Sub Webhook Push Listener
 │   ├── api_quotations.php          # Endpoint MySQL CRUD SPH Quotations
-│   ├── api_products.php            # Endpoint Master Produk & Upload Foto
-│   ├── api_gdrive_sync.php         # Endpoint Google Drive Cloud Sync & Conflict Resolver
-│   ├── api_pdf_ocr.php             # Endpoint Gemini AI PDF OCR Scanner
-│   └── uploads/products/           # Direktori penyimpanan fisik foto produk
+│   ├── api_products.php            # Endpoint Master Produk & Kategori IMPA
+│   ├── import_products.php         # Sinkronisasi Cetak Biru Kategori Google Sheets
+│   └── router.php                  # Custom router untuk PHP Built-in Server
 ├── resources/
 │   ├── css/
 │   │   └── app.css                 # Tailwind CSS & Print styles
 │   └── js/
 │       ├── components/
-│       │   ├── RFQInbox.tsx        # Dashboard RFQ Inbox + Lightbox Attachments + AI Summary/Logs
-│       │   ├── ProductCatalog.tsx  # Tabel Katalog Produk + Upload Foto + GDrive Sync
+│       │   ├── RFQInbox.tsx        # Dashboard RFQ Inbox + Lightbox + AI Rule Filters
+│       │   ├── ProductCatalog.tsx  # Master Katalog Produk & IMPA Category Blueprints
 │       │   ├── QuotationBuilder.tsx# Form SPH + Multi-Select Product Picker Modal
-│       │   ├── QuotationList.tsx   # Tabel Rekam Data SPH + Filter Siap Kirim
-│       │   ├── QuotationDoc.tsx    # Template Cetak SPH PDF Resmi
-│       │   ├── EmailReplyModal.tsx # Modal Balasan Email SPH
-│       │   ├── Header.tsx          # Topbar Navigation Metrics
+│       │   ├── QuotationList.tsx   # Tabel SPH (Sticky Header + Mode 21 Kolom DB)
+│       │   ├── SystemSettings.tsx  # Pengaturan Kredensial & Filter Date Cutoff
+│       │   ├── Header.tsx          # Topbar Navigasi Ringkas
 │       │   └── Sidebar.tsx         # Sidebar Menu Neumorphic Soft-UI
 │       ├── types/
-│       │   └── erp.ts              # Definisi Tipe TypeScript Ketat (Anti-Bug)
+│       │   └── erp.ts              # Definisi Tipe TypeScript Ketat
 │       ├── App.tsx                 # Entrypoint Utama SPA + React ErrorBoundary
 │       └── main.tsx                # Mount React DOM
-├── .gitignore                      # Proteksi AGENTS.md, .env, & uploads dari Git Commit
-├── deploy_ftp.php                  # Skrip deployment otomatis FTP menggunakan PHP
+├── AGENTS.md                       # Panduan Utama & Aturan Proyek Prosedural
 ├── package.json                    # Konfigurasi dependensi React & Vite
 └── README.md                       # Dokumentasi Proyek
 ```
 
 ---
 
-## 🖥️ Cara Menjalankan di Komputer Lokal
+## 🖥️ Cara Menjalankan Layanan di Server Linux VPS (24/7)
 
-Jika perintah `php` atau `npm` tidak dikenali oleh sistem PATH Anda, gunakan alamat absolut executable bawaan XAMPP dan Node.js berikut:
+Sistem sudah terkonfigurasi sebagai **Systemd Services** yang berjalan permanen di latar belakang:
 
-1. **Jalankan Backend PHP Server (Port 8000):**
-   ```powershell
-   & "C:\xampp\php\php.exe" -S localhost:8000 -t public
+1. **Cek Status Layanan Systemd:**
+   ```bash
+   systemctl status erp-php.service
+   systemctl status erp-vite.service
+   systemctl status mariadb.service
    ```
 
-2. **Jalankan Vite Dev Server (Port 5173):**
-   ```powershell
-   & "C:\Users\ilhampradani\.gemini\antigravity-ide\scratch\node\node-v20.18.0-win-x64\node.exe" node_modules\vite\bin\vite.js --host
+2. **Restart Layanan Jika Ada Pembaruan:**
+   ```bash
+   systemctl restart erp-php.service
+   systemctl restart erp-vite.service
    ```
 
-3. **Jalankan Sinkronisasi AI Latar Belakang (Background Scan):**
-   ```powershell
-   & "C:\xampp\php\php.exe" public/api_fetch_live_gmail.php bg_scan=1
-   ```
-
-4. **Jalankan Deployment FTP Otomatis:**
-   ```powershell
-   & "C:\xampp\php\php.exe" deploy_ftp.php
-   ```
-
-5. **Buka Aplikasi di Browser:**
-   👉 `http://localhost:5173`
+3. **Buka Portal di Browser:**
+   - 🌐 Frontend: `http://202.155.94.144:3000`
+   - ⚡ Backend API: `http://202.155.94.144:8000`
+   - 🗄️ Database Adminer: `http://202.155.94.144:8000/adminer.php`
 
 ---
 
-## 🔒 Aturan Push Git & FTP Deployment
+## 🔒 Aturan 0% Dummy Data & Deployment
 
-- Proses **FTP Upload** dan **GitHub Push** hanya boleh dipicu apabila ada permintaan eksplisit dari pengguna. Jangan lakukan otomatisasi deploy tanpa instruksi.
+1. **STRICT ZERO DUMMY DATA DIRECTIVE:**
+   - Seluruh data pada portal ERP (RFQ Inbox, Penawaran SPH, preview lampiran, dll.) **WAJIB 100% ASLI** dari Live Gmail IMAP (`abmalayaindustry@gmail.com`) dan MySQL `abmalaya_erp`.
+   - Dilarang memasang data buatan, placeholder, atau harga acak tiruan.
 
----
-
-## 🔒 Proteksi Keamanan Git Repository
-
-File sensitif **`AGENTS.md`** (berisi kredensial live IMAP & database) telah dimasukkan ke dalam `.gitignore` sehingga **TIDAK AKAN TERNIKAT/TERPUSH** saat Anda menyambungkan repositori ini ke GitHub nanti.
+2. **STRICT NO AUTO DEPLOY RULE:**
+   - Proses **FTP Upload** dan **GitHub Push** hanya boleh dipicu **apabila diminta secara eksplisit oleh pengguna** melalui obrolan chat. Dilarang memicu deployment otomatis.

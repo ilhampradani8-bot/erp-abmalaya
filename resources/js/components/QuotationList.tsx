@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Quotation } from '../types/erp';
-import { Search, Plus, Eye, Edit, Send, RefreshCw, Loader2, Trash2, FileType, Check, Sparkles, CheckCircle2, Sliders, Clock, MoreVertical, History, X as CloseIcon, User, AlertTriangle, Printer, Image, ShieldCheck, ScanLine, Info, Database, Activity, Terminal } from 'lucide-react';
+import { Search, Plus, Eye, Edit, Send, RefreshCw, Loader2, Trash2, FileType, Check, Sparkles, CheckCircle2, Sliders, Clock, MoreVertical, History, X as CloseIcon, User, AlertTriangle, Printer, Image, ShieldCheck, ScanLine, Info, Database, Activity, Terminal, Tag } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
+
 
 interface QuotationListProps {
   onEditQuotation: (quo: Quotation) => void;
@@ -11,6 +12,7 @@ interface QuotationListProps {
   cachedQuotations: Quotation[];
   setCachedQuotations: (data: Quotation[]) => void;
   hasFetched: boolean;
+  currentUser?: { id?: string; name?: string; email?: string; role?: string };
 }
 
 export const QuotationList: React.FC<QuotationListProps> = ({
@@ -21,6 +23,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   cachedQuotations,
   setCachedQuotations,
   hasFetched,
+  currentUser,
 }) => {
   const [quotations, setQuotations] = useState<Quotation[]>(cachedQuotations || []);
   const [isLoading, setIsLoading] = useState<boolean>(!hasFetched && cachedQuotations.length === 0);
@@ -45,6 +48,158 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   // OCR scan states
   const [isScanningOcr, setIsScanningOcr] = useState<boolean>(false);
   const [_ocrScanResult, setOcrScanResult] = useState<any>(null);
+  const [ocrRateLimitInfo, setOcrRateLimitInfo] = useState<{
+    active: boolean;
+    quo_id: string;
+    retryAfter: number;       // seconds remaining in countdown
+    totalWait: number;        // original wait seconds
+    attempt: number;          // which attempt this is
+    message: string;
+    isPartialSuccess: boolean;
+  } | null>(null);
+  const [ocrSuccessMsg, setOcrSuccessMsg] = useState<string | null>(null);
+  const [ocrErrorMsg, setOcrErrorMsg] = useState<string | null>(null);
+  const ocrRetryTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ocrRetryAttemptRef = React.useRef<number>(0);
+  const MAX_OCR_RETRIES = 10;
+
+  // Keep a ref to currentUser so useCallback always reads latest value (avoids stale closure)
+  const currentUserRef = React.useRef(currentUser);
+  React.useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+
+  // Live countdown tick — decrements retryAfter every second
+  React.useEffect(() => {
+    if (!ocrRateLimitInfo?.active || ocrRateLimitInfo.retryAfter <= 0) return;
+    const tick = setInterval(() => {
+      setOcrRateLimitInfo(prev => {
+        if (!prev) return null;
+        const next = prev.retryAfter - 1;
+        if (next <= 0) { clearInterval(tick); return null; }
+        return { ...prev, retryAfter: next };
+      });
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [ocrRateLimitInfo?.active, ocrRateLimitInfo?.totalWait]);
+
+  // Auto-retry trigger — fires after countdown reaches 0
+  const scheduleOcrRetry = (quo_id: string, retryAfterSecs: number, attempt: number) => {
+    if (ocrRetryTimerRef.current) clearTimeout(ocrRetryTimerRef.current);
+    ocrRetryTimerRef.current = setTimeout(() => {
+      triggerOcrScan(quo_id, attempt + 1);
+    }, retryAfterSecs * 1000);
+  };
+
+  // Core OCR scan + IMPA chain function (called on button click & auto-retry)
+  const triggerOcrScan = React.useCallback((quo_id: string, attempt: number = 1) => {
+    if (attempt > MAX_OCR_RETRIES) {
+      setIsScanningOcr(false);
+      setOcrRateLimitInfo(null);
+      setOcrErrorMsg(`Scan gagal setelah ${MAX_OCR_RETRIES} percobaan. API Gemini tidak tersedia sementara. Coba lagi nanti.`);
+      return;
+    }
+    ocrRetryAttemptRef.current = attempt;
+    setIsScanningOcr(true);
+    setOcrRateLimitInfo(null);
+    if (attempt === 1) { setOcrSuccessMsg(null); setOcrErrorMsg(null); }
+
+    fetch(getApiUrl('/api_ocr_scan.php'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        quo_id,
+        actor_name:  currentUserRef.current?.name  || 'Sales Engineer',
+        actor_email: currentUserRef.current?.email || null,
+      }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        const resObj = d.ocr_scan_result || null;
+        const resStr = typeof resObj === 'string' ? resObj : JSON.stringify(resObj);
+        const rateLimited    = d.rate_limited || resObj?.ai_rate_limited || false;
+        const retryAfterSecs = d.retry_after_secs || resObj?.retry_after_secs || 60;
+
+        if (d.status === 'success') {
+          setOcrScanResult(resObj);
+          setQuotations(prev => prev.map(q => q.id === quo_id
+            ? { ...q, ocr_scan_status: d.ocr_scan_status as any, ocr_scan_result: resStr } : q));
+          setSelectedInfoQuotation(prev => prev
+            ? { ...prev, ocr_scan_status: d.ocr_scan_status as any, ocr_scan_result: resStr } : null);
+
+          if (rateLimited && resObj?.scan_confidence?.includes('Native')) {
+            // Partial success — native items extracted, AI rate limited, auto-retry for AI
+            setOcrRateLimitInfo({
+              active: true, quo_id, retryAfter: retryAfterSecs, totalWait: retryAfterSecs,
+              attempt, isPartialSuccess: true,
+              message: `Waiting - ${retryAfterSecs}s (Item berhasil diekstrak via native fallback. Menunggu reset kuota Gemini AI...)`,
+            });
+            scheduleOcrRetry(quo_id, retryAfterSecs, attempt);
+            setIsScanningOcr(false);
+          } else {
+            // Full AI success — chain IMPA matching
+            const itemCount = Array.isArray(resObj?.items) ? resObj.items.length : 0;
+            const model = resObj?.scan_model ? ` [${resObj.scan_model}]` : '';
+            setOcrSuccessMsg(`Scan selesai${model} • ${itemCount} item • Percobaan ke-${attempt} • Mencocokkan kode IMPA...`);
+            setIsScanningOcr(false);
+            // Auto-chain IMPA matching
+            fetch(getApiUrl('/api_impa_match.php'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ quo_id }),
+            })
+              .then(r => r.json())
+              .then(im => {
+                if (im.status === 'success') {
+                  setOcrSuccessMsg(`Scan + IMPA selesai${model} • ${itemCount} item • Kode IMPA: ${im.impa_code} (${im.category_name}) • Confidence ${im.confidence}%`);
+                  setQuotations(prev => prev.map(q => q.id === quo_id
+                    ? { ...q, impa_code: im.impa_code, category_name: im.category_name } : q));
+                  setSelectedInfoQuotation(prev => prev
+                    ? { ...prev, impa_code: im.impa_code, category_name: im.category_name } : null);
+                } else {
+                  setOcrSuccessMsg(`Scan selesai${model} • ${itemCount} item • IMPA: ${im.message || 'tidak cocok'}`);
+                }
+                setTimeout(() => setOcrSuccessMsg(null), 8000);
+              })
+              .catch(() => {
+                setTimeout(() => setOcrSuccessMsg(null), 6000);
+              });
+          }
+        } else if (d.status === 'skipped') {
+          setIsScanningOcr(false);
+          setOcrErrorMsg('Scan dilewati: ' + (d.message || 'File lampiran tidak ditemukan.'));
+          setTimeout(() => setOcrErrorMsg(null), 6000);
+        } else {
+          // Error response
+          if (rateLimited) {
+            setOcrRateLimitInfo({
+              active: true, quo_id, retryAfter: retryAfterSecs, totalWait: retryAfterSecs,
+              attempt, isPartialSuccess: false,
+              message: `Waiting - ${retryAfterSecs}s (Gemini AI rate limited. Otomatis coba ulang saat countdown selesai...)`,
+            });
+            scheduleOcrRetry(quo_id, retryAfterSecs, attempt);
+            setIsScanningOcr(false);
+          } else {
+            setIsScanningOcr(false);
+            setOcrErrorMsg('Scan gagal: ' + (d.message || resObj?.reason || 'Error tidak diketahui.'));
+            setTimeout(() => setOcrErrorMsg(null), 8000);
+          }
+        }
+      })
+
+      .catch(e => {
+        console.error('OCR scan error:', e);
+        setIsScanningOcr(false);
+        setOcrErrorMsg('Gagal terhubung ke API OCR Scanner.');
+        setTimeout(() => setOcrErrorMsg(null), 5000);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, setQuotations, setSelectedInfoQuotation]);
+
+  // Cleanup retry timer on unmount
+  React.useEffect(() => {
+    return () => { if (ocrRetryTimerRef.current) clearTimeout(ocrRetryTimerRef.current); };
+  }, []);
+
+
   
   // ACC approval states
   const [accNote, setAccNote] = useState<string>('');
@@ -296,6 +451,13 @@ export const QuotationList: React.FC<QuotationListProps> = ({
 
   useEffect(() => {
     fetchQuotationsFromMySQL();
+
+    // REALTIME LIVE DATA SYNC: Poll MySQL database every 5 seconds for status & OCR updates
+    const pollInterval = setInterval(() => {
+      fetchQuotationsFromMySQL();
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
   }, []);
 
   const handleDeleteQuotation = (id: string) => {
@@ -625,11 +787,6 @@ export const QuotationList: React.FC<QuotationListProps> = ({
             <Loader2 className="w-7 h-7 text-[#0099ec] animate-spin mx-auto" />
             <p className="text-xs font-bold text-slate-600">Fetching SPH quotations from MySQL database...</p>
           </div>
-        ) : filteredQuotations.length === 0 ? (
-          <div className="py-20 text-center text-slate-400 text-xs space-y-2">
-            <FileType className="w-8 h-8 text-slate-300 mx-auto" />
-            <p className="font-bold text-slate-600">No quotation data found in this view.</p>
-          </div>
         ) : (
           <div className="w-full overflow-x-auto border-t border-b border-[rgba(0,0,0,0.2)]">
             <table className="w-full text-left text-xs font-sans border-collapse relative">
@@ -648,22 +805,41 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                       <Check className="w-3.5 h-3.5 mx-auto text-slate-300" />
                     )}
                   </th>
+                  {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-16 text-center">ID (DB)</th>}
                   <th className="p-2.5 border-r border-slate-800 w-28">SPH Number</th>
+                  <th className="p-2.5 border-r border-slate-800 w-44">IMPA Category</th>
+                  {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-20 text-center">RFQ ID</th>}
+
                   <th className="p-2.5 border-r border-slate-800 w-32">Client Name</th>
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-44">Client Email</th>}
                   <th className="p-2.5 border-r border-slate-800">Company</th>
                   <th className="p-2.5 border-r border-slate-800 w-28 text-center">Date Issued</th>
-                  <th className="p-2.5 border-r border-slate-800 w-36 text-center">Status / Phase</th>
+                  {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-28 text-center">Valid Until</th>}
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-32 text-right">Subtotal</th>}
-                  {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-28 text-right">Pajak (11%)</th>}
+                  {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-28 text-right">Discount</th>}
+                  {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-20 text-center">Tax (%)</th>}
+                  {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-28 text-right">Tax Amount</th>}
                   <th className="p-2.5 border-r border-slate-800 w-44 text-right">Grand Total (RM)</th>
+                  {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-36">Notes</th>}
+                  <th className="p-2.5 border-r border-slate-800 w-36 text-center">Status / Phase</th>
                   <th className="p-2.5 border-r border-slate-800 w-24 text-center">OCR Scan</th>
+                  {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-32 text-center">Approved By</th>}
+                  {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-28 text-center">Created By</th>}
+                  {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-36 text-center">Created At</th>}
                   <th className="p-2.5 border-r border-slate-800 w-28 text-center">Alerts</th>
                   <th className="p-2.5 text-center w-28">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredQuotations.map((q, idx) => {
+                {filteredQuotations.length === 0 ? (
+                  <tr>
+                    <td colSpan={showAllDbColumns ? 23 : 11} className="py-20 text-center text-slate-400 text-xs space-y-2 bg-white">
+                      <FileType className="w-8 h-8 text-slate-300 mx-auto" />
+                      <p className="font-bold text-slate-600">No quotation data found in this view.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredQuotations.map((q, idx) => {
                   const isEven = idx % 2 === 1;
                   const isActive = activeRowId === q.id;
 
@@ -702,9 +878,38 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                         )}
                       </td>
 
+                      {showAllDbColumns && (
+                        <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center font-mono text-[11px] font-bold text-slate-500">
+                          {q.id}
+                        </td>
+                      )}
+
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] font-mono font-bold text-xs">
                         {shortenQuotationNumber(q.quotation_number || q.id)}
                       </td>
+
+                      {/* IMPA Category Column (Next to SPH Number / ID DB) */}
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">
+                        {q.impa_code || q.category_name ? (
+                          <span
+                            className="bg-indigo-50 text-indigo-900 border border-indigo-200 font-extrabold px-1.5 py-0.5 rounded text-[10px] inline-flex items-center gap-1 truncate max-w-[170px]"
+                            title={q.impa_code ? `${q.impa_code} - ${q.category_name}` : (q.category_name || '')}
+                          >
+
+                            <Tag className="w-3 h-3 text-indigo-600 shrink-0" />
+                            <span className="truncate">{q.impa_code ? `${q.impa_code} — ` : ''}{q.category_name}</span>
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-mono text-[10px] italic">—</span>
+                        )}
+                      </td>
+
+
+                      {showAllDbColumns && (
+                        <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center font-mono text-[11px] text-slate-600">
+                          {q.rfq_id || '—'}
+                        </td>
+                      )}
 
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">
                         <div className={`font-bold text-xs truncate max-w-[120px]`}>{q.client_name}</div>
@@ -712,7 +917,15 @@ export const QuotationList: React.FC<QuotationListProps> = ({
 
                       {showAllDbColumns && (
                         <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] font-mono text-[11px] text-slate-600">
-                          {q.client_email || '—'}
+                          {(() => {
+                            const rawEm = q.client_email || '—';
+                            if (rawEm.startsWith('{') || rawEm.startsWith('[')) {
+                              try {
+                                return JSON.parse(rawEm).selected || rawEm;
+                              } catch (e) {}
+                            }
+                            return rawEm;
+                          })()}
                         </td>
                       )}
 
@@ -723,6 +936,48 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center font-mono text-xs">
                         {q.date_issued}
                       </td>
+
+                      {showAllDbColumns && (
+                        <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center font-mono text-xs text-slate-600">
+                          {q.valid_until || '—'}
+                        </td>
+                      )}
+
+                      {showAllDbColumns && (
+                        <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-right font-mono text-xs text-slate-700 font-bold">
+                          {formatCurrency(q.subtotal || 0)}
+                        </td>
+                      )}
+
+                      {showAllDbColumns && (
+                        <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-right font-mono text-xs text-slate-500">
+                          {formatCurrency(q.discount_total || 0)}
+                        </td>
+                      )}
+
+                      {showAllDbColumns && (
+                        <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center font-mono text-xs text-slate-600 font-bold">
+                          {q.tax_percent !== undefined && q.tax_percent !== null ? `${q.tax_percent}%` : '11%'}
+                        </td>
+                      )}
+
+                      {showAllDbColumns && (
+                        <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-right font-mono text-xs text-slate-600 font-bold">
+                          {formatCurrency(q.tax_amount || 0)}
+                        </td>
+                      )}
+
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-right font-mono font-extrabold text-xs">
+                        <span className={isActive ? 'text-amber-300' : 'text-blue-700'}>
+                          {formatCurrency(q.grand_total)}
+                        </span>
+                      </td>
+
+                      {showAllDbColumns && (
+                        <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-xs text-slate-600">
+                          <div className="truncate max-w-[140px]" title={q.notes}>{q.notes || '—'}</div>
+                        </td>
+                      )}
 
                       {/* STATUS BADGE / PHASE */}
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center">
@@ -753,27 +1008,20 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                         )}
                       </td>
 
-                      {showAllDbColumns && (
-                        <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-right font-mono text-xs text-slate-700 font-bold">
-                          {formatCurrency(q.subtotal || 0)}
-                        </td>
-                      )}
-
-                      {showAllDbColumns && (
-                        <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-right font-mono text-xs text-slate-600 font-bold">
-                          {formatCurrency(q.tax_amount || 0)}
-                        </td>
-                      )}
-
-                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-right font-mono font-extrabold text-xs">
-                        <span className={isActive ? 'text-amber-300' : 'text-blue-700'}>
-                          {formatCurrency(q.grand_total)}
-                        </span>
-                      </td>
-
                       {/* OCR SCAN STATUS CELL */}
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center">
                         {(() => {
+                          const isWaitingThisRow = ocrRateLimitInfo?.active && ocrRateLimitInfo.quo_id === q.id && ocrRateLimitInfo.retryAfter > 0;
+                          if (isWaitingThisRow) {
+                            const secs = ocrRateLimitInfo.retryAfter;
+                            const fmtTime = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`;
+                            return (
+                              <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold px-1.5 py-0.5 rounded-sm text-[10px] inline-flex items-center gap-1 animate-pulse" title="Quota rate limited — Auto-retrying when countdown finishes">
+                                <Clock className="w-3 h-3 text-amber-600 animate-spin" />
+                                Waiting ({fmtTime})
+                              </span>
+                            );
+                          }
                           const ocrSt = q.ocr_scan_status || 'pending';
                           if (ocrSt === 'done') return <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold px-1.5 py-0.5 rounded-sm text-[10px] inline-flex items-center gap-1"><ShieldCheck className="w-3 h-3" />Done</span>;
                           if (ocrSt === 'processing') return <span className="bg-blue-50 text-blue-700 border border-blue-300 font-bold px-1.5 py-0.5 rounded-sm text-[10px] inline-flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Scanning</span>;
@@ -782,6 +1030,29 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                           return <span className="text-slate-400 font-bold text-[10px]">Pending</span>;
                         })()}
                       </td>
+
+
+                      {showAllDbColumns && (
+                        <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center text-xs">
+                          {q.approved_by ? (
+                            <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold px-1.5 py-0.5 rounded text-[10px]">ACC Approved</span>
+                          ) : (
+                            <span className="text-slate-400 font-mono text-[10px]">—</span>
+                          )}
+                        </td>
+                      )}
+
+                      {showAllDbColumns && (
+                        <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center font-mono text-[11px] text-slate-600">
+                          {q.created_by || 'system'}
+                        </td>
+                      )}
+
+                      {showAllDbColumns && (
+                        <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center font-mono text-[10px] text-slate-500">
+                          {q.created_at || '—'}
+                        </td>
+                      )}
 
                       {/* ALERTS CELL */}
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center">
@@ -903,16 +1174,11 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                       </td>
                     </tr>
                   );
-                })}
+                }))}
               </tbody>
             </table>
           </div>
         )}
-
-        {/* FOOTER SUMMARY LINE */}
-        <footer className="bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] border-t border-b border-[#7b7b7b] text-center py-1.5 text-[11px] text-[#3d3d3d] font-semibold w-full shrink-0">
-          <span>{filteredQuotations.length} Quotation Records Listed • MySQL Database (abmalaya_erp.quotations)</span>
-        </footer>
 
       </div>
 
@@ -1035,7 +1301,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
             `}</style>
             
             <div 
-              className="bg-white border-l-2 border-[#7b7b7b] w-full sm:w-1/2 shadow-2xl flex flex-col h-screen overflow-hidden font-sans animate-slide-in-right"
+              className="bg-white border-l-2 border-[#7b7b7b] w-full sm:w-[80%] max-w-[95vw] shadow-2xl flex flex-col h-screen overflow-hidden font-sans animate-slide-in-right"
               onClick={(e) => e.stopPropagation()}
             >
               
@@ -1051,27 +1317,22 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   {/* OCR Scan Trigger */}
                   <button
                     onClick={() => {
-                      setIsScanningOcr(true);
-                      fetch(getApiUrl('/api_ocr_scan.php'), {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ quo_id: activeQuotation.id })
-                      })
-                        .then(r => r.json())
-                        .then(d => {
-                          setOcrScanResult(d.ocr_scan_result || null);
-                          setQuotations(prev => prev.map(q => q.id === activeQuotation.id ? { ...q, ocr_scan_status: d.ocr_scan_status as any, ocr_scan_result: JSON.stringify(d.ocr_scan_result) } : q));
-                        })
-                        .catch(e => console.error('OCR scan error:', e))
-                        .finally(() => setIsScanningOcr(false));
+                      if (ocrRetryTimerRef.current) clearTimeout(ocrRetryTimerRef.current);
+                      ocrRetryAttemptRef.current = 0;
+                      triggerOcrScan(activeQuotation.id, 1);
                     }}
                     disabled={isScanningOcr}
-                    className="p-1 bg-white/80 border border-[#a0a0a0] hover:bg-blue-50 rounded text-[#3d3d3d] transition cursor-pointer disabled:opacity-50 flex items-center gap-1"
-                    title="Trigger OCR AI Scan on attachment file"
+                    className="p-1.5 bg-gradient-to-b from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 border border-blue-300 rounded text-blue-900 transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-2xs"
+                    title="Trigger live Gemini AI OCR scan + IMPA matching"
                   >
                     {isScanningOcr ? <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" /> : <ScanLine className="w-3.5 h-3.5 text-blue-600" />}
-                    <span className="text-[10px] font-bold">{isScanningOcr ? 'Scanning...' : 'Scan OCR'}</span>
+                    <span className="text-[10px] font-extrabold">
+                      {isScanningOcr
+                        ? `Scanning${ocrRetryAttemptRef.current > 1 ? ` #${ocrRetryAttemptRef.current}` : ''}...`
+                        : 'Rescan AI + IMPA'}
+                    </span>
                   </button>
+
 
                   <button
                     onClick={() => {
@@ -1085,12 +1346,112 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                 </div>
               </div>
 
+              {/* ── OCR Status Notification Banners ─────────────────────── */}
+
+              {/* Rate Limit Banner — live countdown + progress bar + auto-retry info */}
+              {ocrRateLimitInfo && (
+                <div className={`shrink-0 px-3 py-2.5 border-b ${
+                  ocrRateLimitInfo.isPartialSuccess ? 'bg-amber-50 border-amber-300' : 'bg-orange-50 border-orange-300'
+                }`}>
+                  <div className="flex items-start gap-2.5">
+                    <div className="mt-0.5 shrink-0">
+                      <svg className={`w-4 h-4 ${ocrRateLimitInfo.isPartialSuccess ? 'text-amber-600' : 'text-orange-600'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <p className={`text-[10px] font-extrabold uppercase tracking-wide ${ocrRateLimitInfo.isPartialSuccess ? 'text-amber-700' : 'text-orange-700'}`}>
+                          {ocrRateLimitInfo.isPartialSuccess ? 'AI Rate Limit — Partial Scan' : 'AI Rate Limit — Auto Retry'}
+                        </p>
+                        <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                          ocrRateLimitInfo.isPartialSuccess ? 'bg-amber-200 text-amber-800' : 'bg-orange-200 text-orange-800'
+                        }`}>
+                          Percobaan {ocrRateLimitInfo.attempt}/{MAX_OCR_RETRIES}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-600 mt-0.5 leading-snug">{ocrRateLimitInfo.message}</p>
+
+                      {/* Progress bar + countdown */}
+                      <div className="mt-2 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] text-slate-500">Auto-retry dalam:</span>
+                          <span className={`text-[10px] font-mono font-black ${
+                            ocrRateLimitInfo.retryAfter <= 10
+                              ? 'text-emerald-600'
+                              : ocrRateLimitInfo.isPartialSuccess ? 'text-amber-700' : 'text-orange-700'
+                          }`}>
+                            {ocrRateLimitInfo.retryAfter >= 60
+                              ? `${Math.floor(ocrRateLimitInfo.retryAfter / 60)}m ${String(ocrRateLimitInfo.retryAfter % 60).padStart(2,'0')}s`
+                              : `${ocrRateLimitInfo.retryAfter}s`
+                            }
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              ocrRateLimitInfo.isPartialSuccess ? 'bg-amber-400' : 'bg-orange-400'
+                            }`}
+                            style={{
+                              width: `${Math.max(2, ((ocrRateLimitInfo.totalWait - ocrRateLimitInfo.retryAfter) / ocrRateLimitInfo.totalWait) * 100)}%`,
+                              transition: 'width 1s linear'
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (ocrRetryTimerRef.current) clearTimeout(ocrRetryTimerRef.current);
+                        setOcrRateLimitInfo(null);
+                        setOcrErrorMsg('Auto-retry dibatalkan.');
+                        setTimeout(() => setOcrErrorMsg(null), 4000);
+                      }}
+                      className="shrink-0 text-slate-400 hover:text-slate-600 mt-0.5"
+                      title="Batalkan auto-retry"
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+
+              {/* Success Banner */}
+              {ocrSuccessMsg && (
+                <div className="shrink-0 px-3 py-2 border-b bg-emerald-50 border-emerald-300 flex items-center gap-2">
+                  <svg className="w-3.5 h-3.5 text-emerald-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  <p className="text-[10px] text-emerald-700 font-semibold flex-1">{ocrSuccessMsg}</p>
+                  <button onClick={() => setOcrSuccessMsg(null)} className="text-emerald-400 hover:text-emerald-600">
+                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+              )}
+
+              {/* Error Banner */}
+              {ocrErrorMsg && (
+                <div className="shrink-0 px-3 py-2 border-b bg-rose-50 border-rose-300 flex items-center gap-2">
+                  <svg className="w-3.5 h-3.5 text-rose-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                  </svg>
+                  <p className="text-[10px] text-rose-700 font-semibold flex-1">{ocrErrorMsg}</p>
+                  <button onClick={() => setOcrErrorMsg(null)} className="text-rose-400 hover:text-rose-600">
+                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+              )}
+
               {/* TAB SYSTEM NAVIGATION — 4 TABS */}
-              <div className="bg-slate-100 border-b border-[#c6c6c6] flex shrink-0 text-[11px]">
+
+              <div className="bg-slate-100 border-b border-slate-300 flex shrink-0 text-[11px]">
                 {([
                   { id: 'summary', label: 'Summary & Items' },
                   { id: 'email', label: 'Email Source' },
-                  { id: 'history', label: 'Riwayat Edit' },
+                  { id: 'history', label: 'Edit History' },
                   { id: 'acc', label: 'ACC Approval' },
                 ] as Array<{ id: 'summary'|'email'|'history'|'acc'; label: string }>).map(tab => (
                   <button
@@ -1107,97 +1468,171 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                 ))}
               </div>
 
-              {/* Modal Body */}
-              <div className="flex-1 p-3.5 overflow-y-auto bg-[#fafafa] space-y-3.5 text-[11px] text-[#3d3d3d]">
+              {/* Drawer Content Area — Clean Border-Separated Flat Layout */}
+              <div className="flex-1 p-4 overflow-y-auto bg-white divide-y divide-slate-200 text-[11px] text-[#3d3d3d] space-y-4">
                 
                 {drawerTab === 'summary' ? (
                   <>
-                    {/* Status Banner */}
-                    <div className="bg-slate-100 p-2.5 rounded-md border border-slate-200 flex items-center justify-between">
-                      <span className="font-bold text-[10px]">Current Status:</span>
-                      {(() => {
-                        const st = (activeQuotation.status || 'draft').toLowerCase();
-                        const isDraft = st === 'draft' || st === 'diproses' || st === 'siap_kirim' || st === 'in_progress';
-                        const isQuotation = st === 'quotation' || st === 'quotation_build';
-                        const isDone = st === 'done_send' || st === 'sent' || st === 'approved' || st === 'acc' || st === 'deal' || st === 'terkirim' || st === 'disetujui' || st === 'penawaran_terkirim';
-
-                        if (st === 'requisition') {
-                          return <span className="bg-amber-50 text-amber-800 border border-amber-300 font-extrabold px-2 py-0.5 rounded-sm uppercase text-[9px]">Requisition</span>;
-                        } else if (isDraft) {
-                          return <span className="bg-amber-100 text-amber-800 border border-amber-200 font-extrabold px-2 py-0.5 rounded-sm uppercase text-[9px]">In Progress (Draft)</span>;
-                        } else if (isQuotation) {
-                          return <span className="bg-blue-50 text-blue-900 border border-blue-200 font-extrabold px-2 py-0.5 rounded-sm uppercase text-[9px]">Quotation</span>;
-                        } else if (isDone) {
-                          return <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 font-extrabold px-2 py-0.5 rounded-sm uppercase text-[9px]">Done</span>;
-                        }
-                        return <span className="bg-slate-200 font-bold px-2 py-0.5 rounded-sm uppercase text-[9px]">{activeQuotation.status}</span>;
-                      })()}
-                    </div>
-
-                    {/* Grid Client Info */}
-                    <div className="grid grid-cols-2 gap-2 border border-slate-200 p-3 rounded-md bg-white">
-                      <div>
-                        <h4 className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Company Name</h4>
-                        <p className="font-bold text-[#0080d0]">{getQuotationCompany(activeQuotation)}</p>
-                      </div>
-                      <div>
-                        <h4 className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Client U.p. / Contact</h4>
-                        <p className="font-bold">{activeQuotation.client_name || '-'}</p>
-                      </div>
-                      <div className="col-span-2">
-                        <h4 className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Email Address</h4>
-                        <p className="font-mono text-slate-600">{activeQuotation.client_email}</p>
-                      </div>
-                      <div>
-                        <h4 className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Date Issued</h4>
-                        <p className="font-mono text-slate-600">{activeQuotation.date_issued}</p>
-                      </div>
-                      <div>
-                        <h4 className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Valid Until</h4>
-                        <p className="font-mono text-slate-600">{activeQuotation.valid_until || '14 Days'}</p>
-                      </div>
-                      <div>
-                        <h4 className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Source File</h4>
+                    {/* Status Header Bar */}
+                    <div className="flex items-center justify-between pb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-500 font-bold text-[10px] uppercase tracking-wider">Status:</span>
                         {(() => {
-                          let fileUrl = activeQuotation.email_source?.attachment_url || '';
-                          if ((!fileUrl || fileUrl === 'NONE') && activeQuotation.ocr_scan_result) {
-                            try {
-                              const parsedOcr = JSON.parse(activeQuotation.ocr_scan_result);
-                              fileUrl = parsedOcr?.file_url || '';
-                            } catch (e) {}
+                          const st = (activeQuotation.status || 'draft').toLowerCase();
+                          const isDraft = st === 'draft' || st === 'diproses' || st === 'siap_kirim' || st === 'in_progress';
+                          const isQuotation = st === 'quotation' || st === 'quotation_build';
+                          const isDone = st === 'done_send' || st === 'sent' || st === 'approved' || st === 'acc' || st === 'deal' || st === 'terkirim' || st === 'disetujui' || st === 'penawaran_terkirim';
+
+                          if (st === 'requisition') {
+                            return <span className="bg-amber-50 text-amber-800 border border-amber-300 font-black px-2 py-0.5 rounded-sm uppercase text-[9px]">Requisition</span>;
+                          } else if (isDraft) {
+                            return <span className="bg-amber-100 text-amber-800 border border-amber-200 font-black px-2 py-0.5 rounded-sm uppercase text-[9px]">In Progress (Draft)</span>;
+                          } else if (isQuotation) {
+                            return <span className="bg-blue-50 text-blue-900 border border-blue-200 font-black px-2 py-0.5 rounded-sm uppercase text-[9px]">Quotation</span>;
+                          } else if (isDone) {
+                            return <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 font-black px-2 py-0.5 rounded-sm uppercase text-[9px]">Done</span>;
                           }
-                          
-                          if (!fileUrl || fileUrl === 'NONE') {
-                            return <span className="font-mono text-slate-400">file : 0</span>;
-                          }
-                          
-                          const isDrive = fileUrl.toLowerCase().includes('drive.google') || fileUrl.toLowerCase().includes('docs.google') || fileUrl.toLowerCase().includes('gdrive');
-                          let filename = fileUrl;
-                          if (fileUrl.includes('fn=')) {
-                            const match = fileUrl.match(/fn=([^&]+)/);
-                            if (match) filename = decodeURIComponent(match[1]);
-                          } else if (fileUrl.includes('/')) {
-                            filename = fileUrl.substring(fileUrl.lastIndexOf('/') + 1);
-                          }
-                          
-                          return (
-                            <a
-                              href={fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-bold text-blue-600 hover:underline flex items-center gap-0.5 font-mono text-[10px] break-all"
-                            >
-                              {isDrive ? 'file : drive' : `file : ${filename}`}
-                            </a>
-                          );
+                          return <span className="bg-slate-200 font-bold px-2 py-0.5 rounded-sm uppercase text-[9px]">{activeQuotation.status}</span>;
                         })()}
                       </div>
+                      <div className="text-right font-mono text-[10px] text-slate-500">
+                        Date Issued: <strong className="text-slate-800">{activeQuotation.date_issued}</strong>
+                      </div>
                     </div>
 
-                    {/* SPH Items Table */}
-                    <div className="border border-slate-200 rounded-md overflow-hidden bg-white">
-                      <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200 flex justify-between items-center">
-                        <span className="font-bold text-slate-700">SPH Line Items</span>
+                    {/* Client & Document Details (Flat Rows with Left Border Highlights) */}
+                    <div className="pt-3 space-y-3">
+                      <div className="grid grid-cols-3 gap-x-4 gap-y-2.5">
+                        <div className="border-l-2 border-blue-500 pl-2.5">
+                          <h4 className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Company Name</h4>
+                          <p className="font-bold text-[#0080d0] text-xs">{getQuotationCompany(activeQuotation)}</p>
+                        </div>
+                        <div className="border-l-2 border-slate-300 pl-2.5">
+                          <h4 className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Attention / Contact</h4>
+                          <p className="font-bold text-slate-800">{activeQuotation.client_name || '-'}</p>
+                        </div>
+                        <div className="border-l-2 border-slate-300 pl-2.5">
+                          <h4 className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Phone Number</h4>
+                          <p className="font-mono font-bold text-slate-800">
+                            {activeQuotation.client_phone || (() => {
+                              if (activeQuotation.ocr_scan_result) {
+                                try {
+                                  const parsed = JSON.parse(activeQuotation.ocr_scan_result);
+                                  return parsed.phone || '—';
+                                } catch(e) {}
+                              }
+                              return '—';
+                            })()}
+                          </p>
+                        </div>
+                        <div className="col-span-2 border-l-2 border-slate-300 pl-2.5">
+                          <h4 className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Client Email (JSON Selected Dropdown)</h4>
+                          {(() => {
+                            let selectedEmail = activeQuotation.client_email || '';
+                            let optionsList: Array<{ email: string; source: string }> = [];
+
+                            if (selectedEmail.startsWith('{') || selectedEmail.startsWith('[')) {
+                              try {
+                                const parsedJson = JSON.parse(selectedEmail);
+                                selectedEmail = parsedJson.selected || '';
+                                optionsList = parsedJson.options || [];
+                              } catch (e) {}
+                            }
+
+                            if (optionsList.length === 0 && selectedEmail) {
+                              optionsList.push({ email: selectedEmail, source: 'Primary Sender Email' });
+                            }
+
+                            const handleSelectEmail = (newEmail: string) => {
+                              const updatedJson = JSON.stringify({
+                                selected: newEmail,
+                                options: optionsList.length > 0 ? optionsList : [{ email: newEmail, source: 'Selected Email' }]
+                              });
+                              setQuotations(prev => prev.map(q => q.id === activeQuotation.id ? { ...q, client_email: updatedJson } : q));
+                              setSelectedInfoQuotation(prev => prev ? { ...prev, client_email: updatedJson } : null);
+
+                              fetch(getApiUrl('/api_quotations.php'), {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: activeQuotation.id, client_email: updatedJson })
+                              }).catch(err => console.error('Save email update error:', err));
+                            };
+
+                            return (
+                              <div className="space-y-1">
+                                {optionsList.length > 1 ? (
+                                  <select
+                                    value={selectedEmail}
+                                    onChange={(e) => handleSelectEmail(e.target.value)}
+                                    className="bg-blue-50 border border-blue-300 font-mono text-[10px] font-bold text-blue-900 px-2 py-1 rounded w-full cursor-pointer focus:outline-none"
+                                  >
+                                    {optionsList.map((opt, oIdx) => (
+                                      <option key={oIdx} value={opt.email}>
+                                        {opt.email} ({opt.source})
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <p className="text-slate-800 font-mono font-bold text-[10px] bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                                    {selectedEmail || '—'}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                        <div className="border-l-2 border-indigo-500 pl-2.5">
+                          <h4 className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Category & IMPA Code</h4>
+                          {activeQuotation.impa_code || activeQuotation.category_name ? (
+                            <span className="bg-indigo-50 text-indigo-900 border border-indigo-200 font-extrabold px-2 py-0.5 rounded text-[10px] inline-flex items-center gap-1">
+                              <Tag className="w-3 h-3 text-indigo-600" />
+                              {activeQuotation.impa_code ? `${activeQuotation.impa_code} — ` : ''}{activeQuotation.category_name}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-mono text-[10px] italic">Belum ditentukan</span>
+                          )}
+                        </div>
+                        <div className="col-span-3 border-l-2 border-slate-300 pl-2.5">
+
+                          <h4 className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Source Attachment</h4>
+                          {(() => {
+                            let fileUrl = activeQuotation.email_source?.attachment_url || '';
+                            if ((!fileUrl || fileUrl === 'NONE') && activeQuotation.ocr_scan_result) {
+                              try {
+                                const parsedOcr = JSON.parse(activeQuotation.ocr_scan_result);
+                                fileUrl = parsedOcr?.file_url || '';
+                              } catch (e) {}
+                            }
+                            if (!fileUrl || fileUrl === 'NONE') {
+                              return <span className="font-mono text-slate-400">None attached</span>;
+                            }
+                            const isDrive = fileUrl.toLowerCase().includes('drive.google') || fileUrl.toLowerCase().includes('docs.google') || fileUrl.toLowerCase().includes('gdrive');
+                            let filename = fileUrl;
+                            if (fileUrl.includes('fn=')) {
+                              const match = fileUrl.match(/fn=([^&]+)/);
+                              if (match) filename = decodeURIComponent(match[1]);
+                            } else if (fileUrl.includes('/')) {
+                              filename = fileUrl.substring(fileUrl.lastIndexOf('/') + 1);
+                            }
+                            return (
+                              <a
+                                href={fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-bold text-blue-600 hover:underline flex items-center gap-0.5 font-mono text-[10px] break-all"
+                              >
+                                {isDrive ? 'File: Google Drive' : `File: ${filename}`}
+                              </a>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Unified Items Table (Combined SPH & AI OCR Extracted Items with Full Specification Columns) */}
+                    <div className="pt-3 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">Line Items Specification & Details</span>
                         {activeQuotation.unregistered_items_count && activeQuotation.unregistered_items_count > 0 ? (
                           <span className="bg-amber-100 text-amber-800 text-[9px] font-black px-1.5 py-0.5 rounded-sm flex items-center gap-0.5 border border-amber-300">
                             <AlertTriangle className="w-3 h-3 text-amber-600" />
@@ -1205,327 +1640,162 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                           </span>
                         ) : null}
                       </div>
-                      
-                      <div className="overflow-x-auto max-h-48">
-                        <table className="w-full text-left text-[10px] font-sans border-collapse">
-                          <thead className="bg-[#fcfcfc] border-b border-slate-200 text-slate-500">
-                            <tr>
-                              <th className="p-1.5 text-center w-8">No</th>
-                              <th className="p-1.5">Description</th>
-                              <th className="p-1.5 text-center w-12">Qty</th>
-                              <th className="p-1.5 text-right w-24">Total</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {activeQuotation.items_details && activeQuotation.items_details.length > 0 ? (
-                              activeQuotation.items_details.map((item, idx) => (
-                                <tr key={idx} className="hover:bg-slate-50">
-                                  <td className="p-1.5 text-center font-mono text-slate-500">{idx + 1}</td>
-                                  <td className="p-1.5 font-medium text-slate-800">{item.description}</td>
-                                  <td className="p-1.5 text-center">{item.quantity} {item.unit}</td>
-                                  <td className="p-1.5 text-right font-mono font-bold text-slate-900">{formatCurrency(item.total)}</td>
+
+                      {(() => {
+                        let ocrItems: any[] = [];
+                        if (activeQuotation.ocr_scan_result) {
+                          try {
+                            const parsed = JSON.parse(activeQuotation.ocr_scan_result);
+                            if (Array.isArray(parsed?.items)) ocrItems = parsed.items;
+                          } catch (e) {}
+                        }
+
+                        const hasSphItems = Array.isArray(activeQuotation.items_details) && activeQuotation.items_details.length > 0;
+                        const displayItems = hasSphItems ? activeQuotation.items_details! : [];
+
+                        return (
+                          <div className="border-t border-b border-slate-200 overflow-x-auto">
+                            <table className="w-full text-left text-[10px] font-sans border-collapse">
+                              <thead className="border-b border-slate-300 bg-slate-50 text-slate-500 font-bold uppercase tracking-wider">
+                                <tr>
+                                  <th className="py-2 px-2 text-center w-8">#</th>
+                                  <th className="py-2 px-2 w-24">Part / Code</th>
+                                  <th className="py-2 px-2">Description</th>
+                                  <th className="py-2 px-2">Specification / Technical Details</th>
+                                  <th className="py-2 px-2 text-center w-16">Qty</th>
+                                  <th className="py-2 px-2 text-right w-24">Unit Price</th>
+                                  <th className="py-2 px-2 text-center w-16">Disc (%)</th>
+                                  <th className="py-2 px-2 text-right w-20">Tax</th>
+                                  <th className="py-2 px-2 text-right w-24">Total</th>
                                 </tr>
-                              ))
-                            ) : (
-                              <tr>
-                                <td colSpan={4} className="p-4 text-center text-slate-400 font-bold">No SPH line items found.</td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {hasSphItems ? (
+                                  displayItems.map((item, idx) => (
+                                    <tr key={idx} className="hover:bg-slate-50">
+                                      <td className="py-2 px-2 text-center font-mono text-slate-400">{idx + 1}</td>
+                                      <td className="py-2 px-2 font-mono text-slate-600 font-bold">{item.product_code || '—'}</td>
+                                      <td className="py-2 px-2 font-bold text-slate-800">{item.description}</td>
+                                      <td className="py-2 px-2 text-slate-600 italic leading-snug">{item.specification || 'Standard specification'}</td>
+                                      <td className="py-2 px-2 text-center font-mono font-bold">{item.quantity} {item.unit}</td>
+                                      <td className="py-2 px-2 text-right font-mono text-slate-600">{formatCurrency(item.unit_price || 0)}</td>
+                                      <td className="py-2 px-2 text-center font-mono text-rose-600">{item.discount_percent ? `${item.discount_percent}%` : '0%'}</td>
+                                      <td className="py-2 px-2 text-right font-mono text-slate-600">{formatCurrency((item.total || 0) * 0.11)}</td>
+                                      <td className="py-2 px-2 text-right font-mono font-extrabold text-slate-900">{formatCurrency(item.total)}</td>
+                                    </tr>
+                                  ))
+                                ) : ocrItems.length > 0 ? (
+                                  ocrItems.map((it: any, idx: number) => (
+                                    <tr key={idx} className="hover:bg-slate-50">
+                                      <td className="py-2 px-2 text-center font-mono text-slate-400">{idx + 1}</td>
+                                      <td className="py-2 px-2 font-mono text-slate-600 font-bold">{it.product_code || '—'}</td>
+                                      <td className="py-2 px-2 font-bold text-slate-800 flex items-center gap-1.5">
+                                        <span>{it.description || '—'}</span>
+                                        <span className="bg-blue-50 text-blue-700 text-[8px] font-bold px-1 rounded border border-blue-200">OCR</span>
+                                      </td>
+                                      <td className="py-2 px-2 text-slate-600 italic leading-snug">{it.specification || 'Extracted via Vision AI'}</td>
+                                      <td className="py-2 px-2 text-center font-mono font-bold">{it.qty ?? 1} {it.unit || 'pcs'}</td>
+                                      <td className="py-2 px-2 text-right font-mono text-slate-600">{it.unit_price != null ? formatCurrency(it.unit_price) : '—'}</td>
+                                      <td className="py-2 px-2 text-center font-mono text-rose-600">{it.discount_percent != null ? `${it.discount_percent}%` : '—'}</td>
+                                      <td className="py-2 px-2 text-right font-mono text-slate-600">{it.tax != null ? (typeof it.tax === 'number' ? formatCurrency(it.tax) : String(it.tax)) : '—'}</td>
+                                      <td className="py-2 px-2 text-right font-mono font-extrabold text-slate-900">{it.total != null ? formatCurrency(it.total) : '—'}</td>
+                                    </tr>
+                                  ))
+                                ) : (
+                                  <tr>
+                                    <td colSpan={9} className="py-6 text-center text-slate-400 font-bold">No line items specified.</td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        );
+                      })()}
                     </div>
 
-                    {/* Financial Section */}
-                    <div className="border-t border-[#d2d2d2] pt-3">
-                      <h4 className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-1.5">Costing Summary</h4>
-                      <div className="bg-slate-50 border border-slate-200 rounded-md p-2.5 space-y-1.5 font-mono text-[10px]">
-                        <div className="flex justify-between">
+                    {/* Financial Costing Summary (Border Separated, Flat Lines) */}
+                    <div className="pt-3 space-y-2">
+                      <h4 className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Financial Breakdown</h4>
+                      <div className="space-y-1.5 font-mono text-[11px] max-w-xs ml-auto">
+                        <div className="flex justify-between text-slate-600">
                           <span>Subtotal:</span>
-                          <span>{formatCurrency(activeQuotation.subtotal)}</span>
+                          <span className="font-bold">{formatCurrency(activeQuotation.subtotal)}</span>
                         </div>
                         <div className="flex justify-between text-rose-600">
                           <span>Discount:</span>
                           <span>-{formatCurrency(activeQuotation.discount_total)}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span>SST / Tax ({activeQuotation.tax_percent}%):</span>
+                        <div className="flex justify-between text-slate-600">
+                          <span>Tax / SST ({activeQuotation.tax_percent}%):</span>
                           <span>{formatCurrency(activeQuotation.tax_amount)}</span>
                         </div>
-                        <div className="flex justify-between text-blue-700 font-bold">
-                          <span>Software Fee (1.75%):</span>
-                          <span>{formatCurrency(((activeQuotation.subtotal || 0) - (activeQuotation.discount_total || 0)) * 0.0175)}</span>
-                        </div>
-                        <div className="border-t border-slate-200 my-1 pt-1.5 flex justify-between font-bold text-[11px] text-[#0080d0]">
+                        <div className="border-t-2 border-slate-800 pt-2 flex justify-between font-bold text-xs text-[#0080d0]">
                           <span>Grand Total:</span>
-                          <span>{formatCurrency(activeQuotation.grand_total)}</span>
+                          <span className="text-sm">{formatCurrency(activeQuotation.grand_total)}</span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Notes */}
+                    {/* Remarks Section */}
                     {activeQuotation.notes && (
-                      <div className="border-t border-[#d2d2d2] pt-3">
-                        <h4 className="text-[9px] text-slate-500 uppercase font-bold tracking-wider mb-1">Notes / Remarks</h4>
-                        <p className="p-2 bg-amber-50/50 border border-amber-200/60 rounded-md text-slate-600 leading-relaxed italic">{activeQuotation.notes}</p>
+                      <div className="pt-3 space-y-1">
+                        <h4 className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Notes & Remarks</h4>
+                        <p className="text-slate-600 italic leading-relaxed">{activeQuotation.notes}</p>
                       </div>
                     )}
-
-                    {/* AI OCR SCANNING METADATA SECTION */}
-                    {(() => {
-                      if (!activeQuotation.ocr_scan_result) return null;
-                      let ocrData: any = null;
-                      try {
-                        ocrData = JSON.parse(activeQuotation.ocr_scan_result);
-                      } catch (e) {
-                        return (
-                          <div className="border-t border-[#d2d2d2] pt-3 text-rose-600 font-mono text-[9px]">
-                            Error parsing OCR JSON: {activeQuotation.ocr_scan_result.substring(0, 100)}...
-                          </div>
-                        );
-                      }
-
-                      if (!ocrData) return null;
-
-                      // Display error or skipped alert if status is not 'done'
-                      if (ocrData.scan_status === 'error' || ocrData.scan_status === 'skipped') {
-                        return (
-                          <div className="border-t border-rose-300 pt-3 space-y-1.5">
-                            <h4 className="text-[9px] text-rose-600 uppercase font-black tracking-wider flex items-center gap-1">
-                              <AlertTriangle className="w-3.5 h-3.5" /> AI OCR Scan Error Log
-                            </h4>
-                            <div className="bg-rose-50 border border-rose-200 rounded p-2 text-rose-800 font-mono text-[10px]">
-                              {ocrData.reason || 'Unknown error occurred during automated OCR scan.'}
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      const fileName = ocrData.file_url ? ocrData.file_url.split('/').pop() : 'Scanned Attachment';
-
-                      return (
-                        <div className="border-t border-blue-300 pt-3.5 space-y-2">
-                          <div className="flex items-center justify-between border-b border-blue-200 pb-1">
-                            <h4 className="text-[10px] text-blue-800 uppercase font-black tracking-wider flex items-center gap-1.5">
-                              <ScanLine className="w-3.5 h-3.5" /> AI OCR Document Scan Results
-                            </h4>
-                            <span className="bg-blue-100 text-blue-800 font-extrabold px-1.5 py-0.5 rounded-sm text-[9px] uppercase tracking-wide">
-                              Confidence: {ocrData.scan_confidence || 'medium'}
-                            </span>
-                          </div>
-
-                          {/* File info */}
-                          <div className="bg-slate-50 border border-slate-200 rounded p-2 text-[10px] space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-slate-500">File Scanned:</span>
-                              {ocrData.file_url ? (
-                                <a
-                                  href={ocrData.file_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="font-bold text-blue-600 hover:underline flex items-center gap-0.5"
-                                >
-                                  {fileName}
-                                </a>
-                              ) : (
-                                <span className="text-slate-700">None</span>
-                              )}
-                            </div>
-                            <div className="flex justify-between font-mono text-[9px] text-slate-400">
-                              <span>Scanned At:</span>
-                              <span>{ocrData.scanned_at || '-'}</span>
-                            </div>
-                          </div>
-
-                          {/* Card Grid of Meta Components */}
-                          <div className="grid grid-cols-2 gap-2 border border-slate-200 p-2.5 rounded-md bg-white text-[10px]">
-                            <div>
-                              <span className="text-slate-500 font-bold text-[9px] block">VALIDITY</span>
-                              <span className="font-bold text-slate-800">{ocrData.validity || 'Not specified'}</span>
-                            </div>
-                            <div>
-                              <span className="text-slate-500 font-bold text-[9px] block">VALID UNTIL</span>
-                              <span className="font-mono text-slate-800">{ocrData.valid_until || '—'}</span>
-                            </div>
-                            <div className="col-span-2 border-t border-slate-100 pt-1">
-                              <span className="text-slate-500 font-bold text-[9px] block">REGISTRATION NO</span>
-                              <span className="font-mono font-bold text-slate-800">{ocrData.registration_number || '—'}</span>
-                            </div>
-                            <div className="border-t border-slate-100 pt-1">
-                              <span className="text-slate-500 font-bold text-[9px] block">EMAIL</span>
-                              <span className="font-mono text-slate-700 break-all">{ocrData.email || '—'}</span>
-                            </div>
-                            <div className="border-t border-slate-100 pt-1">
-                              <span className="text-slate-500 font-bold text-[9px] block">PHONE</span>
-                              <span className="font-mono text-slate-700">{ocrData.phone || '—'}</span>
-                            </div>
-                            <div className="col-span-2 border-t border-slate-100 pt-1">
-                              <span className="text-slate-500 font-bold text-[9px] block">BILLING ADDRESS</span>
-                              <p className="text-slate-700 leading-snug">
-                                {ocrData.address_1}
-                                {ocrData.address_2 && `, ${ocrData.address_2}`}
-                                {ocrData.postcode && ` (Postcode: ${ocrData.postcode})`}
-                                {!ocrData.address_1 && '—'}
-                              </p>
-                            </div>
-                            <div className="col-span-2 border-t border-slate-100 pt-1">
-                              <span className="text-slate-500 font-bold text-[9px] block">DELIVERY ADDRESS</span>
-                              <p className="text-slate-700 leading-snug">
-                                {ocrData.delivery_address_1}
-                                {ocrData.delivery_address_2 && `, ${ocrData.delivery_address_2}`}
-                                {!ocrData.delivery_address_1 && '—'}
-                              </p>
-                              {ocrData.delivery_email && (
-                                <span className="font-mono text-[9px] text-slate-500 mt-0.5 block">
-                                  Delivery Email: {ocrData.delivery_email}
-                                </span>
-                              )}
-                            </div>
-                            {ocrData.notes && (
-                              <div className="col-span-2 border-t border-slate-100 pt-1">
-                                <span className="text-slate-500 font-bold text-[9px] block">SCAN NOTES</span>
-                                <p className="text-slate-600 bg-amber-50/40 p-1.5 rounded-sm border border-amber-100 italic leading-snug">
-                                  {ocrData.notes}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* AI OCR Extracted Items Table */}
-                          {ocrData.items && ocrData.items.length > 0 && (
-                            <div className="border border-blue-200 rounded-md overflow-hidden bg-white mt-2 font-mono text-[9px]">
-                              <div className="bg-blue-50 px-2.5 py-1.5 border-b border-blue-200 text-blue-800 font-bold text-[9px] uppercase tracking-wide font-sans">
-                                Extracted Items from Attachment
-                              </div>
-                              <table className="w-full text-left text-[9px] font-mono border-collapse">
-                                <thead className="bg-[#fcfcfc] border-b border-slate-200 text-slate-500">
-                                  <tr>
-                                    <th className="p-1.5 w-8 text-center border-r border-slate-100">Qty</th>
-                                    <th className="p-1.5 w-12 text-center border-r border-slate-100">Unit</th>
-                                    <th className="p-1.5 border-r border-slate-100">Description</th>
-                                    <th className="p-1.5 text-right w-16 border-r border-slate-100">Price</th>
-                                    <th className="p-1.5 text-right w-12 border-r border-slate-100">Tax</th>
-                                    <th className="p-1.5 text-right w-20">Total</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100 bg-white">
-                                  {ocrData.items.map((it: any, itIdx: number) => (
-                                    <tr key={itIdx} className="hover:bg-slate-50 transition-colors">
-                                      <td className="p-1.5 text-center font-bold text-slate-800 border-r border-slate-100">{it.qty ?? '—'}</td>
-                                      <td className="p-1.5 text-center text-slate-600 border-r border-slate-100">{it.unit ?? '—'}</td>
-                                      <td className="p-1.5 text-slate-800 font-sans truncate max-w-[150px] border-r border-slate-100" title={it.description}>{it.description ?? '—'}</td>
-                                      <td className="p-1.5 text-right text-slate-600 border-r border-slate-100">{it.unit_price != null ? formatCurrency(it.unit_price) : '—'}</td>
-                                      <td className="p-1.5 text-right text-slate-600 border-r border-slate-100">
-                                        {it.tax != null ? (typeof it.tax === 'boolean' ? (it.tax ? 'Yes' : 'No') : it.tax) : '—'}
-                                      </td>
-                                      <td className="p-1.5 text-right font-bold text-slate-900">{it.total != null ? formatCurrency(it.total) : '—'}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
                   </>
                 ) : (
                   <>
                     {/* Email Source Tab */}
                     {activeQuotation.email_source ? (
-                      <div className="space-y-3.5">
-                        <div className="bg-white border border-slate-200 rounded-md p-3 space-y-2">
+                      <div className="space-y-3 pt-1">
+                        <div className="border-l-2 border-blue-500 pl-3 space-y-2">
                           <div>
-                            <h4 className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Linked RFQ ID</h4>
+                            <h4 className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Linked RFQ Record</h4>
                             <p className="font-mono text-slate-800 font-bold">RFQ-{activeQuotation.email_source.id} (Seq: {activeQuotation.email_source.rfq_number})</p>
                           </div>
                           <div>
-                            <h4 className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Source File</h4>
-                            {(() => {
-                              let fileUrl = activeQuotation.email_source?.attachment_url || '';
-                              if ((!fileUrl || fileUrl === 'NONE') && activeQuotation.ocr_scan_result) {
-                                try {
-                                  const parsedOcr = JSON.parse(activeQuotation.ocr_scan_result);
-                                  fileUrl = parsedOcr?.file_url || '';
-                                } catch (e) {}
-                              }
-                              
-                              if (!fileUrl || fileUrl === 'NONE') {
-                                return <span className="font-mono text-slate-400">file : 0</span>;
-                              }
-                              
-                              const isDrive = fileUrl.toLowerCase().includes('drive.google') || fileUrl.toLowerCase().includes('docs.google') || fileUrl.toLowerCase().includes('gdrive');
-                              let filename = fileUrl;
-                              if (fileUrl.includes('fn=')) {
-                                const match = fileUrl.match(/fn=([^&]+)/);
-                                if (match) filename = decodeURIComponent(match[1]);
-                              } else if (fileUrl.includes('/')) {
-                                filename = fileUrl.substring(fileUrl.lastIndexOf('/') + 1);
-                              }
-                              
-                              return (
-                                <a
-                                  href={fileUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="font-bold text-blue-600 hover:underline flex items-center gap-0.5 font-mono text-[10px] w-fit mt-0.5"
-                                >
-                                  {isDrive ? 'file : drive' : `file : ${filename}`}
-                                </a>
-                              );
-                            })()}
+                            <h4 className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Sender Details</h4>
+                            <p className="font-bold text-slate-800">{activeQuotation.email_source.sender_name} <span className="font-mono text-[10px] text-slate-500 font-normal">({activeQuotation.email_source.sender_email})</span></p>
                           </div>
                           <div>
-                            <h4 className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">From Sender</h4>
-                            <p className="font-bold">{activeQuotation.email_source.sender_name} <span className="font-mono text-[10px] text-slate-500 font-normal">({activeQuotation.email_source.sender_email})</span></p>
-                          </div>
-                          <div>
-                            <h4 className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Subject</h4>
+                            <h4 className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Email Subject</h4>
                             <p className="font-semibold text-slate-800">{activeQuotation.email_source.subject}</p>
                           </div>
                           <div>
-                            <h4 className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Date Received</h4>
+                            <h4 className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Date Received</h4>
                             <p className="font-mono text-slate-600">{activeQuotation.email_source.created_at}</p>
                           </div>
                         </div>
 
-                        {/* Collapsible Email Message Contents */}
-                        <div className="space-y-1.5">
+                        <div className="pt-2">
                           <button
                             onClick={() => setShowEmailBody(!showEmailBody)}
-                            className="w-full py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                            className="py-1.5 px-3 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded font-bold text-slate-700 transition cursor-pointer text-xs"
                           >
-                            <span>{showEmailBody ? 'Hide Email Message Contents' : 'Show Email Message Contents'}</span>
+                            {showEmailBody ? 'Hide Full Email Body' : 'Show Full Email Body'}
                           </button>
                           
                           {showEmailBody && (
-                            <div className="bg-white border border-slate-300 rounded-md p-3.5 max-h-80 overflow-y-auto font-mono text-[10px] whitespace-pre-wrap leading-relaxed text-slate-700 select-text">
-                              {activeQuotation.email_source.message_body || 'No message body saved.'}
+                            <div className="mt-2 p-3 border-t border-b border-slate-200 font-mono text-[10px] whitespace-pre-wrap leading-relaxed text-slate-700 select-text max-h-80 overflow-y-auto">
+                              {activeQuotation.email_source.message_body || 'No email body text stored.'}
                             </div>
                           )}
                         </div>
                       </div>
                     ) : (
-                      <div className="py-24 text-center text-slate-400 font-bold space-y-1">
+                      <div className="py-20 text-center text-slate-400 font-bold space-y-1">
                         <Clock className="w-8 h-8 mx-auto text-slate-300" />
-                        <p>This SPH was created manually without a linked IMAP Gmail RFQ source.</p>
+                        <p>This SPH was created manually without a linked IMAP Gmail RFQ email source.</p>
                       </div>
                     )}
                   </>
                 )}
 
-                {/* Created By Log */}
-                <div className="text-[9px] text-slate-400 font-mono pt-2 border-t border-slate-200 flex justify-between shrink-0">
-                  <span>Created by: <strong>{activeQuotation.created_by || 'System'}</strong></span>
-                  <span>ID: {activeQuotation.id}</span>
-                </div>
-
-                {/* ── TAB: RIWAYAT EDIT (History) ──────────────────────────────── */}
+                {/* ── TAB: EDIT HISTORY ────────────────────────────────────────── */}
                 {drawerTab === 'history' && (
-                  <>
-                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wide border-b border-slate-200 pb-1.5 mb-2">
-                      Edit History &amp; Audit Trail
-                    </div>
+                  <div className="pt-1 space-y-3">
+                    <h4 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">System Audit Trail & History Log</h4>
                     {(() => {
                       let logs: any[] = [];
                       try {
@@ -1536,35 +1806,33 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                       if (!Array.isArray(logs) || logs.length === 0) {
                         return (
                           <div className="py-16 text-center text-slate-400 text-xs font-bold space-y-2">
-                            <Clock className="w-7 h-7 mx-auto text-slate-300 animate-bounce" />
-                            <p>Belum ada riwayat perubahan tercatat untuk SPH ini.</p>
+                            <Clock className="w-7 h-7 mx-auto text-slate-300" />
+                            <p>No audit trail records found for this quotation.</p>
                           </div>
                         );
                       }
                       return (
-                        <div className="space-y-2">
+                        <div className="divide-y divide-slate-100">
                           {[...logs].reverse().map((entry: any, idx: number) => (
-                            <div key={idx} className="bg-white border border-slate-200 rounded-md p-2.5 space-y-0.5">
+                            <div key={idx} className="py-2.5 space-y-1">
                               <div className="flex items-center justify-between">
-                                <span className="bg-slate-100 text-slate-700 font-black px-2 py-0.5 rounded-sm text-[9px] uppercase tracking-wide">{entry.action}</span>
+                                <span className="bg-slate-100 text-slate-700 font-black px-2 py-0.5 rounded-sm text-[9px] uppercase tracking-wider">{entry.action}</span>
                                 <span className="font-mono text-[9px] text-slate-400">{entry.timestamp}</span>
                               </div>
                               <p className="font-bold text-[10px] text-slate-800">{entry.user_name} <span className="text-slate-400 font-normal">({entry.user_email})</span></p>
-                              <p className="text-[10px] text-slate-600 leading-snug">{entry.details}</p>
+                              <p className="text-[10px] text-slate-600">{entry.details}</p>
                             </div>
                           ))}
                         </div>
                       );
                     })()}
-                  </>
+                  </div>
                 )}
 
                 {/* ── TAB: ACC APPROVAL ────────────────────────────────────────── */}
                 {drawerTab === 'acc' && (
-                  <>
-                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wide border-b border-slate-200 pb-1.5 mb-2">
-                      Internal ACC / Approval Log
-                    </div>
+                  <div className="pt-1 space-y-3">
+                    <h4 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Internal Management Approval</h4>
 
                     {/* Approval log list */}
                     {(() => {
@@ -1578,17 +1846,17 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                         return (
                           <div className="py-10 text-center text-slate-400 text-xs font-bold space-y-2">
                             <ShieldCheck className="w-7 h-7 mx-auto text-slate-300" />
-                            <p>Belum ada ACC/approval yang diberikan untuk SPH ini.</p>
+                            <p>No management approvals granted for this quotation yet.</p>
                           </div>
                         );
                       }
                       return (
-                        <div className="space-y-2 mb-3">
+                        <div className="divide-y divide-slate-100 mb-3">
                           {approvals.map((a: any, idx: number) => (
-                            <div key={idx} className="bg-emerald-50 border border-emerald-200 rounded-md p-2.5 space-y-0.5">
+                            <div key={idx} className="py-2 space-y-1">
                               <div className="flex items-center justify-between">
-                                <span className="bg-emerald-700 text-white font-black px-2 py-0.5 rounded-sm text-[9px] uppercase tracking-wide flex items-center gap-1">
-                                  <ShieldCheck className="w-3 h-3" /> ACC Approved
+                                <span className="text-emerald-700 font-extrabold text-[10px] uppercase flex items-center gap-1">
+                                  <ShieldCheck className="w-3.5 h-3.5" /> Approved
                                 </span>
                                 <span className="font-mono text-[9px] text-slate-400">{a.timestamp}</span>
                               </div>
@@ -1601,18 +1869,18 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                     })()}
 
                     {/* ACC Approval Form */}
-                    <div className="border-t border-slate-200 pt-3 space-y-2">
-                      <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Berikan ACC / Persetujuan Anda</p>
+                    <div className="pt-3 border-t border-slate-200 space-y-2">
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Grant Approval & Remarks</p>
                       <textarea
                         value={accNote}
                         onChange={e => setAccNote(e.target.value)}
-                        placeholder="Catatan approval (opsional)..."
+                        placeholder="Approval remarks (optional)..."
                         className="w-full bg-white border border-slate-300 rounded p-2 text-[11px] focus:outline-none focus:border-[#0080d0] resize-none font-sans"
                         rows={2}
                       />
                       <button
                         onClick={() => {
-                          const userName = 'Admin'; // Replace with currentUser from context if needed
+                          const userName = 'Admin';
                           const userEmail = 'admin@abmalaya.com';
                           fetch(getApiUrl('/api_quotations.php'), {
                             method: 'POST',
@@ -1628,13 +1896,12 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                             .then(r => r.json())
                             .then(d => {
                               if (d.status === 'success') {
-                                // Build new approved_by locally
                                 let current: any[] = [];
                                 try { if (activeQuotation.approved_by) current = JSON.parse(activeQuotation.approved_by); } catch(e) {}
                                 current.push({ timestamp: new Date().toISOString().replace('T',' ').substring(0,19), user_name: userName, user_email: userEmail, note: accNote });
                                 setQuotations(prev => prev.map(q => q.id === activeQuotation.id ? { ...q, approved_by: JSON.stringify(current) } : q));
                                 setAccNote('');
-                                alert('ACC Approval berhasil disimpan!');
+                                alert('ACC Approval successfully recorded!');
                               }
                             })
                             .catch(e => console.error('ACC error:', e));
@@ -1642,13 +1909,13 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                         className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2 rounded flex items-center justify-center gap-1.5 cursor-pointer transition shadow-xs"
                       >
                         <ShieldCheck className="w-3.5 h-3.5" />
-                        <span>Berikan ACC / Setujui SPH Ini</span>
+                        <span>Grant ACC Approval</span>
                       </button>
                     </div>
-                  </>
+                  </div>
                 )}
 
-              </div>{/* END Modal Body */}
+              </div>{/* END Drawer Content Area */}
 
               {/* Modal Footer Actions */}
               <div className="bg-gradient-to-b from-[#fcfcfc] to-[#e1e1e1] px-3.5 py-3 border-t border-[#7b7b7b] flex justify-between items-center gap-2 shrink-0">

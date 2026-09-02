@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserAccount } from '../types/erp';
-import { Mail, FileText, FileCheck, Users, Settings, ChevronRight, Check, PanelLeftClose, PanelLeft, FileSpreadsheet, Package, Bell, Trash2 } from 'lucide-react';
+import { Mail, FileText, FileCheck, Users, Settings, ChevronRight, Check, PanelLeftClose, PanelLeft, FileSpreadsheet, Package, Bell, Trash2, Download } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
 interface SidebarProps {
-  viewMode: 'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation';
+  viewMode: 'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'downloads';
   setViewMode: (mode: any) => void;
   onNewQuotation: () => void;
   pendingCount: number;
@@ -139,6 +139,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: Users,
       badge: isAdmin ? 'Admin' : 'Restricted',
       badgeColor: isAdmin ? 'backdrop-blur-md bg-purple-500/15 text-purple-800 border border-purple-300/60 font-bold' : 'bg-slate-200 text-slate-600',
+    },
+    {
+      id: 'downloads',
+      label: 'ERP Desktop (Electron)',
+      icon: Download,
+      badge: 'v2.4',
+      badgeColor: 'bg-indigo-100 text-indigo-800 border border-indigo-300 font-extrabold',
     },
     {
       id: 'system_settings',

@@ -94,7 +94,7 @@ try {
                 $quo_id = $row['id'];
                 
                 // Fetch items list
-                $items_res = $db_conn->query("SELECT description, quantity, unit, unit_price, discount_percent, total FROM quotation_items WHERE quotation_id = '" . $db_conn->real_escape_string($quo_id) . "'");
+                $items_res = $db_conn->query("SELECT id, product_code, description, specification, quantity, unit, unit_price, discount_percent, total FROM quotation_items WHERE quotation_id = '" . $db_conn->real_escape_string($quo_id) . "'");
                 $unregistered_count = 0;
                 $total_items = 0;
                 $items_arr = [];
@@ -235,8 +235,24 @@ try {
             $rfq_id_raw = (int)str_replace(['GMAIL-LIVE-', 'RFQ-'], '', $input['rfq_id']);
         }
 
-        $client_name = isset($input['client_name']) && !empty($input['client_name']) ? $input['client_name'] : (isset($input['sender_name']) ? $input['sender_name'] : 'Client');
-        $client_email = isset($input['client_email']) && !empty($input['client_email']) ? $input['client_email'] : (isset($input['sender_email']) ? $input['sender_email'] : 'client@abmalaya.com');
+        $raw_email = isset($input['client_email']) && !empty($input['client_email']) ? $input['client_email'] : (isset($input['sender_email']) ? $input['sender_email'] : 'client@abmalaya.com');
+        
+        // Handle client_email as structured JSON or plain string
+        if (is_array($raw_email)) {
+            $client_email = json_encode($raw_email, JSON_UNESCAPED_UNICODE);
+        } else if (is_string($raw_email) && (strpos($raw_email, '{') === 0 || strpos($raw_email, '[') === 0)) {
+            $client_email = $raw_email;
+        } else {
+            $opts = [['email' => $raw_email, 'source' => 'Primary Email']];
+            if (isset($input['delivery_email']) && !empty($input['delivery_email']) && $input['delivery_email'] !== $raw_email) {
+                $opts[] = ['email' => trim($input['delivery_email']), 'source' => 'Dispatch Email (OCR / Notes)'];
+            }
+            $client_email = json_encode([
+                'selected' => $raw_email,
+                'options' => $opts
+            ], JSON_UNESCAPED_UNICODE);
+        }
+
         $company_name = isset($input['company_name']) && !empty($input['company_name']) ? $input['company_name'] : (isset($input['company']) ? $input['company'] : $client_name);
         $date_issued = isset($input['date_issued']) && !empty($input['date_issued']) ? $input['date_issued'] : date('Y-m-d');
         $valid_until = isset($input['valid_until']) && !empty($input['valid_until']) ? $input['valid_until'] : '14 Days';
@@ -255,10 +271,12 @@ try {
         $exists_check = $db_conn->query("SELECT id FROM quotations WHERE id = '" . $db_conn->real_escape_string($id) . "' LIMIT 1");
         $is_update = ($exists_check && $exists_check->num_rows > 0);
 
-        $stmt = $db_conn->prepare("INSERT INTO quotations (id, rfq_id, quotation_number, client_name, client_email, company_name, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?) ON DUPLICATE KEY UPDATE grand_total=VALUES(grand_total), status=VALUES(status), rfq_id=VALUES(rfq_id)");
+        $client_phone = isset($input['client_phone']) && !empty($input['client_phone']) ? $input['client_phone'] : (isset($input['phone']) ? $input['phone'] : null);
+
+        $stmt = $db_conn->prepare("INSERT INTO quotations (id, rfq_id, quotation_number, client_name, client_email, client_phone, company_name, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?) ON DUPLICATE KEY UPDATE grand_total=VALUES(grand_total), status=VALUES(status), rfq_id=VALUES(rfq_id), client_phone=VALUES(client_phone), client_email=VALUES(client_email)");
         
         if ($stmt) {
-            $stmt->bind_param("sisssssdddddss", $id, $rfq_id_val, $quo_num, $client_name, $client_email, $company_name, $date_issued, $valid_until, $subtotal, $discount_total, $tax_percent, $tax_amount, $grand_total, $notes, $created_by);
+            $stmt->bind_param("sissssssdddddss", $id, $rfq_id_val, $quo_num, $client_name, $client_email, $client_phone, $company_name, $date_issued, $valid_until, $subtotal, $discount_total, $tax_percent, $tax_amount, $grand_total, $notes, $created_by);
             $stmt->execute();
             $stmt->close();
         } else {
@@ -273,10 +291,25 @@ try {
         $details_log = $is_update ? "User updated SPH details (Grand Total: RM {$grand_total})." : "User created SPH (Grand Total: RM {$grand_total}).";
         appendQuotationHistoryLog($db_conn, $id, $action_log, $user_name, $user_email, $details_log);
 
-        if ($rfq_id_raw > 0) {
-            $rfq_num_temp = 'RFQ-' . $rfq_id_raw;
-            $db_conn->query("UPDATE rfq_requests SET status = 'diproses' WHERE rfq_number = '{$rfq_num_temp}' OR id = {$rfq_id_raw}");
-            appendRfqHistoryLog($db_conn, $rfq_id_raw, 'Proses SPH Manual', $user_name, $user_email, "User memproses RFQ secara manual menjadi draf SPH nomor: {$quo_num}.");
+        if (isset($input['items']) && is_array($input['items'])) {
+            $db_conn->query("DELETE FROM quotation_items WHERE quotation_id = '" . $db_conn->real_escape_string($id) . "'");
+            $item_stmt = $db_conn->prepare("INSERT INTO quotation_items (quotation_id, product_code, description, specification, quantity, unit, unit_price, discount_percent, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            if ($item_stmt) {
+                foreach ($input['items'] as $it) {
+                    $p_code = isset($it['product_code']) ? trim($it['product_code']) : (isset($it['item_code']) ? trim($it['item_code']) : '');
+                    $p_desc = isset($it['description']) ? trim($it['description']) : '';
+                    $p_spec = isset($it['specification']) ? trim($it['specification']) : '';
+                    $p_qty  = isset($it['quantity']) ? (float)$it['quantity'] : (isset($it['qty']) ? (float)$it['qty'] : 1.0);
+                    $p_unit = isset($it['unit']) ? trim($it['unit']) : 'Unit';
+                    $p_price= isset($it['unit_price']) ? (float)$it['unit_price'] : 0.0;
+                    $p_disc = isset($it['discount_percent']) ? (float)$it['discount_percent'] : 0.0;
+                    $p_tot  = isset($it['total']) ? (float)$it['total'] : ($p_qty * $p_price);
+
+                    $item_stmt->bind_param("ssssdsddd", $id, $p_code, $p_desc, $p_spec, $p_qty, $p_unit, $p_price, $p_disc, $p_tot);
+                    $item_stmt->execute();
+                }
+                $item_stmt->close();
+            }
         }
 
         ob_end_clean();

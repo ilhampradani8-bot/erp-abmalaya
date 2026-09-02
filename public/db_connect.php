@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Asia/Kuala_Lumpur');
 $is_localhost = (!isset($_SERVER['SERVER_NAME']) || $_SERVER['SERVER_NAME'] === 'localhost' || $_SERVER['SERVER_NAME'] === '127.0.0.1' || (isset($_SERVER['HTTP_HOST']) && (strpos($_SERVER['HTTP_HOST'], 'localhost') !== false || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false)));
 
 if (!$is_localhost) {
@@ -97,7 +98,7 @@ function appendRfqHistoryLog($db_conn, $rfq_id, $action, $user_name, $user_email
     $new_entry = [
         'timestamp' => date('Y-m-d H:i:s'),
         'user_name' => $user_name ?: 'System Automation',
-        'user_email' => $user_email ?: 'system@abmalaya.com',
+        'user_email' => $user_email ?: null,
         'action' => $action,
         'details' => $details
     ];
@@ -142,7 +143,7 @@ function appendQuotationHistoryLog($db_conn, $quo_id, $action, $user_name, $user
     $new_entry = [
         'timestamp' => date('Y-m-d H:i:s'),
         'user_name' => $user_name ?: 'System Automation',
-        'user_email' => $user_email ?: 'system@abmalaya.com',
+        'user_email' => $user_email ?: null,
         'action' => $action,
         'details' => $details
     ];

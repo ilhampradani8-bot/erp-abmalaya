@@ -2,10 +2,13 @@
   "name": "erp-abmalaya",
   "private": true,
   "type": "module",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "electron:start": "electron electron/main.js",
+    "electron:build": "electron-builder"
   },
   "dependencies": {
     "@inertiajs/react": "^1.2.0",

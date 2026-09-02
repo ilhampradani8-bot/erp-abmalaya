@@ -35,9 +35,20 @@ $scan_inbox_out = shell_exec(escapeshellarg($php) . ' ' . escapeshellarg($base .
 daemon_log($scan_inbox_out ?? 'No output from scan_inbox.php');
 
 // Step 3: Run AI Vision OCR on pending attachments
-daemon_log('[3/3] Running AI Vision OCR Scan...');
+daemon_log('[3/5] Running AI Vision OCR Scan...');
 $scan_ocr_out = shell_exec(escapeshellarg($php) . ' ' . escapeshellarg($base . '/scan_ocr.php') . ' 2>&1');
 daemon_log($scan_ocr_out ?? 'No output from scan_ocr.php');
 
+// Step 4: Run Dedicated IMPA Category Text Matching
+daemon_log('[4/5] Running IMPA Category Text Matching Daemon...');
+$match_impa_out = shell_exec(escapeshellarg($php) . ' ' . escapeshellarg($base . '/matching_text_impa.php') . ' 2>&1');
+daemon_log($match_impa_out ?? 'No output from matching_text_impa.php');
+
+// Step 5: Run Dedicated Product Text Matching (attaches existing product codes without creating duplicates)
+daemon_log('[5/5] Running Product Text Matching Daemon...');
+$match_prod_out = shell_exec(escapeshellarg($php) . ' ' . escapeshellarg($base . '/matching_text_product.php') . ' 2>&1');
+daemon_log($match_prod_out ?? 'No output from matching_text_product.php');
+
 daemon_log('=== Done ===');
 exit(0);
+

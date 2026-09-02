@@ -109,6 +109,21 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
     defaultNotes: 'Price excludes transport tax unless explicitly stated. All goods remain property of AB Malaya until fully paid.'
   });
 
+  const [headerTemplate, setHeaderTemplate] = useState<'default' | 'minimalist' | 'maritime'>('default');
+  const [tableHeaderBg, setTableHeaderBg] = useState<string>('#0f172a');
+  const [tableHeaderTextColor, setTableHeaderTextColor] = useState<string>('#ffffff');
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleNav = (e: any) => {
+      if (e.detail) {
+        setActiveTab(e.detail);
+      }
+    };
+    window.addEventListener('navigate_settings_tab', handleNav);
+    return () => window.removeEventListener('navigate_settings_tab', handleNav);
+  }, []);
+
   // ── Tab 5: Inbox Rules State ──────────────────────────────────────────────
   const [inboxRules, setInboxRules] = useState({
     excludeNoreply: true,
@@ -736,15 +751,62 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
           </div>
         )}
 
-        {/* ── TAB 4: SETTING PAPER & BRANDING ──────────────────────────────── */}
+        {/* ── TAB 4: SETTING PAPER & BRANDING + SPH HEADER STYLE ──────────────────────── */}
         {activeTab === 'paper' && (
           <div className="space-y-4 max-w-4xl mx-auto">
-            <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-xs space-y-4">
-              <div className="border-b border-slate-100 pb-2">
+            <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-xs space-y-4 font-sans">
+              <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2">
                   <FileText className="w-4 h-4 text-blue-600" />
-                  <span>Setting Paper, Header, Footer & Table Styling</span>
+                  <span>Setting Paper, Header Choice, Footer & Table Styling</span>
                 </h3>
+
+                <button
+                  onClick={() => setIsPreviewModalOpen(true)}
+                  className="bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-extrabold text-[10px] px-3 py-1.5 rounded shadow-xs cursor-pointer flex items-center gap-1.5 transition"
+                >
+                  <Eye className="w-3.5 h-3.5 text-blue-200" />
+                  <span>Pratinjau Layout Header SPH (Live Preview)</span>
+                </button>
+              </div>
+
+              {/* SPH Header Choice Selector */}
+              <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-md space-y-2">
+                <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">Pilihan Template Layout Header SPH:</label>
+                <div className="grid grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setHeaderTemplate('default')}
+                    className={`p-3 border rounded-md text-left transition cursor-pointer ${
+                      headerTemplate === 'default' ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-300' : 'bg-white border-slate-300 hover:border-slate-400'
+                    }`}
+                  >
+                    <span className="block font-bold text-xs text-slate-900 mb-0.5">1. Official AB Malaya Default</span>
+                    <span className="block text-[10px] text-slate-500">Logo ABM Kiri, Metadata No SPH Kanan, From/To Kartu Ganda.</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setHeaderTemplate('minimalist')}
+                    className={`p-3 border rounded-md text-left transition cursor-pointer ${
+                      headerTemplate === 'minimalist' ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-300' : 'bg-white border-slate-300 hover:border-slate-400'
+                    }`}
+                  >
+                    <span className="block font-bold text-xs text-slate-900 mb-0.5">2. Modern Minimalist Executive</span>
+                    <span className="block text-[10px] text-slate-500">Clean Header Garis Tipis, Tipografi Inter Slate Modern.</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setHeaderTemplate('maritime')}
+                    className={`p-3 border rounded-md text-left transition cursor-pointer ${
+                      headerTemplate === 'maritime' ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-300' : 'bg-white border-slate-300 hover:border-slate-400'
+                    }`}
+                  >
+                    <span className="block font-bold text-xs text-slate-900 mb-0.5">3. Maritime Industrial Logistics</span>
+                    <span className="block text-[10px] text-slate-500">Aksen Biru Laut Tua, Badge IMPA & Kode Maritim Resmi.</span>
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -772,6 +834,19 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 </div>
 
                 <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Table Header Background Color</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={tableHeaderBg}
+                      onChange={(e) => setTableHeaderBg(e.target.value)}
+                      className="w-8 h-8 rounded border border-slate-300 cursor-pointer"
+                    />
+                    <span className="font-mono text-[10px] font-bold">{tableHeaderBg}</span>
+                  </div>
+                </div>
+
+                <div>
                   <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Logo URL</label>
                   <input
                     type="text"
@@ -779,6 +854,19 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     onChange={(e) => setPaperSettings({ ...paperSettings, logoUrl: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 font-mono text-[10px]"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Table Header Text Color</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={tableHeaderTextColor}
+                      onChange={(e) => setTableHeaderTextColor(e.target.value)}
+                      className="w-8 h-8 rounded border border-slate-300 cursor-pointer"
+                    />
+                    <span className="font-mono text-[10px] font-bold">{tableHeaderTextColor}</span>
+                  </div>
                 </div>
 
                 <div className="col-span-2">
@@ -802,7 +890,16 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end">
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPreviewModalOpen(true)}
+                  className="bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 font-bold px-3 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer text-xs"
+                >
+                  <Eye className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Preview Pop-Up</span>
+                </button>
+
                 <button
                   onClick={handleSavePaper}
                   className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer"
@@ -1085,6 +1182,111 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 Save Key to Database
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* POP-UP MODAL: LIVE PREVIEW SPH HEADER LAYOUT */}
+      {isPreviewModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in font-sans">
+          <div className="bg-white border border-slate-300 w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden rounded-md">
+            
+            <div className="p-3 bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] text-[#3d3d3d] flex items-center justify-between border-b border-[#7b7b7b] shrink-0">
+              <div className="flex items-center gap-2">
+                <Eye className="w-4 h-4 text-blue-600" />
+                <h3 className="font-extrabold text-xs text-slate-900">
+                  Pratinjau Layout SPH (Live Preview) — Template: <span className="uppercase text-blue-700 font-mono">{headerTemplate}</span>
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsPreviewModalOpen(false)}
+                className="p-1 text-slate-500 hover:text-slate-900 transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-4 bg-slate-100 flex-1 text-xs">
+              
+              {/* SPH Header Document Card Preview */}
+              <div className="bg-white p-6 rounded-md shadow-md border border-slate-300 space-y-5">
+                
+                {/* Header Branding */}
+                <div className="flex justify-between items-start border-b-2 border-slate-800 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-slate-900 text-white rounded flex items-center justify-center font-black text-xl tracking-wider">
+                      ABM
+                    </div>
+                    <div>
+                      <h2 className="font-black text-base text-slate-900">{paperSettings.headerTitle}</h2>
+                      <p className="text-slate-500 font-mono text-[11px]">{paperSettings.companyName}</p>
+                    </div>
+                  </div>
+                  <div className="text-right font-mono text-[11px]">
+                    <p className="font-bold text-blue-700 text-sm">SPH-ABM/MY/2026/0403</p>
+                    <p className="text-slate-500">Date: {new Date().toISOString().split('T')[0]}</p>
+                  </div>
+                </div>
+
+                {/* FROM vs TO Preview */}
+                <div className="grid grid-cols-2 gap-4 text-xs font-sans">
+                  <div className="bg-slate-50 p-3 rounded border border-slate-200 space-y-1">
+                    <span className="font-bold text-slate-700 uppercase text-[10px] block">FROM (AB MALAYA):</span>
+                    <p className="font-bold text-slate-900">{paperSettings.companyName}</p>
+                    <p className="text-slate-600">{paperSettings.companyAddress}</p>
+                    <p className="text-slate-600 font-mono">{paperSettings.email} | {paperSettings.phone}</p>
+                  </div>
+
+                  <div className="bg-blue-50/50 p-3 rounded border border-blue-200 space-y-1">
+                    <span className="font-bold text-blue-900 uppercase text-[10px] block">TO (CLIENT):</span>
+                    <p className="font-bold text-slate-900">Gantang Coffee Enterprise Sdn. Bhd.</p>
+                    <p className="text-slate-600">Attention: Purchase Officer</p>
+                    <p className="text-slate-600 font-mono">procurement@gantangcoffee.my</p>
+                  </div>
+                </div>
+
+                {/* Table Header Styled Preview */}
+                <div className="border rounded overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead style={{ backgroundColor: tableHeaderBg, color: tableHeaderTextColor }} className="font-bold uppercase text-[10px]">
+                      <tr>
+                        <th className="p-2 border-r border-white/20 w-8 text-center">#</th>
+                        <th className="p-2 border-r border-white/20 w-28">Kode Barang</th>
+                        <th className="p-2 border-r border-white/20">Nama Produk</th>
+                        <th className="p-2 border-r border-white/20">Spesifikasi Detail</th>
+                        <th className="p-2 border-r border-white/20 w-16 text-center">Qty</th>
+                        <th className="p-2 border-r border-white/20 w-20">Unit</th>
+                        <th className="p-2 border-r border-white/20 w-28 text-right">Harga (RM)</th>
+                        <th className="p-2 text-right w-32">Total (RM)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      <tr>
+                        <td className="p-2 text-center font-mono">1</td>
+                        <td className="p-2 font-mono font-bold text-blue-700">IMPA-49-01</td>
+                        <td className="p-2 font-bold">RO Water Maker High Pressure Hose</td>
+                        <td className="p-2 text-slate-600">Material Stainless 316, Press: 350 Bar</td>
+                        <td className="p-2 text-center font-bold">2</td>
+                        <td className="p-2">Unit</td>
+                        <td className="p-2 text-right font-mono">4,500.00</td>
+                        <td className="p-2 text-right font-mono font-bold text-blue-700">9,000.00</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+              </div>
+
+            </div>
+
+            <div className="p-3 bg-[#e9e9e9] border-t border-[#dbdbdb] flex justify-end shrink-0">
+              <button
+                onClick={() => setIsPreviewModalOpen(false)}
+                className="px-4 py-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] text-[#3d3d3d] border border-[#a0a0a0] font-bold text-xs rounded-sm cursor-pointer hover:bg-white"
+              >
+                Tutup Pratinjau
+              </button>
+            </div>
+
           </div>
         </div>
       )}

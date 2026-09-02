@@ -13,6 +13,7 @@ import { AccountSettings } from './components/AccountSettings';
 import { SystemSettings } from './components/SystemSettings';
 import { NotificationLog } from './components/NotificationLog';
 import { TrashQuotation } from './components/TrashQuotation';
+import { ElectronDownloads } from './components/ElectronDownloads';
 import { encryptData } from './utils/crypto';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { getApiUrl } from './utils/api';
@@ -182,12 +183,12 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  const [viewMode, setViewModeState] = useState<'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation'>('inbox');
+  const [viewMode, setViewModeState] = useState<'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'downloads'>('inbox');
   const [showEmailModal, setShowEmailModal] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const setViewMode = (mode: 'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation') => {
+  const setViewMode = (mode: 'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'downloads') => {
     setIsLoading(true);
     setViewModeState(mode);
     setTimeout(() => {
@@ -460,6 +461,10 @@ export const App: React.FC = () => {
                   }}
                   setViewMode={setViewMode}
                 />
+              )}
+
+              {viewMode === 'downloads' && (
+                <ElectronDownloads />
               )}
 
               {viewMode === 'builder' && (

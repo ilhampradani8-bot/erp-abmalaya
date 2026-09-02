@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Asia/Kuala_Lumpur');
 /**
  * ABM Malaya ERP — Background AI Inbox Classification Daemon
  * daemon/scan_inbox.php
@@ -10,7 +11,7 @@
 
 define('DAEMON_MODE', true);
 define('LOG_FILE', __DIR__ . '/logs/scan_inbox_' . date('Y-m-d') . '.log');
-define('SCAN_LIMIT', 30);
+define('SCAN_LIMIT', 1); // Murni 1 per 1 email gantian per siklus
 
 function daemon_log(string $msg): void {
     $line = '[' . date('Y-m-d H:i:s') . '] ' . $msg . PHP_EOL;
@@ -26,15 +27,36 @@ if (!$db_conn || $db_conn->connect_error) {
     exit(1);
 }
 
+// Check if user is currently performing a priority manual scan
+$lock_check = $db_conn->query("SELECT lock_value FROM system_locks WHERE lock_key = 'manual_scan_active' LIMIT 1");
+if ($lock_check && $lock_check->num_rows > 0) {
+    $lock_time = (int)$lock_check->fetch_assoc()['lock_value'];
+    if (time() - $lock_time < 60) { // Active lock within 60s
+        daemon_log('Priority Manual User Scan in progress. Pausing background Inbox daemon.');
+        exit(0);
+    }
+}
+
 daemon_log('AI Inbox Scanner Daemon started.');
 
-// Load Gemini API Keys from DB
-$gemini_key = '';
-$res_key = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key = 'GEMINI_API_KEY'");
+// Load Gemini API Keys from DB — dibaca per baris (GEMINI_API_KEY_1, _2, _3, dst.)
+$key_list = [];
+$res_key = $db_conn->query("SELECT credential_key, credential_value FROM api_credentials WHERE credential_key LIKE 'GEMINI_API_KEY_%' ORDER BY credential_key ASC");
 if ($res_key && $res_key->num_rows > 0) {
-    $gemini_key = trim($res_key->fetch_assoc()['credential_value']);
+    while ($row = $res_key->fetch_assoc()) {
+        $v = trim($row['credential_value']);
+        if (!empty($v)) $key_list[] = $v;
+    }
 }
-$key_list = !empty($gemini_key) ? array_values(array_filter(array_map('trim', explode(',', $gemini_key)))) : [];
+
+// Fallback: format lama (satu baris, pisah koma)
+if (empty($key_list)) {
+    $res_key2 = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key = 'GEMINI_API_KEY'");
+    if ($res_key2 && $res_key2->num_rows > 0) {
+        $raw = trim($res_key2->fetch_assoc()['credential_value']);
+        $key_list = array_values(array_filter(array_map('trim', explode(',', $raw))));
+    }
+}
 
 if (empty($key_list)) {
     daemon_log('WARNING: No Gemini API keys found in database. Scan skipped.');
@@ -42,15 +64,18 @@ if (empty($key_list)) {
 }
 daemon_log('Loaded ' . count($key_list) . ' Gemini API key(s).');
 
-// AI Classification Function
+// Tracker kunci yang sedang kena 429 (global per siklus daemon)
+$GLOBALS['exhausted_keys'] = []; // key => unix timestamp kapan boleh dicoba lagi (cooldown 60s)
+
+// AI Classification Function — Smart Key Rotation
 function classifyEmail(string $subject, string $body, string $sender, array $key_list): array {
     $body_short = mb_substr($body, 0, 1500);
     $prompt = "You are a professional logistics AI assistant for AB Malaya industry.\n"
             . "Determine if this email is a genuine client request for quote/SPH (client_rfq) or spam/junk (junk).\n\n"
             . "=== CRITICAL RULES ===\n"
-            . "1. CLASSIFY AS 'client_rfq' ONLY IF it is a real request to buy, order, query pricing, or request a quote for goods or services.\n"
-            . "2. CLASSIFY AS 'junk' IF the email is: bank receipt, newsletter, promotion, social media, system alert, password reset, bounce message.\n"
-            . "3. File attachments (requisition sheets, specs, PDF) are strong indicators of 'client_rfq'.\n\n"
+            . "1. CLASSIFY AS 'client_rfq' ONLY IF it is an incoming purchase request or RFQ from an external client wanting to buy products/services.\n"
+            . "2. CLASSIFY AS 'junk' IF the email is: internal outgoing email, request for tender extension, RFI follow-up sent by sales, bank receipt, newsletter, promotion, social media, system alert, password reset, bounce message.\n"
+            . "3. Incoming emails with attached purchase specs, RFQ sheets, or item lists are strong indicators of 'client_rfq'.\n\n"
             . "=== EMAIL DATA ===\n"
             . "Subject: $subject\nSender: $sender\nBody:\n$body_short\n\n"
             . "Respond ONLY with valid JSON. JSON format:\n"
@@ -63,16 +88,26 @@ function classifyEmail(string $subject, string $body, string $sender, array $key
             . "  ]\n"
             . "}";
 
-    $max_attempts = count($key_list) * 2;
-    $errors = [];
     $key_count = count($key_list);
+    $errors    = [];
+    $now       = time();
 
-    for ($i = 0; $i < $max_attempts; $i++) {
-        $api_key  = $key_list[$i % $key_count];
+    // Cek apakah SEMUA kunci sedang dalam cooldown 429 → abort seluruh siklus
+    $active_keys = array_filter($key_list, function($k) use ($now) {
+        return !isset($GLOBALS['exhausted_keys'][$k]) || $GLOBALS['exhausted_keys'][$k] <= $now;
+    });
+
+    if (empty($active_keys)) {
+        daemon_log('ABORT: Semua ' . $key_count . ' kunci Gemini sedang cooldown 429. Siklus dihentikan — tunggu siklus berikutnya.');
+        return ['classification' => 'abort_cycle', 'item_requested' => null, 'items' => [], 'verified' => 0, 'error' => 'all_keys_exhausted'];
+    }
+
+    // Coba setiap kunci aktif (yang belum cooldown) satu kali saja
+    foreach ($active_keys as $api_key) {
         $key_short = substr($api_key, -6);
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=' . urlencode($api_key);
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=' . urlencode($api_key);
         $payload = json_encode([
-            'contents'        => [['parts' => [['text' => $prompt]]]],
+            'contents'         => [['parts' => [['text' => $prompt]]]],
             'generationConfig' => ['responseMimeType' => 'application/json']
         ]);
 
@@ -106,25 +141,39 @@ function classifyEmail(string $subject, string $body, string $sender, array $key
         }
 
         if ($http_code === 429) {
-            $errors[] = "Key ...{$key_short}: 429 Rate Limit. Waiting 10s...";
-            sleep(10);
-            continue;
+            // Tandai kunci ini cooldown selama 60 detik
+            $GLOBALS['exhausted_keys'][$api_key] = $now + 60;
+            $errors[] = "Key ...{$key_short}: 429 Rate Limit → cooldown 60s";
+            continue; // Coba kunci berikutnya tanpa sleep
         }
 
         $errors[] = "Key ...{$key_short}: HTTP {$http_code}. " . substr($resp, 0, 120);
-        if ($http_code === 429) {
-            sleep(10);
-        } else {
-            sleep(2);
-        }
+        sleep(1); // Delay minimal untuk error non-429
+    }
+
+    // Cek lagi setelah semua kunci aktif dicoba — jika semua kena 429 sekarang, abort
+    $still_active = array_filter($key_list, function($k) {
+        return !isset($GLOBALS['exhausted_keys'][$k]) || $GLOBALS['exhausted_keys'][$k] <= time();
+    });
+
+    if (empty($still_active)) {
+        daemon_log('ABORT: Semua kunci habis setelah percobaan. Siklus dihentikan.');
+        return ['classification' => 'abort_cycle', 'item_requested' => null, 'items' => [], 'verified' => 0, 'error' => 'all_keys_exhausted'];
     }
 
     return ['classification' => 'client_rfq', 'item_requested' => null, 'items' => [], 'verified' => 0, 'error' => implode(' | ', $errors)];
 }
 
+
 // Obvious Junk Pre-filter
 function isObviousJunk(string $subject, string $body, string $sender): bool {
     $text = strtolower($subject . ' ' . $body . ' ' . $sender);
+
+    // Auto-junk outgoing request for extension of tender date or internal RFI sent by sales
+    if (preg_match('/(extension of tender|request for extension|extension date|penangguhan tender|perpanjangan tender)/i', $text)) {
+        return true;
+    }
+
     if (preg_match('/(rfq|sebutharga|tender|bid|quotation|pelawaan|perolehan|estimating|specification|inquiry|requisition)/i', $text)) {
         return false;
     }
@@ -161,8 +210,8 @@ function autoGenerateQuotation($db_conn, $rfq_row, $items, $item_requested) {
     $company_name = $client_name;
 
     $date_issued = date('Y-m-d');
-    $valid_until = '14 Days';
-    $notes = "Auto-generated from RFQ Requisition: " . ($item_requested ?: $rfq_row['subject']);
+    $valid_until = date('Y-m-d', strtotime('+14 days'));
+    $notes = $item_requested ?: $rfq_row['subject'];
     $created_by = 'System Automation Daemon';
 
     $subtotal = 0.00;
@@ -172,7 +221,10 @@ function autoGenerateQuotation($db_conn, $rfq_row, $items, $item_requested) {
     $stmt_quo = $db_conn->prepare("INSERT INTO quotations (id, rfq_id, quotation_number, client_name, client_email, company_name, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, status, ocr_scan_status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0.00, ?, 0.00, 0.00, ?, 'requisition', 'pending', ?)");
     if ($stmt_quo) {
         $stmt_quo->bind_param("sissssssdss", $quo_id, $rfq_id, $quo_num, $client_name, $client_email, $company_name, $date_issued, $valid_until, $tax_percent, $notes, $created_by);
-        $stmt_quo->execute();
+        if (!$stmt_quo->execute()) {
+            daemon_log("  -> ERROR executing parent quotation insert: " . $stmt_quo->error);
+            return;
+        }
         $stmt_quo->close();
     } else {
         daemon_log("  -> ERROR preparing parent quotation: " . $db_conn->error);
@@ -242,11 +294,17 @@ function autoGenerateQuotation($db_conn, $rfq_row, $items, $item_requested) {
     }
 }
 
-// Load start date cutoff filter
+// Load start date cutoff filter & priority rule
 $start_date_limit = '';
 $res_start = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key IN ('INBOX_RULE_START_DATE', 'imap_start_date', 'info_start_date') AND credential_value != '' ORDER BY id DESC LIMIT 1");
 if ($res_start && $res_start->num_rows > 0) {
     $start_date_limit = trim($res_start->fetch_assoc()['credential_value']);
+}
+
+$prioritize_pdf = true; // Default prioritize emails with attachments
+$res_prio = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key = 'INBOX_RULE_PRIORITIZE_PDF'");
+if ($res_prio && $res_prio->num_rows > 0) {
+    $prioritize_pdf = trim($res_prio->fetch_assoc()['credential_value']) === 'true';
 }
 
 $where_clause = "WHERE ai_verified = 0";
@@ -255,8 +313,15 @@ if (!empty($start_date_limit)) {
     daemon_log("Ingestion Date Cutoff Active: >= {$start_date_limit}");
 }
 
+// Priority sorting: Emails WITH ATTACHMENTS first (Priority 0), then newest emails first (id DESC)
+$order_by = "ORDER BY ";
+if ($prioritize_pdf) {
+    $order_by .= "(CASE WHEN (attachment_url IS NOT NULL AND attachment_url != '' AND attachment_url != 'NONE' AND attachment_url != '[]') THEN 0 ELSE 1 END) ASC, ";
+}
+$order_by .= "id DESC";
+
 // Main classification loop
-$res = $db_conn->query("SELECT id, rfq_number, subject, message_body, client_email, attachment_url FROM rfq_requests {$where_clause} ORDER BY id ASC LIMIT " . SCAN_LIMIT);
+$res = $db_conn->query("SELECT id, rfq_number, subject, message_body, client_email, attachment_url FROM rfq_requests {$where_clause} {$order_by} LIMIT " . SCAN_LIMIT);
 
 if (!$res || $res->num_rows === 0) {
     daemon_log('No pending emails to scan. Exiting.');
@@ -292,6 +357,12 @@ while ($row = $res->fetch_assoc()) {
         $verified       = $result['verified'];
         $ai_error       = $result['error'];
 
+        // ABORT: semua kunci kena rate limit — hentikan siklus, jangan proses email berikutnya
+        if ($classification === 'abort_cycle') {
+            daemon_log("ABORT CYCLE: Semua {" . count($key_list) . "} kunci rate-limited. Sisa email akan diproses di siklus berikutnya (5 menit lagi).");
+            break;
+        }
+
         if ($verified) {
             daemon_log("  [AI-OK] #{$rfq_num} → {$classification}");
             $success++;
@@ -299,13 +370,14 @@ while ($row = $res->fetch_assoc()) {
             daemon_log("  [AI-FAIL] #{$rfq_num} → fallback. Error: " . substr($ai_error ?? '', 0, 120));
             $failed++;
         }
-        sleep(4);
+        sleep(3); // jeda antar email agar tidak burst
     }
 
-    $rfq_status = 'received';
+
+    $rfq_status = 'masuk';
     if ($verified) {
         if ($classification === 'client_rfq') {
-            $rfq_status = 'in_progress';
+            $rfq_status = 'diproses';
             autoGenerateQuotation($db_conn, $row, $items, $item_requested);
         } else {
             $rfq_status = 'junk';
