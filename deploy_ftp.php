@@ -36,36 +36,26 @@ if (!ftp_login($conn, $user, $pass)) {
 }
 
 ftp_pasv($conn, true);
-$files_to_upload = [
-    'public/api_fetch_live_gmail.php' => 'api_fetch_live_gmail.php',
-    'public/api_gmail_webhook.php' => 'api_gmail_webhook.php',
-    'public/api_quotations.php' => 'api_quotations.php',
-    'public/api_rfq_status.php' => 'api_rfq_status.php',
-    'public/api_download_attachment.php' => 'api_download_attachment.php',
-    'public/api_ocr_scan.php' => 'api_ocr_scan.php',
-    'daemon/scan_ai.php' => '../daemon/scan_ai.php',
-    'daemon/scan_inbox.php' => '../daemon/scan_inbox.php',
-    'daemon/scan_ocr.php' => '../daemon/scan_ocr.php',
-];
-
-// Add dist files to upload directly to FTP root
-function addDistToUploads($dir, &$list) {
+// Auto-scan public/ folder -> upload to root
+function addFolderToUploads($dir, $remote_prefix, &$list) {
     if (!is_dir($dir)) return;
     $files = scandir($dir);
     foreach ($files as $file) {
-        if ($file === '.' || $file === '..') continue;
+        if ($file === '.' || $file === '..' || $file === '.git') continue;
         $path = $dir . '/' . $file;
         if (is_dir($path)) {
-            addDistToUploads($path, $list);
+            addFolderToUploads($path, $remote_prefix . $file . '/', $list);
         } else {
-            // Translate dist/... to ...
-            $remote_path = substr($path, strlen('dist/'));
-            $list[$path] = $remote_path;
+            $list[$path] = $remote_prefix . $file;
         }
     }
 }
 
-addDistToUploads('dist', $files_to_upload);
+$files_to_upload = [];
+addFolderToUploads('public', '', $files_to_upload);
+addFolderToUploads('daemon', '../daemon/', $files_to_upload);
+addFolderToUploads('dist', '', $files_to_upload);
+
 
 foreach ($files_to_upload as $local => $remote) {
     echo "Uploading $local to $remote...\n";
