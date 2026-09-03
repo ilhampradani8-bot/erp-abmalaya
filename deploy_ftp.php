@@ -54,6 +54,7 @@ function addFolderToUploads($dir, $remote_prefix, &$list) {
 $files_to_upload = [];
 addFolderToUploads('public', '', $files_to_upload);
 addFolderToUploads('daemon', '../daemon/', $files_to_upload);
+addFolderToUploads('cpanel', '../cpanel/', $files_to_upload);
 addFolderToUploads('dist', '', $files_to_upload);
 
 
