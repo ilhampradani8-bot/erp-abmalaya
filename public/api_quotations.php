@@ -93,8 +93,9 @@ try {
             while ($row = $res->fetch_assoc()) {
                 $quo_id = $row['id'];
                 
-                // Fetch items list
-                $items_res = $db_conn->query("SELECT id, product_code, description, specification, quantity, unit, unit_price, discount_percent, total FROM quotation_items WHERE quotation_id = '" . $db_conn->real_escape_string($quo_id) . "'");
+                // Fetch items list including category_code & impa_code
+                $items_res = $db_conn->query("SELECT id, product_code, category_code, impa_code, description, specification, quantity, unit, unit_price, discount_percent, total FROM quotation_items WHERE quotation_id = '" . $db_conn->real_escape_string($quo_id) . "'");
+
                 $unregistered_count = 0;
                 $total_items = 0;
                 $items_arr = [];

@@ -1187,12 +1187,15 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                       <th className="p-2.5 w-10 text-center border-r border-slate-200">
                         {rowToReplaceIndex !== null ? 'Pick' : 'Sel'}
                       </th>
-                      <th className="p-2.5 w-14 text-center border-r border-slate-200">Photo</th>
-                      <th className="p-2.5 w-28 border-r border-slate-200">Code</th>
-                      <th className="p-2.5 border-r border-slate-200">Product Name & Spec</th>
-                      <th className="p-2.5 w-28 border-r border-slate-200">Category</th>
+                      <th className="p-2.5 w-12 text-center border-r border-slate-200">Photo</th>
+                      <th className="p-2.5 w-28 border-r border-slate-200">Product Code</th>
+                      <th className="p-2.5 border-r border-slate-200">Product Name</th>
+                      <th className="p-2.5 border-r border-slate-200">Specification</th>
+                      <th className="p-2.5 w-28 border-r border-slate-200">Supplier / Seller</th>
+                      <th className="p-2.5 w-24 border-r border-slate-200">Category</th>
                       <th className="p-2.5 w-16 text-center border-r border-slate-200">Unit</th>
-                      <th className="p-2.5 w-36 text-right">Master Price (Rp)</th>
+                      <th className="p-2.5 w-28 text-right border-r border-slate-200">Unit Price (MYR)</th>
+                      <th className="p-2.5 w-16 text-center">Stock</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
@@ -1212,7 +1215,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                             isSelected ? 'bg-blue-50/90 font-semibold' : 'hover:bg-slate-50'
                           }`}
                         >
-                          <td className="p-2.5 text-center border-r border-slate-200">
+                          <td className="p-2 text-center border-r border-slate-200">
                             {rowToReplaceIndex !== null ? (
                               <button
                                 type="button"
@@ -1235,44 +1238,61 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                               <img
                                 src={p.image_url}
                                 alt={p.product_name}
-                                className="w-9 h-9 object-cover border border-slate-300 mx-auto"
+                                className="w-8 h-8 object-cover border border-slate-300 rounded mx-auto"
                               />
                             ) : (
-                              <div className="w-9 h-9 bg-slate-200 border border-slate-300 mx-auto flex items-center justify-center text-slate-400">
+                              <div className="w-8 h-8 bg-slate-200 border border-slate-300 rounded mx-auto flex items-center justify-center text-slate-400">
                                 <ImageIcon className="w-3.5 h-3.5 opacity-50" />
+
                               </div>
                             )}
                           </td>
 
-                          <td className="p-2.5 font-mono font-bold border-r border-slate-200 text-xs">
+                          <td className="p-2 font-mono font-bold border-r border-slate-200 text-xs text-blue-700">
                             {p.product_code}
                           </td>
 
-                          <td className="p-2.5 border-r border-slate-200">
-                            <div className="font-bold text-xs text-slate-900">{p.product_name}</div>
-                            {p.description && (
-                              <div className="text-[11px] text-slate-500 line-clamp-1">{p.description}</div>
+                          <td className="p-2 border-r border-slate-200 font-bold text-xs text-slate-900">
+                            {p.product_name}
+                          </td>
+
+                          <td className="p-2 border-r border-slate-200 text-[11px] text-slate-600 italic">
+                            {p.specification || p.description || 'Standard catalog specification'}
+                          </td>
+
+                          <td className="p-2 border-r border-slate-200 font-mono text-[10px]">
+                            {p.supplier_name ? (
+                              <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold px-1.5 py-0.5 rounded">
+                                {p.supplier_name}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 italic">—</span>
                             )}
                           </td>
 
-                          <td className="p-2.5 border-r border-slate-200">
-                            <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 text-[10px] font-bold">
+                          <td className="p-2 border-r border-slate-200">
+                            <span className="bg-amber-50 text-amber-900 border border-amber-300 px-1.5 py-0.5 text-[10px] font-bold rounded">
                               {p.category || 'Equipment'}
                             </span>
                           </td>
 
-                          <td className="p-2.5 text-center border-r border-slate-200 font-medium">
-                            {p.unit || 'Package'}
+                          <td className="p-2 text-center border-r border-slate-200 font-medium">
+                            {p.unit || 'Unit'}
                           </td>
 
-                          <td className="p-2.5 text-right font-mono font-bold text-blue-700">
+                          <td className="p-2 text-right border-r border-slate-200 font-mono font-bold text-slate-800">
                             {formatCurrency(p.unit_price)}
+                          </td>
+
+                          <td className="p-2 text-center font-mono font-bold text-slate-600">
+                            {p.stock_quantity ?? 50}
                           </td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
+
               )}
             </div>
 

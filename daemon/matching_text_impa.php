@@ -45,7 +45,8 @@ $impa_blueprint = [
     '39' => ['name' => 'MEDICINES & MEDICAL SUPPLIES', 'keywords' => ['medicine', 'medical', 'first aid', 'bandage', 'pharma', 'drug', 'ointment', 'tablet', 'bandage', 'stretcher']],
     '45' => ['name' => 'PETROLEUM & LUBRICANTS', 'keywords' => ['petroleum', 'lubricant', 'oil', 'grease', 'engine oil', 'hydraulic oil', 'gear oil', 'fuel oil']],
     '47' => ['name' => 'PAINTS & PAINTING EQUIPMENT', 'keywords' => ['paint', 'thinner', 'primer', 'brush', 'roller', 'spray gun', 'coating', 'anti-fouling']],
-    '49' => ['name' => 'HARDWARE & STATIONERY', 'keywords' => ['hardware', 'stationery', 'paper', 'pen', 'pencil', 'binder', 'stapler', 'calculator', 'tape', 'marker', 'vessel\'s stationery', 'office']],
+    '49' => ['name' => 'HARDWARE & STATIONERY', 'keywords' => ['hardware', 'stationery', 'stationary', 'paper', 'pen', 'pencil', 'binder', 'stapler', 'calculator', 'tape', 'marker', 'vessel\'s stationery', 'vessel\'s stationary', 'office']],
+
     '51' => ['name' => 'CLEANING MATERIALS & CHEMICALS', 'keywords' => ['cleaning', 'chemical', 'detergent', 'degreaser', 'soap', 'disinfectant', 'mop', 'broom', 'rag', 'cotton waste']],
     '53' => ['name' => 'DECK MACHINERY & EQUIPMENT', 'keywords' => ['deck', 'winch', 'windlass', 'crane', 'capstan', 'anchor', 'chain', 'fairlead', 'bollard']],
     '55' => ['name' => 'RIGGING & LIFTING GEAR', 'keywords' => ['rigging', 'lifting', 'shackle', 'turnbuckle', 'hook', 'chain block', 'lever hoist', 'slings']],
@@ -129,10 +130,10 @@ while ($quo = $res->fetch_assoc()) {
             $upd->close();
         }
 
-        // Update quotation_items table category_code
-        $upd_items = $db_conn->prepare("UPDATE quotation_items SET category_code = ? WHERE quotation_id = ?");
+        // Update quotation_items table category_code and impa_code
+        $upd_items = $db_conn->prepare("UPDATE quotation_items SET category_code = ?, impa_code = ? WHERE quotation_id = ?");
         if ($upd_items) {
-            $upd_items->bind_param("ss", $best_code, $quo_id);
+            $upd_items->bind_param("sss", $best_code, $best_code, $quo_id);
             $upd_items->execute();
             $upd_items->close();
         }
@@ -141,4 +142,43 @@ while ($quo = $res->fetch_assoc()) {
     }
 }
 
+// 2. Fetch individual quotation_items where category_code or impa_code is null or empty to match per-item IMPA code
+$res_items = $db_conn->query("SELECT id, quotation_id, description FROM quotation_items WHERE (category_code IS NULL OR category_code = '' OR impa_code IS NULL OR impa_code = '') LIMIT 100");
+if ($res_items && $res_items->num_rows > 0) {
+    $item_matched_count = 0;
+    while ($qi = $res_items->fetch_assoc()) {
+        $item_id   = $qi['id'];
+        $item_desc = trim($qi['description']);
+        if (empty($item_desc)) continue;
+
+        $item_best_code = null;
+        $item_best_name = null;
+        $item_highest = 0;
+
+        foreach ($impa_blueprint as $code => $info) {
+            $score = calculateImpaMatchScore($item_desc, $info['keywords']);
+            if ($score > $item_highest) {
+                $item_highest   = $score;
+                $item_best_code = $code;
+                $item_best_name = $info['name'];
+            }
+        }
+
+        if ($item_best_code && $item_highest >= 60) {
+            $item_matched_count++;
+            $upd_qi = $db_conn->prepare("UPDATE quotation_items SET category_code = ?, impa_code = ? WHERE id = ?");
+            if ($upd_qi) {
+                $upd_qi->bind_param("ssi", $item_best_code, $item_best_code, $item_id);
+                $upd_qi->execute();
+                $upd_qi->close();
+            }
+        }
+    }
+
+    if ($item_matched_count > 0) {
+        impa_daemon_log("Per-Item IMPA Matching: Updated {$item_matched_count} quotation item(s) with specific IMPA category codes.");
+    }
+}
+
 impa_daemon_log("=== IMPA Matching Complete. Processed quotations. Matched: {$matched_count} ===");
+

@@ -72,6 +72,8 @@ CREATE TABLE IF NOT EXISTS `quotation_items` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `quotation_id` VARCHAR(50) NOT NULL,
   `product_code` VARCHAR(100) DEFAULT NULL,
+  `category_code` VARCHAR(50) DEFAULT NULL,
+  `impa_code` VARCHAR(50) DEFAULT NULL,
   `description` TEXT NOT NULL,
   `specification` TEXT DEFAULT NULL,
   `quantity` DECIMAL(10, 2) NOT NULL DEFAULT 1.00,
@@ -81,6 +83,7 @@ CREATE TABLE IF NOT EXISTS `quotation_items` (
   `total` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
   FOREIGN KEY (`quotation_id`) REFERENCES `quotations`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 
 -- 5. Table: company_profile (Company Branding, Logo & Official Stamp)
 CREATE TABLE IF NOT EXISTS `company_profile` (
@@ -110,13 +113,16 @@ CREATE TABLE IF NOT EXISTS `products` (
   `product_code` VARCHAR(100) UNIQUE NOT NULL,
   `product_name` VARCHAR(255) NOT NULL,
   `description` TEXT,
+  `specification` TEXT,
   `unit` VARCHAR(50) DEFAULT 'Unit',
   `unit_price` DECIMAL(15,2) DEFAULT 0.00,
   `image_url` TEXT,
   `category` VARCHAR(100) DEFAULT 'Equipment',
+  `supplier_name` VARCHAR(255) DEFAULT NULL,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 
 -- 8. Table: system_notifications (Notification Log & Sync Activity History)
 CREATE TABLE IF NOT EXISTS `system_notifications` (

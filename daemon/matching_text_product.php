@@ -33,16 +33,17 @@ prod_daemon_log('=== Product Text Matching Daemon Started ===');
 
 // Load all existing products into memory for fast fuzzy matching
 $products_catalog = [];
-$res_p = $db_conn->query("SELECT id, product_code, product_name, description, unit, unit_price, category FROM products WHERE product_name IS NOT NULL AND product_name != ''");
+$res_p = $db_conn->query("SELECT id, product_code, product_name, description, specification, unit, unit_price, category FROM products WHERE product_name IS NOT NULL AND product_name != ''");
 if ($res_p && $res_p->num_rows > 0) {
     while ($p = $res_p->fetch_assoc()) {
         $products_catalog[] = [
             'product_code' => $p['product_code'],
             'product_name' => $p['product_name'],
             'description'  => $p['description'] ?? '',
+            'specification'=> $p['specification'] ?? '',
             'unit_price'   => (float)($p['unit_price'] ?? 0.00),
             'unit'         => $p['unit'] ?? 'Pcs',
-            'tokens'       => array_filter(explode(' ', strtolower(preg_replace('/[^a-zA-Z0-9\s]/', ' ', $p['product_name'] . ' ' . $p['description']))))
+            'tokens'       => array_filter(explode(' ', strtolower(preg_replace('/[^a-zA-Z0-9\s]/', ' ', $p['product_name'] . ' ' . ($p['specification'] ?? $p['description'])))))
         ];
     }
 }
@@ -74,7 +75,7 @@ function calculateProductMatchScore(string $rfq_desc, array $prod_tokens): int {
 }
 
 // Fetch quotation_items needing product matching (where product_code is null or unit_price = 0)
-$sql = "SELECT id, quotation_id, description, quantity, unit_price FROM quotation_items WHERE (product_code IS NULL OR product_code = '' OR unit_price = 0.00) LIMIT 100";
+$sql = "SELECT id, quotation_id, description, specification, quantity, unit_price FROM quotation_items WHERE (product_code IS NULL OR product_code = '' OR unit_price = 0.00) LIMIT 100";
 $res_qi = $db_conn->query($sql);
 
 if (!$res_qi || $res_qi->num_rows === 0) {
@@ -85,8 +86,9 @@ if (!$res_qi || $res_qi->num_rows === 0) {
 $matched_items = 0;
 while ($item = $res_qi->fetch_assoc()) {
     $item_id   = $item['id'];
-    $rfq_desc  = trim($item['description']);
+    $rfq_desc  = trim($item['description'] . ' ' . ($item['specification'] ?? ''));
     $qty       = (float)$item['quantity'];
+
 
     if (empty($rfq_desc)) continue;
 

@@ -112,6 +112,8 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
   const [productCode, setProductCode] = useState('');
   const [productName, setProductName] = useState('');
   const [description, setDescription] = useState('');
+  const [specification, setSpecification] = useState('');
+  const [supplierName, setSupplierName] = useState('');
   const [unit, setUnit] = useState('Package');
   const [unitPrice, setUnitPrice] = useState<number>(0);
   const [stockQuantity, setStockQuantity] = useState<number>(50);
@@ -120,6 +122,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [category, setCategory] = useState('Hose & Fitting');
   const [isSaving, setIsSaving] = useState<boolean>(false);
+
 
   // Auto-Compression Info State
   const [isCompressingImage, setIsCompressingImage] = useState<boolean>(false);
@@ -173,6 +176,8 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
       .finally(() => setIsImporting(false));
   };
 
+  const [currencySymbol, setCurrencySymbol] = useState<string>('RM');
+
   // Check Google Drive Sync & Conflict Status
   const checkGDriveSyncStatus = () => {
     fetch(getApiUrl('/api_gdrive_sync.php'))
@@ -185,13 +190,31 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
       .catch((err) => console.log('GDrive sync status check error:', err));
   };
 
+  // Fetch Currency Setting from API Credentials
+  const fetchCurrencySetting = () => {
+    fetch(getApiUrl('/api_credentials.php'))
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success' && Array.isArray(resData.data)) {
+          const currItem = resData.data.find((c: any) => c.credential_key === 'DOC_CURRENCY');
+          if (currItem && currItem.credential_value) {
+            const rawCurr = currItem.credential_value.toUpperCase();
+            setCurrencySymbol(rawCurr === 'MYR' ? 'RM' : rawCurr === 'IDR' ? 'Rp' : rawCurr);
+          }
+        }
+      })
+      .catch((err) => console.log('Currency setting fetch error:', err));
+  };
+
   useEffect(() => {
     fetchProducts();
   }, [activeTab]);
 
   useEffect(() => {
     checkGDriveSyncStatus();
+    fetchCurrencySetting();
   }, []);
+
 
   // Handle Google Drive Sync Conflict Resolution Choice
   const handleResolveGDriveConflict = (choice: 'use_local' | 'use_gdrive') => {
@@ -234,6 +257,8 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
     setProductCode(`PRD-00${products.length + 1}`);
     setProductName('');
     setDescription('');
+    setSpecification('');
+    setSupplierName('');
     setUnit('Package');
     setUnitPrice(0);
     setStockQuantity(50);
@@ -254,6 +279,8 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
     setProductCode(p.product_code);
     setProductName(p.product_name);
     setDescription(p.description || '');
+    setSpecification(p.specification || '');
+    setSupplierName(p.supplier_name || '');
     setUnit(p.unit || 'Package');
     setUnitPrice(p.unit_price || 0);
     setStockQuantity(p.stock_quantity || 50);
@@ -296,12 +323,15 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
     formData.append('product_code', productCode);
     formData.append('product_name', productName);
     formData.append('description', description);
+    formData.append('specification', specification);
+    formData.append('supplier_name', supplierName);
     formData.append('unit', unit);
     formData.append('unit_price', unitPrice.toString());
     formData.append('stock_quantity', stockQuantity.toString());
     formData.append('discount_percent', discountPercent.toString());
     formData.append('category', category);
     formData.append('image_url', imageUrl);
+
 
     if (selectedFile) {
       formData.append('product_image', selectedFile);
@@ -341,13 +371,11 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
       });
   };
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      maximumFractionDigits: 0,
-    }).format(val || 0);
+  const formatCurrency = (val: number, curr = currencySymbol || 'RM') => {
+    const num = Number(val) || 0;
+    return `${curr} ${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
+
 
   const categories = ['all', ...Array.from(new Set(products.map(p => p.category || 'Equipment')))];
 
@@ -626,19 +654,22 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
           <div className="w-full overflow-x-auto border-t border-b border-[rgba(0,0,0,0.2)]">
             <table className="w-full text-left text-xs font-sans border-collapse">
               <thead className="bg-gradient-to-b from-[#DFDFDF] to-[#EDEDED] border-b border-[rgba(0,0,0,0.15)] text-[#626262] font-semibold text-[11px] uppercase tracking-wide">
+
                 <tr>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-8 text-center">^</th>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-8 text-center">
                     <Check className="w-3.5 h-3.5 mx-auto text-[#626262]" />
                   </th>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-14 text-center">Photo</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-28">Code</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">Product Name & Specifications</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-28 font-mono">Product Code</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">Product Name</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">Specification</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-28 font-mono">Supplier / Seller</th>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-32">Category</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-20 text-center">Stock</th>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-20 text-center">Unit</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-36 text-right">Master Price (Rp)</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-24 text-center">Disc (%)</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-36 text-right font-mono">Unit Price (MYR)</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-16 text-center font-mono">Stock</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-16 text-center font-mono">Disc (%)</th>
                   <th className="p-2.5 text-center w-24">Actions</th>
                 </tr>
               </thead>
@@ -695,28 +726,31 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
                         )}
                       </td>
 
-                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] font-mono font-bold text-xs">
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] font-mono font-bold text-xs text-blue-700">
                         {p.product_code}
                       </td>
 
-                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">
-                        <div className="font-bold text-xs mb-0.5">{p.product_name}</div>
-                        {p.description && (
-                          <div className={`text-[11px] line-clamp-1 ${isActive ? 'text-slate-300' : 'text-slate-500'}`}>
-                            {p.description}
-                          </div>
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] font-bold text-xs">
+                        {p.product_name}
+                      </td>
+
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-[11px] italic leading-snug">
+                        {p.specification || p.description || 'Standard specification'}
+                      </td>
+
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] font-mono text-[10px]">
+                        {p.supplier_name ? (
+                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold px-1.5 py-0.5 rounded">
+                            {p.supplier_name}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic">—</span>
                         )}
                       </td>
 
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">
-                        <span className="bg-amber-100 text-amber-900 border border-amber-300 font-bold px-2 py-0.5 text-[10px]">
+                        <span className="bg-amber-100 text-amber-900 border border-amber-300 font-bold px-2 py-0.5 text-[10px] rounded">
                           {p.category || 'Equipment'}
-                        </span>
-                      </td>
-
-                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center font-mono font-bold text-xs">
-                        <span className={(p.stock_quantity || 0) > 0 ? 'text-emerald-700' : 'text-rose-600'}>
-                          {p.stock_quantity || 0}
                         </span>
                       </td>
 
@@ -737,8 +771,15 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
                       </td>
 
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center font-mono font-bold text-xs">
+                        <span className={(p.stock_quantity || 0) > 0 ? 'text-emerald-700' : 'text-rose-600'}>
+                          {p.stock_quantity || 0}
+                        </span>
+                      </td>
+
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center font-mono font-bold text-xs">
                         {p.discount_percent || 0}%
                       </td>
+
 
                       <td className="p-2 text-center relative">
                         <div className="flex items-center justify-center gap-1">
@@ -1174,7 +1215,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
 
             <form onSubmit={handleSaveProduct} className="p-5 space-y-3.5 text-xs text-slate-900 bg-slate-50">
               
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Product Code:</label>
                   <input
@@ -1192,34 +1233,59 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
                     type="text"
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    placeholder="E.g. Hose & Fitting / Valves / Membrane"
+                    placeholder="E.g. Hose & Fitting / Valves / Hardware"
                     className="w-full bg-white border border-slate-300 p-1.5 text-xs font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Supplier / Seller Vendor:</label>
+                  <input
+                    type="text"
+                    value={supplierName}
+                    onChange={(e) => setSupplierName(e.target.value)}
+                    placeholder="E.g. 125 / Vendor Supplier Name"
+                    className="w-full bg-white border border-slate-300 p-1.5 text-xs font-semibold text-emerald-800"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Product Name / Specification:</label>
+                <label className="block font-bold text-slate-700 mb-1">Product Name:</label>
                 <input
                   type="text"
                   required
                   value={productName}
                   onChange={(e) => setProductName(e.target.value)}
-                  placeholder="E.g. RO WATER MAKER HIGH PRESSURE HOSE (Ref: PD-ENG-2026-059)"
+                  placeholder="E.g. RO WATER MAKER HIGH PRESSURE HOSE"
                   className="w-full bg-white border border-slate-300 p-1.5 text-xs font-bold focus:ring-1 focus:ring-[#0099ec]"
                 />
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Technical Specification Details:</label>
-                <textarea
-                  rows={2}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="E.g. High Pressure Flexible Rubber Hose with SS316 Fitting Ends. Operating Pressure: 350 BAR."
-                  className="w-full bg-white border border-slate-300 p-1.5 text-xs"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Short Description:</label>
+                  <textarea
+                    rows={2}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Short product summary..."
+                    className="w-full bg-white border border-slate-300 p-1.5 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Technical Specification Details:</label>
+                  <textarea
+                    rows={2}
+                    value={specification}
+                    onChange={(e) => setSpecification(e.target.value)}
+                    placeholder="Full tech specs, maker/model, operating pressure..."
+                    className="w-full bg-white border border-slate-300 p-1.5 text-xs font-mono"
+                  />
+                </div>
               </div>
+
 
               <div className="grid grid-cols-4 gap-2">
                 <div>
@@ -1245,7 +1311,8 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Price (Rp):</label>
+                  <label className="block font-bold text-slate-700 mb-1">Unit Price ({currencySymbol}):</label>
+
                   <input
                     type="number"
                     min={0}

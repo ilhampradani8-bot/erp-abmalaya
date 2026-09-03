@@ -464,15 +464,32 @@ function performOCRScan(string $file_url, array $key_list, array $quo_context): 
 
         // Flush last block if exists
         if ($curr_block) {
+            $title_parts = [];
+            $spec_parts  = [];
+            foreach ($curr_block['desc_lines'] as $b_line) {
+                if (preg_match('/^(Maker|Model|For|S\/N|Ref|Capacity|Rating|Voltage|Serial|Part No|P\/N)\s*[:;-]/i', $b_line) || (!empty($title_parts) && strlen($b_line) > 25)) {
+                    if (empty($title_parts)) {
+                        $title_parts[] = $b_line;
+                    } else {
+                        $spec_parts[] = $b_line;
+                    }
+                } else {
+                    $title_parts[] = $b_line;
+                }
+            }
+
             $native_items[] = [
-                'description'   => implode(' — ', $curr_block['desc_lines']),
+                'description'   => implode(' — ', $title_parts),
+                'specification' => !empty($spec_parts) ? implode(' — ', $spec_parts) : 'Standard specification',
                 'qty'           => $curr_block['qty'],
                 'unit'          => $curr_block['unit'],
                 'product_code'  => null,
-                'specification' => null,
-                'unit_price' => null, 'discount_percent' => null, 'total' => null
+                'unit_price'    => null,
+                'discount_percent' => null,
+                'total'         => null
             ];
         }
+
 
         if (preg_match('/Note[s]?:\s*(1\..+)/is', $raw_text, $nm)) {
             $native_notes = trim(str_replace("\n", ' ', $nm[1]));
@@ -505,13 +522,14 @@ PIPELINE NOTE: Raw text below was pre-extracted by pdftotext / Tesseract OCR.
 Use it as your PRIMARY text source, but also VISUALLY VERIFY against the attached document image for any missed or misread text.
 {$raw_text_block}
 === EXTRACTION RULES ===
-1. "items": Extract EVERY numbered line item. Each item MUST have:
+1. "items": Extract EVERY numbered line item. Each item MUST be cleanly split:
+   - "description": SHORT core item title ONLY (MAX 4-8 WORDS, e.g. "VALVE POSITION INDICATOR" or "SOLENOID VALVE"). NEVER put long Maker/Model/Specs text in description!
+   - "specification": ALL technical details — Maker/Manufacturer, Model Number, Cylinder Capacity, Voltage, Serial Number, and application notes (e.g. "Maker: Oval Corporation, Japan. Model: NP145B10, calibrated for 74 cc actuator capacity.").
    - "qty": numeric quantity (float)
    - "unit": unit of measure (BOXES, PCS, SETS, BOTTLES, KG, etc.)
-   - "description": product main name / ordering title only
-   - "specification": ALL additional details — brand, grade, size, colour, CAS No, pack size, technical params. If none, null.
    - "product_code": article no / CAS no / part no if printed. If none, null.
    - "unit_price", "discount_percent", "total": set from document if present, else null.
+
 
 2. "notes": Capture ALL special remarks, dispatch instructions, document notes printed verbatim.
 3. "delivery_email": Extract ONLY if a dispatch/fleet/delivery email address is EXPLICITLY PRINTED in document (e.g. fleet@domain.com). If not found, set null.

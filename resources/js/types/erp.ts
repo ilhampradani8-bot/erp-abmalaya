@@ -39,6 +39,8 @@ export interface RFQ {
 export interface QuotationItem {
   id: string;
   product_code?: string;
+  category_code?: string | null;
+  impa_code?: string | null;
   description: string;
   specification?: string;
   quantity: number;
@@ -50,6 +52,7 @@ export interface QuotationItem {
   item_code?: string;
   qty?: number;
 }
+
 
 export type QuotationStatus = 'draft' | 'terkirim' | 'disetujui' | 'ditolak' | 'siap_kirim' | 'quotation_build' | 'penawaran_terkirim' | 'deal' | 'masuk' | 'diproses';
 

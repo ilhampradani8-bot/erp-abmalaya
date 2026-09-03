@@ -93,11 +93,11 @@ function performOCRScan($file_url, array $key_list, array $quo_context) {
 
     $prompt = "You are a precise OCR extraction engine for AB Malaya Industry ERP system.\n"
             . "Extract structured data from the attached document image or PDF.\n\n"
-            . "=== SPECIAL DOCUMENT STRUCTURE GUIDELINES ===\n"
             . "1. ITEM DESCRIPTION & SPECIFICATION SPLITTING:\n"
-            . "   - 'description': Main product item name / ordering title (e.g. 'TOLUENE, ANALYTICAL REAGENT GRADE').\n"
-            . "   - 'product_code': Product/Article Number or CAS No or Ref No if printed (e.g. '1.08325.2500' or 'CAS: 108-88-3').\n"
-            . "   - 'specification': Combine all bullet points, brand, grade, formula, pack size, and technical parameters (e.g. 'Brand: EMSURE / Supelco, Grade: ACS ISO, Chemical Formula: C7H8, Pack Size: 2.5 Litres per bottle, UN No: UN 1294').\n"
+            . "   - 'description': SHORT core item title ONLY (MAX 4-8 WORDS, e.g. 'VALVE POSITION INDICATOR' or 'SOLENOID VALVE'). NEVER put long Maker/Model/Specs text in description!\n"
+            . "   - 'product_code': Product/Article Number or CAS No or Ref No if printed (e.g. 'NP145B10' or '1.08325.2500').\n"
+            . "   - 'specification': ALL technical details — Maker/Manufacturer, Model Number, Cylinder Capacity, Voltage, Serial Number, and application notes (e.g. 'Maker: Oval Corporation, Japan. Model: NP145B10, calibrated for 74 cc actuator capacity. For Open/Shut valve service...').\n"
+
             . "2. NOTES & DISPATCH INSTRUCTIONS:\n"
             . "   - 'notes': Capture ALL special remarks, submission instructions, or notes printed on document (e.g. 'Send to fleet@dutamarine.com and file copy onboard. Supplier shall provide latest SDS...').\n"
             . "   - 'delivery_email': If document contains a specific destination/dispatch email in the notes or footer (e.g. 'fleet@dutamarine.com'), set it in 'delivery_email'.\n"

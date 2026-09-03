@@ -33,6 +33,7 @@ try {
     }
 
     $header = json_encode(['alg' => 'RS256', 'typ' => 'JWT']);
+
     $now = time();
     $claim = json_encode([
         'iss' => $creds['client_email'],
@@ -68,9 +69,43 @@ try {
         throw new Exception('Failed to obtain Google Access Token: ' . $response . ' (Curl error: ' . $err . ')');
     }
 
-    // 3. Fetch Google Sheet Category Blueprint & Products Data in a single Batch request
     $spreadsheet_id = '17oE102qBlTzXGeWxHMkNTCnz0CE4TKR_xxsq65QqFmI';
-    $batch_url = "https://sheets.googleapis.com/v4/spreadsheets/{$spreadsheet_id}/values:batchGet?ranges=" . urlencode('C1:C100') . "&ranges=" . urlencode('OTHERS!A1:G100');
+
+    // 3. Get Metadata to discover all tabs in the Spreadsheet
+    $meta_url = "https://sheets.googleapis.com/v4/spreadsheets/{$spreadsheet_id}";
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $meta_url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        "Authorization: Bearer $access_token",
+        "Content-Type: application/json"
+    ]);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    $meta_res = curl_exec($ch);
+    $meta_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($meta_code !== 200) {
+        throw new Exception("Failed to fetch spreadsheet metadata. HTTP $meta_code: $meta_res");
+    }
+
+    $sheet_meta = json_decode($meta_res, true);
+    $sheets = $sheet_meta['sheets'] ?? [];
+
+    // Build batch ranges for all sheet tabs
+    $ranges = ["C1:C2000"]; // Sheet 1 Blueprint
+    $sheet_names = [];
+    foreach ($sheets as $s) {
+        $st = $s['properties']['title'] ?? '';
+        if ($st && strpos($st, 'Blue Print') === false) {
+            $ranges[] = "{$st}!A1:I2000";
+            $sheet_names[] = $st;
+        }
+    }
+
+
+    $batch_query = implode('&ranges=', array_map('urlencode', $ranges));
+    $batch_url = "https://sheets.googleapis.com/v4/spreadsheets/{$spreadsheet_id}/values:batchGet?ranges={$batch_query}";
 
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $batch_url);
@@ -85,17 +120,15 @@ try {
     curl_close($ch);
 
     if ($sheet_code !== 200) {
-        throw new Exception("Google Sheets API failed with HTTP $sheet_code: " . $sheet_response);
+        throw new Exception("Google Sheets API batchGet failed with HTTP $sheet_code: " . $sheet_response);
     }
 
     $batch_data = json_decode($sheet_response, true);
     $valueRanges = $batch_data['valueRanges'] ?? [];
-    
-    $rows = isset($valueRanges[0]['values']) ? $valueRanges[0]['values'] : [];
-    $others_rows = isset($valueRanges[1]['values']) ? $valueRanges[1]['values'] : [];
 
-    if (empty($rows)) {
-        throw new Exception('No rows found in the Category Blueprint Google Sheet.');
+    $blueprint_rows = isset($valueRanges[0]['values']) ? $valueRanges[0]['values'] : [];
+    if (empty($blueprint_rows)) {
+        throw new Exception('No rows found in Category Blueprint.');
     }
 
     // 4. Re-create product_categories table for Google Sheet blueprints
@@ -113,95 +146,124 @@ try {
         `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-    // 5. Restore products table for actual items
+    // 5. Restore products table for actual items with supplier_name & image_url
     $db_conn->query("DROP TABLE IF EXISTS `products`");
     $db_conn->query("CREATE TABLE `products` (
         `id` INT AUTO_INCREMENT PRIMARY KEY,
         `product_code` VARCHAR(100) UNIQUE NOT NULL,
         `product_name` VARCHAR(255) NOT NULL,
         `description` TEXT,
+        `specification` TEXT,
         `unit` VARCHAR(50) DEFAULT 'Unit',
         `unit_price` DECIMAL(15,2) DEFAULT 0.00,
         `stock_quantity` INT DEFAULT 50,
         `discount_percent` DECIMAL(5,2) DEFAULT 0.00,
         `image_url` TEXT,
         `category` VARCHAR(100) DEFAULT 'Equipment',
+        `supplier_name` VARCHAR(255) DEFAULT NULL,
         `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
         `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-    // Seed products table from the OTHERS tab (Tab 2) dynamically
+    // 6. Import Products across ALL Spreadsheet Tabs
     $others_imported = 0;
-    if (!empty($others_rows)) {
-        $db_conn->query("TRUNCATE TABLE `products`");
+    $product_index = 1;
+
+    $stmt_prod = $db_conn->prepare("INSERT INTO `products` (`product_code`, `product_name`, `description`, `specification`, `unit`, `unit_price`, `stock_quantity`, `discount_percent`, `image_url`, `category`, `supplier_name`) VALUES (?, ?, ?, ?, 'Unit', ?, 50, 0.00, ?, ?, ?)");
+
+    for ($tab_idx = 1; $tab_idx < count($valueRanges); $tab_idx++) {
+        $tab_rows = $valueRanges[$tab_idx]['values'] ?? [];
+        $tab_name = $sheet_names[$tab_idx - 1] ?? 'General Equipment';
+
         $current_parent = '';
-        $product_index = 1;
-        
-        foreach ($others_rows as $idx_row => $row_val) {
-            if ($idx_row < 4) continue;
+        foreach ($tab_rows as $idx_row => $row_val) {
+            if ($idx_row < 2) continue; // skip headers
             if (empty($row_val)) continue;
-            
-            $no = isset($row_val[2]) ? trim($row_val[2]) : '';
-            $impa = isset($row_val[3]) ? trim($row_val[3]) : '';
-            $desc = isset($row_val[4]) ? trim($row_val[4]) : '';
-            $offered = isset($row_val[5]) ? trim($row_val[5]) : '';
-            $price = isset($row_val[6]) ? trim($row_val[6]) : '';
-            
+
+            // Find column indexes safely
+            $no       = '';
+            $impa     = '';
+            $desc     = '';
+            $offered  = '';
+            $price    = '';
+            $supplier = '';
+            $image    = '';
+
+            // Detect column offset
+            $col_offset = 0;
+            foreach ($row_val as $ci => $cv) {
+                if (trim($cv) === 'No' || trim($cv) === 'IMPA Code' || trim($cv) === 'DESCRIPTIONS') {
+                    $col_offset = $ci > 2 ? $ci - 2 : 0;
+                    break;
+                }
+            }
+
+            $no       = isset($row_val[2 + $col_offset]) ? trim($row_val[2 + $col_offset]) : '';
+            $impa     = isset($row_val[3 + $col_offset]) ? trim($row_val[3 + $col_offset]) : '';
+            $desc     = isset($row_val[4 + $col_offset]) ? trim($row_val[4 + $col_offset]) : '';
+            $offered  = isset($row_val[5 + $col_offset]) ? trim($row_val[5 + $col_offset]) : '';
+            $price    = isset($row_val[6 + $col_offset]) ? trim($row_val[6 + $col_offset]) : '';
+            $supplier = isset($row_val[7 + $col_offset]) ? trim($row_val[7 + $col_offset]) : '';
+            $image    = isset($row_val[8 + $col_offset]) ? trim($row_val[8 + $col_offset]) : '';
+
             if (empty($desc)) continue;
-            if (strtolower($desc) === 'descriptions' || strtolower($no) === 'no') {
+            if (strtolower($desc) === 'descriptions' || strtolower($no) === 'no' || strtolower($desc) === 'sub cat :') {
                 continue;
             }
-            if (strpos(strtoupper($desc), 'SUB CAT :') !== false) {
-                continue;
-            }
-            
+
             $product_name = '';
-            $product_desc = $offered;
-            $unit_price = (float)str_replace([',', ' '], '', $price);
-            
+            $product_spec = !empty($offered) ? $offered : $desc;
+            $unit_price   = (float)str_replace([',', ' ', 'RM', 'rm'], '', $price);
+
             if (!empty($no)) {
-                if (!empty($price)) {
-                    $product_name = $desc;
-                    $current_parent = '';
-                } else {
-                    $current_parent = $desc;
-                    continue;
-                }
+                $product_name = $desc;
+                $current_parent = $desc;
             } else {
-                if (!empty($price) && !empty($current_parent)) {
-                    $product_name = $current_parent . ' - ' . $desc;
-                } else {
-                    continue;
-                }
+                $product_name = !empty($current_parent) ? ($current_parent . ' - ' . $desc) : $desc;
             }
-            
+
             if (empty($product_name)) continue;
-            
-            $product_code = 'PRD-GYM-' . str_pad($product_index++, 3, '0', STR_PAD_LEFT);
-            if (!empty($impa)) {
+
+
+            $product_code = 'PRD-' . str_pad($product_index++, 4, '0', STR_PAD_LEFT);
+            if (!empty($impa) && preg_match('/^\d+$/', $impa)) {
                 $product_code = 'IMPA-' . $impa;
             }
-            
-            $stmt_prod = $db_conn->prepare("INSERT INTO `products` (`product_code`, `product_name`, `description`, `unit`, `unit_price`, `stock_quantity`, `discount_percent`, `category`) VALUES (?, ?, ?, 'Unit', ?, 50, 0.00, 'Gym Equipment')");
+
             if ($stmt_prod) {
-                $stmt_prod->bind_param("sssd", $product_code, $product_name, $product_desc, $unit_price);
+                $img_val = !empty($image) ? $image : null;
+                $sup_val = !empty($supplier) ? $supplier : null;
+
+                $stmt_prod->bind_param("ssssdsss", $product_code, $product_name, $product_name, $product_spec, $unit_price, $img_val, $tab_name, $sup_val);
                 if ($stmt_prod->execute()) {
                     $others_imported++;
                 } else {
-                    $errors[] = "Failed to insert product $product_code ($product_name): " . $stmt_prod->error;
+                    // Ignore duplicate IMPA code errors, append index
+                    $alt_code = $product_code . '-' . $product_index;
+                    $stmt_prod->bind_param("ssssdsss", $alt_code, $product_name, $product_name, $product_spec, $unit_price, $img_val, $tab_name, $sup_val);
+                    if ($stmt_prod->execute()) $others_imported++;
                 }
-                $stmt_prod->close();
-            } else {
-                $errors[] = "Failed to prepare statement for product $product_code: " . $db_conn->error;
             }
         }
-    } else {
-        $errors[] = "OTHERS sheet rows are empty.";
+    }
+    if ($stmt_prod) $stmt_prod->close();
+
+    // 7. Parse Categories Blueprint from IMPA Sheet Tab Names & Blueprint rows
+    $imported_count = 0;
+    $stmt_cat = $db_conn->prepare("INSERT INTO `product_categories` (`category_code`, `category_name`, `internal_category`, `subcategories`, `description_en`, `description_my`, `classification_rules`) VALUES (?, ?, 'Marine Logistics', 'General Spares', ?, ?, 'Standard IMPA Rules') ON DUPLICATE KEY UPDATE `category_name` = VALUES(`category_name`)");
+
+    foreach ($sheet_names as $sn) {
+        if (preg_match('/^(\d+)\s*(.+)$/', trim($sn), $cm)) {
+            $code = str_pad(trim($cm[1]), 2, '0', STR_PAD_LEFT);
+            $cat_title = trim($cm[2]);
+            if ($stmt_cat) {
+                $stmt_cat->bind_param("ssss", $code, $cat_title, $sn, $sn);
+                if ($stmt_cat->execute()) $imported_count++;
+            }
+        }
     }
 
-    $imported_count = 0;
-
-    foreach ($rows as $row) {
+    foreach ($blueprint_rows as $row) {
         if (empty($row[0])) continue;
         $text = trim($row[0]);
 
@@ -209,68 +271,30 @@ try {
             continue;
         }
 
-        $code = trim($match_title[1]);
+        $code = str_pad(trim($match_title[1]), 2, '0', STR_PAD_LEFT);
         $full_title = trim($match_title[2]);
-
         $title_lines = explode("\n", $full_title);
         $category_name = trim($title_lines[0]);
         $category_name = preg_replace('/[^A-Za-z0-9\s\-\&]/', '', $category_name);
-        $category_name = trim(preg_replace('/^[?\s\-–—]+/', '', $category_name));
 
-        $internal_cat = '';
-        if (preg_match('/AB Malaya Internal Category\s*\n\s*\n\s*(.+)$/mi', $text, $match_int)) {
-            $internal_lines = explode("\n", trim($match_int[1]));
-            $internal_cat = trim($internal_lines[0]);
-        }
-
-        $subcategories = [];
-        if (preg_match('/Subcategories\s*\n(.+?)(?:\n\s*\n|Description|$)/si', $text, $match_sub)) {
-            $sub_lines = explode("\n", trim($match_sub[1]));
-            foreach ($sub_lines as $sub) {
-                $sub = trim($sub);
-                if (!empty($sub)) $subcategories[] = $sub;
-            }
-        }
-        $subcategories_str = implode(', ', $subcategories);
-
-        $desc_en = '';
-        $desc_my = '';
-        if (preg_match('/Description\s*\n\s*\n\s*English:\s*\n(.+?)(?:\n\s*\n\s*Bahasa Melayu:|\n\s*\n\s*Classification Rule|$)/si', $text, $match_desc_en)) {
-            $desc_en = trim($match_desc_en[1]);
-        }
-        if (preg_match('/Bahasa Melayu:\s*\n(.+?)(?:\n\s*\n\s*Classification Rule|$)/si', $text, $match_desc_my)) {
-            $desc_my = trim($match_desc_my[1]);
-        }
-
-        $rules = '';
-        if (preg_match('/Classification Rule\s*\n(.+)$/si', $text, $match_rules)) {
-            $rules = trim($match_rules[1]);
-        }
-
-        // Insert into the category table
-        $stmt = $db_conn->prepare("INSERT INTO product_categories (category_code, category_name, internal_category, subcategories, description_en, description_my, classification_rules) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        if ($stmt) {
-            $stmt->bind_param("sssssss", $code, $category_name, $internal_cat, $subcategories_str, $desc_en, $desc_my, $rules);
-            if ($stmt->execute()) {
-                $imported_count++;
-            } else {
-                $errors[] = "Failed to insert Category $code: " . $stmt->error;
-            }
-            $stmt->close();
-        } else {
-            $errors[] = "Failed to prepare statement for Category $code: " . $db_conn->error;
+        if ($stmt_cat) {
+            $stmt_cat->bind_param("ssss", $code, $category_name, $full_title, $full_title);
+            if ($stmt_cat->execute()) $imported_count++;
         }
     }
+    if ($stmt_cat) $stmt_cat->close();
+
 
     echo json_encode([
         'status' => 'success',
-        'message' => 'Successfully imported category blueprint data to product_categories, and restored products database table.',
+        'message' => 'Successfully imported all product tabs & supplier details from Google Sheets.',
         'imported_categories' => $imported_count,
         'imported_products' => $others_imported,
         'errors' => $errors
     ]);
 
 } catch (Exception $e) {
+    http_response_code(500);
     echo json_encode([
         'status' => 'error',
         'message' => $e->getMessage()

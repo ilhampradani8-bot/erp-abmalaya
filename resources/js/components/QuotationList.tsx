@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Quotation } from '../types/erp';
-import { Search, Plus, Eye, Edit, Send, RefreshCw, Loader2, Trash2, FileType, Check, Sparkles, CheckCircle2, Sliders, Clock, MoreVertical, History, X as CloseIcon, User, AlertTriangle, Printer, Image, ShieldCheck, ScanLine, Info, Database, Activity, Terminal, Tag } from 'lucide-react';
+import { Search, Plus, Eye, Edit, Send, RefreshCw, Loader2, Trash2, FileType, Check, Sparkles, CheckCircle2, Sliders, Clock, MoreVertical, History, X as CloseIcon, User, AlertTriangle, Printer, Image as ImageIcon, ShieldCheck, ScanLine, Info, Database, Activity, Terminal, Tag } from 'lucide-react';
+
 import { getApiUrl } from '../utils/api';
 
 
@@ -1659,14 +1660,15 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                               <thead className="border-b border-slate-300 bg-slate-50 text-slate-500 font-bold uppercase tracking-wider">
                                 <tr>
                                   <th className="py-2 px-2 text-center w-8">#</th>
-                                  <th className="py-2 px-2 w-24">Part / Code</th>
-                                  <th className="py-2 px-2">Description</th>
+                                  <th className="py-2 px-2 text-center w-12">Photo</th>
+                                  <th className="py-2 px-2 w-28 font-mono">Part / IMPA Code</th>
+                                  <th className="py-2 px-2">Item Name (Description)</th>
                                   <th className="py-2 px-2">Specification / Technical Details</th>
+                                  <th className="py-2 px-2 w-24">Supplier / Seller</th>
                                   <th className="py-2 px-2 text-center w-16">Qty</th>
-                                  <th className="py-2 px-2 text-right w-24">Unit Price</th>
+                                  <th className="py-2 px-2 text-right w-24">Unit Price (MYR)</th>
                                   <th className="py-2 px-2 text-center w-16">Disc (%)</th>
-                                  <th className="py-2 px-2 text-right w-20">Tax</th>
-                                  <th className="py-2 px-2 text-right w-24">Total</th>
+                                  <th className="py-2 px-2 text-right w-24">Total Amount</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100">
@@ -1674,13 +1676,39 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   displayItems.map((item, idx) => (
                                     <tr key={idx} className="hover:bg-slate-50">
                                       <td className="py-2 px-2 text-center font-mono text-slate-400">{idx + 1}</td>
-                                      <td className="py-2 px-2 font-mono text-slate-600 font-bold">{item.product_code || '—'}</td>
+                                      <td className="py-1 px-2 text-center">
+                                        {item.image_url ? (
+                                          <img src={item.image_url} alt="Photo" className="w-8 h-8 object-cover rounded border border-slate-200 mx-auto" />
+                                        ) : (
+                                          <div className="w-8 h-8 bg-slate-100 border border-slate-200 rounded mx-auto flex items-center justify-center text-slate-400 text-[8px]">
+                                            <ImageIcon className="w-3.5 h-3.5 opacity-40" />
+
+                                          </div>
+
+                                        )}
+                                      </td>
+                                      <td className="py-2 px-2 font-mono text-slate-700 font-bold">
+                                        <div>{item.product_code || '—'}</div>
+                                        {item.impa_code || item.category_code || activeQuotation.impa_code ? (
+                                          <span className="mt-0.5 bg-indigo-50 text-indigo-800 border border-indigo-200 font-extrabold px-1.5 py-0.5 rounded text-[8px] inline-flex items-center gap-1">
+                                            <span>🏷 IMPA {item.impa_code || item.category_code || activeQuotation.impa_code}</span>
+                                          </span>
+                                        ) : null}
+                                      </td>
                                       <td className="py-2 px-2 font-bold text-slate-800">{item.description}</td>
                                       <td className="py-2 px-2 text-slate-600 italic leading-snug">{item.specification || 'Standard specification'}</td>
+                                      <td className="py-2 px-2 font-mono text-[9px] text-slate-600">
+                                        {(item as any).supplier_name ? (
+                                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold px-1.5 py-0.5 rounded">
+                                            {(item as any).supplier_name}
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-400 italic">—</span>
+                                        )}
+                                      </td>
                                       <td className="py-2 px-2 text-center font-mono font-bold">{item.quantity} {item.unit}</td>
                                       <td className="py-2 px-2 text-right font-mono text-slate-600">{formatCurrency(item.unit_price || 0)}</td>
                                       <td className="py-2 px-2 text-center font-mono text-rose-600">{item.discount_percent ? `${item.discount_percent}%` : '0%'}</td>
-                                      <td className="py-2 px-2 text-right font-mono text-slate-600">{formatCurrency((item.total || 0) * 0.11)}</td>
                                       <td className="py-2 px-2 text-right font-mono font-extrabold text-slate-900">{formatCurrency(item.total)}</td>
                                     </tr>
                                   ))
@@ -1688,24 +1716,52 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   ocrItems.map((it: any, idx: number) => (
                                     <tr key={idx} className="hover:bg-slate-50">
                                       <td className="py-2 px-2 text-center font-mono text-slate-400">{idx + 1}</td>
-                                      <td className="py-2 px-2 font-mono text-slate-600 font-bold">{it.product_code || '—'}</td>
+                                      <td className="py-1 px-2 text-center">
+                                        {it.image_url ? (
+                                          <img src={it.image_url} alt="Photo" className="w-8 h-8 object-cover rounded border border-slate-200 mx-auto" />
+                                        ) : (
+                                          <div className="w-8 h-8 bg-slate-100 border border-slate-200 rounded mx-auto flex items-center justify-center text-slate-400 text-[8px]">
+                                            <ImageIcon className="w-3.5 h-3.5 opacity-40" />
+
+                                          </div>
+
+                                        )}
+                                      </td>
+                                      <td className="py-2 px-2 font-mono text-slate-700 font-bold">
+                                        <div>{it.product_code || '—'}</div>
+                                        {it.impa_code || it.category_code || activeQuotation.impa_code ? (
+                                          <span className="mt-0.5 bg-indigo-50 text-indigo-800 border border-indigo-200 font-extrabold px-1.5 py-0.5 rounded text-[8px] inline-flex items-center gap-1">
+                                            <span>🏷 IMPA {it.impa_code || it.category_code || activeQuotation.impa_code}</span>
+                                          </span>
+                                        ) : null}
+                                      </td>
                                       <td className="py-2 px-2 font-bold text-slate-800 flex items-center gap-1.5">
                                         <span>{it.description || '—'}</span>
                                         <span className="bg-blue-50 text-blue-700 text-[8px] font-bold px-1 rounded border border-blue-200">OCR</span>
                                       </td>
                                       <td className="py-2 px-2 text-slate-600 italic leading-snug">{it.specification || 'Extracted via Vision AI'}</td>
+                                      <td className="py-2 px-2 font-mono text-[9px] text-slate-600">
+                                        {it.supplier_name ? (
+                                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold px-1.5 py-0.5 rounded">
+                                            {it.supplier_name}
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-400 italic">—</span>
+                                        )}
+                                      </td>
                                       <td className="py-2 px-2 text-center font-mono font-bold">{it.qty ?? 1} {it.unit || 'pcs'}</td>
                                       <td className="py-2 px-2 text-right font-mono text-slate-600">{it.unit_price != null ? formatCurrency(it.unit_price) : '—'}</td>
                                       <td className="py-2 px-2 text-center font-mono text-rose-600">{it.discount_percent != null ? `${it.discount_percent}%` : '—'}</td>
-                                      <td className="py-2 px-2 text-right font-mono text-slate-600">{it.tax != null ? (typeof it.tax === 'number' ? formatCurrency(it.tax) : String(it.tax)) : '—'}</td>
                                       <td className="py-2 px-2 text-right font-mono font-extrabold text-slate-900">{it.total != null ? formatCurrency(it.total) : '—'}</td>
                                     </tr>
                                   ))
                                 ) : (
                                   <tr>
-                                    <td colSpan={9} className="py-6 text-center text-slate-400 font-bold">No line items specified.</td>
+                                    <td colSpan={10} className="py-6 text-center text-slate-400 font-bold">No line items specified.</td>
                                   </tr>
                                 )}
+
+
                               </tbody>
                             </table>
                           </div>
@@ -1935,7 +1991,8 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                     className="bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-[#e6e6e6] text-[#3d3d3d] font-bold text-xs p-1.5 rounded border border-[#a0a0a0] transition cursor-pointer flex items-center justify-center gap-1"
                     title="Save SPH PNG image"
                   >
-                    <Image className="w-3.5 h-3.5 text-emerald-600" />
+                    <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
+
                     <span className="hidden sm:inline">PNG</span>
                   </button>
                 </div>

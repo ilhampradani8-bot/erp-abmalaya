@@ -136,12 +136,14 @@ try {
             $product_code = isset($input['product_code']) ? trim($input['product_code']) : '';
             $product_name = isset($input['product_name']) ? trim($input['product_name']) : '';
             $description = isset($input['description']) ? trim($input['description']) : '';
+            $specification = isset($input['specification']) ? trim($input['specification']) : '';
             $unit = isset($input['unit']) ? trim($input['unit']) : 'Unit';
             $unit_price = isset($input['unit_price']) ? (float)$input['unit_price'] : 0.00;
             $stock_quantity = isset($input['stock_quantity']) ? (int)$input['stock_quantity'] : 50;
             $discount_percent = isset($input['discount_percent']) ? (float)$input['discount_percent'] : 0.00;
             $image_url = isset($input['image_url']) ? trim($input['image_url']) : '';
             $category = isset($input['category']) ? trim($input['category']) : 'Equipment';
+            $supplier_name = isset($input['supplier_name']) ? trim($input['supplier_name']) : '';
 
             // Support multipart file uploads for images
             if (isset($_FILES['product_image']) && $_FILES['product_image']['error'] === UPLOAD_ERR_OK) {
@@ -153,7 +155,9 @@ try {
                 if (in_array($ext, $allowed_exts)) {
                     $new_filename = 'prd_' . time() . '_' . rand(100, 999) . '.' . $ext;
                     if (move_uploaded_file($tmp_name, $upload_dir . $new_filename)) {
-                        $image_url = 'http://localhost:8000/uploads/products/' . $new_filename;
+                        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+                        $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8000';
+                        $image_url = $protocol . $host . '/uploads/products/' . $new_filename;
                     }
                 }
             }
@@ -165,13 +169,14 @@ try {
                 $product_code = 'PRD-' . rand(1000, 9999);
             }
 
-            $stmt = $db_conn->prepare("INSERT INTO products (product_code, product_name, description, unit, unit_price, stock_quantity, discount_percent, image_url, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE product_name=VALUES(product_name), description=VALUES(description), unit=VALUES(unit), unit_price=VALUES(unit_price), stock_quantity=VALUES(stock_quantity), discount_percent=VALUES(discount_percent), image_url=VALUES(image_url), category=VALUES(category)");
+            $stmt = $db_conn->prepare("INSERT INTO products (product_code, product_name, description, specification, unit, unit_price, stock_quantity, discount_percent, image_url, category, supplier_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE product_name=VALUES(product_name), description=VALUES(description), specification=VALUES(specification), unit=VALUES(unit), unit_price=VALUES(unit_price), stock_quantity=VALUES(stock_quantity), discount_percent=VALUES(discount_percent), image_url=VALUES(image_url), category=VALUES(category), supplier_name=VALUES(supplier_name)");
             if ($stmt) {
-                $stmt->bind_param("ssssdidss", $product_code, $product_name, $description, $unit, $unit_price, $stock_quantity, $discount_percent, $image_url, $category);
+                $stmt->bind_param("sssssdidsss", $product_code, $product_name, $description, $specification, $unit, $unit_price, $stock_quantity, $discount_percent, $image_url, $category, $supplier_name);
                 $stmt->execute();
             } else {
                 throw new Exception("MySQL Prepare Failed: " . $db_conn->error);
             }
+
 
             ob_end_clean();
             header('Content-Type: application/json; charset=utf-8');
