@@ -470,8 +470,8 @@ PROMPT;
 
     // ── Step 3: Call Gemini AI Model ─────────────────────────────────────────
     $ocr_models = [
-        'gemini-3.5-flash',
         'gemini-3.6-flash',
+        'gemini-3.5-flash',
         'gemini-flash-latest',
     ];
     $key_count = count($key_list);
