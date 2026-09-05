@@ -109,53 +109,61 @@ function classifyEmail(string $subject, string $body, string $sender, array $key
         return ['classification' => 'abort_cycle', 'item_requested' => null, 'items' => [], 'verified' => 0, 'error' => 'all_keys_exhausted'];
     }
 
+    $inbox_models = [
+        'gemini-3.6-flash',
+        'gemini-3.5-flash',
+        'gemini-flash-latest'
+    ];
+
     // Coba setiap kunci aktif (yang belum cooldown) satu kali saja
     foreach ($active_keys as $api_key) {
         $key_short = substr($api_key, -6);
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=' . urlencode($api_key);
-        $payload = json_encode([
-            'contents'         => [['parts' => [['text' => $prompt]]]],
-            'generationConfig' => ['responseMimeType' => 'application/json']
-        ]);
+        foreach ($inbox_models as $model_name) {
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . $model_name . ':generateContent?key=' . urlencode($api_key);
+            $payload = json_encode([
+                'contents'         => [['parts' => [['text' => $prompt]]]],
+                'generationConfig' => ['responseMimeType' => 'application/json']
+            ]);
 
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => $payload,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_TIMEOUT        => 30,
-            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-        ]);
-        $resp      = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_POST           => true,
+                CURLOPT_POSTFIELDS     => $payload,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_TIMEOUT        => 30,
+                CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+            ]);
+            $resp      = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
 
-        if ($http_code === 200 && !empty($resp)) {
-            $api_data = json_decode($resp, true);
-            $raw_text = $api_data['candidates'][0]['content']['parts'][0]['text'] ?? '';
-            $raw_text = trim(preg_replace('/^```json\s*/i', '', preg_replace('/\s*```$/', '', $raw_text)));
-            $parsed   = json_decode($raw_text, true);
-            if ($parsed && isset($parsed['classification'])) {
-                return [
-                    'classification' => $parsed['classification'],
-                    'item_requested' => $parsed['item_requested'] ?? null,
-                    'items'          => $parsed['items'] ?? [],
-                    'verified'       => 1,
-                    'error'          => null,
-                ];
+            if ($http_code === 200 && !empty($resp)) {
+                $api_data = json_decode($resp, true);
+                $raw_text = $api_data['candidates'][0]['content']['parts'][0]['text'] ?? '';
+                $raw_text = trim(preg_replace('/^```json\s*/i', '', preg_replace('/\s*```$/', '', $raw_text)));
+                $parsed   = json_decode($raw_text, true);
+                if ($parsed && isset($parsed['classification'])) {
+                    return [
+                        'classification' => $parsed['classification'],
+                        'item_requested' => $parsed['item_requested'] ?? null,
+                        'items'          => $parsed['items'] ?? [],
+                        'verified'       => 1,
+                        'error'          => null,
+                    ];
+                }
             }
-        }
 
-        if ($http_code === 429) {
-            // Tandai kunci ini cooldown selama 60 detik
-            $GLOBALS['exhausted_keys'][$api_key] = $now + 60;
-            $errors[] = "Key ...{$key_short}: 429 Rate Limit → cooldown 60s";
-            continue; // Coba kunci berikutnya tanpa sleep
-        }
+            if ($http_code === 429) {
+                // Tandai kunci ini cooldown selama 60 detik
+                $GLOBALS['exhausted_keys'][$api_key] = $now + 60;
+                $errors[] = "[{$model_name}] Key ...{$key_short}: 429 Rate Limit → cooldown 60s";
+                break; // Break inner model loop to rotate to next key
+            }
 
-        $errors[] = "Key ...{$key_short}: HTTP {$http_code}. " . substr($resp, 0, 120);
-        sleep(1); // Delay minimal untuk error non-429
+            $errors[] = "[{$model_name}] Key ...{$key_short}: HTTP {$http_code}. " . substr($resp, 0, 120);
+            sleep(1); // Delay minimal untuk error non-429
+        }
     }
 
     // Cek lagi setelah semua kunci aktif dicoba — jika semua kena 429 sekarang, abort
