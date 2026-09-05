@@ -5,7 +5,8 @@ import {
   Key, Database, CheckCircle2, Eye, EyeOff, Save, 
   FileText, Sliders, Bot, AlertTriangle, 
   Plus, Edit3, Trash2, Percent, ExternalLink, 
-  Activity, Layers, Server, Cpu, Calendar, ScanLine
+  Activity, Layers, Server, Cpu, Calendar, ScanLine,
+  Cloud, RefreshCw
 } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
@@ -30,10 +31,25 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
   smtpConfig,
   onSaveSmtpConfig,
 }) => {
-  // 7 Tabs: 'credentials' | 'ai' | 'default_fee' | 'paper' | 'inbox_rules' | 'database' | 'quotation_settings'
+  // 8 Tabs: 'credentials' | 'ai' | 'cloud_sync' | 'default_fee' | 'paper' | 'inbox_rules' | 'database' | 'quotation_settings'
   const [activeTab, setActiveTab] = useState<
-    'credentials' | 'ai' | 'default_fee' | 'paper' | 'inbox_rules' | 'database' | 'quotation_settings'
+    'credentials' | 'ai' | 'cloud_sync' | 'default_fee' | 'paper' | 'inbox_rules' | 'database' | 'quotation_settings'
   >('credentials');
+
+  // Cloud Sync & Multi-Spreadsheet Backup State
+  const [cloudSubTab, setCloudSubTab] = useState<'info' | 'logs' | 'conflicts' | 'audit' | 'advanced'>('info');
+  const [backupsList, setBackupsList] = useState<any[]>([]);
+  const [syncLogsList, setSyncLogsList] = useState<any[]>([]);
+  const [syncConflictsList, setSyncConflictsList] = useState<any[]>([]);
+  const [sessionAuditLogs, setSessionAuditLogs] = useState<any[]>([]);
+  const [isAddBackupModalOpen, setIsAddBackupModalOpen] = useState(false);
+  const [backupTitle, setBackupTitle] = useState('');
+  const [backupSpreadsheetId, setBackupSpreadsheetId] = useState('');
+  const [backupSheetName, setBackupSheetName] = useState('Sheet1');
+  const [backupSaEmail, setBackupSaEmail] = useState('erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com');
+  const [backupKeyFile, setBackupKeyFile] = useState('erp-abmalaya-connect-0fc0c4cb6314.json');
+  const [backupIsPrimary, setBackupIsPrimary] = useState(false);
+  const [isSavingBackup, setIsSavingBackup] = useState(false);
 
   // Common Notification Banner State
   const [isSaved, setIsSaved] = useState(false);
@@ -263,7 +279,103 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         }
       })
       .catch(() => {});
+
+    // Fetch Spreadsheet Backups List & Logs
+    fetchSpreadsheetBackups();
+    fetchSyncLogs();
+    fetchConflicts();
+    loadSessionAudit();
   }, []);
+
+  const fetchSpreadsheetBackups = () => {
+    fetch(getApiUrl('/api_spreadsheet_sync.php?action=get_backups'))
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success' && Array.isArray(resData.backups)) {
+          setBackupsList(resData.backups);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const fetchSyncLogs = () => {
+    fetch(getApiUrl('/api_spreadsheet_sync.php?action=get_sync_logs'))
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success' && Array.isArray(resData.sync_logs)) {
+          setSyncLogsList(resData.sync_logs);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const fetchConflicts = () => {
+    fetch(getApiUrl('/api_spreadsheet_sync.php?action=check_conflicts'))
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success' && Array.isArray(resData.conflicts)) {
+          setSyncConflictsList(resData.conflicts);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const loadSessionAudit = () => {
+    try {
+      const stored = localStorage.getItem('product_edit_history_session');
+      if (stored) {
+        setSessionAuditLogs(JSON.parse(stored));
+      }
+    } catch (e) {}
+  };
+
+  const handleAddBackupTarget = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!backupSpreadsheetId) return;
+
+    setIsSavingBackup(true);
+    fetch(getApiUrl('/api_spreadsheet_sync.php?action=add_backup'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: backupTitle || 'Spreadsheet Backup',
+        spreadsheet_id: backupSpreadsheetId,
+        sheet_name: backupSheetName || 'Sheet1',
+        service_account_email: backupSaEmail,
+        key_filename: backupKeyFile,
+        is_primary: backupIsPrimary ? 1 : 0
+      })
+    })
+      .then((res) => res.json())
+      .then((resData) => {
+        setIsSavingBackup(false);
+        if (resData.status === 'success') {
+          setIsAddBackupModalOpen(false);
+          setBackupTitle('');
+          setBackupSpreadsheetId('');
+          setSavedMessage('File backup spreadsheet baru berhasil ditambahkan!');
+          setIsSaved(true);
+          setTimeout(() => setIsSaved(false), 3000);
+          fetchSpreadsheetBackups();
+        }
+      })
+      .catch(() => setIsSavingBackup(false));
+  };
+
+  const handleDeleteBackupTarget = (id: number) => {
+    if (!window.confirm('Hapus konfigurasi file backup ini?')) return;
+    fetch(getApiUrl(`/api_spreadsheet_sync.php?action=delete_backup&id=${id}`))
+      .then((res) => res.json())
+      .then(() => fetchSpreadsheetBackups())
+      .catch(() => {});
+  };
+
+  const handleSetPrimaryBackupTarget = (id: number) => {
+    fetch(getApiUrl(`/api_spreadsheet_sync.php?action=set_primary&id=${id}`))
+      .then((res) => res.json())
+      .then(() => fetchSpreadsheetBackups())
+      .catch(() => {});
+  };
 
   // Save Function Helper
   const saveBatchSettings = (items: { credential_key: string; credential_value: string; service_name: string }[], msg?: string) => {
@@ -480,16 +592,17 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         </div>
       )}
 
-      {/* 7 Tab Navigation Header */}
+      {/* 8 Tab Navigation Header */}
       <div className="bg-white border-b border-slate-200 px-4 pt-3 flex gap-1 overflow-x-auto select-none shadow-xs">
         {[
           { id: 'credentials', label: '1. SMTP Credential', icon: Key },
           { id: 'ai', label: '2. AI Engine & Keys', icon: Bot },
-          { id: 'default_fee', label: '3. Default Setting (Fee)', icon: Percent },
-          { id: 'paper', label: '4. Setting Paper', icon: FileText },
-          { id: 'inbox_rules', label: '5. Inbox Rules', icon: Sliders },
-          { id: 'database', label: '6. Database', icon: Database },
-          { id: 'quotation_settings', label: '7. Setting Quotation', icon: Layers },
+          { id: 'cloud_sync', label: '3. Cloud Sync & Backup', icon: Cloud },
+          { id: 'default_fee', label: '4. Default Setting (Fee)', icon: Percent },
+          { id: 'paper', label: '5. Setting Paper', icon: FileText },
+          { id: 'inbox_rules', label: '6. Inbox Rules', icon: Sliders },
+          { id: 'database', label: '7. Database', icon: Database },
+          { id: 'quotation_settings', label: '8. Setting Quotation', icon: Layers },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -512,6 +625,497 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
 
       {/* Main Body Content Scroll Container */}
       <div className="flex-1 p-4 overflow-y-auto space-y-4">
+
+        {/* ── TAB 3: CLOUD SYNC & SPREADSHEET BACKUP ─────────────────────── */}
+        {activeTab === 'cloud_sync' && (
+          <div className="space-y-4 max-w-5xl mx-auto font-sans">
+            
+            {/* Sub-Tab Navigation Header */}
+            <div className="flex flex-wrap items-center gap-1 bg-white p-2 border border-slate-200 rounded-lg shadow-2xs text-xs font-bold">
+              <button
+                onClick={() => setCloudSubTab('info')}
+                className={`px-3 py-1.5 rounded-md transition flex items-center gap-1.5 cursor-pointer ${
+                  cloudSubTab === 'info' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Cloud className="w-3.5 h-3.5" />
+                <span>Spreadsheet Link & Info</span>
+              </button>
+
+              <button
+                onClick={() => { setCloudSubTab('logs'); fetchSyncLogs(); }}
+                className={`px-3 py-1.5 rounded-md transition flex items-center gap-1.5 cursor-pointer ${
+                  cloudSubTab === 'logs' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Log Error Sync</span>
+                <span className="px-1.5 py-0.2 text-[10px] bg-blue-100 text-blue-900 rounded-full font-mono">
+                  {syncLogsList.length}
+                </span>
+              </button>
+
+              <button
+                onClick={() => { setCloudSubTab('conflicts'); fetchConflicts(); }}
+                className={`px-3 py-1.5 rounded-md transition flex items-center gap-1.5 cursor-pointer ${
+                  cloudSubTab === 'conflicts' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                <span>Cek Konflik Manual</span>
+                <span className="px-1.5 py-0.2 text-[10px] bg-amber-100 text-amber-900 rounded-full font-mono">
+                  {syncConflictsList.length}
+                </span>
+              </button>
+
+              <button
+                onClick={() => { setCloudSubTab('audit'); loadSessionAudit(); }}
+                className={`px-3 py-1.5 rounded-md transition flex items-center gap-1.5 cursor-pointer ${
+                  cloudSubTab === 'audit' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Activity className="w-3.5 h-3.5" />
+                <span>Audit Sesi Edit</span>
+              </button>
+
+              <button
+                onClick={() => { setCloudSubTab('advanced'); fetchSpreadsheetBackups(); }}
+                className={`px-3 py-1.5 rounded-md transition flex items-center gap-1.5 cursor-pointer ml-auto ${
+                  cloudSubTab === 'advanced' ? 'bg-slate-900 text-white shadow-xs' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
+                }`}
+              >
+                <Sliders className="w-3.5 h-3.5 text-blue-400" />
+                <span>Advanced Settings</span>
+              </button>
+            </div>
+
+            {/* SUB-TAB 1: SPREADSHEET LINK & INFO */}
+            {cloudSubTab === 'info' && (
+              <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                      <Cloud className="w-4.5 h-4.5 text-blue-600" />
+                      <span>Integrasi Google Spreadsheet Utama</span>
+                    </h3>
+                    <p className="text-slate-500 text-xs mt-0.5">
+                      Koneksi resmi Google Sheets API v4 menggunakan Service Account resmi project erp-abmalaya-connect.
+                    </p>
+                  </div>
+                  <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold px-3 py-1 rounded-full text-xs flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Google Sheets API Connected</span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  <div className="bg-slate-50 p-3.5 rounded-md border border-slate-200 space-y-1.5">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Target Spreadsheet ID</span>
+                    <div className="font-mono font-extrabold text-blue-700 bg-white p-2 rounded border border-slate-200 break-all flex items-center justify-between">
+                      <span>1PHMV-f5fEZzdzCHXXMZFn2laEIRnOWrDoH9ZJcxi1UQ</span>
+                      <a
+                        href="https://docs.google.com/spreadsheets/d/1PHMV-f5fEZzdzCHXXMZFn2laEIRnOWrDoH9ZJcxi1UQ/edit"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-600 hover:underline flex items-center gap-1 shrink-0 ml-2"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Buka</span>
+                      </a>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-3.5 rounded-md border border-slate-200 space-y-1.5">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Service Account Email</span>
+                    <div className="font-mono font-bold text-slate-800 bg-white p-2 rounded border border-slate-200 truncate">
+                      erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50/60 border border-blue-200 p-3.5 rounded-md text-xs text-blue-950 space-y-1">
+                  <span className="font-bold block">Status Mesin Auto-Sync Daemon:</span>
+                  <p className="text-[11px] leading-relaxed text-blue-900">
+                    Mesin daemon background diset otomatis berjalan setiap <strong>5 Menit</strong> (`cron_spreadsheet_auto_sync.php`) untuk memperbarui data produk MySQL ke Google Spreadsheet secara aman.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* SUB-TAB 2: LOG ERROR SYNC */}
+            {cloudSubTab === 'logs' && (
+              <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-xs space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <h3 className="font-bold text-xs text-slate-900 flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-purple-600" />
+                    <span>Riwayat System Notifications & Log Sync ({syncLogsList.length})</span>
+                  </h3>
+                  <button
+                    onClick={fetchSyncLogs}
+                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Refresh Logs</span>
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto max-h-80 border border-slate-200 rounded">
+                  <table className="w-full text-left text-xs font-sans">
+                    <thead className="bg-slate-100 text-slate-700 font-bold text-[10px] uppercase border-b border-slate-200">
+                      <tr>
+                        <th className="p-2 w-12 text-center">ID</th>
+                        <th className="p-2 w-36">Waktu Record</th>
+                        <th className="p-2 w-48">Judul Log</th>
+                        <th className="p-2">Pesan & Keterangan</th>
+                        <th className="p-2 w-24 text-center">Tipe</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {syncLogsList.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="p-6 text-center text-slate-400 italic">
+                            Belum ada riwayat log sync tercatat.
+                          </td>
+                        </tr>
+                      ) : (
+                        syncLogsList.map((log: any) => (
+                          <tr key={log.id} className="hover:bg-slate-50">
+                            <td className="p-2 text-center font-mono font-bold text-slate-500">{log.id}</td>
+                            <td className="p-2 font-mono text-[10px] text-slate-600">{log.created_at}</td>
+                            <td className="p-2 font-bold text-slate-900">{log.title}</td>
+                            <td className="p-2 text-slate-700">{log.message}</td>
+                            <td className="p-2 text-center">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                log.type === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
+                              }`}>
+                                {log.type || 'info'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* SUB-TAB 3: CEK KONFLIK MANUAL */}
+            {cloudSubTab === 'conflicts' && (
+              <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-xs space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <h3 className="font-bold text-xs text-slate-900 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    <span>Inspeksi Konflik Perbedaan Data (MySQL vs Google Sheet)</span>
+                  </h3>
+                  <button
+                    onClick={fetchConflicts}
+                    className="px-2.5 py-1 bg-amber-600 text-white rounded font-bold text-[11px] flex items-center gap-1 cursor-pointer hover:bg-amber-700"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Jalankan Cek Konflik</span>
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto border border-slate-200 rounded">
+                  <table className="w-full text-left text-xs font-sans">
+                    <thead className="bg-slate-100 text-slate-700 font-bold text-[10px] uppercase border-b border-slate-200">
+                      <tr>
+                        <th className="p-2 w-28 font-mono">Kode Produk</th>
+                        <th className="p-2">Nama Produk</th>
+                        <th className="p-2 w-32">Field Berbeda</th>
+                        <th className="p-2 w-32 bg-blue-50 text-blue-900">Nilai MySQL</th>
+                        <th className="p-2 w-32 bg-emerald-50 text-emerald-900">Nilai Cloud Sheet</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {syncConflictsList.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="p-6 text-center text-slate-400 italic">
+                            Tidak ditemukan perbedaan data. Database MySQL dan Google Sheet 100% identik!
+                          </td>
+                        </tr>
+                      ) : (
+                        syncConflictsList.map((disc: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-slate-50">
+                            <td className="p-2 font-mono font-bold text-blue-700">{disc.product_code}</td>
+                            <td className="p-2 font-bold text-slate-900">{disc.product_name}</td>
+                            <td className="p-2">
+                              <span className="bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded font-extrabold text-[10px]">
+                                {disc.field}
+                              </span>
+                            </td>
+                            <td className="p-2 font-mono font-bold text-blue-700 bg-blue-50/40">{disc.local_val}</td>
+                            <td className="p-2 font-mono font-bold text-emerald-700 bg-emerald-50/40">{disc.cloud_val}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* SUB-TAB 4: AUDIT SESI EDIT */}
+            {cloudSubTab === 'audit' && (
+              <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-xs space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <h3 className="font-bold text-xs text-slate-900 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-emerald-600" />
+                    <span>Audit Sesi Perubahan Local Storage ({sessionAuditLogs.length})</span>
+                  </h3>
+                </div>
+
+                <div className="overflow-x-auto max-h-80 border border-slate-200 rounded">
+                  <table className="w-full text-left text-xs font-sans">
+                    <thead className="bg-slate-100 text-slate-700 font-bold text-[10px] uppercase border-b border-slate-200">
+                      <tr>
+                        <th className="p-2 w-12 text-center">#</th>
+                        <th className="p-2 w-36">Waktu Aksi</th>
+                        <th className="p-2 w-32">Tipe Aksi</th>
+                        <th className="p-2">Rincian Perubahan</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {sessionAuditLogs.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="p-6 text-center text-slate-400 italic">
+                            Belum ada aktivitas edit produk pada sesi ini.
+                          </td>
+                        </tr>
+                      ) : (
+                        sessionAuditLogs.map((log: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-slate-50">
+                            <td className="p-2 text-center font-mono font-bold text-slate-400">{idx + 1}</td>
+                            <td className="p-2 font-mono text-[10px] text-slate-600">{log.timestamp}</td>
+                            <td className="p-2">
+                              <span className="bg-purple-100 text-purple-900 px-2 py-0.5 rounded font-bold text-[10px]">
+                                {log.action}
+                              </span>
+                            </td>
+                            <td className="p-2 text-slate-800 font-medium">{log.detail}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* SUB-TAB 5: ADVANCED SETTINGS (MULTI SPREADSHEET MANAGER) */}
+            {cloudSubTab === 'advanced' && (
+              <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                      <Sliders className="w-4.5 h-4.5 text-blue-600" />
+                      <span>Manajemen Multi-File Backup Spreadsheet</span>
+                    </h3>
+                    <p className="text-slate-500 text-xs mt-0.5">
+                      Kelola lebih dari 1 lokasi file backup Google Spreadsheet dan kunci kredensial Service Account.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsAddBackupModalOpen(true)}
+                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Tambah Detail File Backup & Key</span>
+                  </button>
+                </div>
+
+                {/* Backups List Table */}
+                <div className="overflow-x-auto border border-slate-200 rounded-md">
+                  <table className="w-full text-left text-xs font-sans border-collapse">
+                    <thead className="bg-slate-100 text-slate-700 font-bold text-[10px] uppercase border-b border-slate-200">
+                      <tr>
+                        <th className="p-2.5 w-10 text-center">#</th>
+                        <th className="p-2.5">Judul Backup</th>
+                        <th className="p-2.5 w-64">Spreadsheet ID / Share Link</th>
+                        <th className="p-2.5 w-24">Tab Sheet</th>
+                        <th className="p-2.5 w-64">Service Account Key File</th>
+                        <th className="p-2.5 w-20 text-center">Primary</th>
+                        <th className="p-2.5 w-28 text-center">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {backupsList.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-6 text-center text-slate-400 italic">
+                            Belum ada file backup didaftarkan.
+                          </td>
+                        </tr>
+                      ) : (
+                        backupsList.map((bk: any, idx: number) => (
+                          <tr key={bk.id} className="hover:bg-slate-50">
+                            <td className="p-2.5 text-center font-mono font-bold text-slate-500">{idx + 1}</td>
+                            <td className="p-2.5 font-bold text-slate-900">
+                              {bk.title}
+                              {bk.is_primary == 1 && (
+                                <span className="ml-1.5 bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold px-1.5 py-0.2 rounded text-[9px]">
+                                  Utama
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-2.5 font-mono text-blue-700 text-[11px] truncate max-w-[200px]">
+                              {bk.spreadsheet_id}
+                            </td>
+                            <td className="p-2.5 font-semibold text-slate-700">{bk.sheet_name}</td>
+                            <td className="p-2.5 font-mono text-[10px] text-slate-600 truncate max-w-[200px]">
+                              {bk.key_filename}
+                            </td>
+                            <td className="p-2.5 text-center">
+                              {bk.is_primary == 1 ? (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 mx-auto" />
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetPrimaryBackupTarget(bk.id)}
+                                  className="text-[10px] text-blue-600 hover:underline font-bold cursor-pointer"
+                                >
+                                  Set Utama
+                                </button>
+                              )}
+                            </td>
+                            <td className="p-2.5 text-center">
+                              {bk.is_primary != 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteBackupTarget(bk.id)}
+                                  className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                                  title="Hapus Target Backup"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+              </div>
+            )}
+
+            {/* POP-UP MODAL: TAMBAH DETAIL FILE BACKUP */}
+            {isAddBackupModalOpen && (
+              <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in">
+                <div className="bg-white border border-slate-300 w-full max-w-lg rounded-lg shadow-2xl overflow-hidden flex flex-col">
+                  
+                  <div className="p-3.5 bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] text-[#3d3d3d] flex items-center justify-between border-b border-[#7b7b7b]">
+                    <div className="flex items-center gap-2">
+                      <Plus className="w-4 h-4 text-blue-600" />
+                      <h3 className="font-extrabold text-xs text-slate-900 uppercase">
+                        Tambah Detail File Backup Spreadsheet
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => setIsAddBackupModalOpen(false)}
+                      className="p-1 text-slate-500 hover:text-slate-900 transition cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleAddBackupTarget} className="p-4 space-y-3 text-xs">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-700 block">Judul File Backup</label>
+                      <input
+                        type="text"
+                        placeholder="Contoh: Spreadsheet Backup Cadangan VPS 2"
+                        value={backupTitle}
+                        onChange={(e) => setBackupTitle(e.target.value)}
+                        required
+                        className="w-full bg-white border border-slate-300 rounded p-2 text-slate-800 font-sans focus:outline-none focus:border-blue-600"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-700 block">Google Spreadsheet Link / ID</label>
+                      <input
+                        type="text"
+                        placeholder="https://docs.google.com/spreadsheets/d/1PHMV.../edit"
+                        value={backupSpreadsheetId}
+                        onChange={(e) => setBackupSpreadsheetId(e.target.value)}
+                        required
+                        className="w-full bg-white border border-slate-300 rounded p-2 font-mono text-slate-800 focus:outline-none focus:border-blue-600"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="font-bold text-slate-700 block">Nama Tab Sheet</label>
+                        <input
+                          type="text"
+                          value={backupSheetName}
+                          onChange={(e) => setBackupSheetName(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded p-2 text-slate-800"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="font-bold text-slate-700 block">File Key (.json)</label>
+                        <input
+                          type="text"
+                          value={backupKeyFile}
+                          onChange={(e) => setBackupKeyFile(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded p-2 font-mono text-slate-800"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-700 block">Service Account Email</label>
+                      <input
+                        type="email"
+                        value={backupSaEmail}
+                        onChange={(e) => setBackupSaEmail(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded p-2 font-mono text-slate-800"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="checkbox"
+                        id="primaryCheck"
+                        checked={backupIsPrimary}
+                        onChange={(e) => setBackupIsPrimary(e.target.checked)}
+                        className="rounded text-blue-600 cursor-pointer"
+                      />
+                      <label htmlFor="primaryCheck" className="font-bold text-slate-800 cursor-pointer select-none">
+                        Jadikan sebagai File Backup Utama (Primary Target)
+                      </label>
+                    </div>
+
+                    <div className="p-3 bg-slate-100 border-t border-slate-200 flex justify-end gap-2 shrink-0 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddBackupModalOpen(false)}
+                        className="px-3.5 py-1.5 bg-white border border-slate-300 text-slate-700 font-bold rounded cursor-pointer"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSavingBackup}
+                        className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded cursor-pointer disabled:opacity-50"
+                      >
+                        {isSavingBackup ? 'Saving...' : 'Simpan Backup Target'}
+                      </button>
+                    </div>
+                  </form>
+
+                </div>
+              </div>
+            )}
+
+          </div>
+        )}
 
         {/* ── TAB 1: CREDENTIAL SMTP ─────────────────────────────────────── */}
         {activeTab === 'credentials' && (

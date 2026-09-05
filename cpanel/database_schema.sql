@@ -114,11 +114,14 @@ CREATE TABLE IF NOT EXISTS `products` (
   `product_name` VARCHAR(255) NOT NULL,
   `description` TEXT,
   `specification` TEXT,
+  `offer` TEXT DEFAULT NULL,
   `unit` VARCHAR(50) DEFAULT 'Unit',
   `unit_price` DECIMAL(15,2) DEFAULT 0.00,
+  `capital` DECIMAL(15,2) DEFAULT 0.00,
   `image_url` TEXT,
   `category` VARCHAR(100) DEFAULT 'Equipment',
   `supplier_name` VARCHAR(255) DEFAULT NULL,
+  `status` VARCHAR(20) DEFAULT 'active',
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -133,6 +136,20 @@ CREATE TABLE IF NOT EXISTS `system_notifications` (
   `category` VARCHAR(50) DEFAULT 'sync',
   `is_read` TINYINT(1) DEFAULT 0,
   `action_link` VARCHAR(255) DEFAULT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 9. Table: spreadsheet_backups (Multi-Spreadsheet Cloud Backup Target Configuration)
+CREATE TABLE IF NOT EXISTS `spreadsheet_backups` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `title` VARCHAR(255) NOT NULL,
+  `spreadsheet_id` VARCHAR(255) NOT NULL,
+  `sheet_name` VARCHAR(100) DEFAULT 'Sheet1',
+  `service_account_email` VARCHAR(255) DEFAULT 'erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com',
+  `key_filename` VARCHAR(255) DEFAULT 'erp-abmalaya-connect-0fc0c4cb6314.json',
+  `is_primary` TINYINT(1) DEFAULT 1,
+  `status` VARCHAR(20) DEFAULT 'active',
+  `last_synced_at` DATETIME NULL,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

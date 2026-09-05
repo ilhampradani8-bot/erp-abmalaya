@@ -107,6 +107,24 @@ try {
     $import_output = ob_get_clean();
     $log[] = "Product & Category Sheet Import executed successfully.";
 
+    // 6. Optional: Full Database Backup SQL Import (cpanel/database_backup_full.sql)
+    if (isset($_GET['import_sql']) && $_GET['import_sql'] === '1') {
+        $sql_file = __DIR__ . '/cpanel/database_backup_full.sql';
+        if (!file_exists($sql_file)) {
+            $sql_file = __DIR__ . '/../cpanel/database_backup_full.sql';
+        }
+        if (file_exists($sql_file)) {
+            $sql_content = file_get_contents($sql_file);
+            if (!empty($sql_content)) {
+                $db_conn->multi_query($sql_content);
+                while ($db_conn->more_results() && $db_conn->next_result()) {
+                    // flush multi_query results
+                }
+                $log[] = "Full database dump (cpanel/database_backup_full.sql) imported into live MySQL database.";
+            }
+        }
+    }
+
     echo json_encode([
         'status' => 'success',
         'message' => 'Remote Database Schema & Google Sheet Products Migration Finished!',

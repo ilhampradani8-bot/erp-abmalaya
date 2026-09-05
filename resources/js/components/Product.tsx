@@ -1,23 +1,40 @@
 // @ts-nocheck
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Trash2, Edit3, Image as ImageIcon, Package, Check, X, Loader2, RefreshCw, Eye, Upload, AlertTriangle, Cloud, HardDrive, Settings, FileJson, CheckCircle2, Zap, ShieldAlert, MoreVertical } from 'lucide-react';
+import { Search, Plus, Trash2, Edit3, Image as ImageIcon, Package, Check, X, Loader2, RefreshCw, Eye, Upload, AlertTriangle, Cloud, HardDrive, Settings, FileJson, CheckCircle2, Zap, ShieldAlert, MoreVertical, Filter, FileText, Copy } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
 export interface ProductItem {
   id: number;
-  category_code: string;
-  category_name: string;
-  internal_category: string;
-  subcategories: string;
-  description_en: string;
-  description_my: string;
-  classification_rules: string;
+  product_code?: string;
+  product_name?: string;
+  category_code?: string;
+  category_name?: string;
+  internal_category?: string;
+  subcategories?: string;
+  description?: string;
+  specification?: string;
+  unit?: string;
+  unit_price?: number;
+  capital?: number;
+  stock_quantity?: number;
+  discount_percent?: number;
+  image_url?: string;
+  category?: string;
+  supplier_name?: string;
+  offer?: string;
+  offered_item?: string;
+  status?: string;
+  description_en?: string;
+  description_my?: string;
+  classification_rules?: string;
   created_at?: string;
 }
 
-interface ProductCatalogProps {
+export interface ProductProps {
   onSelectProductForQuotation?: (product: ProductItem) => void;
+  onNavigateView?: (mode: string) => void;
 }
+export type ProductCatalogProps = ProductProps;
 
 // Client-side Image Compression Helper using HTML5 Canvas
 const compressImageFile = (
@@ -83,17 +100,27 @@ const compressImageFile = (
   });
 };
 
-export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
+export const Product: React.FC<ProductProps> = ({}) => {
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [activeRowIdx, setActiveRowIdx] = useState<number | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'products' | 'categories'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'junk'>('products');
   const [categoriesBlueprints, setCategoriesBlueprints] = useState<ProductItem[]>([]);
   const [selectedBlueprint, setSelectedBlueprint] = useState<ProductItem | null>(null);
+  const [selectedProductDetail, setSelectedProductDetail] = useState<ProductItem | null>(null);
+  const [copiedCodeToast, setCopiedCodeToast] = useState<boolean>(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState<boolean>(false);
+  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState<boolean>(false);
+  const [isSyncDropdownOpen, setIsSyncDropdownOpen] = useState<boolean>(false);
+  const [syncModalTab, setSyncModalTab] = useState<'config' | 'logs' | 'conflicts' | 'session_audit'>('config');
+  const [syncLogs, setSyncLogs] = useState<any[]>([]);
+  const [conflictsList, setConflictsList] = useState<any[]>([]);
+  const [isSyncingSpreadsheet, setIsSyncingSpreadsheet] = useState<boolean>(false);
+  const [isCheckingConflicts, setIsCheckingConflicts] = useState<boolean>(false);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Google Drive Cloud Sync & Conflict Detection States
   const [gdriveStatus, setGdriveStatus] = useState<any | null>(null);
@@ -113,15 +140,101 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
   const [productName, setProductName] = useState('');
   const [description, setDescription] = useState('');
   const [specification, setSpecification] = useState('');
+  const [offerText, setOfferText] = useState('');
   const [supplierName, setSupplierName] = useState('');
   const [unit, setUnit] = useState('Package');
   const [unitPrice, setUnitPrice] = useState<number>(0);
+  const [capitalCost, setCapitalCost] = useState<number>(0);
   const [stockQuantity, setStockQuantity] = useState<number>(50);
   const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [imageUrl, setImageUrl] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [category, setCategory] = useState('Hose & Fitting');
   const [isSaving, setIsSaving] = useState<boolean>(false);
+
+  const logSessionAudit = (action: string, detail: string) => {
+    try {
+      const existing = JSON.parse(localStorage.getItem('product_edit_history_session') || '[]');
+      const newEntry = { time: new Date().toLocaleTimeString(), action, detail };
+      localStorage.setItem('product_edit_history_session', JSON.stringify([newEntry, ...existing].slice(0, 30)));
+    } catch (e) {
+      console.error('Session audit log error:', e);
+    }
+  };
+
+  const fetchSyncLogs = () => {
+    fetch(getApiUrl('/api_spreadsheet_sync.php?action=get_sync_logs'))
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success' && resData.sync_logs) {
+          setSyncLogs(resData.sync_logs);
+        }
+      })
+      .catch((err) => console.log('Sync log fetch error:', err));
+  };
+
+  const handleManualSyncSpreadsheet = () => {
+    setIsSyncingSpreadsheet(true);
+    fetch(getApiUrl('/api_spreadsheet_sync.php?action=manual_sync'))
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success') {
+          setSaveSuccessMessage(resData.message);
+          logSessionAudit('SPREADSHEET_SYNC', resData.message);
+          setTimeout(() => setSaveSuccessMessage(null), 5000);
+          fetchSyncLogs();
+        }
+      })
+      .catch((err) => alert('Sync error: ' + err.message))
+      .finally(() => setIsSyncingSpreadsheet(false));
+  };
+
+  const handleCheckConflictsManual = () => {
+    setIsCheckingConflicts(true);
+    fetch(getApiUrl('/api_spreadsheet_sync.php?action=check_conflicts'))
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success') {
+          setConflictsList(resData.conflicts || []);
+          setSyncModalTab('conflicts');
+          setIsSettingsModalOpen(true);
+        }
+      })
+      .catch((err) => alert('Conflict check error: ' + err.message))
+      .finally(() => setIsCheckingConflicts(false));
+  };
+
+  const handleDownloadFilteredCSV = (isTemplate = false) => {
+    const url = getApiUrl(`/api_spreadsheet_sync.php?action=download_csv&category=${encodeURIComponent(activeCategory)}&q=${encodeURIComponent(searchTerm)}&template=${isTemplate ? 1 : 0}`);
+    window.open(url, '_blank');
+    logSessionAudit('DOWNLOAD_CSV', isTemplate ? 'Downloaded CSV Template' : `Downloaded Filtered CSV (${filteredProducts.length} items)`);
+  };
+
+  const handleUploadCSVFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('csv_file', file);
+    formData.append('action', 'upload_csv');
+
+    fetch(getApiUrl('/api_spreadsheet_sync.php'), {
+      method: 'POST',
+      body: formData,
+    })
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success') {
+          setSaveSuccessMessage(resData.message);
+          logSessionAudit('UPLOAD_CSV', resData.message);
+          setTimeout(() => setSaveSuccessMessage(null), 5000);
+          fetchProducts();
+        } else {
+          alert('Upload failed: ' + resData.message);
+        }
+      })
+      .catch((err) => alert('Upload error: ' + err.message));
+  };
 
 
   // Auto-Compression Info State
@@ -258,9 +371,11 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
     setProductName('');
     setDescription('');
     setSpecification('');
+    setOfferText('');
     setSupplierName('');
     setUnit('Package');
     setUnitPrice(0);
+    setCapitalCost(0);
     setStockQuantity(50);
     setDiscountPercent(0);
     setImageUrl('https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=600&q=80');
@@ -276,13 +391,15 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
 
   const handleOpenEditModal = (p: ProductItem) => {
     setEditingProduct(p);
-    setProductCode(p.product_code);
-    setProductName(p.product_name);
+    setProductCode(p.product_code || '');
+    setProductName(p.product_name || '');
     setDescription(p.description || '');
     setSpecification(p.specification || '');
+    setOfferText(p.offer || p.offered_item || '');
     setSupplierName(p.supplier_name || '');
     setUnit(p.unit || 'Package');
     setUnitPrice(p.unit_price || 0);
+    setCapitalCost(p.capital || 0);
     setStockQuantity(p.stock_quantity || 50);
     setDiscountPercent(p.discount_percent || 0);
     setImageUrl(p.image_url || '');
@@ -324,9 +441,11 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
     formData.append('product_name', productName);
     formData.append('description', description);
     formData.append('specification', specification);
+    formData.append('offer', offerText);
     formData.append('supplier_name', supplierName);
     formData.append('unit', unit);
     formData.append('unit_price', unitPrice.toString());
+    formData.append('capital', capitalCost.toString());
     formData.append('stock_quantity', stockQuantity.toString());
     formData.append('discount_percent', discountPercent.toString());
     formData.append('category', category);
@@ -345,6 +464,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
       .then((resData) => {
         if (resData.status === 'success') {
           setSaveSuccessMessage(`Product "${productName}" saved to dedicated folder & MySQL!`);
+          logSessionAudit('SAVE_PRODUCT', `Saved product ${productCode} - ${productName} (Capital: ${capitalCost})`);
           setTimeout(() => setSaveSuccessMessage(null), 4000);
           setIsFormModalOpen(false);
           fetchProducts();
@@ -355,16 +475,43 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
       .finally(() => setIsSaving(false));
   };
 
-  const handleDeleteProduct = (id: number, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete product "${name}" from MySQL database?`)) return;
+  const handleTrashProduct = (id: number, name: string) => {
+    if (!window.confirm(`Pindahkan produk "${name}" ke Sampah (Junk)?`)) return;
 
-    fetch(getApiUrl(`/api_products.php?action=delete&id=${id}`), {
-      method: 'DELETE',
-    })
+    fetch(getApiUrl(`/api_products.php?action=trash&id=${id}`))
       .then((res) => res.json())
       .then((resData) => {
         if (resData.status === 'success') {
-          setSaveSuccessMessage(`Product "${name}" deleted from database.`);
+          setSaveSuccessMessage(`Produk "${name}" dipindahkan ke Sampah.`);
+          logSessionAudit('TRASH_PRODUCT', `Moved product #${id} (${name}) to Junk`);
+          setTimeout(() => setSaveSuccessMessage(null), 3000);
+          fetchProducts();
+        }
+      });
+  };
+
+  const handleRestoreProduct = (id: number, name: string) => {
+    fetch(getApiUrl(`/api_products.php?action=restore&id=${id}`))
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success') {
+          setSaveSuccessMessage(`Produk "${name}" dipulihkan ke daftar aktif.`);
+          logSessionAudit('RESTORE_PRODUCT', `Restored product #${id} (${name})`);
+          setTimeout(() => setSaveSuccessMessage(null), 3000);
+          fetchProducts();
+        }
+      });
+  };
+
+  const handlePermanentDelete = (id: number, name: string) => {
+    if (!window.confirm(`PERINGATAN: Hapus secara PERMANEN produk "${name}"? Tindakan ini tidak dapat dibatalkan.`)) return;
+
+    fetch(getApiUrl(`/api_products.php?action=delete_permanent&id=${id}`))
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success') {
+          setSaveSuccessMessage(`Produk "${name}" dihapus permanen.`);
+          logSessionAudit('PERMANENT_DELETE', `Permanently deleted product #${id} (${name})`);
           setTimeout(() => setSaveSuccessMessage(null), 3000);
           fetchProducts();
         }
@@ -408,25 +555,8 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
 
   const totalMasterCatalogValue = products.reduce((acc, p) => acc + (p.unit_price || 0) * (p.stock_quantity || 1), 0);
 
-  // Sample Discrepancy Items between Local MySQL & Google Drive Backup for Diff Inspection Modal
-  const conflictDiscrepancies = [
-    {
-      product_code: 'PRD-001',
-      product_name: 'RO WATER MAKER HIGH PRESSURE HOSE',
-      field: 'Stok Barang (Quantity)',
-      local_val: '50 Package',
-      cloud_val: '40 Package',
-      status: 'Berbeda (Beda 10 Qty)',
-    },
-    {
-      product_code: 'PRD-002',
-      product_name: 'BALL VALVE STAINLESS STEEL 316 2 INCH 1000 WOG',
-      field: 'Harga Master (Unit Price)',
-      local_val: 'Rp 1.500.000',
-      cloud_val: 'Rp 1.450.000',
-      status: 'Berbeda (Beda Rp 50.000)',
-    },
-  ];
+  // Real Discrepancy Items between Local MySQL & Google Drive Backup from Backend API
+  const conflictDiscrepancies = conflictsList;
 
   return (
     <div className="w-full h-full bg-[#f0f0f0] overflow-y-auto flex flex-col font-sans p-0 m-0">
@@ -434,15 +564,119 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
       {/* ITUNES-STYLE TOP METALLIC HEADER BAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] px-4 py-2 border-b border-[#7b7b7b] shrink-0 w-full shadow-xs">
         
-        {/* Left Side: Category Title */}
-        <div className="flex items-center gap-2 flex-1">
-          <h2 className="font-extrabold text-sm text-[#3d3d3d] tracking-wide flex items-center gap-2 uppercase">
-            <Package className="w-4 h-4 text-slate-800" /> 
-            <span>{activeTab === 'categories' ? 'IMPA Category Blueprints' : 'Master Products & Pricing'}</span>
-          </h2>
+        {/* Left Side: Product Title & Category Filter Dropdown */}
+        <div className="flex items-center gap-3 flex-1">
+          <div className="flex items-center gap-2">
+            <Package className="w-4.5 h-4.5 text-slate-800" /> 
+            <h2 className="font-extrabold text-sm text-[#3d3d3d] tracking-wide uppercase">
+              {activeTab === 'categories' ? 'IMPA Category Blueprints' : 'Product'}
+            </h2>
+          </div>
+
+          {/* LEFT-ALIGNED CATEGORY FILTER DROPDOWN */}
+          <div className="relative">
+            <button
+              onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md border text-xs font-bold transition cursor-pointer ${
+                activeCategory !== 'all' || activeTab === 'categories'
+                  ? 'bg-amber-100 text-amber-900 border-amber-400 shadow-xs'
+                  : 'bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-white text-[#3d3d3d] border-[#a0a0a0] shadow-inner'
+              }`}
+              title="Filter Categories & IMPA Blueprints"
+            >
+              <Filter className="w-3.5 h-3.5 text-slate-700" />
+              <span className="max-w-[130px] truncate">
+                {activeTab === 'categories'
+                  ? 'IMPA Blueprints'
+                  : activeCategory === 'all'
+                  ? 'All Categories'
+                  : activeCategory}
+              </span>
+              <span className="ml-1 px-1.5 py-0.2 bg-blue-600 text-white rounded-full text-[10px] font-mono font-extrabold">
+                {activeTab === 'categories' ? categoriesBlueprints.length : filteredProducts.length}
+              </span>
+            </button>
+
+            {isFilterDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setIsFilterDropdownOpen(false)} />
+                <div className="absolute left-0 mt-1.5 w-64 bg-white border border-slate-300 shadow-xl rounded-md overflow-hidden z-20 font-sans max-h-80 overflow-y-auto">
+                  <div className="p-2 bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold text-slate-600 uppercase tracking-wider flex items-center justify-between">
+                    <span>Filter & Catalog Mode</span>
+                    {activeCategory !== 'all' && (
+                      <button
+                        onClick={() => {
+                          setActiveCategory('all');
+                          setActiveTab('products');
+                          setIsFilterDropdownOpen(false);
+                        }}
+                        className="text-[10px] text-blue-600 hover:underline cursor-pointer lowercase font-normal"
+                      >
+                        Reset Filter
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="py-1">
+                    {/* IMPA Category Blueprints Option */}
+                    <button
+                      onClick={() => {
+                        setActiveTab('categories');
+                        setIsFilterDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between transition cursor-pointer border-b border-slate-150 ${
+                        activeTab === 'categories'
+                          ? 'bg-amber-100 text-amber-900 font-bold border-l-4 border-amber-600'
+                          : 'text-slate-800 hover:bg-slate-100 font-bold'
+                      }`}
+                    >
+                      <span className="truncate pr-2 flex items-center gap-1.5">
+                        <Settings className="w-3.5 h-3.5 text-amber-600" />
+                        <span>IMPA Category Blueprints</span>
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full font-mono text-[10px] bg-amber-200 text-amber-900 font-bold">
+                        {categoriesBlueprints.length}
+                      </span>
+                    </button>
+
+                    {/* Standard Categories */}
+                    {categories.map((cat) => {
+                      const count = cat === 'all'
+                        ? products.filter(p => (p.status || 'active') === 'active').length
+                        : products.filter(p => (p.status || 'active') === 'active' && (p.category || 'Equipment') === cat).length;
+                      const isSelected = activeTab === 'products' && activeCategory === cat;
+
+                      return (
+                        <button
+                          key={cat}
+                          onClick={() => {
+                            setActiveTab('products');
+                            setActiveCategory(cat);
+                            setIsFilterDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between transition cursor-pointer ${
+                            isSelected
+                              ? 'bg-blue-50 text-blue-800 font-bold border-l-4 border-blue-600'
+                              : 'text-slate-700 hover:bg-slate-100 font-medium'
+                          }`}
+                        >
+                          <span className="truncate pr-2">{cat === 'all' ? 'All Categories' : cat}</span>
+                          <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] ${
+                            isSelected ? 'bg-blue-200 text-blue-900 font-bold' : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Right Side: Search, Settings & Sync/Add Buttons */}
+        {/* Right Side: Search, + Add Product & CARD-MODEL 3-DOTS MENU */}
         <div className="flex items-center gap-2 shrink-0">
 
           <div className="relative w-full sm:w-56">
@@ -476,73 +710,136 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
             </button>
           )}
 
-          {/* 3-DOTS ACTION DROPDOWN MENU */}
+          {/* CARD-MODEL 3-DOTS ACTION DROPDOWN MENU */}
           <div className="relative">
             <button
               onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
               className="p-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-white text-[#3d3d3d] rounded-md border border-[#a0a0a0] shadow-inner transition cursor-pointer flex items-center justify-center"
-              title="More Actions"
+              title="More Actions & Spreadsheet Backup"
             >
               <MoreVertical className="w-3.5 h-3.5 text-slate-800" />
             </button>
 
-            {/* Dropdown Menu */}
+            {/* Card-Style Dropdown Menu */}
             {isMoreMenuOpen && (
               <>
-                {/* Backdrop overlay to close when clicking outside */}
                 <div className="fixed inset-0 z-10" onClick={() => setIsMoreMenuOpen(false)} />
                 
-                <div className="absolute right-0 mt-1.5 w-60 bg-white border border-slate-300 shadow-lg rounded-md overflow-hidden z-20 font-sans">
-                  <div className="py-1">
+                <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-300 shadow-2xl rounded-lg p-3 z-20 font-sans space-y-3">
+                  
+                  {/* CARD 1: SPREADSHEET CLOUD SYNC */}
+                  <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-md space-y-1.5 shadow-2xs">
+                    <span className="font-extrabold text-[11px] text-blue-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 pb-1">
+                      <Cloud className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Spreadsheet Backup & Sync</span>
+                    </span>
                     
-                    {/* Menu Item 1: Switch active tab */}
-                    <button
-                      onClick={() => {
-                        setActiveTab(activeTab === 'products' ? 'categories' : 'products');
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 border-b border-slate-150 transition cursor-pointer font-bold"
-                    >
-                      {activeTab === 'products' ? (
-                        <>
-                          <Settings className="w-3.5 h-3.5 text-slate-500" />
-                          <span>Switch to IMPA Blueprints</span>
-                        </>
-                      ) : (
-                        <>
-                          <Package className="w-3.5 h-3.5 text-slate-500" />
-                          <span>Switch to Products & Pricing</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                      <button
+                        onClick={() => {
+                          handleManualSyncSpreadsheet();
+                          setIsMoreMenuOpen(false);
+                        }}
+                        disabled={isSyncingSpreadsheet}
+                        className="w-full text-left p-2 bg-white hover:bg-blue-50 border border-slate-200 rounded text-[11px] font-bold text-slate-800 transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${isSyncingSpreadsheet ? 'animate-spin' : ''}`} />
+                        <span>Sync Manual</span>
+                      </button>
 
-                    {/* Menu Item 2: Pengaturan Google Drive */}
-                    <button
-                      onClick={() => {
-                        setIsSettingsModalOpen(true);
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 border-b border-slate-150 transition cursor-pointer"
-                    >
-                      <Settings className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Pengaturan (Google Drive Sync)</span>
-                    </button>
-
-                    {/* Menu Item 3: Refresh List */}
-                    <button
-                      onClick={() => {
-                        fetchProducts();
-                        if (activeTab === 'products') checkGDriveSyncStatus();
-                        setIsMoreMenuOpen(false);
-                      }}
-                      disabled={isLoading}
-                      className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 flex items-center gap-2 transition cursor-pointer"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isLoading ? 'animate-spin' : ''}`} />
-                      <span>{isLoading ? 'Refreshing...' : 'Refresh List Data'}</span>
-                    </button>
-
+                      <button
+                        onClick={() => {
+                          handleCheckConflictsManual();
+                          setIsMoreMenuOpen(false);
+                        }}
+                        disabled={isCheckingConflicts}
+                        className="w-full text-left p-2 bg-white hover:bg-amber-50 border border-slate-200 rounded text-[11px] font-bold text-slate-800 transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Cek Konflik</span>
+                      </button>
+                    </div>
                   </div>
+
+                  {/* CARD 2: IMPORT / EXPORT CSV DATA */}
+                  <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-md space-y-1.5 shadow-2xs">
+                    <span className="font-extrabold text-[11px] text-emerald-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 pb-1">
+                      <Upload className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Export / Import Spreadsheet CSV</span>
+                    </span>
+
+                    <div className="space-y-1 pt-0.5">
+                      <button
+                        onClick={() => {
+                          handleDownloadFilteredCSV(false);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="w-full text-left p-1.5 bg-white hover:bg-emerald-50 border border-slate-200 rounded text-[11px] font-semibold text-slate-800 transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-emerald-600 rotate-180" />
+                        <span>Download Filtered CSV ({filteredProducts.length} items)</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          handleDownloadFilteredCSV(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="w-full text-left p-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded text-[11px] font-semibold text-slate-800 transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <FileJson className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Download Template CSV</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          fileInputRef.current?.click();
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="w-full text-left p-1.5 bg-white hover:bg-purple-50 border border-slate-200 rounded text-[11px] font-semibold text-slate-800 transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-purple-600" />
+                        <span>Upload Data CSV / Spreadsheet</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* CARD 3: SYSTEM LOGS & AUDIT TRAIL */}
+                  <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-md space-y-1.5 shadow-2xs">
+                    <span className="font-extrabold text-[11px] text-purple-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 pb-1">
+                      <Settings className="w-3.5 h-3.5 text-purple-600" />
+                      <span>System Logs & Audit</span>
+                    </span>
+
+                    <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                      <button
+                        onClick={() => {
+                          fetchSyncLogs();
+                          setSyncModalTab('logs');
+                          setIsSettingsModalOpen(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="w-full text-left p-1.5 bg-white hover:bg-purple-50 border border-slate-200 rounded text-[11px] font-semibold text-slate-800 transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-purple-600" />
+                        <span>Log Error Sync</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          fetchProducts();
+                          checkGDriveSyncStatus();
+                          setIsMoreMenuOpen(false);
+                        }}
+                        disabled={isLoading}
+                        className="w-full text-left p-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded text-[11px] font-semibold text-slate-800 transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${isLoading ? 'animate-spin' : ''}`} />
+                        <span>Refresh Data</span>
+                      </button>
+                    </div>
+                  </div>
+
                 </div>
               </>
             )}
@@ -652,25 +949,27 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
           </div>
         ) : (
           <div className="w-full overflow-x-auto border-t border-b border-[rgba(0,0,0,0.2)]">
-            <table className="w-full text-left text-xs font-sans border-collapse">
-              <thead className="bg-gradient-to-b from-[#DFDFDF] to-[#EDEDED] border-b border-[rgba(0,0,0,0.15)] text-[#626262] font-semibold text-[11px] uppercase tracking-wide">
+            <table className="min-w-[1300px] w-full text-left text-xs font-sans border-collapse">
+              <thead className="sticky top-0 z-10 bg-gradient-to-b from-[#DFDFDF] to-[#EDEDED] border-b border-[rgba(0,0,0,0.15)] text-[#626262] font-semibold text-[11px] uppercase tracking-wide">
 
                 <tr>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-8 text-center">^</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-8 text-center">
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-10 text-center">^</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-10 text-center">
                     <Check className="w-3.5 h-3.5 mx-auto text-[#626262]" />
                   </th>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-14 text-center">Photo</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-28 font-mono">Product Code</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">Product Name</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">Specification</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-28 font-mono">Supplier / Seller</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-32">Category</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-32 font-mono">Product Code</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] min-w-[180px]">Product Name</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] min-w-[200px]">Specification</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] min-w-[150px]">Offered Item (Offer)</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-32 font-mono">Supplier / Seller</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-36">Category</th>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-20 text-center">Unit</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-32 text-right font-mono">Capital (MYR)</th>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-36 text-right font-mono">Unit Price (MYR)</th>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-16 text-center font-mono">Stock</th>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-16 text-center font-mono">Disc (%)</th>
-                  <th className="p-2.5 text-center w-24">Actions</th>
+                  <th className="p-2.5 text-center w-28">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -684,8 +983,11 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
                   return (
                     <tr
                       key={p.id}
-                      onClick={() => setActiveRowIdx(idx)}
-                      className={`border-b border-[rgba(0,0,0,0.1)] transition ${rowBgClass}`}
+                      onClick={() => {
+                        setActiveRowIdx(idx);
+                        setSelectedProductDetail(p);
+                      }}
+                      className={`border-b border-[rgba(0,0,0,0.1)] transition cursor-pointer hover:bg-blue-50/40 ${rowBgClass}`}
                     >
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center font-mono font-bold text-[11px]">
                         {idx + 1}
@@ -734,8 +1036,27 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
                         {p.product_name}
                       </td>
 
-                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-[11px] italic leading-snug">
-                        {p.specification || p.description || 'Standard specification'}
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-[11px]">
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedProductDetail(p);
+                          }}
+                          className="max-w-[200px] truncate text-slate-700 font-sans hover:text-blue-600 hover:underline cursor-pointer"
+                          title="Klik untuk lihat rincian & aksi produk"
+                        >
+                          {p.specification || p.description || 'Standard specification'}
+                        </div>
+                      </td>
+
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-[11px] font-semibold text-emerald-800">
+                        {p.offer || p.offered_item ? (
+                          <span className="bg-emerald-50 text-emerald-900 border border-emerald-300 font-extrabold px-2 py-0.5 rounded text-[10px]">
+                            {p.offer || p.offered_item}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic text-[10px]">—</span>
+                        )}
                       </td>
 
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] font-mono text-[10px]">
@@ -748,14 +1069,22 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
                         )}
                       </td>
 
-                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">
-                        <span className="bg-amber-100 text-amber-900 border border-amber-300 font-bold px-2 py-0.5 text-[10px] rounded">
-                          {p.category || 'Equipment'}
-                        </span>
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] font-semibold text-slate-700 text-xs">
+                        {p.category || 'Equipment'}
                       </td>
 
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center font-semibold text-xs">
                         {p.unit || 'Package'}
+                      </td>
+
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-right font-mono font-bold text-xs">
+                        {(p.capital || 0) > 0 ? (
+                          <span className={isActive ? 'text-emerald-300' : 'text-emerald-800'}>
+                            {formatCurrency(p.capital || 0)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic font-normal text-[10px]">RM 0.00</span>
+                        )}
                       </td>
 
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-right font-mono font-extrabold text-xs">
@@ -783,29 +1112,60 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
 
                       <td className="p-2 text-center relative">
                         <div className="flex items-center justify-center gap-1">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenEditModal(p);
-                            }}
-                            className="p-1 text-blue-600 hover:text-blue-900 hover:bg-blue-100 transition cursor-pointer"
-                            title="Edit Product"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
+                          {activeTab === 'junk' ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRestoreProduct(p.id, p.product_name || '');
+                                }}
+                                className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded transition cursor-pointer flex items-center gap-1"
+                                title="Pulihkan dari Sampah"
+                              >
+                                <RefreshCw className="w-3 h-3" />
+                                <span>Restore</span>
+                              </button>
 
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteProduct(p.id, p.product_name);
-                            }}
-                            className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
-                            title="Delete Product"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePermanentDelete(p.id, p.product_name || '');
+                                }}
+                                className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                                title="Hapus Permanen"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenEditModal(p);
+                                }}
+                                className="p-1 text-blue-600 hover:text-blue-900 hover:bg-blue-100 transition cursor-pointer"
+                                title="Edit Product"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTrashProduct(p.id, p.product_name || '');
+                                }}
+                                className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                                title="Pindah ke Sampah (Junk)"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -827,6 +1187,188 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
         </footer>
 
       </div>
+
+      {/* POP-UP MODAL: PRODUCT DETAILS & QUICK ACTIONS */}
+      {selectedProductDetail && (
+        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in font-sans">
+          <div className="bg-white border border-slate-300 w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden rounded-lg">
+            
+            {/* Modal Header */}
+            <div className="p-3.5 bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] text-[#3d3d3d] flex items-center justify-between border-b border-[#7b7b7b] shrink-0">
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-blue-600 shrink-0" />
+                <h3 className="font-extrabold text-xs text-slate-900 uppercase tracking-wide">
+                  Rincian Detail Produk & Aksi Quick Action
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedProductDetail(null)}
+                className="p-1 text-slate-500 hover:text-slate-900 transition cursor-pointer"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 overflow-y-auto max-h-[75vh] space-y-4 text-slate-800 text-xs">
+              
+              {/* Top Summary Banner */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-50 border border-slate-200 p-3 rounded-md">
+                <div className="flex items-center gap-3">
+                  {selectedProductDetail.image_url ? (
+                    <img
+                      src={selectedProductDetail.image_url}
+                      alt={selectedProductDetail.product_name}
+                      className="w-16 h-16 object-cover border border-slate-300 rounded shadow-xs shrink-0 cursor-pointer"
+                      onClick={() => setPreviewPhotoUrl(selectedProductDetail.image_url || null)}
+                    />
+                  ) : (
+                    <div className="w-16 h-16 bg-slate-200 border border-slate-300 rounded flex items-center justify-center text-slate-400 shrink-0">
+                      <ImageIcon className="w-6 h-6 opacity-40" />
+                    </div>
+                  )}
+                  <div>
+                    <span className="bg-blue-100 text-blue-800 border border-blue-300 px-2 py-0.5 rounded font-mono font-extrabold text-[11px]">
+                      {selectedProductDetail.product_code}
+                    </span>
+                    <h2 className="font-extrabold text-sm text-slate-900 mt-1">
+                      {selectedProductDetail.product_name}
+                    </h2>
+                    <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                      Kategori: <strong className="text-slate-700">{selectedProductDetail.category || 'Equipment'}</strong>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-right sm:border-l sm:border-slate-200 sm:pl-4 shrink-0">
+                  <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Harga Master (MYR)</div>
+                  <div className="text-sm font-extrabold text-emerald-700 font-mono">
+                    {formatCurrency(selectedProductDetail.unit_price || 0)}
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                    Modal: <span className="font-mono font-bold text-slate-700">{formatCurrency(selectedProductDetail.capital || 0)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Full Specification Box */}
+              <div className="space-y-1 bg-amber-50/60 border border-amber-200 p-3 rounded-md">
+                <h4 className="font-bold text-amber-950 uppercase tracking-wide text-[11px] flex items-center gap-1.5 border-b border-amber-200 pb-1">
+                  <FileText className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Spesifikasi Lengkap Produk</span>
+                </h4>
+                <p className="leading-relaxed text-slate-800 whitespace-pre-line text-xs font-sans pt-1">
+                  {selectedProductDetail.specification || selectedProductDetail.description || 'Tidak ada spesifikasi khusus tercatat dalam database.'}
+                </p>
+              </div>
+
+              {/* Grid Properties */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                <div className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-0.5">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Supplier / Vendor</span>
+                  <span className="font-extrabold text-slate-800 block truncate">
+                    {selectedProductDetail.supplier_name || '—'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-0.5">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Satuan (Unit)</span>
+                  <span className="font-extrabold text-slate-800 block">
+                    {selectedProductDetail.unit || 'Package'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-0.5">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Stok Tersedia</span>
+                  <span className="font-extrabold text-emerald-700 font-mono block">
+                    {selectedProductDetail.stock_quantity || 0} unit
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-0.5">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Diskon (%)</span>
+                  <span className="font-extrabold text-slate-800 font-mono block">
+                    {selectedProductDetail.discount_percent || 0}%
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-0.5">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Status Record</span>
+                  <span className="font-extrabold text-slate-800 uppercase block">
+                    {selectedProductDetail.status || 'active'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-0.5">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block">ID Database</span>
+                  <span className="font-mono text-slate-700 block">
+                    #{selectedProductDetail.id}
+                  </span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Footer with Actions */}
+            <div className="p-3 bg-slate-100 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedProductDetail.product_code) {
+                    navigator.clipboard.writeText(selectedProductDetail.product_code);
+                    setCopiedCodeToast(true);
+                    setTimeout(() => setCopiedCodeToast(false), 2000);
+                  }
+                }}
+                className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs rounded transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Copy className="w-3.5 h-3.5 text-slate-500" />
+                <span>{copiedCodeToast ? 'Kode Tersalin!' : 'Copy Kode Produk'}</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const item = selectedProductDetail;
+                    setSelectedProductDetail(null);
+                    handleOpenEditModal(item);
+                  }}
+                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Edit Produk</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = selectedProductDetail.id;
+                    const name = selectedProductDetail.product_name || '';
+                    setSelectedProductDetail(null);
+                    handleTrashProduct(id, name);
+                  }}
+                  className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Pindah ke Sampah</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedProductDetail(null)}
+                  className="px-4 py-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-white text-[#3d3d3d] font-bold text-xs border border-[#a0a0a0] rounded shadow-xs transition cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* POP-UP MODAL: CATEGORY BLUEPRINT DETAILS */}
       {selectedBlueprint && (
@@ -1025,7 +1567,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
               <div className="flex items-center gap-2">
                 <Settings className="w-4 h-4 text-[#0099ec]" />
                 <h3 className="font-extrabold text-xs text-slate-900">
-                  Pengaturan Sync & Backup Cloud Google Drive
+                  Pengaturan Sync & Backup Cloud Google Drive / Spreadsheet
                 </h3>
               </div>
               <button
@@ -1036,121 +1578,231 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
               </button>
             </div>
 
-            <div className="p-5 overflow-y-auto space-y-4 text-xs text-slate-900 bg-slate-50 flex-1">
+            {/* Multi-Tab Selector Bar */}
+            <div className="flex items-center gap-1 bg-slate-200/90 px-3 py-1.5 border-b border-slate-300 text-xs font-extrabold shrink-0">
+              <button
+                onClick={() => setSyncModalTab('config')}
+                className={`px-3 py-1 rounded cursor-pointer transition flex items-center gap-1.5 ${
+                  syncModalTab === 'config' ? 'bg-white text-blue-900 shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Cloud className="w-3.5 h-3.5" />
+                <span>Spreadsheet Link & Info</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  fetchSyncLogs();
+                  setSyncModalTab('logs');
+                }}
+                className={`px-3 py-1 rounded cursor-pointer transition flex items-center gap-1.5 ${
+                  syncModalTab === 'logs' ? 'bg-white text-blue-900 shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Log Error Sync ({syncLogs.length})</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  handleCheckConflictsManual();
+                  setSyncModalTab('conflicts');
+                }}
+                className={`px-3 py-1 rounded cursor-pointer transition flex items-center gap-1.5 ${
+                  syncModalTab === 'conflicts' ? 'bg-white text-blue-900 shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                <span>Cek Konflik Manual ({conflictsList.length})</span>
+              </button>
+
+              <button
+                onClick={() => setSyncModalTab('session_audit')}
+                className={`px-3 py-1 rounded cursor-pointer transition flex items-center gap-1.5 ${
+                  syncModalTab === 'session_audit' ? 'bg-white text-blue-900 shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <FileJson className="w-3.5 h-3.5 text-purple-600" />
+                <span>Audit Sesi Edit</span>
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto space-y-4 text-xs text-slate-900 bg-slate-50 flex-1">
               
-              {/* SECTION 1: NAMA FILE BACKUP & STATUS KONEKSI */}
-              <div className="bg-white p-4 border border-slate-300 space-y-3 shadow-2xs">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                  <span className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
-                    <Cloud className="w-4 h-4 text-blue-600" />
-                    Informasi Berkas Backup Google Drive
-                  </span>
-                  <span className="bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold px-2 py-0.5 text-[10px] rounded flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                    Connected to Google Service Account
-                  </span>
-                </div>
+              {/* TAB 1: CONFIG & SPREADSHEET LINK */}
+              {syncModalTab === 'config' && (
+                <>
+                  <div className="bg-white p-4 border border-slate-300 space-y-3 shadow-2xs">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                      <span className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
+                        <Cloud className="w-4 h-4 text-blue-600" />
+                        Google Spreadsheet Link (.env:L89)
+                      </span>
+                      <a
+                        href="https://docs.google.com/spreadsheets/d/1PHMV-f5fEZzdzCHXXMZFn2laEIRnOWrDoH9ZJcxi1UQ/edit?usp=drive_link"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1 rounded text-[10px] flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <span>Buka Spreadsheet Live</span>
+                        <Eye className="w-3 h-3" />
+                      </a>
+                    </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div className="space-y-1">
-                    <span className="text-slate-500 font-bold text-[10px] uppercase block">Nama File Backup Cloud:</span>
-                    <div className="font-mono font-bold text-slate-900 bg-slate-100 p-2 border border-slate-300 flex items-center gap-2">
-                      <FileJson className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span>abmalaya_erp_products_backup.json</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div className="space-y-1">
+                        <span className="text-slate-500 font-bold text-[10px] uppercase block">Spreadsheet Backup URL:</span>
+                        <div className="font-mono font-bold text-blue-800 bg-blue-50 p-2 border border-blue-200 text-[11px] truncate">
+                          https://docs.google.com/spreadsheets/d/1PHMV-f5fEZzdzCHXXMZFn2laEIRnOWrDoH9ZJcxi1UQ
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="text-slate-500 font-bold text-[10px] uppercase block">Google Service Account:</span>
+                        <div className="font-mono font-bold text-slate-900 bg-slate-100 p-2 border border-slate-300 text-[11px] truncate">
+                          erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <span className="text-slate-500 font-bold text-[10px] uppercase block">Google Service Account:</span>
-                    <div className="font-mono font-bold text-slate-900 bg-slate-100 p-2 border border-slate-300 text-[11px] truncate">
-                      erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com
+                  <div className="bg-white p-4 border border-slate-300 space-y-2 shadow-2xs">
+                    <h4 className="font-bold text-slate-900 uppercase text-xs border-b border-slate-200 pb-2">
+                      Tombol Manual Sync & Backup Spreadsheet:
+                    </h4>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleManualSyncSpreadsheet}
+                        disabled={isSyncingSpreadsheet}
+                        className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs px-3.5 py-1.5 rounded cursor-pointer transition shadow-xs disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isSyncingSpreadsheet ? 'animate-spin' : ''}`} />
+                        <span>Sync Manual MySQL ➔ Spreadsheet</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleCheckConflictsManual}
+                        disabled={isCheckingConflicts}
+                        className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs px-3.5 py-1.5 rounded cursor-pointer transition shadow-xs disabled:opacity-50"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        <span>Jalankan Cek Konflik Manual</span>
+                      </button>
                     </div>
                   </div>
+                </>
+              )}
+
+              {/* TAB 2: LOG ERROR SYNC */}
+              {syncModalTab === 'logs' && (
+                <div className="bg-white p-4 border border-slate-300 space-y-3 shadow-2xs">
+                  <h4 className="font-bold text-slate-900 uppercase text-xs border-b border-slate-200 pb-2 flex items-center justify-between">
+                    <span>Log Error & Peringatan System Notifications:</span>
+                    <button
+                      onClick={fetchSyncLogs}
+                      className="text-blue-600 hover:underline text-[10px] font-normal cursor-pointer flex items-center gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Refresh Logs</span>
+                    </button>
+                  </h4>
+
+                  {syncLogs.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 font-bold text-xs">
+                      Belum ada log error sync tercatat di database.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                      {syncLogs.map((log) => (
+                        <div key={log.id} className="p-2.5 bg-slate-50 border border-slate-200 rounded text-xs space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold text-slate-900">{log.title}</span>
+                            <span className="font-mono text-[10px] text-slate-500">{log.created_at}</span>
+                          </div>
+                          <p className="text-slate-700 leading-relaxed font-sans">{log.message}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
+              )}
 
-                <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-600 bg-slate-50 p-2.5 border border-slate-200 gap-2">
-                  <span>Status Resolusi Konflik: <strong className="text-slate-900">{gdriveStatus?.has_sync_conflict ? '⚠️ Peringatan Konflik Terdeteksi' : '✅ Sinkron 100%'}</strong></span>
-                  <span>Terakhir Diperbarui: <strong className="text-slate-900">{gdriveStatus?.last_sync_time || new Date().toLocaleString('id-ID')}</strong></span>
+              {/* TAB 3: CEK KONFLIK MANUAL */}
+              {syncModalTab === 'conflicts' && (
+                <div className="bg-white p-4 border border-slate-300 space-y-3 shadow-2xs">
+                  <h4 className="font-bold text-slate-900 uppercase text-xs border-b border-slate-200 pb-2">
+                    Hasil Pemindaian Konflik Data (MySQL vs Spreadsheet):
+                  </h4>
+
+                  {conflictsList.length === 0 ? (
+                    <div className="p-8 text-center text-emerald-700 bg-emerald-50 border border-emerald-200 font-bold text-xs rounded">
+                      ✅ Seluruh data MySQL dan Spreadsheet sinkron 100%. Tidak ditemukan perbedaan tak terduga.
+                    </div>
+                  ) : (
+                    <table className="w-full text-left text-xs border-collapse bg-white border border-slate-300">
+                      <thead className="bg-slate-100 text-slate-700 font-bold text-[11px] uppercase">
+                        <tr>
+                          <th className="p-2 border-r border-slate-200">Kode Produk</th>
+                          <th className="p-2 border-r border-slate-200">Nama Produk</th>
+                          <th className="p-2 border-r border-slate-200">Field</th>
+                          <th className="p-2 border-r border-slate-200 bg-blue-50 text-blue-900">Versi MySQL</th>
+                          <th className="p-2 bg-emerald-50 text-emerald-900">Versi Spreadsheet</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {conflictsList.map((c, idx) => (
+                          <tr key={idx} className="border-b border-slate-200">
+                            <td className="p-2 border-r border-slate-200 font-mono font-bold">{c.product_code}</td>
+                            <td className="p-2 border-r border-slate-200 font-bold">{c.product_name}</td>
+                            <td className="p-2 border-r border-slate-200 font-semibold text-amber-800">{c.field}</td>
+                            <td className="p-2 border-r border-slate-200 font-mono text-blue-800 font-bold">{c.local_val}</td>
+                            <td className="p-2 font-mono text-emerald-800 font-bold">{c.cloud_val}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
-              </div>
+              )}
 
-              {/* SECTION 2: PRATINJAU ISI FILE BACKUP (DATA SUMMARY & CODE PREVIEW) */}
-              <div className="bg-white p-4 border border-slate-300 space-y-3 shadow-2xs">
-                <h4 className="font-bold text-slate-900 uppercase text-xs border-b border-slate-200 pb-2 flex items-center gap-1.5">
-                  <FileJson className="w-4 h-4 text-blue-600" />
-                  Pratinjau Isi File Backup JSON Master Katalog:
-                </h4>
+              {/* TAB 4: AUDIT SESI EDIT (LOCALSTORAGE) */}
+              {syncModalTab === 'session_audit' && (
+                <div className="bg-white p-4 border border-slate-300 space-y-3 shadow-2xs">
+                  <h4 className="font-bold text-slate-900 uppercase text-xs border-b border-slate-200 pb-2 flex items-center justify-between">
+                    <span>Riwayat Edit Sesi Pengguna (LocalStorage Audit Trail):</span>
+                    <button
+                      onClick={() => {
+                        localStorage.removeItem('product_edit_history_session');
+                        setSaveSuccessMessage('Riwayat sesi dibersihkan.');
+                        setTimeout(() => setSaveSuccessMessage(null), 3000);
+                      }}
+                      className="text-rose-600 hover:underline text-[10px] font-normal cursor-pointer"
+                    >
+                      Bersihkan Log Sesi
+                    </button>
+                  </h4>
 
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div className="bg-slate-50 p-2.5 border border-slate-200 space-y-0.5">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase block">Jumlah Produk:</span>
-                    <span className="font-mono font-extrabold text-sm text-blue-700">{products.length} Items</span>
-                  </div>
-                  <div className="bg-slate-50 p-2.5 border border-slate-200 space-y-0.5">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase block">Kategori Master:</span>
-                    <span className="font-mono font-extrabold text-sm text-amber-700">{categories.length - 1} Kategori</span>
-                  </div>
-                  <div className="bg-slate-50 p-2.5 border border-slate-200 space-y-0.5">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase block">Nilai Est. Katalog:</span>
-                    <span className="font-mono font-extrabold text-sm text-emerald-700">{formatCurrency(totalMasterCatalogValue)}</span>
-                  </div>
+                  {(() => {
+                    const logs = JSON.parse(localStorage.getItem('product_edit_history_session') || '[]');
+                    if (logs.length === 0) {
+                      return <div className="p-8 text-center text-slate-400 font-bold text-xs">Belum ada riwayat aktivitas edit pada sesi peramban ini.</div>;
+                    }
+                    return (
+                      <div className="space-y-1.5 max-h-80 overflow-y-auto">
+                        {logs.map((log: any, idx: number) => (
+                          <div key={idx} className="p-2 bg-slate-50 border border-slate-200 rounded text-xs flex items-center justify-between">
+                            <span className="font-bold text-slate-800 font-mono text-[11px]">{log.action}: {log.detail}</span>
+                            <span className="font-mono text-[10px] text-slate-500">{log.time}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
-
-                <div>
-                  <span className="text-slate-500 font-bold text-[10px] block mb-1">Preview Snippet Payload JSON:</span>
-                  <pre className="bg-slate-950 text-emerald-400 p-3 rounded border border-slate-800 font-mono text-[10px] max-h-40 overflow-y-auto leading-relaxed">
-                    {JSON.stringify(
-                      {
-                        backup_timestamp: new Date().toISOString(),
-                        system: 'ABMALAYA ERP Portal',
-                        database: 'abmalaya_erp.products',
-                        total_items: products.length,
-                        sample_data: products.slice(0, 3),
-                      },
-                      null,
-                      2
-                    )}
-                  </pre>
-                </div>
-              </div>
-
-              {/* SECTION 3: SIMULASI AKSI SINKRONISASI */}
-              <div className="bg-white p-4 border border-slate-300 space-y-2 shadow-2xs">
-                <h4 className="font-bold text-slate-900 uppercase text-xs border-b border-slate-200 pb-2 flex items-center justify-between">
-                  <span>Aksi Uji Coba & Resolusi Sinkronisasi:</span>
-                </h4>
-
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleSimulateConflict}
-                    className="flex items-center gap-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 px-3 py-1.5 rounded text-xs font-bold cursor-pointer transition"
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
-                    <span>Simulasikan Peringatan Konflik Sync</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleResolveGDriveConflict('use_local')}
-                    disabled={isResolvingSync}
-                    className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs px-3.5 py-1.5 rounded cursor-pointer transition disabled:opacity-50"
-                  >
-                    <HardDrive className="w-3.5 h-3.5 text-blue-200" />
-                    <span>Paksa Sync MySQL ➔ Google Drive</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleResolveGDriveConflict('use_gdrive')}
-                    disabled={isResolvingSync}
-                    className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-3.5 py-1.5 rounded cursor-pointer transition disabled:opacity-50"
-                  >
-                    <Cloud className="w-3.5 h-3.5 text-emerald-200" />
-                    <span>Paksa Sync Google Drive ➔ MySQL</span>
-                  </button>
-                </div>
-              </div>
+              )}
 
             </div>
 
@@ -1161,7 +1813,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
                 onClick={() => setIsSettingsModalOpen(false)}
                 className="px-4 py-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] text-[#3d3d3d] border border-[#a0a0a0] font-bold text-xs rounded-sm cursor-pointer hover:bg-white"
               >
-                Close Settings
+                Tutup Pengaturan
               </button>
             </div>
 
@@ -1262,7 +1914,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Short Description:</label>
                   <textarea
@@ -1284,10 +1936,21 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
                     className="w-full bg-white border border-slate-300 p-1.5 text-xs font-mono"
                   />
                 </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Offered Item (Penawaran SPH):</label>
+                  <textarea
+                    rows={2}
+                    value={offerText}
+                    onChange={(e) => setOfferText(e.target.value)}
+                    placeholder="Contoh: KETTLEBELL CAST IRON 12 KG GRADE A..."
+                    className="w-full bg-white border border-slate-300 p-1.5 text-xs font-bold text-emerald-800"
+                  />
+                </div>
               </div>
 
 
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-5 gap-2">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Stock Qty:</label>
                   <input
@@ -1307,6 +1970,19 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
                     onChange={(e) => setUnit(e.target.value)}
                     placeholder="Package / Pcs"
                     className="w-full bg-white border border-slate-300 p-1.5 text-xs text-center"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Capital Cost ({currencySymbol}):</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={10000}
+                    value={capitalCost}
+                    onChange={(e) => setCapitalCost(parseFloat(e.target.value) || 0)}
+                    placeholder="0"
+                    className="w-full bg-white border border-slate-300 p-1.5 text-xs font-mono font-bold text-emerald-800"
                   />
                 </div>
 
@@ -1475,4 +2151,5 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({}) => {
   );
 };
 
-export default ProductCatalog;
+export const ProductCatalog = Product;
+export default Product;

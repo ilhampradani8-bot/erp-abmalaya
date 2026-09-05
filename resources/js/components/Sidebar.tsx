@@ -4,7 +4,7 @@ import { Mail, FileText, FileCheck, Users, Settings, ChevronRight, Check, PanelL
 import { getApiUrl } from '../utils/api';
 
 interface SidebarProps {
-  viewMode: 'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'downloads';
+  viewMode: 'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads';
   setViewMode: (mode: any) => void;
   onNewQuotation: () => void;
   pendingCount: number;

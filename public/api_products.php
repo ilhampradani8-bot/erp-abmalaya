@@ -16,25 +16,43 @@ if (!is_dir($upload_dir)) {
 try {
     require_once __DIR__ . '/db_connect.php';
 
-    // DELETE PRODUCT RECORD FROM PRODUCTS TABLE
-    if ($_SERVER['REQUEST_METHOD'] === 'DELETE' || (isset($_GET['action']) && $_GET['action'] === 'delete')) {
+    // DELETE / TRASH / RESTORE PRODUCT RECORD FROM PRODUCTS TABLE
+    $action = isset($_GET['action']) ? trim($_GET['action']) : '';
+    if ($_SERVER['REQUEST_METHOD'] === 'DELETE' || !empty($action)) {
         $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
         if ($id > 0) {
-            $stmt = $db_conn->prepare("DELETE FROM products WHERE id = ?");
-            if ($stmt) {
-                $stmt->bind_param("i", $id);
-                $stmt->execute();
+            if ($action === 'trash') {
+                $stmt = $db_conn->prepare("UPDATE products SET status = 'junk' WHERE id = ?");
+                if ($stmt) {
+                    $stmt->bind_param("i", $id);
+                    $stmt->execute();
+                }
+                $msg = 'Product moved to trash (junk)';
+            } else if ($action === 'restore') {
+                $stmt = $db_conn->prepare("UPDATE products SET status = 'active' WHERE id = ?");
+                if ($stmt) {
+                    $stmt->bind_param("i", $id);
+                    $stmt->execute();
+                }
+                $msg = 'Product restored to active list';
+            } else if ($action === 'delete' || $action === 'delete_permanent' || $_SERVER['REQUEST_METHOD'] === 'DELETE') {
+                $stmt = $db_conn->prepare("DELETE FROM products WHERE id = ?");
+                if ($stmt) {
+                    $stmt->bind_param("i", $id);
+                    $stmt->execute();
+                }
+                $msg = 'Product permanently deleted';
             }
-        }
 
-        ob_end_clean();
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode([
-            'status' => 'success',
-            'message' => 'Product deleted successfully',
-            'deleted_id' => $id
-        ]);
-        exit;
+            ob_end_clean();
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'status' => 'success',
+                'message' => $msg ?? 'Action completed successfully',
+                'target_id' => $id
+            ]);
+            exit;
+        }
     }
 
     // GET PRODUCTS OR CATEGORIES
@@ -76,8 +94,10 @@ try {
             if ($res && $res->num_rows > 0) {
                 while ($row = $res->fetch_assoc()) {
                     $row['unit_price'] = (float)$row['unit_price'];
+                    $row['capital'] = (float)($row['capital'] ?? 0.0);
                     $row['stock_quantity'] = isset($row['stock_quantity']) ? (int)$row['stock_quantity'] : 50;
                     $row['discount_percent'] = isset($row['discount_percent']) ? (float)$row['discount_percent'] : 0.0;
+                    $row['status'] = $row['status'] ?? 'active';
                     $data[] = $row;
                 }
             }
@@ -137,13 +157,16 @@ try {
             $product_name = isset($input['product_name']) ? trim($input['product_name']) : '';
             $description = isset($input['description']) ? trim($input['description']) : '';
             $specification = isset($input['specification']) ? trim($input['specification']) : '';
+            $offer = isset($input['offer']) ? trim($input['offer']) : (isset($input['offered_item']) ? trim($input['offered_item']) : '');
             $unit = isset($input['unit']) ? trim($input['unit']) : 'Unit';
             $unit_price = isset($input['unit_price']) ? (float)$input['unit_price'] : 0.00;
+            $capital = isset($input['capital']) ? (float)$input['capital'] : 0.00;
             $stock_quantity = isset($input['stock_quantity']) ? (int)$input['stock_quantity'] : 50;
             $discount_percent = isset($input['discount_percent']) ? (float)$input['discount_percent'] : 0.00;
             $image_url = isset($input['image_url']) ? trim($input['image_url']) : '';
             $category = isset($input['category']) ? trim($input['category']) : 'Equipment';
             $supplier_name = isset($input['supplier_name']) ? trim($input['supplier_name']) : '';
+            $status = isset($input['status']) ? trim($input['status']) : 'active';
 
             // Support multipart file uploads for images
             if (isset($_FILES['product_image']) && $_FILES['product_image']['error'] === UPLOAD_ERR_OK) {
@@ -169,9 +192,9 @@ try {
                 $product_code = 'PRD-' . rand(1000, 9999);
             }
 
-            $stmt = $db_conn->prepare("INSERT INTO products (product_code, product_name, description, specification, unit, unit_price, stock_quantity, discount_percent, image_url, category, supplier_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE product_name=VALUES(product_name), description=VALUES(description), specification=VALUES(specification), unit=VALUES(unit), unit_price=VALUES(unit_price), stock_quantity=VALUES(stock_quantity), discount_percent=VALUES(discount_percent), image_url=VALUES(image_url), category=VALUES(category), supplier_name=VALUES(supplier_name)");
+            $stmt = $db_conn->prepare("INSERT INTO products (product_code, product_name, description, specification, offer, unit, unit_price, capital, stock_quantity, discount_percent, image_url, category, supplier_name, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE product_name=VALUES(product_name), description=VALUES(description), specification=VALUES(specification), offer=VALUES(offer), unit=VALUES(unit), unit_price=VALUES(unit_price), capital=VALUES(capital), stock_quantity=VALUES(stock_quantity), discount_percent=VALUES(discount_percent), image_url=VALUES(image_url), category=VALUES(category), supplier_name=VALUES(supplier_name), status=VALUES(status)");
             if ($stmt) {
-                $stmt->bind_param("sssssdidsss", $product_code, $product_name, $description, $specification, $unit, $unit_price, $stock_quantity, $discount_percent, $image_url, $category, $supplier_name);
+                $stmt->bind_param("ssssssddidssss", $product_code, $product_name, $description, $specification, $offer, $unit, $unit_price, $capital, $stock_quantity, $discount_percent, $image_url, $category, $supplier_name, $status);
                 $stmt->execute();
             } else {
                 throw new Exception("MySQL Prepare Failed: " . $db_conn->error);

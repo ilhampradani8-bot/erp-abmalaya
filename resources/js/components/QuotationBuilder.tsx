@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Quotation, QuotationItem } from '../types/erp';
 import { Plus, Trash2, Send, FileCheck, X, Paperclip, FileType, CheckCircle2, Sparkles, Loader2, Terminal, Save, Eye, MoreVertical, Package, Image as ImageIcon, PlusCircle, Search, RefreshCw } from 'lucide-react';
-import { ProductItem } from './ProductCatalog';
+import { ProductItem } from './Product';
 import { getApiUrl } from '../utils/api';
 
 interface QuotationBuilderProps {

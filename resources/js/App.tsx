@@ -7,12 +7,12 @@ import { RFQInbox } from './components/RFQInbox';
 import { QuotationList } from './components/QuotationList';
 import { QuotationBuilder } from './components/QuotationBuilder';
 import { QuotationDoc } from './components/QuotationDoc';
-import { ProductCatalog } from './components/ProductCatalog';
+import { Product } from './components/Product';
 import { EmailReplyModal } from './components/EmailReplyModal';
 import { AccountSettings } from './components/AccountSettings';
 import { SystemSettings } from './components/SystemSettings';
 import { NotificationLog } from './components/NotificationLog';
-import { TrashQuotation } from './components/TrashQuotation';
+import { Trash } from './components/Trash';
 import { ElectronDownloads } from './components/ElectronDownloads';
 import { encryptData } from './utils/crypto';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
@@ -183,12 +183,12 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  const [viewMode, setViewModeState] = useState<'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'downloads'>('inbox');
+  const [viewMode, setViewModeState] = useState<'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads'>('inbox');
   const [showEmailModal, setShowEmailModal] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const setViewMode = (mode: 'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'downloads') => {
+  const setViewMode = (mode: 'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads') => {
     setIsLoading(true);
     setViewModeState(mode);
     setTimeout(() => {
@@ -432,7 +432,7 @@ export const App: React.FC = () => {
               )}
 
               {viewMode === 'product_catalog' && (
-                <ProductCatalog />
+                <Product />
               )}
 
               {viewMode === 'notification_log' && (
@@ -465,8 +465,8 @@ export const App: React.FC = () => {
                 />
               )}
 
-              {viewMode === 'trash_quotation' && (
-                <TrashQuotation
+              {(viewMode === 'trash_quotation' || viewMode === 'trash') && (
+                <Trash
                   quotations={quotationsCache}
                   setQuotations={setQuotationsCache}
                   isLoading={isLoading}
