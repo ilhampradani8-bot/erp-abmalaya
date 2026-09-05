@@ -156,3 +156,16 @@ if (!function_exists('appendQuotationHistoryLog')) {
         }
     }
 }
+
+if (!function_exists('addSystemNotification')) {
+    function addSystemNotification($db_conn, $title, $message, $type = 'info', $category = 'system', $action_link = null) {
+        if (!$db_conn || $db_conn->connect_error) return;
+        $stmt = $db_conn->prepare("INSERT INTO system_notifications (title, message, type, category, action_link) VALUES (?, ?, ?, ?, ?)");
+        if ($stmt) {
+            $stmt->bind_param("sssss", $title, $message, $type, $category, $action_link);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+}
+

@@ -50,9 +50,14 @@ $match_impa_out = shell_exec(escapeshellarg($php) . ' ' . escapeshellarg($base .
 daemon_log($match_impa_out ?? 'No output from matching_text_impa.php');
 
 // Step 5: Run Dedicated Product Text Matching (attaches existing product codes without creating duplicates)
-daemon_log('[5/5] Running Product Text Matching Daemon...');
+daemon_log('[5/6] Running Product Text Matching Daemon...');
 $match_prod_out = shell_exec(escapeshellarg($php) . ' ' . escapeshellarg($base . '/matching_text_product.php') . ' 2>&1');
 daemon_log($match_prod_out ?? 'No output from matching_text_product.php');
+
+// Step 6: Run Database Change Watcher & System Notifications Engine
+daemon_log('[6/6] Running Database Change Watcher Engine...');
+$watch_db_out = shell_exec(escapeshellarg($php) . ' ' . escapeshellarg($base . '/watch_db_changes.php') . ' 2>&1');
+daemon_log($watch_db_out ?? 'No output from watch_db_changes.php');
 
 daemon_log('=== Done ===');
 exit(0);
