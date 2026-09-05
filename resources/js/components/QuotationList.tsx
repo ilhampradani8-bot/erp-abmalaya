@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Quotation } from '../types/erp';
-import { Search, Plus, Eye, Edit, Send, RefreshCw, Loader2, Trash2, FileType, Check, Sparkles, CheckCircle2, Sliders, Clock, MoreVertical, History, X as CloseIcon, User, AlertTriangle, Printer, Image as ImageIcon, ShieldCheck, ScanLine, Info, Database, Activity, Terminal, Tag } from 'lucide-react';
+import { Search, Plus, Eye, Edit, Send, RefreshCw, Loader2, Trash2, FileType, Check, Sparkles, CheckCircle2, Sliders, Clock, MoreVertical, History, X as CloseIcon, User, AlertTriangle, Printer, Image as ImageIcon, ShieldCheck, ScanLine, Info, Database, Activity, Terminal, Tag, Filter } from 'lucide-react';
 
 import { getApiUrl } from '../utils/api';
 
@@ -637,6 +637,25 @@ export const QuotationList: React.FC<QuotationListProps> = ({
       .finally(() => setIsLoading(false));
   };
 
+  const tabCounts = useMemo(() => {
+    let all = 0, requisition = 0, draft = 0, quotation = 0, acc = 0, done = 0, junk = 0;
+    quotations.forEach((q) => {
+      const st = (q.status || 'draft').toLowerCase();
+      if (st === 'junk' || st === 'trash') {
+        junk++;
+      } else {
+        all++;
+        if (st === 'requisition' || st === '0' || st === 'masuk') requisition++;
+        else if (st === 'draft' || st === 'diproses' || st === 'siap_kirim' || st === 'in_progress' || st === 'quotation_build') draft++;
+        else if (st === 'quotation' || st === 'penawaran_terkirim') quotation++;
+        else if (st === 'approved' || st === 'acc' || st === 'disetujui') acc++;
+        else if (st === 'done_send' || st === 'sent' || st === 'deal' || st === 'terkirim') done++;
+        else draft++;
+      }
+    });
+    return { all, requisition, draft, quotation, acc, done, junk };
+  }, [quotations]);
+
   const filteredQuotations = useMemo(() => {
     return quotations.filter((q) => {
       const term = searchTerm.toLowerCase();
@@ -644,37 +663,34 @@ export const QuotationList: React.FC<QuotationListProps> = ({
         (q.quotation_number || '').toLowerCase().includes(term) ||
         (q.company_name || '').toLowerCase().includes(term) ||
         (q.client_name || '').toLowerCase().includes(term) ||
-        (q.client_email || '').toLowerCase().includes(term);
+        (q.client_email || '').toLowerCase().includes(term) ||
+        (q.category_name || '').toLowerCase().includes(term) ||
+        (q.impa_code || '').toLowerCase().includes(term);
 
       const st = (q.status || 'draft').toLowerCase();
 
-      // Default: exclude junk unless active tab is 'junk'
-      if (activeTab !== 'junk' && st === 'junk') {
+      if (activeTab === 'junk') {
+        return matchesSearch && (st === 'junk' || st === 'trash');
+      }
+
+      if (st === 'junk' || st === 'trash') {
         return false;
       }
 
       if (activeTab === 'requisition') {
-        return matchesSearch && (st === 'requisition' || st === '0');
+        return matchesSearch && (st === 'requisition' || st === '0' || st === 'masuk');
       }
       if (activeTab === 'draft') {
-        return matchesSearch && (st === 'draft' || st === 'diproses' || st === 'siap_kirim');
+        return matchesSearch && (st === 'draft' || st === 'diproses' || st === 'siap_kirim' || st === 'in_progress' || st === 'quotation_build');
       }
       if (activeTab === 'quotation') {
-        return matchesSearch && st === 'quotation';
+        return matchesSearch && (st === 'quotation' || st === 'penawaran_terkirim');
       }
       if (activeTab === 'acc') {
         return matchesSearch && (st === 'approved' || st === 'acc' || st === 'disetujui');
       }
       if (activeTab === 'done') {
         return matchesSearch && (st === 'done_send' || st === 'sent' || st === 'deal' || st === 'terkirim');
-      }
-      if (activeTab === 'junk') {
-        return matchesSearch && st === 'junk';
-      }
-
-      // For 'all' tab, exclude 'junk'
-      if (activeTab === 'all') {
-        return matchesSearch && st !== 'junk';
       }
 
       return matchesSearch;
@@ -695,28 +711,39 @@ export const QuotationList: React.FC<QuotationListProps> = ({
       {/* ITUNES-STYLE TOP METALLIC NAVIGATION & FILTER BAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] px-4 py-2 border-b border-[#7b7b7b] shrink-0 w-full shadow-xs">
         
-        {/* iTunes Filter Tabs: All | Requisition | In Progress (Draft) | Quotation | Done | Junk / Trash */}
-        <div className="flex items-center gap-1.5 text-xs overflow-x-auto">
-          {[
-            { id: 'all', label: 'All Quotations' },
-            { id: 'requisition', label: 'Requisition' },
-            { id: 'draft', label: 'In Progress (Draft)' },
-            { id: 'quotation', label: 'Quotation' },
-            { id: 'acc', label: 'ACC Approved' },
-            { id: 'done', label: 'Done' },
-          ].map((tab) => (
-            <button
-               key={tab.id}
-               onClick={() => setActiveTab(tab.id as any)}
-               className={`px-3 py-1 font-bold text-xs rounded-md transition cursor-pointer whitespace-nowrap ${
-                 activeTab === tab.id
-                   ? 'bg-gradient-to-b from-[#00b4ff] to-[#0080d0] text-white border border-[#0060b0] shadow-xs'
-                   : 'bg-gradient-to-b from-[#fafafa] to-[#eaeaea] text-[#3d3d3d] hover:bg-[#e0e0e0] border border-[#a0a0a0] shadow-inner'
-               }`}
+        {/* UNIFIED DROPDOWN FILTER BAR */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex items-center bg-gradient-to-b from-white to-[#f0f0f0] border border-[#a0a0a0] rounded-md px-2.5 py-1 shadow-inner text-xs font-bold text-[#3d3d3d]">
+            <Filter className="w-3.5 h-3.5 text-[#0080d0] shrink-0 mr-1.5" />
+            <span className="text-[11px] text-slate-500 font-semibold mr-1.5 whitespace-nowrap">Filter Status:</span>
+            <select
+              value={activeTab}
+              onChange={(e) => setActiveTab(e.target.value as any)}
+              className="bg-transparent font-bold text-xs text-[#0080d0] focus:outline-none cursor-pointer pr-1 appearance-none"
             >
-              {tab.label}
-            </button>
-          ))}
+              <option value="all">All Quotations ({tabCounts.all})</option>
+              <option value="requisition">Requisition ({tabCounts.requisition})</option>
+              <option value="draft">In Progress / Draft ({tabCounts.draft})</option>
+              <option value="quotation">Quotation / Penawaran ({tabCounts.quotation})</option>
+              <option value="acc">ACC Approved ({tabCounts.acc})</option>
+              <option value="done">Done / Terkirim ({tabCounts.done})</option>
+              <option value="junk">Trash / Junk ({tabCounts.junk})</option>
+            </select>
+            <Sliders className="w-3 h-3 text-slate-400 pointer-events-none ml-1 shrink-0" />
+          </div>
+
+          <div className="hidden md:flex items-center gap-1 bg-[#0080d0]/10 border border-[#0080d0]/20 px-2 py-1 rounded-md text-[11px] font-extrabold text-[#0080d0]">
+            <span className="text-slate-500">Selected:</span>
+            <span className="uppercase">
+              {activeTab === 'all' && `All (${tabCounts.all})`}
+              {activeTab === 'requisition' && `Requisition (${tabCounts.requisition})`}
+              {activeTab === 'draft' && `In Progress / Draft (${tabCounts.draft})`}
+              {activeTab === 'quotation' && `Quotation (${tabCounts.quotation})`}
+              {activeTab === 'acc' && `ACC Approved (${tabCounts.acc})`}
+              {activeTab === 'done' && `Done (${tabCounts.done})`}
+              {activeTab === 'junk' && `Trash (${tabCounts.junk})`}
+            </span>
+          </div>
         </div>
 
         {/* Search Input Bar & Refresh Button */}
