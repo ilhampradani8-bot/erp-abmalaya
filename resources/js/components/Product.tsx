@@ -524,7 +524,11 @@ export const Product: React.FC<ProductProps> = ({}) => {
   };
 
 
-  const categories = ['all', ...Array.from(new Set(products.map(p => p.category || 'Equipment')))];
+  const categories = Array.from(new Set([
+    'all',
+    ...categoriesBlueprints.map((cb) => (cb.category_name ? (cb.category_code ? `${cb.category_code} ${cb.category_name}` : cb.category_name) : '')).filter(Boolean),
+    ...products.map((p) => p.category || 'Equipment')
+  ]));
 
   const filteredProducts = products.filter((p) => {
     const q = searchTerm.toLowerCase();
@@ -534,8 +538,11 @@ export const Product: React.FC<ProductProps> = ({}) => {
       (p.description || '').toLowerCase().includes(q) ||
       (p.category || '').toLowerCase().includes(q);
 
-    if (activeCategory !== 'all' && (p.category || 'Equipment') !== activeCategory) {
-      return false;
+    if (activeCategory !== 'all') {
+      const pCat = (p.category || 'Equipment').toLowerCase();
+      const aCat = activeCategory.toLowerCase();
+      const isMatch = pCat === aCat || pCat.includes(aCat) || aCat.includes(pCat);
+      if (!isMatch) return false;
     }
     return matchesSearch;
   });
@@ -643,7 +650,12 @@ export const Product: React.FC<ProductProps> = ({}) => {
                     {categories.map((cat) => {
                       const count = cat === 'all'
                         ? products.filter(p => (p.status || 'active') === 'active').length
-                        : products.filter(p => (p.status || 'active') === 'active' && (p.category || 'Equipment') === cat).length;
+                        : products.filter(p => {
+                            if ((p.status || 'active') !== 'active') return false;
+                            const pCat = (p.category || 'Equipment').toLowerCase();
+                            const cCat = cat.toLowerCase();
+                            return pCat === cCat || pCat.includes(cCat) || cCat.includes(pCat);
+                          }).length;
                       const isSelected = activeTab === 'products' && activeCategory === cat;
 
                       return (
