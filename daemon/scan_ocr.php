@@ -68,7 +68,7 @@ $res = $db_conn->query("
            r.attachment_url, r.subject, r.message_body, r.item_requested, r.quantity_requested, r.client_company, r.client_phone
     FROM quotations q
     INNER JOIN rfq_requests r ON r.id = q.rfq_id
-    WHERE q.ocr_scan_status IN ('pending', 'skipped', 'waiting')
+    WHERE q.ocr_scan_status IN ('pending', 'skipped', 'waiting', 'waiting_ai_limit')
     ORDER BY q.created_at ASC
     LIMIT " . SCAN_LIMIT
 );
@@ -112,7 +112,11 @@ while ($row = $res->fetch_assoc()) {
     $result_json = json_encode($scan_result, JSON_UNESCAPED_UNICODE);
     
     $inner_status = $scan_result['scan_status'] ?? 'error';
-    $new_status   = in_array($inner_status, ['done', 'low_quality']) ? 'done' : (($inner_status === 'waiting') ? 'waiting' : 'error');
+    $new_status   = in_array($inner_status, ['done', 'low_quality']) ? 'done' : (in_array($inner_status, ['waiting', 'waiting_ai_limit']) ? 'waiting_ai_limit' : 'error');
+
+    if ($new_status === 'waiting_ai_limit') {
+        daemon_log("Scan result for SPH {$quo_id}: WAITING_AI_LIMIT (Gemini API rate limited — Re-queued for auto-retry)");
+    }
 
     // Update phone & email if extracted
     $extracted_phone = isset($scan_result['phone']) && !empty($scan_result['phone']) ? trim($scan_result['phone']) : null;
