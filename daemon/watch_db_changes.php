@@ -6,7 +6,7 @@ date_default_timezone_set('Asia/Kuala_Lumpur');
  *
  * Monitors table row inserts and status modifications across MySQL tables:
  * rfq_requests, quotations, products, and users.
- * Automatically inserts structured records into system_notifications table.
+ * Automatically inserts structured records in English into system_notifications table.
  */
 
 define('DAEMON_MODE', true);
@@ -57,10 +57,10 @@ if ($res_rfq && $res_rfq->num_rows > 0) {
 
         if ($state['initialized']) {
             $sender = !empty($row['client_name']) ? $row['client_name'] : ($row['client_email'] ?: 'Client');
-            $subject = !empty($row['subject']) ? $row['subject'] : 'Inquiry RFQ Baru';
-            $msg = "Diterima email RFQ baru dari {$sender} ({$row['client_email']}) — Subjek: \"{$subject}\"";
+            $subject = !empty($row['subject']) ? $row['subject'] : 'New RFQ Inquiry';
+            $msg = "Received new RFQ inquiry from {$sender} ({$row['client_email']}) — Subject: \"{$subject}\"";
             
-            addSystemNotification($db_conn, "Email RFQ Baru Masuk", $msg, "info", "rfq", "rfq_inbox");
+            addSystemNotification($db_conn, "New RFQ Email Received", $msg, "info", "rfq", "rfq_inbox");
             daemon_watch_log("Detected new RFQ ID {$rfq_id}: {$sender}");
         }
     }
@@ -77,7 +77,7 @@ if ($res_quo && $res_quo->num_rows > 0) {
         $q_id = $row['id'];
         $q_num = $row['quotation_number'];
         $status = strtolower($row['status'] ?? 'draft');
-        $company = !empty($row['company_name']) ? $row['company_name'] : ($row['client_name'] ?: 'Klien');
+        $company = !empty($row['company_name']) ? $row['company_name'] : ($row['client_name'] ?: 'Client');
         
         $current_quo_statuses[$q_id] = [
             'num' => $q_num,
@@ -89,29 +89,29 @@ if ($res_quo && $res_quo->num_rows > 0) {
         if ($state['initialized']) {
             if (!isset($state['quo_statuses'][$q_id])) {
                 // New quotation created
-                $msg = "Draf SPH penawaran baru #{$q_num} telah dibuat untuk {$company}.";
-                addSystemNotification($db_conn, "Draf SPH Baru #{$q_num}", $msg, "info", "sph", "quotations_list");
+                $msg = "New SPH quotation draft #{$q_num} has been created for {$company}.";
+                addSystemNotification($db_conn, "New SPH Draft #{$q_num}", $msg, "info", "sph", "quotations_list");
                 daemon_watch_log("Detected new SPH #{$q_num} for {$company}");
             } else {
                 $old_status = $state['quo_statuses'][$q_id]['status'] ?? '';
                 if ($old_status !== $status) {
                     // Status changed!
                     $type = 'info';
-                    $title = "Perubahan Status SPH #{$q_num}";
+                    $title = "SPH Status Updated #{$q_num}";
                     if (in_array($status, ['approved', 'acc', 'disetujui'])) {
                         $type = 'success';
-                        $title = "ACC Manager Disetujui #{$q_num}";
-                        $msg = "Surat Penawaran Harga #{$q_num} ({$company}) telah disetujui (ACC) oleh Manager.";
+                        $title = "ACC Manager Approved #{$q_num}";
+                        $msg = "SPH quotation #{$q_num} ({$company}) has been approved by ACC Manager.";
                     } elseif ($status === 'junk') {
                         $type = 'warning';
-                        $title = "SPH Dipindahkan ke Sampah #{$q_num}";
-                        $msg = "Surat Penawaran Harga #{$q_num} ({$company}) dipindahkan ke folder Sampah/Junk.";
+                        $title = "SPH Moved to Trash #{$q_num}";
+                        $msg = "SPH quotation #{$q_num} ({$company}) moved to Trash / Junk folder.";
                     } elseif (in_array($status, ['done_send', 'sent', 'terkirim'])) {
                         $type = 'success';
-                        $title = "Penawaran SPH Terkirim #{$q_num}";
-                        $msg = "Dokumen SPH #{$q_num} telah dikirim ke email klien {$company}.";
+                        $title = "SPH Quotation Sent #{$q_num}";
+                        $msg = "SPH quotation document #{$q_num} sent to client {$company}.";
                     } else {
-                        $msg = "Status penawaran SPH #{$q_num} ({$company}) diubah dari '{$old_status}' menjadi '{$status}'.";
+                        $msg = "Status for SPH quotation #{$q_num} ({$company}) updated from '{$old_status}' to '{$status}'.";
                     }
 
                     addSystemNotification($db_conn, $title, $msg, $type, "sph", "quotations_list");
@@ -130,8 +130,8 @@ if ($res_prod && $row = $res_prod->fetch_assoc()) {
     $current_prod_count = intval($row['total']);
     if ($state['initialized'] && $current_prod_count > $state['last_product_count'] && $state['last_product_count'] > 0) {
         $diff = $current_prod_count - $state['last_product_count'];
-        $msg = "Berhasil mensinkronkan {$diff} produk baru ke dalam Master Katalog IMPA MySQL.";
-        addSystemNotification($db_conn, "Pembaruan Katalog IMPA", $msg, "success", "product", "products");
+        $msg = "Successfully synced {$diff} new products into IMPA Master Catalog.";
+        addSystemNotification($db_conn, "IMPA Catalog Updated", $msg, "success", "product", "products");
         daemon_watch_log("Detected {$diff} new IMPA products added.");
     }
     $state['last_product_count'] = $current_prod_count;
