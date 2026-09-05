@@ -93,7 +93,7 @@ export interface Quotation {
     attachment_url: string;
     created_at: string;
   } | null;
-  ocr_scan_status?: 'pending' | 'processing' | 'done' | 'error' | 'skipped' | null;
+  ocr_scan_status?: 'pending' | 'processing' | 'done' | 'error' | 'skipped' | 'waiting_ai_limit' | 'waiting' | null;
   ocr_scan_result?: string | null; // JSON string
   approved_by?: string | null; // JSON string — array of approval entries
   category_name?: string | null;

@@ -14,6 +14,8 @@ define('LOG_FILE', __DIR__ . '/logs/scan_ocr_' . date('Y-m-d') . '.log');
 define('SCAN_LIMIT', 10); // vision scans per run
 
 function daemon_log(string $msg): void {
+    $dir = dirname(LOG_FILE);
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
     $line = '[' . date('Y-m-d H:i:s') . '] ' . $msg . PHP_EOL;
     file_put_contents(LOG_FILE, $line, FILE_APPEND | LOCK_EX);
     echo $line;
@@ -21,6 +23,7 @@ function daemon_log(string $msg): void {
 
 // Bootstrap
 require_once __DIR__ . '/../public/db_connect.php';
+require_once __DIR__ . '/../public/api_ocr_scan.php';
 
 if (!$db_conn || $db_conn->connect_error) {
     daemon_log('FATAL: Cannot connect to MySQL — ' . ($db_conn ? $db_conn->connect_error : 'null'));
@@ -29,216 +32,49 @@ if (!$db_conn || $db_conn->connect_error) {
 
 daemon_log('AI OCR Scanner Daemon started.');
 
-// Load Gemini API Keys from DB — dibaca per baris (GEMINI_API_KEY_1, _2, _3, dst.)
+// Load Gemini API Keys for OCR from dedicated gemini_api_keys table
 $key_list = [];
-$res_key = $db_conn->query("SELECT credential_key, credential_value FROM api_credentials WHERE credential_key LIKE 'GEMINI_API_KEY_%' ORDER BY credential_key ASC");
-if ($res_key && $res_key->num_rows > 0) {
-    while ($row = $res_key->fetch_assoc()) {
-        $v = trim($row['credential_value']);
-        if (!empty($v)) $key_list[] = $v;
+$res_keys = $db_conn->query("SELECT api_key FROM gemini_api_keys WHERE status = 'active' AND pool_type = 'ocr' ORDER BY id ASC");
+if ($res_keys && $res_keys->num_rows > 0) {
+    while ($row = $res_keys->fetch_assoc()) {
+        $k = trim($row['api_key']);
+        if (!empty($k) && strpos($k, '...') === false) {
+            $key_list[] = $k;
+        }
     }
 }
 
-// Fallback: format lama (satu baris, pisah koma)
+// Fallback if OCR pool empty
 if (empty($key_list)) {
-    $res_key2 = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key = 'GEMINI_API_KEY'");
-    if ($res_key2 && $res_key2->num_rows > 0) {
-        $raw = trim($res_key2->fetch_assoc()['credential_value']);
-        $key_list = array_values(array_filter(array_map('trim', explode(',', $raw))));
+    $res_fallback = $db_conn->query("SELECT api_key FROM gemini_api_keys WHERE status = 'active' ORDER BY id ASC");
+    if ($res_fallback && $res_fallback->num_rows > 0) {
+        while ($row = $res_fallback->fetch_assoc()) {
+            $k = trim($row['api_key']);
+            if (!empty($k) && strpos($k, '...') === false) $key_list[] = $k;
+        }
     }
 }
+$key_list = array_values(array_unique($key_list));
 
 if (empty($key_list)) {
     daemon_log('WARNING: No Gemini API keys found in database. Scan skipped.');
     exit(0);
 }
-daemon_log('Loaded ' . count($key_list) . ' Gemini API key(s).');
+daemon_log('Loaded ' . count($key_list) . ' Gemini OCR API key(s).');
 
-// performOCRScan Helper
-function performOCRScan($file_url, array $key_list, array $quo_context) {
-    $scanned_at = date('Y-m-d H:i:s');
-    $ext = strtolower(pathinfo(parse_url($file_url, PHP_URL_PATH), PATHINFO_EXTENSION));
-    $mime_map = [
-        'pdf'  => 'application/pdf',
-        'jpg'  => 'image/jpeg',
-        'jpeg' => 'image/jpeg',
-        'png'  => 'image/png',
-        'gif'  => 'image/gif',
-        'webp' => 'image/webp',
-    ];
-    $mime = $mime_map[$ext] ?? 'application/octet-stream';
-
-    // Download using Curl
-    $ch_file = curl_init($file_url);
-    curl_setopt_array($ch_file, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_TIMEOUT        => 30,
-        CURLOPT_USERAGENT      => 'ABMalaya-ERP-OCR/1.0'
-    ]);
-    $file_data = curl_exec($ch_file);
-    $file_code = curl_getinfo($ch_file, CURLINFO_HTTP_CODE);
-    curl_close($ch_file);
-
-    if ($file_code !== 200 || !$file_data || strlen($file_data) < 100) {
-        return [
-            'scan_status'  => 'error',
-            'reason'       => "Download failed. HTTP Code: {$file_code} for URL: {$file_url}",
-            'scanned_at'   => $scanned_at,
-            'file_url'     => $file_url
-        ];
-    }
-
-    $file_b64 = base64_encode($file_data);
-
-    $prompt = "You are a precise OCR extraction engine for AB Malaya Industry ERP system.\n"
-            . "Extract structured data from the attached document image or PDF.\n\n"
-            . "1. ITEM DESCRIPTION & SPECIFICATION SPLITTING:\n"
-            . "   - 'description': SHORT core item title ONLY (MAX 4-8 WORDS, e.g. 'VALVE POSITION INDICATOR' or 'SOLENOID VALVE'). NEVER put long Maker/Model/Specs text in description!\n"
-            . "   - 'product_code': Product/Article Number or CAS No or Ref No if printed (e.g. 'NP145B10' or '1.08325.2500').\n"
-            . "   - 'specification': ALL technical details — Maker/Manufacturer, Model Number, Cylinder Capacity, Voltage, Serial Number, and application notes (e.g. 'Maker: Oval Corporation, Japan. Model: NP145B10, calibrated for 74 cc actuator capacity. For Open/Shut valve service...').\n"
-
-            . "2. NOTES & DISPATCH INSTRUCTIONS:\n"
-            . "   - 'notes': Capture ALL special remarks, submission instructions, or notes printed on document (e.g. 'Send to fleet@dutamarine.com and file copy onboard. Supplier shall provide latest SDS...').\n"
-            . "   - 'delivery_email': If document contains a specific destination/dispatch email in the notes or footer (e.g. 'fleet@dutamarine.com'), set it in 'delivery_email'.\n"
-            . "3. VESSEL & CLIENT METADATA:\n"
-            . "   - 'company_name': Vessel name or Ordering Company (e.g. 'PERMATA DULANG' or 'Duta Marine').\n"
-            . "   - 'client_name': Ordering Officer / Master name if present (e.g. 'Capt Faiz Bin Kamarolzaman').\n\n"
-            . "=== CRITICAL ANTI-HALLUCINATION RULES ===\n"
-            . "1. ONLY extract data that is EXPLICITLY and CLEARLY VISIBLE in the document.\n"
-            . "2. If a field is NOT present or NOT readable, set its value to null. NEVER guess or invent values.\n"
-            . "3. Do NOT fabricate company names, registration numbers, addresses, phone numbers, or item descriptions.\n"
-            . "4. Do NOT infer prices if they are not clearly printed/typed.\n"
-            . "5. If document is blurry, corrupted, or unreadable, return scan_status: 'low_quality'.\n"
-            . "6. Do NOT add interpretation or assumptions beyond what is literally written.\n\n"
-            . "=== CONTEXT (from email metadata) ===\n"
-            . "Sender: {$quo_context['client_name']} <{$quo_context['client_email']}>\n"
-            . "Email Subject: {$quo_context['subject']}\n\n"
-            . "=== OUTPUT FORMAT ===\n"
-            . "Respond ONLY with valid JSON. No markdown, no explanation outside JSON.\n\n"
-            . "{\n"
-            . "  \"scan_status\": \"done\",\n"
-            . "  \"scan_confidence\": \"high\",\n"
-            . "  \"document_type\": \"RFQ\",\n"
-            . "  \"client_name\": null,\n"
-            . "  \"company_name\": null,\n"
-            . "  \"registration_number\": null,\n"
-            . "  \"email\": null,\n"
-            . "  \"phone\": null,\n"
-            . "  \"address_1\": null,\n"
-            . "  \"address_2\": null,\n"
-            . "  \"postcode\": null,\n"
-            . "  \"delivery_address_1\": null,\n"
-            . "  \"delivery_address_2\": null,\n"
-            . "  \"delivery_email\": null,\n"
-            . "  \"validity\": null,\n"
-            . "  \"valid_until\": null,\n"
-            . "  \"notes\": null,\n"
-            . "  \"subtotal\": null,\n"
-            . "  \"discount_total\": null,\n"
-            . "  \"tax_percent\": null,\n"
-            . "  \"tax_amount\": null,\n"
-            . "  \"grand_total\": null,\n"
-            . "  \"items\": [\n"
-            . "    {\n"
-            . "      \"qty\": 1,\n"
-            . "      \"unit\": \"Pcs\",\n"
-            . "      \"description\": \"Main product name\",\n"
-            . "      \"specification\": \"All technical details, brand, formula, pack size\",\n"
-            . "      \"product_code\": \"Article/CAS/Part No\",\n"
-            . "      \"unit_price\": null,\n"
-            . "      \"discount_percent\": null,\n"
-            . "      \"subtotal\": null,\n"
-            . "      \"tax\": null,\n"
-            . "      \"total\": null\n"
-            . "    }\n"
-            . "  ],\n"
-            . "  \"scanned_at\": \"{$scanned_at}\",\n"
-            . "  \"file_url\": \"{$file_url}\"\n"
-            . "}";
-
-    $key_count = count($key_list);
-    $errors = [];
-
-    for ($i = 0; $i < $key_count * 2; $i++) {
-        $api_key = $key_list[$i % $key_count];
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=' . urlencode($api_key);
-
-        $payload = json_encode([
-            'contents' => [[
-                'parts' => [
-                    ['text' => $prompt],
-                    [
-                        'inline_data' => [
-                            'mime_type' => $mime,
-                            'data'      => $file_b64
-                        ]
-                    ]
-                ]
-            ]],
-            'generationConfig' => [
-                'temperature'     => 0.0,
-                'topP'            => 0.8,
-                'maxOutputTokens' => 8192,
-                'responseMimeType' => 'application/json'
-            ]
-        ]);
-
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => $payload,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_TIMEOUT        => 45,
-            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-        ]);
-        $resp = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($http_code === 200 && !empty($resp)) {
-            $resp_data = json_decode($resp, true);
-            $text = $resp_data['candidates'][0]['content']['parts'][0]['text'] ?? '';
-            $text = trim(preg_replace('/^```json\s*/i', '', preg_replace('/\s*```$/', '', trim($text))));
-            $parsed = json_decode($text, true);
-            if (is_array($parsed)) {
-                $parsed['scanned_at'] = $scanned_at;
-                $parsed['file_url']   = $file_url;
-                if (empty($parsed['scan_status'])) {
-                    $parsed['scan_status'] = 'done';
-                }
-                return $parsed;
-            }
-        }
-        $errors[] = "Key " . substr($api_key, -6) . ": HTTP {$http_code}";
-        if ($http_code === 429) {
-            sleep(10); // Wait 10 seconds for rate limit to clear
-        } else {
-            sleep(2); // Wait 2 seconds before retry
-        }
-    }
-
-    return [
-        'scan_status' => 'error',
-        'reason'      => implode('; ', $errors),
-        'scanned_at'  => $scanned_at,
-        'file_url'    => $file_url
-    ];
-}
-
-// Find pending OCR quotations
+// Find pending/skipped OCR quotations (includes both text-only RFQs and attachment RFQs)
 $res = $db_conn->query("
-    SELECT q.id, q.client_name, q.client_email, r.attachment_url, r.subject
+    SELECT q.id, q.client_name, q.client_email,
+           r.attachment_url, r.subject, r.message_body, r.item_requested, r.quantity_requested, r.client_company, r.client_phone
     FROM quotations q
     INNER JOIN rfq_requests r ON r.id = q.rfq_id
-    WHERE q.ocr_scan_status = 'pending' AND r.attachment_url IS NOT NULL AND r.attachment_url != ''
+    WHERE q.ocr_scan_status IN ('pending', 'skipped', 'waiting')
     ORDER BY q.created_at ASC
     LIMIT " . SCAN_LIMIT
 );
 
 if (!$res || $res->num_rows === 0) {
-    daemon_log('No pending SPH Quotation files to OCR scan. Exiting.');
+    daemon_log('No pending, skipped, or waiting SPH Quotations to scan. Exiting.');
     exit(0);
 }
 
@@ -246,7 +82,7 @@ if (!$res || $res->num_rows === 0) {
 $lock_check = $db_conn->query("SELECT lock_value FROM system_locks WHERE lock_key = 'manual_scan_active' LIMIT 1");
 if ($lock_check && $lock_check->num_rows > 0) {
     $lock_time = (int)$lock_check->fetch_assoc()['lock_value'];
-    if (time() - $lock_time < 60) { // Active lock within 60s
+    if (time() - $lock_time < 60) {
         daemon_log('Priority Manual User Scan in progress. Pausing background OCR daemon.');
         exit(0);
     }
@@ -254,41 +90,115 @@ if ($lock_check && $lock_check->num_rows > 0) {
 
 while ($row = $res->fetch_assoc()) {
     $quo_id = $row['id'];
-    $file_url = $row['attachment_url'];
+    $file_url = $row['attachment_url'] ?? '';
     
-    daemon_log("Starting Vision OCR Scan for SPH: {$quo_id} — File: " . basename($file_url));
+    daemon_log("Starting AI OCR/Text Extraction for SPH: {$quo_id} — Attachment: " . ($file_url ?: 'NONE (Text Inquiry)'));
     
     // Mark as processing
     $db_conn->query("UPDATE quotations SET ocr_scan_status = 'processing' WHERE id = '{$quo_id}'");
 
     $quo_context = [
-        'client_name' => $row['client_name'],
-        'client_email' => $row['client_email'],
-        'subject' => $row['subject']
+        'client_name'        => $row['client_name'],
+        'client_email'       => $row['client_email'],
+        'subject'            => $row['subject'],
+        'message_body'       => $row['message_body'],
+        'item_requested'     => $row['item_requested'],
+        'quantity_requested' => $row['quantity_requested'],
+        'client_company'     => $row['client_company'],
+        'client_phone'       => $row['client_phone']
     ];
     
     $scan_result = performOCRScan($file_url, $key_list, $quo_context);
     $result_json = json_encode($scan_result, JSON_UNESCAPED_UNICODE);
-    $new_status = ($scan_result['scan_status'] === 'done') ? 'done' : 'error';
+    
+    $inner_status = $scan_result['scan_status'] ?? 'error';
+    $new_status   = in_array($inner_status, ['done', 'low_quality']) ? 'done' : (($inner_status === 'waiting') ? 'waiting' : 'error');
 
-    $upd = $db_conn->prepare("UPDATE quotations SET ocr_scan_status = ?, ocr_scan_result = ? WHERE id = ?");
+    // Update phone & email if extracted
+    $extracted_phone = isset($scan_result['phone']) && !empty($scan_result['phone']) ? trim($scan_result['phone']) : null;
+    $extracted_delivery_email = isset($scan_result['delivery_email']) && !empty($scan_result['delivery_email']) ? trim($scan_result['delivery_email']) : (isset($scan_result['email']) && !empty($scan_result['email']) ? trim($scan_result['email']) : null);
+
+    if (!empty($extracted_phone)) {
+        $upd_phone = $db_conn->prepare("UPDATE quotations SET client_phone = ? WHERE id = ?");
+        if ($upd_phone) {
+            $upd_phone->bind_param('ss', $extracted_phone, $quo_id);
+            $upd_phone->execute();
+            $upd_phone->close();
+        }
+    }
+
+    if (!empty($extracted_delivery_email)) {
+        $raw_ce = $row['client_email'] ?? null;
+        if (!empty($raw_ce)) {
+            $ce_json = json_decode($raw_ce, true);
+            $sender_email = (is_array($ce_json) && !empty($ce_json['selected'])) ? $ce_json['selected'] : (filter_var($raw_ce, FILTER_VALIDATE_EMAIL) ? $raw_ce : null);
+        } else {
+            $sender_email = null;
+        }
+        $json_email = json_encode([
+            'selected' => $extracted_delivery_email,
+            'options' => [
+                ['email' => $sender_email, 'source' => 'Sender Email (Live Gmail)'],
+                ['email' => $extracted_delivery_email, 'source' => 'Dispatch Email (OCR / Notes)']
+            ]
+        ], JSON_UNESCAPED_UNICODE);
+
+        $upd_email = $db_conn->prepare("UPDATE quotations SET client_email = ? WHERE id = ?");
+        if ($upd_email) {
+            $upd_email->bind_param('ss', $json_email, $quo_id);
+            $upd_email->execute();
+            $upd_email->close();
+        }
+    }
+
+    $extracted_cat  = $scan_result['category_name'] ?? null;
+    $extracted_impa = $scan_result['impa_code']      ?? null;
+
+    $upd = $db_conn->prepare("UPDATE quotations SET ocr_scan_status = ?, ocr_scan_result = ?, category_name = ?, impa_code = ? WHERE id = ?");
     if ($upd) {
-        $upd->bind_param('sss', $new_status, $result_json, $quo_id);
+        $upd->bind_param('sssss', $new_status, $result_json, $extracted_cat, $extracted_impa, $quo_id);
         $upd->execute();
         $upd->close();
     }
 
-    $log_details = "Background OCR Vision Daemon completed scan. Status: " . strtoupper($new_status);
+    // AUTO-SYNC EXTRACTED ITEMS TO quotation_items TABLE
+    if (!empty($scan_result['items']) && is_array($scan_result['items'])) {
+        $db_conn->query("DELETE FROM quotation_items WHERE quotation_id = '" . $db_conn->real_escape_string($quo_id) . "'");
+        $ins_item = $db_conn->prepare("INSERT INTO quotation_items (quotation_id, product_code, category_code, description, specification, quantity, unit, unit_price, discount_percent, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        if ($ins_item) {
+            foreach ($scan_result['items'] as $it) {
+                $p_code  = $it['product_code'] ?? null;
+                $c_code  = $it['category_code'] ?? $extracted_impa;
+                $p_desc  = $it['description'] ?? 'Item';
+                $p_spec  = $it['specification'] ?? null;
+                $p_qty   = isset($it['qty']) ? (float)$it['qty'] : 1.0;
+                $p_unit  = $it['unit'] ?? 'Pcs';
+                $p_price = isset($it['unit_price']) ? (float)$it['unit_price'] : 0.0;
+                $p_disc  = isset($it['discount_percent']) ? (float)$it['discount_percent'] : 0.0;
+                $p_tot   = isset($it['total']) ? (float)$it['total'] : ($p_qty * $p_price);
+
+                $ins_item->bind_param('sssssdsddd', $quo_id, $p_code, $c_code, $p_desc, $p_spec, $p_qty, $p_unit, $p_price, $p_disc, $p_tot);
+                $ins_item->execute();
+            }
+            $ins_item->close();
+        }
+    }
+
+    $item_count = isset($scan_result['items']) && is_array($scan_result['items']) ? count($scan_result['items']) : 0;
+    $log_details = "Background OCR/Text Daemon completed scan. Status: " . strtoupper($new_status) . ". Items extracted: " . $item_count;
     if ($new_status === 'error') {
         $log_details .= ". Reason: " . ($scan_result['reason'] ?? 'Unknown error');
     }
-    appendQuotationHistoryLog($db_conn, $quo_id, 'OCR Vision Scan', 'OCR Daemon', 'system@abmalaya.com', $log_details);
+    $actor_name = !empty($row['created_by']) ? $row['created_by'] : 'Sesi Daemon Otomatis';
+    $actor_email = 'daemon@abmalaya.com';
+    appendQuotationHistoryLog($db_conn, $quo_id, 'OCR / Text AI Scan', $actor_name, $actor_email, $log_details);
     
-    daemon_log("Finished Vision OCR Scan. Status: " . strtoupper($new_status));
+    daemon_log("Finished scan for {$quo_id}. Status: " . strtoupper($new_status) . " ({$item_count} items extracted)");
     
-    // Sleep to avoid rate limits
-    sleep(4);
+    // Brief pause between items
+    sleep(2);
 }
 
 daemon_log('AI OCR Scanner Daemon complete.');
 exit(0);
+

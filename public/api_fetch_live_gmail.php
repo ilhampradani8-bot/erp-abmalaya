@@ -474,7 +474,7 @@ function classifyEmailWithGeminiWithRetry($subject, $body, $attachments, $key_li
 
     for ($attempt = 0; $attempt < $max_attempts; $attempt++) {
         $api_key = $key_list[$attempt];
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" . urlencode($api_key);
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . urlencode($api_key);
         $payload = [
             'contents' => [
                 [
@@ -540,24 +540,20 @@ function classifyEmailWithGeminiWithRetry($subject, $body, $attachments, $key_li
 try {
     require_once __DIR__ . '/db_connect.php';
 
-    $gemini_key = getEnvValue('GEMINI_API_KEY', '');
-    if (empty($gemini_key) && $db_conn && !$db_conn->connect_error) {
-        $res_key = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key = 'GEMINI_API_KEY'");
-        if ($res_key && $res_key->num_rows > 0) {
-            $row_key = $res_key->fetch_assoc();
-            $gemini_key = trim($row_key['credential_value']);
+    $key_list = [];
+    if ($db_conn && !$db_conn->connect_error) {
+        $res_keys = $db_conn->query("SELECT api_key FROM gemini_api_keys WHERE status = 'active' AND pool_type = 'inbox' ORDER BY id ASC");
+        if ($res_keys && $res_keys->num_rows > 0) {
+            while ($row_key = $res_keys->fetch_assoc()) {
+                $k = trim($row_key['api_key']);
+                if (!empty($k) && strpos($k, '...') === false) {
+                    $key_list[] = $k;
+                }
+            }
         }
     }
-
-    // AI API Key Rotation / Alternation
-    $active_gemini_key = '';
-    if (!empty($gemini_key)) {
-        $key_list = array_filter(array_map('trim', explode(',', $gemini_key)));
-        if (!empty($key_list)) {
-            // Pick a random key from the list to distribute request quota
-            $active_gemini_key = $key_list[array_rand($key_list)];
-        }
-    }
+    $key_list = array_values(array_unique($key_list));
+    $active_gemini_key = !empty($key_list) ? $key_list[array_rand($key_list)] : getEnvValue('GEMINI_API_KEY', '');
 
     $start_date_limit = '';
     if ($db_conn && !$db_conn->connect_error) {

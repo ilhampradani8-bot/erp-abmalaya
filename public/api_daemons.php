@@ -11,6 +11,46 @@ header('Content-Type: application/json; charset=utf-8');
 try {
     require_once __DIR__ . '/db_connect.php';
 
+    // Handler for fetching full live logs
+    if (isset($_GET['action']) && $_GET['action'] === 'get_logs') {
+        $log_dir = __DIR__ . '/../daemon/logs';
+        $logs = [];
+        $log_files = [];
+
+        if (is_dir($log_dir)) {
+            $files = glob($log_dir . '/*.log');
+            rsort($files); // newest first
+            foreach ($files as $file) {
+                $base = basename($file);
+                $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+                $last_lines = array_slice($lines, -150); // get last 150 lines
+                $log_files[] = [
+                    'file' => $base,
+                    'mtime' => date('Y-m-d H:i:s', filemtime($file)),
+                    'content' => implode("\n", $last_lines)
+                ];
+            }
+        }
+
+        // Fetch DB Errors
+        $db_errors = [];
+        $res = $db_conn->query("SELECT id, rfq_number, subject, ai_error AS error, created_at FROM rfq_requests WHERE ai_error IS NOT NULL AND ai_error != '' ORDER BY id DESC LIMIT 20");
+        if ($res && $res->num_rows > 0) {
+            while ($row = $res->fetch_assoc()) {
+                $db_errors[] = $row;
+            }
+        }
+
+        ob_end_clean();
+        echo json_encode([
+            'status' => 'success',
+            'log_files' => $log_files,
+            'db_errors' => $db_errors,
+            'fetched_at' => date('Y-m-d H:i:s')
+        ]);
+        exit;
+    }
+
     $daemons = [];
     $error_count = 0;
 

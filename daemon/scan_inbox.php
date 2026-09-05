@@ -14,6 +14,8 @@ define('LOG_FILE', __DIR__ . '/logs/scan_inbox_' . date('Y-m-d') . '.log');
 define('SCAN_LIMIT', 1); // Murni 1 per 1 email gantian per siklus
 
 function daemon_log(string $msg): void {
+    $dir = dirname(LOG_FILE);
+    if (!is_dir($dir)) @mkdir($dir, 0755, true);
     $line = '[' . date('Y-m-d H:i:s') . '] ' . $msg . PHP_EOL;
     file_put_contents(LOG_FILE, $line, FILE_APPEND | LOCK_EX);
     echo $line;
@@ -39,30 +41,35 @@ if ($lock_check && $lock_check->num_rows > 0) {
 
 daemon_log('AI Inbox Scanner Daemon started.');
 
-// Load Gemini API Keys from DB — dibaca per baris (GEMINI_API_KEY_1, _2, _3, dst.)
+// Load Gemini API Keys for Inbox from dedicated gemini_api_keys table
 $key_list = [];
-$res_key = $db_conn->query("SELECT credential_key, credential_value FROM api_credentials WHERE credential_key LIKE 'GEMINI_API_KEY_%' ORDER BY credential_key ASC");
-if ($res_key && $res_key->num_rows > 0) {
-    while ($row = $res_key->fetch_assoc()) {
-        $v = trim($row['credential_value']);
-        if (!empty($v)) $key_list[] = $v;
+$res_keys = $db_conn->query("SELECT api_key FROM gemini_api_keys WHERE status = 'active' AND pool_type = 'inbox' ORDER BY id ASC");
+if ($res_keys && $res_keys->num_rows > 0) {
+    while ($row = $res_keys->fetch_assoc()) {
+        $k = trim($row['api_key']);
+        if (!empty($k) && strpos($k, '...') === false) {
+            $key_list[] = $k;
+        }
     }
 }
 
-// Fallback: format lama (satu baris, pisah koma)
+// Fallback if inbox pool empty
 if (empty($key_list)) {
-    $res_key2 = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key = 'GEMINI_API_KEY'");
-    if ($res_key2 && $res_key2->num_rows > 0) {
-        $raw = trim($res_key2->fetch_assoc()['credential_value']);
-        $key_list = array_values(array_filter(array_map('trim', explode(',', $raw))));
+    $res_fallback = $db_conn->query("SELECT api_key FROM gemini_api_keys WHERE status = 'active' ORDER BY id ASC");
+    if ($res_fallback && $res_fallback->num_rows > 0) {
+        while ($row = $res_fallback->fetch_assoc()) {
+            $k = trim($row['api_key']);
+            if (!empty($k) && strpos($k, '...') === false) $key_list[] = $k;
+        }
     }
 }
+$key_list = array_values(array_unique($key_list));
 
 if (empty($key_list)) {
     daemon_log('WARNING: No Gemini API keys found in database. Scan skipped.');
     exit(0);
 }
-daemon_log('Loaded ' . count($key_list) . ' Gemini API key(s).');
+daemon_log('Loaded ' . count($key_list) . ' Gemini Inbox API key(s).');
 
 // Tracker kunci yang sedang kena 429 (global per siklus daemon)
 $GLOBALS['exhausted_keys'] = []; // key => unix timestamp kapan boleh dicoba lagi (cooldown 60s)
@@ -105,7 +112,7 @@ function classifyEmail(string $subject, string $body, string $sender, array $key
     // Coba setiap kunci aktif (yang belum cooldown) satu kali saja
     foreach ($active_keys as $api_key) {
         $key_short = substr($api_key, -6);
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=' . urlencode($api_key);
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=' . urlencode($api_key);
         $payload = json_encode([
             'contents'         => [['parts' => [['text' => $prompt]]]],
             'generationConfig' => ['responseMimeType' => 'application/json']
@@ -218,7 +225,7 @@ function autoGenerateQuotation($db_conn, $rfq_row, $items, $item_requested) {
     $items_created = 0;
     $tax_percent = 11.00;
 
-    $stmt_quo = $db_conn->prepare("INSERT INTO quotations (id, rfq_id, quotation_number, client_name, client_email, company_name, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, status, ocr_scan_status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0.00, ?, 0.00, 0.00, ?, 'requisition', 'pending', ?)");
+    $stmt_quo = $db_conn->prepare("INSERT INTO quotations (id, rfq_id, quotation_number, client_name, client_email, company_name, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, status, ocr_scan_status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0.00, ?, 0.00, 0.00, ?, 'in_progress', 'pending', ?)");
     if ($stmt_quo) {
         $stmt_quo->bind_param("sissssssdss", $quo_id, $rfq_id, $quo_num, $client_name, $client_email, $company_name, $date_issued, $valid_until, $tax_percent, $notes, $created_by);
         if (!$stmt_quo->execute()) {
@@ -290,7 +297,7 @@ function autoGenerateQuotation($db_conn, $rfq_row, $items, $item_requested) {
         $stmt_upd->execute();
         $stmt_upd->close();
         daemon_log("  -> SUCCESS: Created SPH #{$quo_num} with status 'requisition'.");
-        appendQuotationHistoryLog($db_conn, $quo_id, 'Create SPH (AI)', 'System Automation', 'system@abmalaya.com', "System classified RFQ and automatically created draft SPH (Grand Total: RM {$grand_total}).");
+        appendQuotationHistoryLog($db_conn, $quo_id, 'Create SPH (AI)', 'Sesi Daemon Otomatis', 'daemon@abmalaya.com', "Klasifikasi RFQ selesai dan draft SPH berhasil dibuat (Grand Total: RM {$grand_total}).");
     }
 }
 
@@ -377,7 +384,7 @@ while ($row = $res->fetch_assoc()) {
     $rfq_status = 'masuk';
     if ($verified) {
         if ($classification === 'client_rfq') {
-            $rfq_status = 'diproses';
+            $rfq_status = 'in_progress';
             autoGenerateQuotation($db_conn, $row, $items, $item_requested);
         } else {
             $rfq_status = 'junk';
@@ -386,15 +393,19 @@ while ($row = $res->fetch_assoc()) {
 
     $upd = $db_conn->prepare("UPDATE rfq_requests SET ai_verified=?, ai_classification=?, ai_error=?, item_requested=?, status=? WHERE rfq_number=?");
     if ($upd) {
-        $upd->bind_param('isssss', $verified, $classification, $ai_error, $item_requested, $rfq_status, $rfq_num);
-        $upd->execute();
+        $ai_err_str = $ai_error ?? '';
+        $item_req_str = $item_requested ?? '';
+        $upd->bind_param('isssss', $verified, $classification, $ai_err_str, $item_req_str, $rfq_status, $rfq_num);
+        if (!$upd->execute()) {
+            daemon_log("  -> ERROR updating RFQ #{$rfq_num}: " . $upd->error);
+        }
         $upd->close();
         
         if ($verified) {
             if ($classification === 'client_rfq') {
-                appendRfqHistoryLog($db_conn, $rfq_num, 'Lolos Automation', 'System Automation', 'system@abmalaya.com', 'Email berhasil diklasifikasikan sebagai Permintaan SPH (client_rfq) dan draf Quotation dibuat otomatis.');
+                appendRfqHistoryLog($db_conn, $rfq_num, 'Lolos Verification', 'Sesi Daemon Otomatis', 'daemon@abmalaya.com', 'Email berhasil diklasifikasikan sebagai Permintaan SPH (client_rfq) dan draf Quotation dibuat.');
             } else {
-                appendRfqHistoryLog($db_conn, $rfq_num, 'Otomatis (AI)', 'System Automation', 'system@abmalaya.com', 'Email otomatis diklasifikasikan sebagai Spam (junk).');
+                appendRfqHistoryLog($db_conn, $rfq_num, 'Klasifikasi (AI)', 'Sesi Daemon Otomatis', 'daemon@abmalaya.com', 'Email diklasifikasikan sebagai Spam (junk).');
             }
         }
     }

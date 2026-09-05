@@ -137,7 +137,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
             <p><span className="text-slate-500">Tanggal Terbit:</span> <strong>{safeQuotation.date_issued || new Date().toISOString().split('T')[0]}</strong></p>
             <p><span className="text-slate-500">Masa Berlaku s.d:</span> <strong className="text-amber-700">{safeQuotation.valid_until || '14 Days'}</strong></p>
             <p><span className="text-slate-500">Mata Uang:</span> <strong>MYR (Malaysian Ringgit)</strong></p>
-            <p><span className="text-slate-500">Penanggung Jawab:</span> <strong>{safeQuotation.created_by || 'Ilham Pradani, S.T.'}</strong></p>
+            <p><span className="text-slate-500">Penanggung Jawab:</span> <strong>{safeQuotation.created_by || 'Aiman Zaki'}</strong></p>
           </div>
         </div>
 
@@ -233,7 +233,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
               </div>
             </div>
 
-            <p className="font-bold text-slate-900"><u>Ilham Pradani, S.T.</u></p>
+            <p className="font-bold text-slate-900"><u>{safeQuotation.created_by || 'Aiman Zaki'}</u></p>
             <p className="text-slate-500">Head of Sales & Business Development</p>
           </div>
         </div>

@@ -21,8 +21,8 @@ try {
         $rfq_id_raw = isset($input['rfq_id']) ? $input['rfq_id'] : '';
         $action = isset($input['action']) ? $input['action'] : '';
         $status = isset($input['status']) ? $input['status'] : 'diproses';
-        $user_name = isset($input['user_name']) ? $input['user_name'] : 'System Automation';
-        $user_email = isset($input['user_email']) ? $input['user_email'] : 'system@abmalaya.com';
+        $user_name = (isset($input['user_name']) && !empty($input['user_name'])) ? $input['user_name'] : 'Sesi Tidak Terdeteksi';
+        $user_email = (isset($input['user_email']) && !empty($input['user_email'])) ? $input['user_email'] : '';
 
         $clean_id = (int)str_replace(['GMAIL-LIVE-', 'RFQ-'], '', $rfq_id_raw);
         $rfq_num = $rfq_id_raw;

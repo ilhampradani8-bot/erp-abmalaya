@@ -45,12 +45,17 @@ try {
     $terms           = isset($input['terms_conditions'])  ? trim($input['terms_conditions']) : '';
 
     // ---- Load Gemini API Keys ----
-    $gemini_key = '';
-    $res = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key = 'GEMINI_API_KEY'");
-    if ($res && $res->num_rows > 0) {
-        $gemini_key = $res->fetch_assoc()['credential_value'];
+    $api_keys = [];
+    $res_keys = $db_conn->query("SELECT api_key FROM gemini_api_keys WHERE status = 'active' ORDER BY id ASC");
+    if ($res_keys && $res_keys->num_rows > 0) {
+        while ($row_key = $res_keys->fetch_assoc()) {
+            $k = trim($row_key['api_key']);
+            if (!empty($k) && strpos($k, '...') === false) {
+                $api_keys[] = $k;
+            }
+        }
     }
-    $api_keys = array_filter(array_map('trim', explode(',', $gemini_key)));
+    $api_keys = array_values(array_unique($api_keys));
     if (empty($api_keys)) {
         throw new Exception("Gemini API key is not configured. Please add it in System Settings.");
     }
@@ -109,7 +114,7 @@ try {
     $last_err   = '';
 
     foreach ($api_keys as $key) {
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" . $key;
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $key;
 
         $payload = [
             'contents' => [[

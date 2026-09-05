@@ -30,10 +30,15 @@ $sync_out = shell_exec(escapeshellarg($php) . ' ' . escapeshellarg($base . '/syn
 daemon_log($sync_out ?? 'No output from sync_gmail.php');
 
 // Step 2: Run AI Inbox classification on pending emails
-daemon_log('[2/3] Running AI Inbox Scan...');
+daemon_log('[2/6] Running AI Inbox Scan...');
 $scan_inbox_out = shell_exec(escapeshellarg($php) . ' ' . escapeshellarg($base . '/scan_inbox.php') . ' 2>&1');
 daemon_log($scan_inbox_out ?? 'No output from scan_inbox.php');
 
+// Step 3: Auto-sync verified AI Requisition emails to Quotations table
+daemon_log('[3/6] Syncing Verified AI Requisition emails to Quotations...');
+$sync_quo_out = shell_exec(escapeshellarg($php) . ' ' . escapeshellarg($base . '/sync_quotations.php') . ' 2>&1');
+daemon_log($sync_quo_out ?? 'No output from sync_quotations.php');
+    
 // Step 3: Run AI Vision OCR on pending attachments
 daemon_log('[3/5] Running AI Vision OCR Scan...');
 $scan_ocr_out = shell_exec(escapeshellarg($php) . ' ' . escapeshellarg($base . '/scan_ocr.php') . ' 2>&1');

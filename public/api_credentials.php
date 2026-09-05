@@ -80,10 +80,20 @@ if ($method === 'GET') {
         }
     }
 
+    // Fetch dedicated gemini_api_keys
+    $gemini_api_keys = [];
+    $gk_res = $connection->query("SELECT id, key_alias, api_key, pool_type, status, updated_at FROM gemini_api_keys ORDER BY pool_type ASC, id ASC");
+    if ($gk_res && $gk_res->num_rows > 0) {
+        while ($gr = $gk_res->fetch_assoc()) {
+            $gemini_api_keys[] = $gr;
+        }
+    }
+
     ob_end_clean();
     echo json_encode([
         'status' => 'success',
         'data' => $credentials,
+        'gemini_api_keys' => $gemini_api_keys,
         'webhook_logs' => $webhook_logs,
         'error_logs' => $error_logs
     ]);
@@ -96,6 +106,21 @@ if ($method === 'POST') {
 
     if (!$input) {
         $input = $_POST;
+    }
+
+    // Support Delete Key Action
+    if (isset($input['action']) && $input['action'] === 'delete_key' && !empty($input['credential_key'])) {
+        $stmt = $connection->prepare("DELETE FROM api_credentials WHERE credential_key = ?");
+        $stmt->bind_param("s", $input['credential_key']);
+        $stmt->execute();
+        $stmt->close();
+
+        ob_end_clean();
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Credential deleted successfully from database!'
+        ]);
+        exit;
     }
 
     // Support Batch Save

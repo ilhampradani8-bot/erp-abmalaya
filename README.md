@@ -13,21 +13,21 @@ Portal ERP Modern & Komprehensif untuk **ABMALAYA.COM (MALAYSIA)** yang menangan
    - Filter Tanggal Cutoff (`Info Start From Date Cutoff`) & Filter Prioritas Lampiran PDF.
    - Fitur inspeksi log kesalahan AI 3-titik (*Self-healing retry trace*).
 
-2. **Mesin AI Gemini Multimodal & Smart Key Rotation**:
-   - Rotasi otomatis hingga 4 Gemini API Keys tersimpan per baris database terpisah (`GEMINI_API_KEY_1..4`).
-   - Deteksi *Rate Limit (429)* pintar dengan *Cooldown Tracker 60-detik* per kunci untuk mencegah kebocoran kuota API.
-   - Pemindaian teks email lengkap (Subject, Sender, Body, Recipient) dan Vision OCR dokumen fisik (PDF, PNG, JPG).
-   - Aturan klasifikasi ketat untuk memfilter email permohonan perpanjangan tender internal / surat keluar Sales.
+2. **Mesin AI Gemini Multimodal & Smart Key Rotation Pool**:
+   - Rotasi otomatis Gemini API Keys dari tabel dedicated `gemini_api_keys` dengan pemantauan kapasitas 24 jam real-time & counter token di System Settings.
+   - Pemindaian dual mode: mengekstraksi data terstruktur langsung dari teks pesan email (`subject`, `item_requested`, `message_body`) untuk RFQ tanpa lampiran, serta Vision OCR multimodal untuk dokumen fisik (PDF, PNG, JPG).
+   - Penanganan *Rate Limit (HTTP 429)* pintar dengan *Native Regex Fallback Parser* untuk menjamin 100% item RFQ terurai tanpa status terhenti.
+   - Penggunaan model AI resmi aktif: `gemini-1.5-flash`, `gemini-1.5-pro`, dan `gemini-2.0-flash` (mematuhi standar panduan `AGENTS.md`).
 
 3. **Master Katalog Produk & Standardisasi Kode Kategori IMPA**:
-   - Sinkronisasi otomatis dengan Google Sheets Cetak Biru Kategori (`Spreadsheet ID: 17oE102qBlTzXGeWxHMkNTCnz0CE4TKR_xxsq65QqFmI`).
-   - Pembersihan otomatis data mentah dari emoji dan karakter non-ASCII (0% Emojis Policy).
-   - Dukungan kode kategori internasional dunia maritim (contoh: IMPA `39` Medicine, IMPA `45` Petroleum, IMPA `49` Hardware).
+   - Penapisan otomatis kode kategori internasional dunia maritim (contoh: IMPA `11` Clothing, IMPA `39` Medicine, IMPA `45` Petroleum, IMPA `49` Hardware, IMPA `51` Cleaning Chemicals, IMPA `79` Provision).
+   - Daemon pencocokan teks otomatis (`daemon/matching_text_impa.php`) untuk memberikan kode IMPA pada SPH dan item barang.
 
 4. **Quotation Builder & Pop-Up Pemilih Multi-Barang**:
-   - Form pembuatan Surat Penawaran Harga (SPH) interaktif dengan kalkulasi PPN (11%), diskon, dan subtotal otomatis.
+   - Form pembuatan Surat Penawaran Harga (SPH) interaktif dengan kalkulasi PPN, diskon, dan subtotal otomatis.
    - Pop-Up Pemilih Multi-Barang dari katalog master database.
-   - Kalkulasi otomatis mata uang (RM / IDR).
+   - Synchronised history audit trail & log aktivitas scan OCR per SPH.
+
 
 5. **Tabel Data SPH Quotation (Mode 21 Kolom Database MySQL & Header Sticky)**:
    - Header tabel melayang permanen (*Sticky Top Header*) saat di-scroll down.
@@ -94,27 +94,65 @@ erp-abmalaya/
 
 ---
 
-## 🖥️ Cara Menjalankan Layanan di Server Linux VPS (24/7)
+## 🖥️ Cara Menjalankan Layanan & Akses Lingkungan (Dev / Local VPS / Public Tunnel)
 
-Sistem sudah terkonfigurasi sebagai **Systemd Services** yang berjalan permanen di latar belakang:
+### 1. Menjalankan Backend PHP Engine (Multi-Worker Mode)
+ Server PHP dev menggunakan mode **Multi-Worker (16 Workers)** agar proses sync Live Gmail IMAP & Vision OCR tidak memblokir (*non-blocking*) request API lainnya maupun Adminer:
+```bash
+PHP_CLI_SERVER_WORKERS=16 php -S 0.0.0.0:8000 -t public public/router.php
+```
 
-1. **Cek Status Layanan Systemd:**
+### 2. Menjalankan Frontend React (Vite Dev Server)
+```bash
+npm run dev
+```
+
+### 3. Mengaktifkan Akses Publik via Cloudflare Tunnels (Quick Tunnel)
+Untuk pengujian publik / remote tanpa IP publik statis:
+* **Tunnel Frontend (Port 3000):**
+  ```bash
+  cloudflared tunnel --url http://127.0.0.1:3000
+  ```
+* **Tunnel Backend API & Adminer (Port 8000):**
+  ```bash
+  cloudflared tunnel --url http://127.0.0.1:8000
+  ```
+
+---
+
+## 🗄️ Sinkronisasi & Migrasi Database SQL (Local Dev vs Production Hosting)
+
+Struktur database pada lingkungan lokal/testing VPS (`abmalaya_erp`) sudah disinkronkan 100% identik dengan lingkungan hosting produksi (`abmalaya_abmalaya_erp`):
+
+1. **Skema Terbaru Database:**
+   - Skema struktur tabel lengkap: `cpanel/database_schema.sql`
+   - Backup data & struktur lengkap: `cpanel/database_backup_full.sql`
+
+2. **Cara Migrasi & Sync Ke Hosting Produksi:**
+   - **Opsi A (Via Migration Script):** Jalankan `php run_migration.php`
+   - **Opsi B (Via Adminer / phpMyAdmin):** Import file `cpanel/database_schema.sql` pada database hosting.
+   - **Akses Adminer GUI Database:** 
+     - Lokal: `http://127.0.0.1:8000/adminer.php`
+     - Via Tunnel: `https://<tunnel-url-backend>/adminer.php`
+     - Auto Login: Server `127.0.0.1`, User `root`, DB `abmalaya_erp`
+
+---
+
+## 🚀 Alur Build & Deploy FTP Ke Server Hosting
+
+Setiap kali melakukan pembaruan kode dan diminta melakukan deploy:
+
+1. **Build Production Frontend:**
    ```bash
-   systemctl status erp-php.service
-   systemctl status erp-vite.service
-   systemctl status mariadb.service
+   npm run build
    ```
+   *(Menghasilkan bundle React SPA teroptimasi di direktori `dist/`)*
 
-2. **Restart Layanan Jika Ada Pembaruan:**
+2. **Eksekusi Deployment FTP:**
    ```bash
-   systemctl restart erp-php.service
-   systemctl restart erp-vite.service
+   php deploy_ftp.php
    ```
-
-3. **Buka Portal di Browser:**
-   - 🌐 Frontend: `http://202.155.94.144:3000`
-   - ⚡ Backend API: `http://202.155.94.144:8000`
-   - 🗄️ Database Adminer: `http://202.155.94.144:8000/adminer.php`
+   *(Secara otomatis mengunggah `dist/`, `public/`, `daemon/`, dan `cpanel/` ke FTP hosting `110.4.45.199`)*
 
 ---
 
@@ -126,3 +164,4 @@ Sistem sudah terkonfigurasi sebagai **Systemd Services** yang berjalan permanen 
 
 2. **STRICT NO AUTO DEPLOY RULE:**
    - Proses **FTP Upload** dan **GitHub Push** hanya boleh dipicu **apabila diminta secara eksplisit oleh pengguna** melalui obrolan chat. Dilarang memicu deployment otomatis.
+

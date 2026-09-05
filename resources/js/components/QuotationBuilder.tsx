@@ -295,7 +295,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         quo_id: quotation.id,
-        actor_name: currentUser?.name || 'Sales Engineer',
+        actor_name: currentUser?.name || currentUser?.email || 'Aiman Zaki',
         actor_email: currentUser?.email || null,
       })
     })
@@ -664,7 +664,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                 <p className="font-extrabold text-slate-900 text-xs">AB MALAYA SDN. BHD. (Reg: 202601001234)</p>
                 <p className="text-slate-600">No. 12, Jalan Industrial Park, 50000 Kuala Lumpur, Malaysia</p>
                 <p className="text-slate-600 font-mono">Email: sales@abmalaya.com | Tel: +60 3-8000 1234</p>
-                <p className="text-slate-500 text-[11px]">Dibuat Oleh: <span className="font-bold text-slate-700">{quotation?.created_by || 'Ilham Pradani, S.T.'}</span></p>
+                <p className="text-slate-500 text-[11px]">Dibuat Oleh: <span className="font-bold text-slate-700">{quotation?.created_by || currentUser?.name || 'Aiman Zaki'}</span></p>
               </div>
             </div>
 
@@ -680,18 +680,18 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
               
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Nama Klien:</label>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Client Name:</label>
                   <input
                     type="text"
                     value={quotation?.client_name || ''}
                     onChange={(e) => setQuotation({ ...quotation, client_name: e.target.value })}
-                    placeholder="Nama Kontak Klien"
+                    placeholder="Client Contact Name"
                     className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold text-slate-900"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Email Balasan Klien (JSON Selector):</label>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Client Reply Email (JSON Selector):</label>
                   {(() => {
                     let currentVal = quotation?.client_email || '';
                     let optionsList: Array<{ email: string; source: string }> = [];
@@ -727,7 +727,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                             }}
                             className="w-full bg-white border border-blue-300 rounded px-2 py-1 text-xs font-mono font-bold text-blue-800 focus:outline-none cursor-pointer"
                           >
-                            <option value="">-- Pilih Email Klien --</option>
+                            <option value="">-- Select Client Email --</option>
                             {optionsList.map((opt, oIdx) => (
                               <option key={oIdx} value={opt.email}>
                                 {opt.email} ({opt.source})
@@ -738,7 +738,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                         <div className="flex items-center gap-1">
                           <input
                             type="email"
-                            placeholder="+ Tambah Email Kustom"
+                            placeholder="+ Add Custom Email"
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
@@ -752,7 +752,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                               }
                             }}
                             className="w-full bg-white/80 border border-slate-300 rounded px-2 py-0.5 text-[10px] font-mono text-slate-700"
-                            title="Tekan Enter untuk menambah email baru ke daftar JSON"
+                            title="Press Enter to add new email to JSON list"
                           />
                         </div>
                       </div>
@@ -761,12 +761,12 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                 </div>
 
                 <div className="col-span-2">
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Nama Perusahaan Klien:</label>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Client Company Name:</label>
                   <input
                     type="text"
                     value={quotation?.company_name || ''}
                     onChange={(e) => setQuotation({ ...quotation, company_name: e.target.value })}
-                    placeholder="PT / Sdn. Bhd. Perusahaan Klien"
+                    placeholder="Client Company Name (Sdn. Bhd. / PT / Inc.)"
                     className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold text-slate-900"
                   />
                 </div>
@@ -923,7 +923,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                           type="text"
                           value={item.description}
                           onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
-                          placeholder="Nama Produk..."
+                          placeholder="Product Name..."
                           className={`w-full bg-transparent border-none outline-none focus:ring-0 p-1 text-xs font-bold ${
                             isActive
                               ? 'text-white placeholder-slate-400'
@@ -940,7 +940,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                           rows={2}
                           value={item.specification || ''}
                           onChange={(e) => handleItemChange(idx, 'specification', e.target.value)}
-                          placeholder="Spesifikasi teknis, ukuran, material, garansi..."
+                          placeholder="Technical specification, size, material, warranty..."
                           className={`w-full bg-transparent border-none outline-none focus:ring-0 p-1 text-xs font-sans resize-none ${
                             isActive
                               ? 'text-white placeholder-slate-400'
@@ -980,7 +980,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                           step={50000}
                           value={item.unit_price}
                           onChange={(e) => handleItemChange(idx, 'unit_price', parseFloat(e.target.value) || 0)}
-                          placeholder="0 (Isi manual)"
+                          placeholder="0 (Manual entry)"
                           className={`w-full p-1 text-xs font-mono transition ${
                             isPriceEmpty
                               ? 'bg-amber-200/90 text-amber-950 font-extrabold border-2 border-amber-500 shadow-inner'
@@ -1036,13 +1036,13 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                 <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div className="space-y-0.5">
                   <p className="font-extrabold text-amber-950">
-                    Pemberitahuan Barang Custom ({unregisteredItems.length} produk belum terdaftar):
+                    Custom Item Notice ({unregisteredItems.length} unregistered products):
                   </p>
                   <p className="text-slate-800 font-medium">
                     {unregisteredItems.map((it) => `"${it.description}"`).join(', ')}
                   </p>
                   <p className="text-[11px] text-slate-600">
-                    Barang pada tabel di atas yang belum terdaftar bisa langsung disimpan ke Master Katalog Produk Database (disertai spesifikasi & harganya).
+                    Unregistered products in the table above can be saved directly into the Master Product Catalog database (with specifications & pricing).
                   </p>
                 </div>
               </div>

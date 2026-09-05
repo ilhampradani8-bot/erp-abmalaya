@@ -84,9 +84,9 @@ export const App: React.FC = () => {
 
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [currentUser, setCurrentUser] = useState<UserAccount>({
-    id: 'USR-001',
-    name: 'Ilham Pradani, S.T.',
-    email: 'ilham@abmalaya.com',
+    id: 'USR-101',
+    name: 'Aiman Zaki',
+    email: 'aimanzaki@abmalaya.com',
     role: 'Admin',
     department: 'Sales & Business Development',
     status: 'Active',
@@ -340,8 +340,22 @@ export const App: React.FC = () => {
     setIsLoading(true);
     setCurrentUser(user);
     localStorage.setItem('abmalaya_user_session', JSON.stringify(user));
+
+    // Record login activity in MySQL
+    fetch(getApiUrl('/api_user_activity.php'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_name: user.name,
+        user_email: user.email,
+        action: 'LOGIN_SESSION',
+        details: `Sesi login diaktifkan untuk akun ${user.name} (${user.email}).`
+      })
+    }).catch(err => console.error('Log login session error:', err));
+
     setTimeout(() => setIsLoading(false), 300);
   };
+
 
   const pendingCount = rfqs.filter((r) => r.status === 'masuk').length;
   const sentCount = rfqs.filter((r) => r.status === 'penawaran_terkirim').length;

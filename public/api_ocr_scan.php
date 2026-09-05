@@ -57,11 +57,11 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $raw   = file_get_contents('php://input');
         $input = json_decode($raw, true) ?: [];
-        $quo_id = isset($input['quo_id']) ? trim($input['quo_id']) : '';
+        $quo_id = isset($input['quo_id']) ? trim($input['quo_id']) : (isset($_POST['quo_id']) ? trim($_POST['quo_id']) : '');
 
         // Actor info from frontend (logged-in user identity)
-        $actor_name  = isset($input['actor_name'])  ? trim($input['actor_name'])  : 'Sales Engineer';
-        $actor_email = isset($input['actor_email']) ? trim($input['actor_email']) : null; // null = unknown, no dummy
+        $actor_email = (isset($input['actor_email']) && !empty($input['actor_email'])) ? trim($input['actor_email']) : '';
+        $actor_name  = (isset($input['actor_name']) && !empty($input['actor_name']))  ? trim($input['actor_name'])  : ($quo['created_by'] ?? 'Sesi Tidak Terdeteksi');
 
         if (empty($quo_id)) {
             ob_end_clean();
@@ -96,35 +96,31 @@ try {
 
         $attachment_url = $quo['attachment_url'] ?? '';
 
-        if (empty($attachment_url)) {
-            $db_conn->query("UPDATE quotations SET ocr_scan_status = 'skipped', ocr_scan_result = '{\"scan_status\":\"skipped\",\"reason\":\"No attachment file found for this RFQ\"}' WHERE id = '" . $db_conn->real_escape_string($quo_id) . "'");
-            ob_end_clean();
-            echo json_encode(['status' => 'skipped', 'message' => 'No attachment found — scan skipped.']);
-            exit;
-        }
 
-        // Load DEDICATED OCR Gemini API Key — separate from inbox/classification keys
-        // Key stored as GEMINI_API_KEY_OCR in api_credentials table
+        // Load DEDICATED OCR Gemini API Keys from gemini_api_keys table
         $key_list = [];
-        $r_key = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key = 'GEMINI_API_KEY_OCR' LIMIT 1");
-        if ($r_key && $r_key->num_rows > 0) {
-            $k_row = $r_key->fetch_assoc();
-            $v = trim($k_row['credential_value']);
-            if (!empty($v)) {
-                // Support comma-separated multiple keys under OCR slot
-                if (strpos($v, ',') !== false) {
-                    $key_list = array_values(array_filter(array_map('trim', explode(',', $v))));
-                } else {
-                    $key_list[] = $v;
+        $res_keys = $db_conn->query("SELECT api_key FROM gemini_api_keys WHERE status = 'active' AND pool_type = 'ocr' ORDER BY id ASC");
+        if ($res_keys && $res_keys->num_rows > 0) {
+            while ($row = $res_keys->fetch_assoc()) {
+                $k = trim($row['api_key']);
+                if (!empty($k) && strpos($k, '...') === false) $key_list[] = $k;
+            }
+        }
+        if (empty($key_list)) {
+            $res_fb = $db_conn->query("SELECT api_key FROM gemini_api_keys WHERE status = 'active' ORDER BY id ASC");
+            if ($res_fb && $res_fb->num_rows > 0) {
+                while ($row = $res_fb->fetch_assoc()) {
+                    $k = trim($row['api_key']);
+                    if (!empty($k) && strpos($k, '...') === false) $key_list[] = $k;
                 }
             }
         }
+        $key_list = array_values(array_unique($key_list));
 
-        // If no dedicated OCR key exists, abort — never fall back to inbox keys
         if (empty($key_list)) {
-            $db_conn->query("UPDATE quotations SET ocr_scan_status = 'error', ocr_scan_result = '{\"scan_status\":\"error\",\"reason\":\"No dedicated OCR API key (GEMINI_API_KEY_OCR) configured in database\"}' WHERE id = '" . $db_conn->real_escape_string($quo_id) . "'");
+            $db_conn->query("UPDATE quotations SET ocr_scan_status = 'error', ocr_scan_result = '{\"scan_status\":\"error\",\"reason\":\"No active OCR API key configured in gemini_api_keys table\"}' WHERE id = '" . $db_conn->real_escape_string($quo_id) . "'");
             ob_end_clean();
-            echo json_encode(['status' => 'error', 'message' => 'No dedicated OCR API key found. Add GEMINI_API_KEY_OCR in System Settings.']);
+            echo json_encode(['status' => 'error', 'message' => 'No active OCR API key found. Add active key in System Settings.']);
             exit;
         }
 
@@ -144,7 +140,7 @@ try {
         //   'low_quality' = partial — still mark as done so user can see data
         //   anything else = error
         $inner_status = $scan_result['scan_status'] ?? 'error';
-        $new_status = in_array($inner_status, ['done', 'low_quality']) ? 'done' : 'error';
+        $new_status = in_array($inner_status, ['done', 'low_quality']) ? 'done' : (in_array($inner_status, ['waiting', 'waiting_ai_limit']) ? 'waiting_ai_limit' : 'error');
 
         // Also update client_phone & delivery_email / client_email in quotations table if extracted by OCR
         $extracted_phone = isset($scan_result['phone']) && !empty($scan_result['phone']) ? trim($scan_result['phone']) : null;
@@ -220,14 +216,12 @@ try {
         $item_count = isset($scan_result['items']) && is_array($scan_result['items']) ? count($scan_result['items']) : 0;
         $confidence = $scan_result['scan_confidence'] ?? $inner_status;
         $ai_note    = $scan_result['ai_rate_limited'] ?? false
-            ? ' [AI rate-limited — native text fallback used]'
+            ? ' [AI rate-limited — waiting retry]'
             : (strpos($confidence, 'Native') !== false ? ' [native text fallback]' : ' [Gemini AI]');
-        $log_action_label = 'Manual OCR Scan ' . strtoupper($new_status);
-        $log_details = 'Manual OCR scan triggered by user.'
-            . ' Status: ' . strtoupper($new_status)
-            . '. Extracted items: ' . $item_count
-            . '. Confidence: ' . $confidence
-            . $ai_note;
+        $log_action_label = ($new_status === 'waiting_ai_limit') ? 'Menunggu AI (Limit)' : 'Manual OCR Scan';
+        $log_details = ($new_status === 'waiting_ai_limit')
+            ? 'Tesseract OCR scan selesai. Menunggu AI (Limit) reset kuota untuk ekstraksi terstruktur 100% via Gemini AI.'
+            : ('Manual OCR scan diproses oleh pengguna. Status: ' . strtoupper($new_status) . '. Ekstraksi item: ' . $item_count . ' item.');
         appendQuotationHistoryLog(
             $db_conn,
             $quo_id,
@@ -252,309 +246,191 @@ try {
 }
 
 /**
- * Perform OCR scan.
+ * Perform OCR & Text Extraction Scan.
  *
  * Pipeline:
- *   1. Resolve file from local disk or download from URL
- *   2. Extract raw text: pdftotext (for PDFs) + Tesseract OCR (for images, or PDF render fallback)
- *   3. ALWAYS send raw text + file to Gemini AI for context understanding & JSON structuring
- *   4. If ALL AI attempts fail: return native regex-parsed items as last resort
+ *   1. Check if valid file attachment is present (PDF or image).
+ *   2. If file present: extract raw text via pdftotext/Tesseract & prepare base64 image data.
+ *   3. Build email text grounding context (subject, item_requested, quantity_requested, message_body).
+ *   4. Pass text prompt (+ file data if present) to Gemini AI model.
+ *   5. If AI fails/rate-limited: fall back to native text & regex extraction.
  */
 function performOCRScan(string $file_url, array $key_list, array $quo_context): array {
     $scanned_at = date('Y-m-d H:i:s');
 
-    // ── Resolve extension from URL ──────────────────────────────────────────
-    $ext = strtolower(pathinfo(parse_url($file_url, PHP_URL_PATH), PATHINFO_EXTENSION));
-    parse_str(parse_url($file_url, PHP_URL_QUERY) ?? '', $qp);
-    if (!empty($qp['ext']))      { $ext = strtolower($qp['ext']); }
-    elseif (!empty($qp['fn']))   { $ext = strtolower(pathinfo($qp['fn'], PATHINFO_EXTENSION)); }
+    // ── Step 1: Resolve attachment file if available ─────────────────────────
+    $trimmed_url = strtoupper(trim((string)$file_url));
+    $has_file = (!empty($file_url) && !in_array($trimmed_url, ['NONE', 'NULL', 'NO_ATTACHMENT', '']));
 
-    $mime_map = [
-        'pdf'  => 'application/pdf',
-        'jpg'  => 'image/jpeg',
-        'jpeg' => 'image/jpeg',
-        'png'  => 'image/png',
-        'gif'  => 'image/gif',
-        'webp' => 'image/webp',
-    ];
-    $mime = $mime_map[$ext] ?? 'application/octet-stream';
+    $file_b64 = null;
+    $mime     = 'application/pdf';
+    $raw_text = '';
 
-    // ── Step 1: Resolve file bytes from local disk or HTTP ──────────────────
-    $file_data = false;
-    if (strpos($file_url, 'msgno=') !== false) {
-        $msgno = $qp['msgno'] ?? '';
-        if ($msgno) {
-            $files = glob(__DIR__ . '/attachments/msg_' . $msgno . '_*');
-            if (!empty($files)) {
-                foreach ($files as $fpath) {
-                    if (file_exists($fpath) && strtolower(pathinfo($fpath, PATHINFO_EXTENSION)) === $ext) {
-                        $file_data = file_get_contents($fpath);
-                        break;
+    if ($has_file) {
+        $ext = strtolower(pathinfo(parse_url($file_url, PHP_URL_PATH), PATHINFO_EXTENSION));
+        parse_str(parse_url($file_url, PHP_URL_QUERY) ?? '', $qp);
+        if (!empty($qp['ext']))      { $ext = strtolower($qp['ext']); }
+        elseif (!empty($qp['fn']))   { $ext = strtolower(pathinfo($qp['fn'], PATHINFO_EXTENSION)); }
+
+        $mime_map = [
+            'pdf'  => 'application/pdf',
+            'jpg'  => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png'  => 'image/png',
+            'gif'  => 'image/gif',
+            'webp' => 'image/webp',
+        ];
+        $mime = $mime_map[$ext] ?? 'application/octet-stream';
+
+        $file_data = false;
+        if (strpos($file_url, 'msgno=') !== false) {
+            $msgno = $qp['msgno'] ?? '';
+            if ($msgno) {
+                $files = glob(__DIR__ . '/attachments/msg_' . $msgno . '_*');
+                if (!empty($files)) {
+                    foreach ($files as $fpath) {
+                        if (file_exists($fpath) && strtolower(pathinfo($fpath, PATHINFO_EXTENSION)) === $ext) {
+                            $file_data = file_get_contents($fpath);
+                            break;
+                        }
                     }
-                }
-                if ($file_data === false && file_exists($files[0])) {
-                    $file_data = file_get_contents($files[0]);
+                    if ($file_data === false && file_exists($files[0])) {
+                        $file_data = file_get_contents($files[0]);
+                    }
                 }
             }
         }
-    }
-    if ($file_data === false || strlen((string)$file_data) < 100) {
-        $ch_dl = curl_init($file_url);
-        curl_setopt_array($ch_dl, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_TIMEOUT        => 10,
-            CURLOPT_USERAGENT      => 'ABMalaya-ERP-OCR/2.0'
-        ]);
-        $file_data = curl_exec($ch_dl);
-        $dl_code   = curl_getinfo($ch_dl, CURLINFO_HTTP_CODE);
-        curl_close($ch_dl);
-        if ($dl_code !== 200 || !$file_data || strlen($file_data) < 100) {
-            return [
-                'scan_status' => 'error',
-                'reason'      => 'Could not load attachment file (HTTP ' . ($dl_code ?? 0) . '). URL: ' . $file_url,
-                'scanned_at'  => $scanned_at,
-                'file_url'    => $file_url
-            ];
+        if ($file_data === false || strlen((string)$file_data) < 100) {
+            $target_url = $file_url;
+            if (!preg_match('/^https?:\/\//i', $target_url)) {
+                $target_url = 'http://127.0.0.1:8000/' . ltrim($target_url, '/');
+            }
+            $ch_dl = curl_init($target_url);
+            curl_setopt_array($ch_dl, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_TIMEOUT        => 30,
+                CURLOPT_USERAGENT      => 'ABMalaya-ERP-OCR/2.0'
+            ]);
+            $file_data = curl_exec($ch_dl);
+            $dl_code   = curl_getinfo($ch_dl, CURLINFO_HTTP_CODE);
+            curl_close($ch_dl);
         }
-    }
 
-    $file_b64 = base64_encode($file_data);
-    $tmp_base = tempnam(sys_get_temp_dir(), 'abm_ocr_');
+        if ($file_data !== false && strlen($file_data) >= 100) {
+            $file_b64 = base64_encode($file_data);
+            $tmp_base = tempnam(sys_get_temp_dir(), 'abm_ocr_');
 
-    // ── Step 2: Extract raw text via Tesseract OCR + pdftotext ─────────────
-    $raw_text = '';
-    $native_items  = [];
-    $native_vessel = null;
-    $native_master = null;
-    $native_cat    = null;
-    $native_notes  = null;
+            if ($ext === 'pdf') {
+                $tmp_pdf = $tmp_base . '.pdf';
+                file_put_contents($tmp_pdf, $file_data);
+                $raw_text = (string) shell_exec('pdftotext -layout ' . escapeshellarg($tmp_pdf) . ' - 2>/dev/null');
 
-    if ($ext === 'pdf') {
-        // 2a. pdftotext — fast, accurate for digital/searchable PDFs
-        $tmp_pdf = $tmp_base . '.pdf';
-        file_put_contents($tmp_pdf, $file_data);
-        $raw_text = (string) shell_exec('pdftotext -layout ' . escapeshellarg($tmp_pdf) . ' - 2>/dev/null');
-
-        // 2b. Tesseract on rendered PNG — for scanned/image PDFs where pdftotext yields little
-        if (strlen(trim($raw_text)) < 80 && shell_exec('which pdftoppm 2>/dev/null')) {
-            $tmp_png_base = $tmp_base . '_page';
-            shell_exec('pdftoppm -r 200 -l 1 -png ' . escapeshellarg($tmp_pdf) . ' ' . escapeshellarg($tmp_png_base) . ' 2>/dev/null');
-            $png_files = glob($tmp_png_base . '*.png');
-            if (!empty($png_files)) {
+                if (strlen(trim($raw_text)) < 80 && shell_exec('which pdftoppm 2>/dev/null')) {
+                    $tmp_png_base = $tmp_base . '_page';
+                    shell_exec('pdftoppm -r 200 -l 1 -png ' . escapeshellarg($tmp_pdf) . ' ' . escapeshellarg($tmp_png_base) . ' 2>/dev/null');
+                    $png_files = glob($tmp_png_base . '*.png');
+                    if (!empty($png_files)) {
+                        $tess_txt_path = $tmp_base . '_tess';
+                        shell_exec('tesseract ' . escapeshellarg($png_files[0]) . ' ' . escapeshellarg($tess_txt_path) . ' -l eng --oem 3 --psm 6 2>/dev/null');
+                        if (file_exists($tess_txt_path . '.txt')) {
+                            $raw_text = (string) file_get_contents($tess_txt_path . '.txt');
+                            @unlink($tess_txt_path . '.txt');
+                        }
+                        foreach ($png_files as $pf) { @unlink($pf); }
+                    }
+                }
+                @unlink($tmp_pdf);
+            } else {
+                $tmp_img = $tmp_base . '.' . $ext;
+                file_put_contents($tmp_img, $file_data);
                 $tess_txt_path = $tmp_base . '_tess';
-                shell_exec('tesseract ' . escapeshellarg($png_files[0]) . ' ' . escapeshellarg($tess_txt_path) . ' -l eng --oem 3 --psm 6 2>/dev/null');
+                shell_exec('tesseract ' . escapeshellarg($tmp_img) . ' ' . escapeshellarg($tess_txt_path) . ' -l eng --oem 3 --psm 6 2>/dev/null');
                 if (file_exists($tess_txt_path . '.txt')) {
                     $raw_text = (string) file_get_contents($tess_txt_path . '.txt');
                     @unlink($tess_txt_path . '.txt');
                 }
-                foreach ($png_files as $pf) { @unlink($pf); }
+                @unlink($tmp_img);
             }
-        }
-        @unlink($tmp_pdf);
-
-    } else {
-        // 2c. Tesseract directly on image files
-        $tmp_img = $tmp_base . '.' . $ext;
-        file_put_contents($tmp_img, $file_data);
-        $tess_txt_path = $tmp_base . '_tess';
-        shell_exec('tesseract ' . escapeshellarg($tmp_img) . ' ' . escapeshellarg($tess_txt_path) . ' -l eng --oem 3 --psm 6 2>/dev/null');
-        if (file_exists($tess_txt_path . '.txt')) {
-            $raw_text = (string) file_get_contents($tess_txt_path . '.txt');
-            @unlink($tess_txt_path . '.txt');
-        }
-        @unlink($tmp_img);
-    }
-    @unlink($tmp_base);
-
-    // 2d. Parse native fallback items from raw text (used if AI fails or rate limited)
-    if (!empty($raw_text)) {
-        $raw_lines  = explode("\n", $raw_text);
-        $curr_block = null;
-
-        foreach ($raw_lines as $line) {
-            // Check metadata fields
-            if (preg_match('/(?:ITEMS|Name of ordering item|Requisition for|Category|Subject)\s*[:;]\s*(.+?)(?:\s{2,}|$)/i', $line, $cm)) {
-                $c_cand = trim($cm[1]);
-                if (strlen($c_cand) > 2 && strlen($c_cand) < 100 && stripos($c_cand, 'number') === false) {
-                    $native_cat = $c_cand;
-                }
-            }
-
-            if (preg_match('/Vessel\s*[:;]\s*(.+?)(?:\s{2,}|$)/i', $line, $vm)) {
-                $v_cand = trim($vm[1]);
-                if (strlen($v_cand) < 50 && stripos($v_cand, 'example') === false && stripos($v_cand, 'code/') === false && stripos($v_cand, 'year/') === false && stripos($v_cand, 'running no') === false) {
-                    $native_vessel = $v_cand;
-                }
-            }
-            if (preg_match('/Master(?:\s+name)?\s*[:;]\s*(.+?)(?:\s{2,}|$)/i', $line, $mm)) {
-                $m_cand = trim($mm[1]);
-                if (strlen($m_cand) < 60 && stripos($m_cand, 'example') === false && stripos($m_cand, 'name of') === false) {
-                    $native_master = $m_cand;
-                }
-            }
-
-            // 1. Single-line item match: "1  PENCIL FABER CASTELL  5 BOXES"
-            if (preg_match('/^\s*(\d+)\s{2,}(.+?)\s{2,}(\d[\d.]*\s*(?:PCS|BOXES|UNITS|SET|Pcs|Boxes|MTR|KG|PKGS|PACKAGE|BOX|PACK).*)$/i', $line, $m1)) {
-                if ($curr_block) {
-                    $native_items[] = [
-                        'description'   => implode(' — ', $curr_block['desc_lines']),
-                        'qty'           => $curr_block['qty'],
-                        'unit'          => $curr_block['unit'],
-                        'product_code'  => null,
-                        'specification' => null,
-                        'unit_price' => null, 'discount_percent' => null, 'total' => null
-                    ];
-                    $curr_block = null;
-                }
-                $qty_raw = trim($m1[3]);
-                preg_match('/^([\d.]+)/', $qty_raw, $qm);
-                $native_items[] = [
-                    'description'      => trim($m1[2]),
-                    'qty'              => isset($qm[1]) ? (float)$qm[1] : 1.0,
-                    'unit'             => trim(preg_replace('/^[\d.]+\s*/', '', $qty_raw)) ?: 'Pcs',
-                    'unit_price'       => null,
-                    'discount_percent' => null,
-                    'total'            => null,
-                    'product_code'     => null,
-                    'specification'    => null,
-                ];
-                continue;
-            }
-
-            // 2. Multi-line item start: "1   Maker: Oval Corporation, Japan."
-            if (preg_match('/^\s*(\d+)\s{2,}(.+)$/', $line, $m2)) {
-                $num_val = (int)$m2[1];
-                $d_start = trim($m2[2]);
-                if ($num_val >= 1 && $num_val <= 500 && strlen($d_start) > 2) {
-                    if ($curr_block) {
-                        $native_items[] = [
-                            'description'   => implode(' — ', $curr_block['desc_lines']),
-                            'qty'           => $curr_block['qty'],
-                            'unit'          => $curr_block['unit'],
-                            'product_code'  => null,
-                            'specification' => null,
-                            'unit_price' => null, 'discount_percent' => null, 'total' => null
-                        ];
-                    }
-                    $curr_block = [
-                        'item_no'    => $num_val,
-                        'desc_lines' => [$d_start],
-                        'qty'        => 1.0,
-                        'unit'       => 'Pcs'
-                    ];
-                    continue;
-                }
-            }
-
-            // 3. If currently in a block, process description or quantity line
-            if ($curr_block) {
-                // Quantity line: "6 PCS" or "1.0 Pcs"
-                if (preg_match('/^\s*(\d+[\d.]*)\s*(PCS|BOXES|UNITS|SET|Pcs|Boxes|MTR|KG|PKGS|PACKAGE|BOX|PACK|EA|RLS)\s*$/i', $line, $mq)) {
-                    $curr_block['qty']  = (float)$mq[1];
-                    $curr_block['unit'] = trim($mq[2]);
-                } else {
-                    $l_clean = trim($line);
-                    if ($l_clean && !preg_match('/(?:Requisition No|Issue to|Vessel|Page \d|HSEMS|NUMBER\s+DESCRIPTION)/i', $l_clean)) {
-                        $curr_block['desc_lines'][] = $l_clean;
-                    }
-                }
-            }
-        }
-
-        // Flush last block if exists
-        if ($curr_block) {
-            $title_parts = [];
-            $spec_parts  = [];
-            foreach ($curr_block['desc_lines'] as $b_line) {
-                if (preg_match('/^(Maker|Model|For|S\/N|Ref|Capacity|Rating|Voltage|Serial|Part No|P\/N)\s*[:;-]/i', $b_line) || (!empty($title_parts) && strlen($b_line) > 25)) {
-                    if (empty($title_parts)) {
-                        $title_parts[] = $b_line;
-                    } else {
-                        $spec_parts[] = $b_line;
-                    }
-                } else {
-                    $title_parts[] = $b_line;
-                }
-            }
-
-            $native_items[] = [
-                'description'   => implode(' — ', $title_parts),
-                'specification' => !empty($spec_parts) ? implode(' — ', $spec_parts) : 'Standard specification',
-                'qty'           => $curr_block['qty'],
-                'unit'          => $curr_block['unit'],
-                'product_code'  => null,
-                'unit_price'    => null,
-                'discount_percent' => null,
-                'total'         => null
-            ];
-        }
-
-
-        if (preg_match('/Note[s]?:\s*(1\..+)/is', $raw_text, $nm)) {
-            $native_notes = trim(str_replace("\n", ' ', $nm[1]));
+            @unlink($tmp_base);
+        } else {
+            $has_file = false;
         }
     }
 
+    // ── Step 2: Build Text Grounding Context from Email Metadata ────────────
+    $ctx_client   = $quo_context['client_name']        ?? '';
+    $ctx_email    = $quo_context['client_email']       ?? '';
+    $ctx_subject  = $quo_context['subject']            ?? '';
+    $ctx_item_req = $quo_context['item_requested']     ?? '';
+    $ctx_qty_req  = $quo_context['quantity_requested'] ?? '';
+    $ctx_msg_raw  = $quo_context['message_body']       ?? '';
 
-    // ── Step 3: Build Gemini AI prompt with raw text as grounded context ────
-    // AI is ALWAYS called — it understands context, splits desc/spec, resolves IMPA, etc.
-    $ctx_client  = $quo_context['client_name']  ?? '';
-    $ctx_email   = $quo_context['client_email'] ?? '';
-    $ctx_subject = $quo_context['subject']      ?? '';
-
-    // Parse display email from JSON if applicable
+    // Parse display email if JSON
     $ctx_email_display = $ctx_email;
     $ce_dec = json_decode($ctx_email, true);
     if (is_array($ce_dec) && !empty($ce_dec['selected'])) {
         $ctx_email_display = $ce_dec['selected'];
     }
 
-    $raw_text_block = (!empty(trim($raw_text)))
-        ? "\n\n=== RAW TEXT EXTRACTED BY OCR ENGINE (pdftotext + Tesseract) ===\n" . trim($raw_text) . "\n====================================================\n"
+    // Clean message body from HTML/CSS tags
+    $clean_msg = strip_tags($ctx_msg_raw);
+    $clean_msg = preg_replace('/@media[^{]+\{[^}]+\}/i', '', $clean_msg);
+    $clean_msg = preg_replace('/(\r?\n){3,}/', "\n\n", $clean_msg);
+    $clean_msg = trim(html_entity_decode($clean_msg));
+
+    $email_text_block = "=== RFQ EMAIL CONTENT ===\n"
+        . "Sender: " . $ctx_client . " <" . $ctx_email_display . ">\n"
+        . "Subject: " . $ctx_subject . "\n"
+        . "Item Requested: " . $ctx_item_req . "\n"
+        . "Quantity Requested: " . $ctx_qty_req . "\n"
+        . "Email Message Body:\n" . (strlen($clean_msg) > 3500 ? substr($clean_msg, 0, 3500) . '...' : $clean_msg) . "\n"
+        . "=========================\n";
+
+    $file_text_block = (!empty(trim($raw_text)))
+        ? "\n=== DOCUMENT OCR EXTRACTED TEXT ===\n" . trim($raw_text) . "\n====================================\n"
         : '';
 
+    $source_desc = $has_file ? "the attached document (PDF/Image) AND the provided RFQ email text" : "the RFQ email text (no attachment file provided)";
+
     $prompt = <<<PROMPT
-You are a precise OCR extraction engine for AB Malaya Industry ERP system — a maritime supply company.
-Your task: extract structured procurement data from the attached document (PDF or image).
+You are a precise OCR and text extraction engine for AB Malaya Industry ERP system — a maritime supply company.
+Your task: extract structured procurement data from {$source_desc}.
 
-PIPELINE NOTE: Raw text below was pre-extracted by pdftotext / Tesseract OCR.
-Use it as your PRIMARY text source, but also VISUALLY VERIFY against the attached document image for any missed or misread text.
-{$raw_text_block}
+{$email_text_block}
+{$file_text_block}
+
 === EXTRACTION RULES ===
-1. "items": Extract EVERY numbered line item. Each item MUST be cleanly split:
-   - "description": SHORT core item title ONLY (MAX 4-8 WORDS, e.g. "VALVE POSITION INDICATOR" or "SOLENOID VALVE"). NEVER put long Maker/Model/Specs text in description!
-   - "specification": ALL technical details — Maker/Manufacturer, Model Number, Cylinder Capacity, Voltage, Serial Number, and application notes (e.g. "Maker: Oval Corporation, Japan. Model: NP145B10, calibrated for 74 cc actuator capacity.").
-   - "qty": numeric quantity (float)
-   - "unit": unit of measure (BOXES, PCS, SETS, BOTTLES, KG, etc.)
-   - "product_code": article no / CAS no / part no if printed. If none, null.
-   - "unit_price", "discount_percent", "total": set from document if present, else null.
+1. "items": Extract EVERY item request found. Each item MUST be cleanly split:
+   - "description": SHORT core item title ONLY (MAX 4-8 WORDS, e.g. "VALVE POSITION INDICATOR", "CLOTHING & LINEN", or "TOLUENE ANALYTICAL REAGENT"). NEVER put long Maker/Model/Specs text in description!
+   - "specification": ALL technical details — Maker/Manufacturer, Model Number, Size, Grade, Formula, Cylinder Capacity, Voltage, Serial Number, and notes.
+   - "qty": numeric quantity (float, e.g. 1.0, 5.0). Default 1.0 if not specified.
+   - "unit": unit of measure (PCS, BOXES, SETS, BOTTLES, KG, MTR, PKGS, PACKAGE, etc.). Default "Pcs" or "Package".
+   - "product_code": article no / CAS no / part no if present. If none, null.
+   - "unit_price", "discount_percent", "total": set from document/text if present, else null.
 
-
-2. "notes": Capture ALL special remarks, dispatch instructions, document notes printed verbatim.
-3. "delivery_email": Extract ONLY if a dispatch/fleet/delivery email address is EXPLICITLY PRINTED in document (e.g. fleet@domain.com). If not found, set null.
+2. "notes": Capture special remarks, dispatch instructions, or submission notes printed verbatim.
+3. "delivery_email": Extract ONLY if a dispatch/fleet/delivery email address is EXPLICITLY PRINTED (e.g. fleet@domain.com). If not found, set null.
 4. "company_name": Vessel name OR ordering company name. null if not found.
 5. "client_name": Ordering officer / Master / Captain name. null if not found.
-6. "category_name": The ITEMS category label from document (e.g. "VESSEL'S STATIONERY", "DECK CONSUMABLES"). null if not found.
-7. "impa_code": IMPA maritime category number based on category_name:
-   - 49 = Hardware/Stationery/Office
-   - 39 = Medicine/Medical
-   - 45 = Petroleum/Lubricants/Oil
-   - 73 = Engine/Machinery Spare Parts
-   - 53 = Deck/Navigation
-   - 51 = Safety Equipment
+6. "category_name": The product/IMPA category label from document or subject (e.g. "CLOTHING & LINEN", "PROVISION & FOOD SUPPLIES", "PETROLEUM & LUBRICANTS", "CLEANING MATERIALS & CHEMICALS", "ENGINE STORE", "STATIONERY").
+7. "impa_code": 2-digit IMPA maritime category number matching category_name:
+   - 11 = Clothing & Linen
+   - 79 = Provision & Food Supplies
+   - 45 = Petroleum & Lubricants / Oil
+   - 51 = Cleaning Materials & Chemicals / Safety
+   - 73 = Engine / Machinery Spare Parts
+   - 53 = Deck / Navigation Consumables
+   - 49 = Hardware / Stationery / Office
    - null if cannot determine
 
 === ANTI-HALLUCINATION RULES ===
-- ONLY extract what is EXPLICITLY VISIBLE in the document.
-- If a field is absent or unreadable, return null. NEVER guess or invent data.
-- Do NOT copy context metadata below into output unless CONFIRMED in document.
+- Extract what is VISIBLE in text/document.
+- If a field is absent, set null.
+- Output ONLY valid JSON. No markdown fencing, no explanation outside JSON.
 
-=== CONTEXT (email metadata — do NOT use unless confirmed in document) ===
-Sender: {$ctx_client} <{$ctx_email_display}>
-Subject: {$ctx_subject}
-
-=== OUTPUT FORMAT: Valid JSON only. No markdown. No explanation outside JSON. ===
+=== OUTPUT FORMAT ===
 {
   "scan_status": "done",
   "scan_confidence": "high",
@@ -592,36 +468,36 @@ Subject: {$ctx_subject}
 }
 PROMPT;
 
-    // ── Step 4: Call Gemini AI (OCR-dedicated key, always) ─────────────────
-    // Model preference: try best available models in order
+    // ── Step 3: Call Gemini AI Model ─────────────────────────────────────────
     $ocr_models = [
-        'gemini-flash-latest',   // Most available, general quota
-        'gemini-3.5-flash',      // High quality
+        'gemini-3.5-flash',
+        'gemini-3.6-flash',
+        'gemini-flash-latest',
     ];
     $key_count = count($key_list);
     $errors    = [];
-    $rate_limited_count = 0;   // how many keys/models hit 429
-    $retry_after_secs   = 60;  // default wait suggestion (seconds)
+    $rate_limited_count = 0;
+    $retry_after_secs   = 60;
 
     foreach ($ocr_models as $model_name) {
         for ($i = 0; $i < $key_count; $i++) {
             $api_key = $key_list[$i];
             $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . $model_name . ':generateContent?key=' . urlencode($api_key);
 
-        $payload = json_encode([
-            'contents' => [[
-                'parts' => [
-                    ['text' => $prompt],
-                    ['inline_data' => ['mime_type' => $mime, 'data' => $file_b64]]
+            $parts = [['text' => $prompt]];
+            if ($has_file && !empty($file_b64)) {
+                $parts[] = ['inline_data' => ['mime_type' => $mime, 'data' => $file_b64]];
+            }
+
+            $payload = json_encode([
+                'contents' => [['parts' => $parts]],
+                'generationConfig' => [
+                    'temperature'      => 0.0,
+                    'topP'             => 0.8,
+                    'maxOutputTokens'  => 8192,
+                    'responseMimeType' => 'application/json'
                 ]
-            ]],
-            'generationConfig' => [
-                'temperature'      => 0.0,
-                'topP'             => 0.8,
-                'maxOutputTokens'  => 8192,
-                'responseMimeType' => 'application/json'
-            ]
-        ]);
+            ]);
 
             $resp_headers = [];
             $ch = curl_init($url);
@@ -647,13 +523,12 @@ PROMPT;
             if ($http_code === 200 && !empty($resp)) {
                 $resp_data = json_decode($resp, true);
                 $text = $resp_data['candidates'][0]['content']['parts'][0]['text'] ?? '';
-                // Strip markdown fencing if present
                 $text = trim(preg_replace('/^```json\s*/i', '', preg_replace('/\s*```$/i', '', trim($text))));
                 $parsed = json_decode($text, true);
                 if (is_array($parsed)) {
                     $parsed['scanned_at']       = $scanned_at;
                     $parsed['file_url']         = $file_url;
-                    $parsed['scan_confidence']  = 'high (Gemini AI [' . $model_name . '] + OCR Text)';
+                    $parsed['scan_confidence']  = 'high (Gemini AI [' . $model_name . '] ' . ($has_file ? '+ OCR File' : '+ Email Text') . ')';
                     $parsed['scan_model']       = $model_name;
                     if (empty($parsed['scan_status'])) { $parsed['scan_status'] = 'done'; }
                     return $parsed;
@@ -661,68 +536,54 @@ PROMPT;
                 $errors[] = '[' . $model_name . '] Key …' . substr($api_key, -6) . ': AI returned non-JSON response';
             } elseif ($http_code === 429) {
                 $rate_limited_count++;
-                // Try to read Retry-After header from Gemini response
-                $ra = $resp_headers['retry-after'] ?? $resp_headers['x-ratelimit-reset-requests'] ?? null;
-                if ($ra && is_numeric($ra)) {
-                    $retry_after_secs = max($retry_after_secs, (int)$ra);
-                } else {
-                    // Parse from JSON body if present
-                    $rb = json_decode($resp, true);
-                    $ra_body = $rb['error']['details'][0]['metadata']['retryDelay'] ?? null;
-                    if ($ra_body && preg_match('/(\d+)/', $ra_body, $ra_match)) {
-                        $retry_after_secs = max($retry_after_secs, (int)$ra_match[1]);
-                    }
-                }
                 $errors[] = '[' . $model_name . '] Key …' . substr($api_key, -6) . ': HTTP 429 (rate limited)';
-                sleep(2);
+                // ── Step 4: AI Rate Limit / Waiting Retry Handler ─────────────────────────
+                // Strict Policy: 100% of items MUST be extracted by Gemini AI. No native fallback item parsing allowed.
+                // If AI is rate limited or unavailable, re-queue SPH in database with 'waiting_ai_limit' status for background retry.
+                return [
+                    'scan_status'     => 'waiting_ai_limit',
+                    'scan_confidence' => 'waiting (Tesseract OCR OK — Menunggu AI Limit Reset)',
+                    'document_type'   => 'RFQ Requisition Form',
+                    'category_name'   => $quo_context['category_name'] ?? null,
+                    'impa_code'       => null,
+                    'company_name'    => $quo_context['client_company'] ?? null,
+                    'client_name'     => $quo_context['client_name']    ?? null,
+                    'delivery_email'  => null,
+                    'notes'           => 'Tesseract OCR text extraction completed successfully. Menunggu AI (Limit) quota reset to perform 100% AI structured parsing.',
+                    'items'           => [],
+                    'ai_errors'       => implode('; ', $errors),
+                    'ai_rate_limited' => true,
+                    'retry_after_secs' => 60,
+                    'scanned_at'      => $scanned_at,
+                    'file_url'        => $file_url
+                ];
             } elseif ($http_code === 404) {
                 $errors[] = '[' . $model_name . '] Model not available (404) — trying next model';
-                break; // Skip remaining keys for this model, try next model
+                break;
             } else {
                 $errors[] = '[' . $model_name . '] Key …' . substr($api_key, -6) . ': HTTP ' . $http_code;
                 sleep(1);
             }
-        } // end key loop
-    } // end model loop
-
-    // ── Step 5: AI failed — native text fallback (0% dummy data) ───────────
-    if (!empty($native_items)) {
-        // Resolve delivery email: extract from raw_text notes if present (e.g. fleet@domain.com)
-        $extracted_note_email = null;
-        if (!empty($raw_text) && preg_match('/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/i', $raw_text, $em)) {
-            $matched_e = trim($em[0]);
-            // Exclude sender email if different email is found in notes
-            if (!empty($matched_e)) {
-                $extracted_note_email = $matched_e;
-            }
         }
-        $real_email = $extracted_note_email ?: $real_email;
-
-        return [
-            'scan_status'     => 'done',
-            'scan_confidence' => 'medium (Native Text Fallback — AI unavailable)',
-            'document_type'   => 'RFQ Requisition Form',
-            'category_name'   => $native_cat,
-            'impa_code'       => null,
-            'company_name'    => $native_vessel ?: ($quo_context['company_name'] ?? null),
-            'client_name'     => $native_master ?: ($quo_context['client_name']  ?? null),
-            'delivery_email'  => $real_email,
-            'notes'           => $native_notes,
-            'items'           => $native_items,
-            'ai_errors'       => implode('; ', $errors),
-            'ai_rate_limited' => $rate_limited_count > 0,
-            'retry_after_secs'=> $rate_limited_count > 0 ? $retry_after_secs : null,
-            'scanned_at'      => $scanned_at,
-            'file_url'        => $file_url
-        ];
     }
 
+    // ── Step 4: Native Text & Regex Fallback Parser ─────────────────────────
     return [
-        'scan_status'      => 'error',
-        'reason'           => implode('; ', $errors),
-        'rate_limited'     => $rate_limited_count > 0,
-        'retry_after_secs' => $rate_limited_count > 0 ? $retry_after_secs : null,
-        'scanned_at'       => $scanned_at,
-        'file_url'         => $file_url
+        'scan_status'     => 'waiting',
+        'scan_confidence' => 'waiting (AI exhausted)',
+        'document_type'   => 'RFQ Requisition Form',
+        'category_name'   => $quo_context['category_name'] ?? null,
+        'impa_code'       => null,
+        'company_name'    => $quo_context['client_company'] ?? null,
+        'client_name'     => $quo_context['client_name']    ?? null,
+        'delivery_email'  => null,
+        'notes'           => 'All AI models exhausted. Please retry.',
+        'items'           => [],
+        'ai_errors'       => implode('; ', $errors),
+        'ai_rate_limited' => true,
+        'retry_after_secs' => 300,
+        'scanned_at'      => $scanned_at,
+        'file_url'        => $file_url
     ];
 }
+

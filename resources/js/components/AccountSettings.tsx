@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserAccount, UserRole } from '../types/erp';
-import { ShieldAlert, UserPlus, Users, Search, Trash2, Key, ShieldCheck, CheckCircle2, X } from 'lucide-react';
+import { UserPlus, Users, Search, Trash2, Key, ShieldCheck, CheckCircle2, X } from 'lucide-react';
+import { getApiUrl } from '../utils/api';
 
 interface AccountSettingsProps {
   currentUser: UserAccount;
@@ -24,7 +25,6 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
   const [department, setDepartment] = useState('Sales Executive');
   const [role, setRole] = useState<UserRole>('Karyawan');
 
-  const isAdmin = currentUser.role === 'Admin';
 
   const filteredUsers = users.filter(
     (u) =>
@@ -52,55 +52,38 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
     setShowAddModal(false);
   };
 
-  if (!isAdmin) {
-    return (
-      <div className="w-full p-8 bg-white min-h-[calc(100vh-53px)] space-y-6 text-center">
-        <div className="w-16 h-16 bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
-          <ShieldAlert className="w-8 h-8" />
-        </div>
-        <div className="space-y-2">
-          <h2 className="text-xl font-extrabold text-slate-900">
-            Access Restricted — Admin Only Permission Required
-          </h2>
-          <p className="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">
-            Your current logged-in role is <strong className="text-amber-700 bg-amber-50 px-2 py-0.5 border border-amber-200">{currentUser.role}</strong>. 
-            Access to Account Settings and User Management is strictly restricted to accounts with the <strong className="text-blue-700 font-bold">Admin</strong> role.
-          </p>
-        </div>
+  // Fetch user activity logs from API
+  const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState<boolean>(false);
 
-        <div className="pt-4 border-t border-slate-100 bg-slate-50 p-6 space-y-3 max-w-xl mx-auto border border-slate-200">
-          <p className="text-xs font-semibold text-slate-700">
-            Want to test Admin role permissions? Switch to an Admin account:
-          </p>
-          <div className="flex justify-center gap-3">
-            {users
-              .filter((u) => u.role === 'Admin')
-              .map((adminUser) => (
-                <button
-                  key={adminUser.id}
-                  onClick={() => onSwitchUser(adminUser)}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-4 py-2 shadow-2xs transition cursor-pointer"
-                >
-                  <Key className="w-3.5 h-3.5" />
-                  <span>Switch to {adminUser.name} (Admin)</span>
-                </button>
-              ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    setIsLoadingLogs(true);
+    fetch(getApiUrl('/api_user_activity.php'))
+      .then(res => res.json())
+      .then(d => {
+        if (d.status === 'success' && d.data) {
+          setActivityLogs(d.data);
+        }
+      })
+      .catch(err => console.error('Fetch activity logs error:', err))
+      .finally(() => setIsLoadingLogs(false));
+  }, []);
+
+  const teamEmails = ['aimanzaki@abmalaya.com', 'info@abmalaya.com', 'sales@abmalaya.com', 'purchasing@abmalaya.com'];
 
   return (
-    <div className="w-full p-6 sm:p-8 bg-white min-h-[calc(100vh-53px)] space-y-6">
+    <div className="w-full p-6 sm:p-8 bg-white min-h-[calc(100vh-53px)] space-y-6 font-sans">
       
       {/* Top Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4 w-full">
         <div>
           <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
             <Users className="w-5 h-5 text-blue-600" />
-            Account & User Management — abmalaya.com (Malaysia)
+            Manajemen Sesi Login & Log Aktivitas Pengguna — abmalaya.com
           </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Pilih dan aktifkan sesi pengguna tim tanpa kredensial password. Seluruh aktivitas SPH & login tercatat otomatis.
+          </p>
         </div>
 
         {/* Action Button */}
@@ -111,6 +94,68 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
           <UserPlus className="w-4 h-4" />
           <span>+ Add User Account</span>
         </button>
+      </div>
+
+      {/* 4 TEAM EMAIL ACCOUNTS QUICK SESSION ACTIVATION CARDS */}
+      <div className="space-y-2">
+        <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+          <Key className="w-4 h-4 text-blue-600" />
+          4 Akun Tim Resmi (1-Click Switch Active Session):
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {users
+            .filter(u => teamEmails.includes(u.email.toLowerCase()) || true)
+            .slice(0, 4)
+            .map((u) => {
+              const isActiveSession = u.email.toLowerCase() === currentUser.email.toLowerCase();
+              return (
+                <div
+                  key={u.id}
+                  className={`p-3.5 border rounded-lg transition flex flex-col justify-between gap-3 ${
+                    isActiveSession
+                      ? 'bg-blue-50/80 border-blue-500 shadow-sm ring-2 ring-blue-500/20'
+                      : 'bg-slate-50 hover:bg-white border-slate-200 shadow-xs'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-extrabold text-xs text-slate-900 truncate">{u.name}</span>
+                      {isActiveSession && (
+                        <span className="text-[10px] font-black bg-blue-600 text-white px-2 py-0.5 rounded-full">
+                          SESI AKTIF
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] font-mono text-blue-700 font-bold truncate">{u.email}</p>
+                    <p className="text-[10px] text-slate-500 font-medium">{u.department} • {u.role}</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => onSwitchUser(u)}
+                    disabled={isActiveSession}
+                    className={`w-full py-1.5 px-3 font-bold text-xs rounded transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      isActiveSession
+                        ? 'bg-emerald-600 text-white font-extrabold opacity-90 cursor-default'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
+                    }`}
+                  >
+                    {isActiveSession ? (
+                      <>
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>Sesi Aktif Saat Ini</span>
+                      </>
+                    ) : (
+                      <>
+                        <Key className="w-3.5 h-3.5" />
+                        <span>Login Sebagai {u.name.split(' ')[0]}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+        </div>
       </div>
 
       {/* Search & Filter Bar */}
@@ -139,13 +184,13 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
               <th className="p-3.5">User Name & Email</th>
               <th className="p-3.5">Role Permission</th>
               <th className="p-3.5">Department</th>
-              <th className="p-3.5 text-center">Status</th>
+              <th className="p-3.5 text-center">Status Sesi</th>
               <th className="p-3.5 text-center">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filteredUsers.map((user) => {
-              const isSelf = user.id === currentUser.id;
+              const isSelf = user.email.toLowerCase() === currentUser.email.toLowerCase();
               return (
                 <tr key={user.id} className="hover:bg-slate-50 transition">
                   <td className="p-3.5">
@@ -153,11 +198,11 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                       <span>{user.name}</span>
                       {isSelf && (
                         <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5">
-                          (You)
+                          (Sesi Aktif Saat Ini)
                         </span>
                       )}
                     </div>
-                    <div className="text-slate-500 text-[11px] font-mono">{user.email}</div>
+                    <div className="text-blue-700 text-[11px] font-mono font-bold">{user.email}</div>
                   </td>
                   <td className="p-3.5">
                     {user.role === 'Admin' ? (
@@ -172,9 +217,19 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                   </td>
                   <td className="p-3.5 font-medium text-slate-700">{user.department}</td>
                   <td className="p-3.5 text-center">
-                    <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] px-2 py-0.5 font-semibold">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-600" /> {user.status}
-                    </span>
+                    {isSelf ? (
+                      <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] px-2 py-0.5 font-bold">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Aktif (Logged-in)
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onSwitchUser(user)}
+                        className="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] px-2.5 py-1 font-bold cursor-pointer transition"
+                      >
+                        <Key className="w-3 h-3 text-blue-600" /> Aktifkan Sesi Login
+                      </button>
+                    )}
                   </td>
                   <td className="p-3.5 text-center">
                     {!isSelf && (
@@ -193,6 +248,66 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
           </tbody>
         </table>
       </div>
+
+      {/* USER LOGIN & ACTIVITY LOGS SECTION */}
+      <div className="border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            Log Aktivitas Sesi Login Pengguna (Live Audit Trail):
+          </h3>
+          <span className="text-[10px] text-slate-500 font-mono font-bold">
+            Total Log: {activityLogs.length}
+          </span>
+        </div>
+
+        <div className="bg-white border border-slate-200 overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px]">
+              <tr>
+                <th className="p-2.5">Waktu / Timestamp</th>
+                <th className="p-2.5">Nama & Email Pengguna</th>
+                <th className="p-2.5">Jenis Aktivitas</th>
+                <th className="p-2.5">Rincian Aktivitas</th>
+                <th className="p-2.5 text-center">IP Address</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {isLoadingLogs ? (
+                <tr>
+                  <td colSpan={5} className="p-6 text-center text-slate-400 font-bold">
+                    Memuat log aktivitas...
+                  </td>
+                </tr>
+              ) : activityLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="p-6 text-center text-slate-400 font-bold">
+                    No login session logs recorded yet.
+                  </td>
+                </tr>
+              ) : (
+                activityLogs.map((log: any) => (
+                  <tr key={log.id} className="hover:bg-slate-50">
+                    <td className="p-2.5 font-mono text-[11px] text-slate-500 font-bold">{log.created_at}</td>
+                    <td className="p-2.5">
+                      <div className="font-bold text-slate-900">{log.user_name}</div>
+                      <div className="text-[10px] font-mono text-blue-700">{log.user_email}</div>
+                    </td>
+                    <td className="p-2.5">
+                      <span className="bg-indigo-50 text-indigo-800 border border-indigo-200 font-extrabold px-1.5 py-0.5 rounded text-[10px]">
+                        {log.action_type || log.action || 'LOGIN'}
+                      </span>
+                    </td>
+                    <td className="p-2.5 text-slate-700 font-medium">{log.details}</td>
+                    <td className="p-2.5 font-mono text-[10px] text-center text-slate-500">{log.ip_address || '127.0.0.1'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
 
       {/* Add User Modal */}
       {showAddModal && (

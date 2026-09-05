@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Quotation } from '../types/erp';
 import { Search, Plus, Eye, Edit, Send, RefreshCw, Loader2, Trash2, FileType, Check, Sparkles, CheckCircle2, Sliders, Clock, MoreVertical, History, X as CloseIcon, User, AlertTriangle, Printer, Image as ImageIcon, ShieldCheck, ScanLine, Info, Database, Activity, Terminal, Tag } from 'lucide-react';
 
@@ -15,6 +15,61 @@ interface QuotationListProps {
   hasFetched: boolean;
   currentUser?: { id?: string; name?: string; email?: string; role?: string };
 }
+
+const bodyCleanCache = new Map<string, string>();
+const cleanEmailBodyText = (text?: string): string => {
+  if (!text) return '';
+  if (bodyCleanCache.has(text)) return bodyCleanCache.get(text)!;
+
+  let cleaned = text;
+
+  // 1. Remove <style>...</style> and <script>...</script> blocks
+  cleaned = cleaned.replace(/<style[\s\S]*?<\/style>/gi, '');
+  cleaned = cleaned.replace(/<script[\s\S]*?<\/script>/gi, '');
+
+  // 2. Remove HTML comments <!-- ... -->
+  cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, '');
+
+  // 3. Remove boundary header parameters & MIME headers
+  cleaned = cleaned.replace(/boundary="[^"]*"/gi, '');
+  cleaned = cleaned.replace(/boundary=[a-zA-Z0-9-@._]+/gi, '');
+  cleaned = cleaned.replace(/content-type:[^\n]*/gi, '');
+  cleaned = cleaned.replace(/content-transfer-encoding:[^\n]*/gi, '');
+  cleaned = cleaned.replace(/content-description:[^\n]*/gi, '');
+  cleaned = cleaned.replace(/creation-date="[^"]*";?/gi, '');
+  cleaned = cleaned.replace(/modification-date="[^"]*";?/gi, '');
+  cleaned = cleaned.replace(/content-id:[^\n]*/gi, '');
+  cleaned = cleaned.replace(/content-disposition:[^\n]*/gi, '');
+
+  // 4. Remove [cid:...] and inline cid:...
+  cleaned = cleaned.replace(/\[cid:[^\]]*\]/gi, '');
+  cleaned = cleaned.replace(/cid:[a-zA-Z0-9-@.]+/gi, '');
+
+  // 5. Remove CSS rule blocks like: table { ... }, th, td { ... }, a { ... }, #id { ... }, .class { ... }
+  cleaned = cleaned.replace(/[a-zA-Z0-9_#.,\s-]+\{[^}]*\}/g, '');
+
+  // 6. Strip remaining HTML tags (like <div>, <p>, <table>, <tr>, <td>, etc.)
+  cleaned = cleaned.replace(/<\/?[^>]+(>|$)/g, '');
+
+  // 7. Remove long base64 lines
+  const lines = cleaned.split('\n');
+  const filteredLines = lines.filter(line => {
+    const trimmed = line.trim();
+    if (trimmed.length > 40 && !trimmed.includes(' ') && /^[a-zA-Z0-9+/=]+$/.test(trimmed)) {
+      return false;
+    }
+    return true;
+  });
+  cleaned = filteredLines.join('\n');
+
+  // 8. Clean consecutive newlines
+  cleaned = cleaned.replace(/\n\s*\n\s*\n+/g, '\n\n');
+
+  const result = cleaned.trim();
+  if (bodyCleanCache.size > 500) bodyCleanCache.clear();
+  bodyCleanCache.set(text, result);
+  return result;
+};
 
 export const QuotationList: React.FC<QuotationListProps> = ({
   onEditQuotation,
@@ -45,6 +100,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   // Drawer tabs and email body states
   const [drawerTab, setDrawerTab] = useState<'summary' | 'email' | 'history' | 'acc'>('summary');
   const [showEmailBody, setShowEmailBody] = useState<boolean>(false);
+
+  useEffect(() => {
+    setShowEmailBody(false);
+  }, [selectedInfoQuotation?.id]);
   
   // OCR scan states
   const [isScanningOcr, setIsScanningOcr] = useState<boolean>(false);
@@ -95,7 +154,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
     if (attempt > MAX_OCR_RETRIES) {
       setIsScanningOcr(false);
       setOcrRateLimitInfo(null);
-      setOcrErrorMsg(`Scan gagal setelah ${MAX_OCR_RETRIES} percobaan. API Gemini tidak tersedia sementara. Coba lagi nanti.`);
+      setOcrErrorMsg(`Scan failed after ${MAX_OCR_RETRIES} attempts. Gemini API temporarily unavailable. Please try again later.`);
       return;
     }
     ocrRetryAttemptRef.current = attempt;
@@ -108,7 +167,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         quo_id,
-        actor_name:  currentUserRef.current?.name  || 'Sales Engineer',
+        actor_name:  currentUserRef.current?.name || currentUserRef.current?.email || 'Unidentified Session',
         actor_email: currentUserRef.current?.email || null,
       }),
     })
@@ -131,7 +190,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
             setOcrRateLimitInfo({
               active: true, quo_id, retryAfter: retryAfterSecs, totalWait: retryAfterSecs,
               attempt, isPartialSuccess: true,
-              message: `Waiting - ${retryAfterSecs}s (Item berhasil diekstrak via native fallback. Menunggu reset kuota Gemini AI...)`,
+              message: `Waiting - ${retryAfterSecs}s (Items extracted via native engine. Waiting for Gemini AI quota reset...)`,
             });
             scheduleOcrRetry(quo_id, retryAfterSecs, attempt);
             setIsScanningOcr(false);
@@ -139,7 +198,11 @@ export const QuotationList: React.FC<QuotationListProps> = ({
             // Full AI success — chain IMPA matching
             const itemCount = Array.isArray(resObj?.items) ? resObj.items.length : 0;
             const model = resObj?.scan_model ? ` [${resObj.scan_model}]` : '';
-            setOcrSuccessMsg(`Scan selesai${model} • ${itemCount} item • Percobaan ke-${attempt} • Mencocokkan kode IMPA...`);
+            if (d.ocr_scan_status === 'waiting_ai_limit') {
+              setOcrSuccessMsg(`Waiting AI (Limit) • Quota limit reached. Automatic retry scheduled upon countdown expiry...`);
+            } else {
+              setOcrSuccessMsg(`Scan completed${model} • ${itemCount} items • Attempt ${attempt} • Matching IMPA code...`);
+            }
             setIsScanningOcr(false);
             // Auto-chain IMPA matching
             fetch(getApiUrl('/api_impa_match.php'), {
@@ -150,13 +213,15 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               .then(r => r.json())
               .then(im => {
                 if (im.status === 'success') {
-                  setOcrSuccessMsg(`Scan + IMPA selesai${model} • ${itemCount} item • Kode IMPA: ${im.impa_code} (${im.category_name}) • Confidence ${im.confidence}%`);
+                  const catName = im.category_name || 'No category_name to match. Run OCR scan first.';
+                  setOcrSuccessMsg(`Scan + IMPA completed${model} • ${itemCount} items • IMPA Code: ${im.impa_code || 'Pending'} (${catName}) • Confidence ${im.confidence || 0}%`);
                   setQuotations(prev => prev.map(q => q.id === quo_id
                     ? { ...q, impa_code: im.impa_code, category_name: im.category_name } : q));
                   setSelectedInfoQuotation(prev => prev
                     ? { ...prev, impa_code: im.impa_code, category_name: im.category_name } : null);
                 } else {
-                  setOcrSuccessMsg(`Scan selesai${model} • ${itemCount} item • IMPA: ${im.message || 'tidak cocok'}`);
+                  const catMsg = im.category_name || im.message || 'No category_name to match. Run OCR scan first.';
+                  setOcrSuccessMsg(`Scan completed • ${itemCount} items • IMPA: ${catMsg}`);
                 }
                 setTimeout(() => setOcrSuccessMsg(null), 8000);
               })
@@ -166,7 +231,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
           }
         } else if (d.status === 'skipped') {
           setIsScanningOcr(false);
-          setOcrErrorMsg('Scan dilewati: ' + (d.message || 'File lampiran tidak ditemukan.'));
+          setOcrErrorMsg('Scan skipped: ' + (d.message || 'Attachment file not found.'));
           setTimeout(() => setOcrErrorMsg(null), 6000);
         } else {
           // Error response
@@ -174,13 +239,13 @@ export const QuotationList: React.FC<QuotationListProps> = ({
             setOcrRateLimitInfo({
               active: true, quo_id, retryAfter: retryAfterSecs, totalWait: retryAfterSecs,
               attempt, isPartialSuccess: false,
-              message: `Waiting - ${retryAfterSecs}s (Gemini AI rate limited. Otomatis coba ulang saat countdown selesai...)`,
+              message: `Waiting - ${retryAfterSecs}s (Gemini AI rate limited. Automatic retry scheduled upon countdown expiry...)`,
             });
             scheduleOcrRetry(quo_id, retryAfterSecs, attempt);
             setIsScanningOcr(false);
           } else {
             setIsScanningOcr(false);
-            setOcrErrorMsg('Scan gagal: ' + (d.message || resObj?.reason || 'Error tidak diketahui.'));
+            setOcrErrorMsg('Scan failed: ' + (d.message || resObj?.reason || 'Unknown error.'));
             setTimeout(() => setOcrErrorMsg(null), 8000);
           }
         }
@@ -189,7 +254,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
       .catch(e => {
         console.error('OCR scan error:', e);
         setIsScanningOcr(false);
-        setOcrErrorMsg('Gagal terhubung ke API OCR Scanner.');
+        setOcrErrorMsg('Failed to connect to OCR Scanner API.');
         setTimeout(() => setOcrErrorMsg(null), 5000);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -351,7 +416,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               <p style="margin: 3px 0;">Tanggal Terbit: <strong>${quo.date_issued}</strong></p>
               <p style="margin: 3px 0;">Masa Berlaku s.d: <strong style="color: #b45309;">${quo.valid_until || '14 Days'}</strong></p>
               <p style="margin: 3px 0;">Mata Uang: <strong>MYR (Malaysian Ringgit)</strong></p>
-              <p style="margin: 3px 0;">Penanggung Jawab: <strong>${quo.created_by || 'Ilham Pradani, S.T.'}</strong></p>
+              <p style="margin: 3px 0;">Penanggung Jawab: <strong>${quo.created_by || currentUserRef.current?.name || currentUserRef.current?.email || 'Sesi Tidak Terdeteksi'}</strong></p>
             </div>
           </div>
           
@@ -403,7 +468,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               <div style="display: flex; justify-content: flex-end; margin: 5px 0;">
                 <div class="stamp-box">[STAMP ABMALAYA]</div>
               </div>
-              <strong><u>Ilham Pradani, S.T.</u></strong>
+              <strong><u>${quo.created_by || currentUserRef.current?.name || currentUserRef.current?.email || 'Sesi Tidak Terdeteksi'}</u></strong>
               <p style="margin: 2px 0 0 0; color: #666;">Head of Sales & Business Development</p>
             </div>
           </div>
@@ -433,30 +498,38 @@ export const QuotationList: React.FC<QuotationListProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fetchQuotationsFromMySQL = () => {
-    // Only show loading spinner on initial load when cache is empty
-    if (quotations.length === 0) {
+  const prevQuotationsJsonRef = useRef<string>('');
+
+  const fetchQuotationsFromMySQL = (isSilent = false) => {
+    // Only show loading spinner on initial load when cache is empty and not silent
+    if (!isSilent && quotations.length === 0) {
       setIsLoading(true);
     }
     fetch(getApiUrl('/api_quotations.php'))
       .then((res) => res.json())
       .then((resData) => {
         if (resData.status === 'success' && resData.data) {
-          setQuotations(resData.data);
-          setCachedQuotations(resData.data);
+          const jsonStr = JSON.stringify(resData.data);
+          if (prevQuotationsJsonRef.current !== jsonStr) {
+            prevQuotationsJsonRef.current = jsonStr;
+            setQuotations(resData.data);
+            setCachedQuotations(resData.data);
+          }
         }
       })
       .catch((err) => console.log('Fetch quotations error:', err))
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        if (!isSilent) setIsLoading(false);
+      });
   };
 
   useEffect(() => {
-    fetchQuotationsFromMySQL();
+    fetchQuotationsFromMySQL(false);
 
-    // REALTIME LIVE DATA SYNC: Poll MySQL database every 5 seconds for status & OCR updates
+    // Silent background poll every 10 seconds — no loading toggle, no flicker
     const pollInterval = setInterval(() => {
-      fetchQuotationsFromMySQL();
-    }, 5000);
+      fetchQuotationsFromMySQL(true);
+    }, 10000);
 
     return () => clearInterval(pollInterval);
   }, []);
@@ -564,47 +637,49 @@ export const QuotationList: React.FC<QuotationListProps> = ({
       .finally(() => setIsLoading(false));
   };
 
-  const filteredQuotations = quotations.filter((q) => {
-    const term = searchTerm.toLowerCase();
-    const matchesSearch =
-      (q.quotation_number || '').toLowerCase().includes(term) ||
-      (q.company_name || '').toLowerCase().includes(term) ||
-      (q.client_name || '').toLowerCase().includes(term) ||
-      (q.client_email || '').toLowerCase().includes(term);
+  const filteredQuotations = useMemo(() => {
+    return quotations.filter((q) => {
+      const term = searchTerm.toLowerCase();
+      const matchesSearch =
+        (q.quotation_number || '').toLowerCase().includes(term) ||
+        (q.company_name || '').toLowerCase().includes(term) ||
+        (q.client_name || '').toLowerCase().includes(term) ||
+        (q.client_email || '').toLowerCase().includes(term);
 
-    const st = (q.status || 'draft').toLowerCase();
+      const st = (q.status || 'draft').toLowerCase();
 
-    // Default: exclude junk unless active tab is 'junk'
-    if (activeTab !== 'junk' && st === 'junk') {
-      return false;
-    }
+      // Default: exclude junk unless active tab is 'junk'
+      if (activeTab !== 'junk' && st === 'junk') {
+        return false;
+      }
 
-    if (activeTab === 'requisition') {
-      return matchesSearch && st === 'requisition';
-    }
-    if (activeTab === 'draft') {
-      return matchesSearch && (st === 'draft' || st === 'diproses' || st === 'siap_kirim');
-    }
-    if (activeTab === 'quotation') {
-      return matchesSearch && st === 'quotation';
-    }
-    if (activeTab === 'acc') {
-      return matchesSearch && (st === 'approved' || st === 'acc' || st === 'disetujui');
-    }
-    if (activeTab === 'done') {
-      return matchesSearch && (st === 'done_send' || st === 'sent' || st === 'deal' || st === 'terkirim');
-    }
-    if (activeTab === 'junk') {
-      return matchesSearch && st === 'junk';
-    }
+      if (activeTab === 'requisition') {
+        return matchesSearch && (st === 'requisition' || st === '0');
+      }
+      if (activeTab === 'draft') {
+        return matchesSearch && (st === 'draft' || st === 'diproses' || st === 'siap_kirim');
+      }
+      if (activeTab === 'quotation') {
+        return matchesSearch && st === 'quotation';
+      }
+      if (activeTab === 'acc') {
+        return matchesSearch && (st === 'approved' || st === 'acc' || st === 'disetujui');
+      }
+      if (activeTab === 'done') {
+        return matchesSearch && (st === 'done_send' || st === 'sent' || st === 'deal' || st === 'terkirim');
+      }
+      if (activeTab === 'junk') {
+        return matchesSearch && st === 'junk';
+      }
 
-    // For 'all' tab, exclude 'junk'
-    if (activeTab === 'all') {
-      return matchesSearch && st !== 'junk';
-    }
+      // For 'all' tab, exclude 'junk'
+      if (activeTab === 'all') {
+        return matchesSearch && st !== 'junk';
+      }
 
-    return matchesSearch;
-  });
+      return matchesSearch;
+    });
+  }, [quotations, searchTerm, activeTab]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -658,7 +733,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
           </div>
 
           <button
-            onClick={fetchQuotationsFromMySQL}
+            onClick={() => fetchQuotationsFromMySQL(false)}
             disabled={isLoading}
             className="p-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] border border-[#a0a0a0] text-[#3d3d3d] rounded-md shadow-inner transition cursor-pointer"
             title="Refresh MySQL Data"
@@ -824,6 +899,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-36">Notes</th>}
                   <th className="p-2.5 border-r border-slate-800 w-36 text-center">Status / Phase</th>
                   <th className="p-2.5 border-r border-slate-800 w-24 text-center">OCR Scan</th>
+                  <th className="p-2.5 border-r border-slate-800 w-48">Petugas & Aktivitas</th>
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-32 text-center">Approved By</th>}
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-28 text-center">Created By</th>}
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-36 text-center">Created At</th>}
@@ -834,7 +910,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               <tbody>
                 {filteredQuotations.length === 0 ? (
                   <tr>
-                    <td colSpan={showAllDbColumns ? 23 : 11} className="py-20 text-center text-slate-400 text-xs space-y-2 bg-white">
+                    <td colSpan={showAllDbColumns ? 24 : 12} className="py-20 text-center text-slate-400 text-xs space-y-2 bg-white">
                       <FileType className="w-8 h-8 text-slate-300 mx-auto" />
                       <p className="font-bold text-slate-600">No quotation data found in this view.</p>
                     </td>
@@ -979,64 +1055,110 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                           <div className="truncate max-w-[140px]" title={q.notes}>{q.notes || '—'}</div>
                         </td>
                       )}
-
-                      {/* STATUS BADGE / PHASE */}
-                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center">
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center text-xs font-sans">
                         {st === 'requisition' ? (
-                          <span className="bg-amber-50 text-amber-800 border border-amber-300 font-extrabold px-2.5 py-0.5 text-[10px] inline-flex items-center gap-1 rounded-sm">
-                            <Sparkles className="w-3 h-3 text-amber-600" />
+                          <span className="font-extrabold text-amber-700 inline-flex items-center gap-1">
+                            <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                             Requisition
                           </span>
                         ) : isDraft ? (
-                          <span className="bg-amber-100 text-amber-800 border border-amber-200 font-extrabold px-2.5 py-0.5 text-[10px] inline-flex items-center gap-1 rounded-sm">
-                            <Clock className="w-3 h-3 text-amber-600" />
+                          <span className="font-extrabold text-amber-600 inline-flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                             In Progress (Draft)
                           </span>
                         ) : isQuotation ? (
-                          <span className="bg-blue-50 text-blue-900 border border-blue-200 font-extrabold px-2.5 py-0.5 text-[10px] inline-flex items-center gap-1 rounded-sm">
-                            <Sliders className="w-3 h-3 text-blue-600" />
+                          <span className="font-extrabold text-blue-700 inline-flex items-center gap-1">
+                            <Sliders className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                             Quotation
                           </span>
                         ) : isDone ? (
-                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 font-extrabold px-2.5 py-0.5 text-[10px] inline-flex items-center gap-1 rounded-sm">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span className="font-extrabold text-emerald-700 inline-flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                             Done
                           </span>
                         ) : (
-                          <span className="bg-slate-100 text-slate-800 border border-slate-300 font-bold px-2.5 py-0.5 text-[10px] rounded-sm">
+                          <span className="font-bold text-slate-700">
                             {q.status || 'Draft'}
                           </span>
                         )}
                       </td>
 
                       {/* OCR SCAN STATUS CELL */}
-                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center">
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center text-xs font-sans">
                         {(() => {
                           const isWaitingThisRow = ocrRateLimitInfo?.active && ocrRateLimitInfo.quo_id === q.id && ocrRateLimitInfo.retryAfter > 0;
                           if (isWaitingThisRow) {
                             const secs = ocrRateLimitInfo.retryAfter;
                             const fmtTime = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`;
                             return (
-                              <span className="bg-amber-100 text-amber-900 border border-amber-300 font-extrabold px-1.5 py-0.5 rounded-sm text-[10px] inline-flex items-center gap-1 animate-pulse" title="Quota rate limited — Auto-retrying when countdown finishes">
-                                <Clock className="w-3 h-3 text-amber-600 animate-spin" />
-                                Waiting ({fmtTime})
+                              <span className="font-extrabold text-amber-700 inline-flex items-center gap-1" title="Quota rate limited — Auto-retrying when countdown finishes">
+                                <Loader2 className="w-3.5 h-3.5 text-amber-600 animate-spin shrink-0" />
+                                Waiting AI ({fmtTime})
                               </span>
                             );
                           }
                           const ocrSt = q.ocr_scan_status || 'pending';
-                          if (ocrSt === 'done') return <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold px-1.5 py-0.5 rounded-sm text-[10px] inline-flex items-center gap-1"><ShieldCheck className="w-3 h-3" />Done</span>;
-                          if (ocrSt === 'processing') return <span className="bg-blue-50 text-blue-700 border border-blue-300 font-bold px-1.5 py-0.5 rounded-sm text-[10px] inline-flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Scanning</span>;
-                          if (ocrSt === 'error') return <span className="bg-rose-50 text-rose-700 border border-rose-300 font-bold px-1.5 py-0.5 rounded-sm text-[10px] inline-flex items-center gap-1"><AlertTriangle className="w-3 h-3" />Error</span>;
-                          if (ocrSt === 'skipped') return <span className="bg-slate-100 text-slate-500 border border-slate-200 font-bold px-1.5 py-0.5 rounded-sm text-[10px]">Skipped</span>;
-                          return <span className="text-slate-400 font-bold text-[10px]">Pending</span>;
+                          if (ocrSt === 'done') return <span className="font-bold text-emerald-700 inline-flex items-center gap-1"><ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />Done</span>;
+                          if (ocrSt === 'processing') return <span className="font-bold text-blue-700 inline-flex items-center gap-1"><Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin shrink-0" />Scanning</span>;
+                          if (ocrSt === 'waiting_ai_limit' || ocrSt === 'waiting') return (
+                            <span className="font-extrabold text-amber-700 inline-flex items-center gap-1" title="AI quota rate limited — Active countdown & auto-retry pending">
+                              <Loader2 className="w-3.5 h-3.5 text-amber-600 animate-spin shrink-0" />
+                              Waiting AI (Limit)
+                            </span>
+                          );
+                          if (ocrSt === 'error') return <span className="font-bold text-rose-700 inline-flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />Error</span>;
+                          if (ocrSt === 'skipped') return <span className="font-semibold text-slate-500">Skipped</span>;
+                          return <span className="font-semibold text-slate-400">Pending</span>;
                         })()}
                       </td>
 
+                      {/* PETUGAS & AKTIVITAS COLUMN */}
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] font-sans" onClick={(e) => e.stopPropagation()}>
+                        {(() => {
+                          let logsArr: any[] = [];
+                          if (q.history_log) {
+                            try {
+                              logsArr = typeof q.history_log === 'string' ? JSON.parse(q.history_log) : q.history_log;
+                            } catch (e) {}
+                          }
+                          const latestLog = Array.isArray(logsArr) && logsArr.length > 0 ? logsArr[logsArr.length - 1] : null;
+                          
+                          const rawActorName = latestLog?.user_name || q.created_by || currentUserRef.current?.name || currentUserRef.current?.email || 'Sesi Tidak Terdeteksi';
+                          const lowerActor = rawActorName.toLowerCase();
+                          const isDummyActor = lowerActor.includes('sales engineer') || lowerActor.includes('ilham') || lowerActor.includes('system') || lowerActor.includes('ocr daemon');
+                          const actorName = isDummyActor ? (q.created_by || currentUserRef.current?.name || currentUserRef.current?.email || 'Sesi Tidak Terdeteksi') : rawActorName;
+                          const actionTitle = latestLog?.action || 'Record Initialized';
+                          const logTime    = latestLog?.timestamp ? (latestLog.timestamp.split(' ')[1] || latestLog.timestamp).substring(0, 5) : '';
+
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedHistoryQuotation(q);
+                                setIsHistoryModalOpen(true);
+                              }}
+                              className="text-left w-full hover:bg-blue-50/80 p-0.5 rounded transition cursor-pointer group"
+                              title="Click to view full activity history log"
+                            >
+                              <div className="flex items-center gap-1 font-bold text-xs text-slate-900 truncate">
+                                <User className="w-3.5 h-3.5 text-blue-600 shrink-0 group-hover:scale-110 transition-transform" />
+                                <span className="truncate">{actorName}</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-1 mt-0.5">
+                                <span className="text-[10px] font-bold text-indigo-700 truncate">
+                                  {actionTitle}
+                                </span>
+                                {logTime && <span className="text-[9px] font-mono text-slate-400 shrink-0">{logTime}</span>}
+                              </div>
+                            </button>
+                          );
+                        })()}
+                      </td>
 
                       {showAllDbColumns && (
                         <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center text-xs">
                           {q.approved_by ? (
-                            <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold px-1.5 py-0.5 rounded text-[10px]">ACC Approved</span>
+                            <span className="font-extrabold text-emerald-700">ACC Approved</span>
                           ) : (
                             <span className="text-slate-400 font-mono text-[10px]">—</span>
                           )}
@@ -1056,10 +1178,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                       )}
 
                       {/* ALERTS CELL */}
-                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center">
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center text-xs font-sans">
                         {q.unregistered_items_count && q.unregistered_items_count > 0 && (st === 'requisition' || st === 'draft' || st === 'diproses' || st === 'siap_kirim') ? (
-                          <span className="bg-[#fef3c7] text-[#92400e] border border-[#fde68a] font-extrabold px-1.5 py-0.5 rounded-sm inline-flex items-center gap-1 text-[10px]" title={`${q.unregistered_items_count} item(s) not found in product database`}>
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 animate-bounce" />
+                          <span className="font-extrabold text-amber-800 inline-flex items-center gap-1 text-[10px]" title={`${q.unregistered_items_count} item(s) not found in product database`}>
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                             <span>{q.unregistered_items_count} Unregistered</span>
                           </span>
                         ) : (
@@ -1099,6 +1221,21 @@ export const QuotationList: React.FC<QuotationListProps> = ({
 
                             {openRowActionId === q.id && (
                               <div className="absolute right-0 mt-1 w-44 bg-white border border-[#9b9b9b] rounded-md shadow-lg z-50 py-1 text-left font-sans text-xs">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenRowActionId(null);
+                                    if (ocrRetryTimerRef.current) clearTimeout(ocrRetryTimerRef.current);
+                                    ocrRetryAttemptRef.current = 0;
+                                    triggerOcrScan(q.id, 1);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-blue-50 text-blue-700 transition flex items-center gap-2 cursor-pointer font-bold"
+                                >
+                                  <ScanLine className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>Rescan AI + IMPA</span>
+                                </button>
+
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -1150,7 +1287,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   className="w-full text-left px-3.5 py-2 hover:bg-blue-50 text-blue-700 transition flex items-center gap-2 cursor-pointer font-bold"
                                 >
                                   <Database className="w-3.5 h-3.5 text-blue-600" />
-                                  <span>Lihat Versi Lengkap</span>
+                                  <span>View Full Record (DB)</span>
                                 </button>
                                 
                                 <div className="border-t border-slate-100 my-1"></div>
@@ -1311,7 +1448,23 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   <FileType className="w-4 h-4 text-[#0080d0]" />
                   <div>
                     <h3 className="font-extrabold text-xs text-[#3d3d3d]">Full Info — SPH Quotation</h3>
-                    <p className="text-[9px] text-slate-500 font-mono">{activeQuotation.quotation_number}</p>
+                    <select
+                      value={activeQuotation.id}
+                      onChange={(e) => {
+                        const target = quotations.find((q) => q.id === e.target.value);
+                        if (target) {
+                          setSelectedInfoQuotation(target);
+                          setActiveRowId(target.id);
+                        }
+                      }}
+                      className="text-[9.5px] font-mono font-bold bg-white/90 border border-slate-400 rounded px-1.5 py-0.5 text-slate-800 cursor-pointer shadow-2xs mt-0.5 max-w-[260px] truncate"
+                    >
+                      {filteredQuotations.map((q) => (
+                        <option key={q.id} value={q.id}>
+                          {q.quotation_number || q.id} — {q.client_name || 'Client'} ({getQuotationCompany(q)})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -1391,11 +1544,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                         <div className="w-full h-1.5 rounded-full bg-slate-200 overflow-hidden">
                           <div
                             className={`h-full rounded-full transition-all ${
-                              ocrRateLimitInfo.isPartialSuccess ? 'bg-amber-400' : 'bg-orange-400'
+                              ocrRateLimitInfo.isPartialSuccess ? 'bg-amber-500' : 'bg-orange-500'
                             }`}
                             style={{
-                              width: `${Math.max(2, ((ocrRateLimitInfo.totalWait - ocrRateLimitInfo.retryAfter) / ocrRateLimitInfo.totalWait) * 100)}%`,
-                              transition: 'width 1s linear'
+                              width: `${Math.max(0, Math.min(100, 100 - (ocrRateLimitInfo.retryAfter / (ocrRateLimitInfo.totalWait || 60)) * 100))}%`
                             }}
                           />
                         </div>
@@ -1426,8 +1578,8 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   <svg className="w-3.5 h-3.5 text-emerald-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <polyline points="20 6 9 17 4 12"/>
                   </svg>
-                  <p className="text-[10px] text-emerald-700 font-semibold flex-1">{ocrSuccessMsg}</p>
-                  <button onClick={() => setOcrSuccessMsg(null)} className="text-emerald-400 hover:text-emerald-600">
+                  <p className="text-[10px] text-emerald-800 font-semibold flex-1">{ocrSuccessMsg}</p>
+                  <button onClick={() => setOcrSuccessMsg(null)} className="text-emerald-500 hover:text-emerald-700">
                     <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                   </button>
                 </div>
@@ -1470,7 +1622,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               </div>
 
               {/* Drawer Content Area — Clean Border-Separated Flat Layout */}
-              <div className="flex-1 p-4 overflow-y-auto bg-white divide-y divide-slate-200 text-[11px] text-[#3d3d3d] space-y-4">
+              <div key={activeQuotation.id} className="flex-1 p-4 overflow-y-auto bg-white divide-y divide-slate-200 text-[11px] text-[#3d3d3d] space-y-4">
                 
                 {drawerTab === 'summary' ? (
                   <>
@@ -1834,7 +1986,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                           
                           {showEmailBody && (
                             <div className="mt-2 p-3 border-t border-b border-slate-200 font-mono text-[10px] whitespace-pre-wrap leading-relaxed text-slate-700 select-text max-h-80 overflow-y-auto">
-                              {activeQuotation.email_source.message_body || 'No email body text stored.'}
+                              {cleanEmailBodyText(activeQuotation.email_source.message_body) || 'No email body text stored.'}
                             </div>
                           )}
                         </div>
@@ -1851,7 +2003,31 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                 {/* ── TAB: EDIT HISTORY ────────────────────────────────────────── */}
                 {drawerTab === 'history' && (
                   <div className="pt-1 space-y-3">
-                    <h4 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">System Audit Trail & History Log</h4>
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                      <h4 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">System Audit Trail & History Log</h4>
+                      <div className="flex items-center gap-1.5 font-mono text-[9.5px]">
+                        <span className="text-slate-400 font-bold">OCR Status:</span>
+                        {activeQuotation.ocr_scan_status === 'done' && (
+                          <span className="bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded text-[9px] uppercase border border-emerald-300">Done (Scanned)</span>
+                        )}
+                        {(activeQuotation.ocr_scan_status === 'waiting_ai_limit' || activeQuotation.ocr_scan_status === 'waiting') && (
+                          <span className="bg-amber-100 text-amber-900 font-extrabold px-2 py-0.5 rounded text-[9px] uppercase border border-amber-300 inline-flex items-center gap-1">
+                            <Loader2 className="w-3 h-3 text-amber-600 animate-spin" />
+                            Waiting AI (Limit)
+                          </span>
+                        )}
+                        {activeQuotation.ocr_scan_status === 'skipped' && (
+                          <span className="bg-slate-200 text-slate-700 font-extrabold px-2 py-0.5 rounded text-[9px] uppercase border border-slate-300">Skipped (No Attachment)</span>
+                        )}
+                        {activeQuotation.ocr_scan_status === 'error' && (
+                          <span className="bg-rose-100 text-rose-800 font-extrabold px-2 py-0.5 rounded text-[9px] uppercase border border-rose-300">Error</span>
+                        )}
+                        {(!activeQuotation.ocr_scan_status || activeQuotation.ocr_scan_status === 'pending') && (
+                          <span className="bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded text-[9px] uppercase">Pending</span>
+                        )}
+                      </div>
+                    </div>
+
                     {(() => {
                       let logs: any[] = [];
                       try {
@@ -1859,23 +2035,46 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                           logs = JSON.parse(activeQuotation.history_log);
                         }
                       } catch (e) {}
-                      if (!Array.isArray(logs) || logs.length === 0) {
+
+                      // Filter out obsolete pre-fix OCR error logs if status is skipped or done
+                      const currentOcrSt = activeQuotation.ocr_scan_status;
+                      const activeLogs = Array.isArray(logs) ? logs.filter((entry: any) => {
+                        const actionStr = String(entry?.action || '').toLowerCase();
+                        const detailsStr = String(entry?.details || '');
+                        const isOcr = actionStr.includes('ocr');
+                        const isObsoleteError = detailsStr.includes('HTTP 404') || detailsStr.includes('URL: NONE') || detailsStr.includes('Download failed');
+                        if (isOcr && isObsoleteError && (currentOcrSt === 'skipped' || currentOcrSt === 'done')) {
+                          return false;
+                        }
+                        return true;
+                      }) : [];
+
+                      if (activeLogs.length === 0) {
                         return (
                           <div className="py-16 text-center text-slate-400 text-xs font-bold space-y-2">
                             <Clock className="w-7 h-7 mx-auto text-slate-300" />
-                            <p>No audit trail records found for this quotation.</p>
+                            <p>No active audit trail records found for this quotation.</p>
                           </div>
                         );
                       }
                       return (
                         <div className="divide-y divide-slate-100">
-                          {[...logs].reverse().map((entry: any, idx: number) => (
+                          {[...activeLogs].reverse().map((entry: any, idx: number) => (
                             <div key={idx} className="py-2.5 space-y-1">
                               <div className="flex items-center justify-between">
                                 <span className="bg-slate-100 text-slate-700 font-black px-2 py-0.5 rounded-sm text-[9px] uppercase tracking-wider">{entry.action}</span>
                                 <span className="font-mono text-[9px] text-slate-400">{entry.timestamp}</span>
                               </div>
-                              <p className="font-bold text-[10px] text-slate-800">{entry.user_name} <span className="text-slate-400 font-normal">({entry.user_email})</span></p>
+                              {(() => {
+                                const rawLogName = entry.user_name || activeQuotation.created_by || currentUserRef.current?.name || currentUserRef.current?.email || 'Sesi Tidak Terdeteksi';
+                                const lowerLogName = rawLogName.toLowerCase();
+                                const isDummyLog = lowerLogName.includes('sales engineer') || lowerLogName.includes('ilham') || lowerLogName.includes('system') || lowerLogName.includes('ocr daemon');
+                                const displayLogName = isDummyLog ? (activeQuotation.created_by || currentUserRef.current?.name || currentUserRef.current?.email || 'Sesi Tidak Terdeteksi') : rawLogName;
+                                const displayEmail = (entry.user_email && !entry.user_email.toLowerCase().includes('system@') && !entry.user_email.toLowerCase().includes('daemon@'))
+                                  ? entry.user_email
+                                  : (currentUserRef.current?.email || '');
+                                return <p className="font-bold text-[10px] text-slate-800">{displayLogName} {displayEmail && <span className="text-slate-400 font-normal">({displayEmail})</span>}</p>;
+                              })()}
                               <p className="text-[10px] text-slate-600">{entry.details}</p>
                             </div>
                           ))}

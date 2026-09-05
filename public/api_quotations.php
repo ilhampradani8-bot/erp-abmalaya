@@ -264,7 +264,7 @@ try {
         $tax_amount = isset($input['tax_amount']) ? (float)$input['tax_amount'] : 0.00;
         $grand_total = isset($input['grand_total']) ? (float)$input['grand_total'] : 0.00;
         $notes = isset($input['notes']) && !empty($input['notes']) ? $input['notes'] : 'RFQ quotation record';
-        $created_by = isset($input['created_by']) && !empty($input['created_by']) ? $input['created_by'] : 'Ilham Pradani, S.T. (abmalaya.com)';
+        $created_by = isset($input['created_by']) && !empty($input['created_by']) ? $input['created_by'] : 'Sesi Tidak Terdeteksi';
 
         $rfq_id_val = ($rfq_id_raw > 0) ? (int)$rfq_id_raw : null;
 

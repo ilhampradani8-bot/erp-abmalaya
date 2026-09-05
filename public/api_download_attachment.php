@@ -93,7 +93,7 @@ try {
     appendRfqHistoryLog(
         $db_conn, $clean_id,
         'Download GDrive File',
-        'System Downloader', 'system@abmalaya.com',
+        'Sesi Downloader', 'downloader@abmalaya.com',
         "Successfully downloaded linked file to file_inbox/rfq-{$clean_id}/{$local_filename}"
     );
 
@@ -118,7 +118,7 @@ try {
         $up_stmt->close();
     }
 
-    appendRfqHistoryLog($db_conn, $clean_id, 'GDrive Download Error', 'System Downloader', 'system@abmalaya.com', $err_msg);
+    appendRfqHistoryLog($db_conn, $clean_id, 'GDrive Download Error', 'Sesi Downloader', 'downloader@abmalaya.com', $err_msg);
 
     echo json_encode(['status' => 'error', 'message' => $err_msg]);
 }

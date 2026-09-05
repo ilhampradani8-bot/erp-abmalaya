@@ -39,9 +39,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const activeUser = currentUser || (dbUsers.length > 0 ? dbUsers[0] : {
-    id: 'USR-001',
-    name: 'Ilham Pradani, S.T.',
-    email: 'ilham@abmalaya.com',
+    id: 'USR-101',
+    name: 'Aiman Zaki',
+    email: 'aimanzaki@abmalaya.com',
     role: 'Admin' as const,
     department: 'Sales',
     status: 'Active' as const,

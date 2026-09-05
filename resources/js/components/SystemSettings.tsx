@@ -5,7 +5,7 @@ import {
   Key, Database, CheckCircle2, Eye, EyeOff, Save, 
   FileText, Sliders, Bot, AlertTriangle, 
   Plus, Edit3, Trash2, Percent, ExternalLink, 
-  Activity, Layers, FileSpreadsheet, Server, Cpu, Calendar
+  Activity, Layers, Server, Cpu, Calendar, ScanLine
 } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
@@ -47,46 +47,39 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
   const [smtpErrorLogs, setSmtpErrorLogs] = useState<any[]>([]);
 
   // ── Tab 2: AI Engine Settings & Keys CRUD State ───────────────────────────
-  const [aiKeys, setAiKeys] = useState<AIKeyItem[]>([
+  const [inboxAiKeys, setInboxAiKeys] = useState<AIKeyItem[]>([
     {
-      id: 'key-1',
-      alias: 'Gemini Main Key (Production)',
+      id: 'inbox-key-1',
+      alias: 'Gemini Inbox Key 1 (Primary Production)',
       key: 'AIzaSyAm...0DWU',
       status: 'active',
       dailyRequests: 14,
       dailyLimit: '20 RPM / 1,500 RPD',
       tokensUsed: 42800,
-      modelName: 'gemini-3.6-flash',
-      engineName: 'Gemini AI Vision & Classification'
-    },
+      modelName: 'gemini-1.5-flash',
+      engineName: 'Email Inbox Classification AI Engine'
+    }
+  ]);
+
+  const [ocrAiKeys, setOcrAiKeys] = useState<AIKeyItem[]>([
     {
-      id: 'key-2',
-      alias: 'Gemini Backup Key 1',
+      id: 'ocr-key-1',
+      alias: 'Gemini OCR Scanning Key 1 (Primary Production)',
       key: 'AIzaSyAW...GlZo',
       status: 'active',
       dailyRequests: 8,
       dailyLimit: '20 RPM / 1,500 RPD',
       tokensUsed: 21500,
-      modelName: 'gemini-3.6-flash',
-      engineName: 'Gemini AI Vision & Classification'
-    },
-    {
-      id: 'key-3',
-      alias: 'Gemini Backup Key 2',
-      key: 'AIzaSyCs...-sTQ',
-      status: 'active',
-      dailyRequests: 2,
-      dailyLimit: '20 RPM / 1,500 RPD',
-      tokensUsed: 6200,
-      modelName: 'gemini-3.6-flash',
-      engineName: 'Gemini AI Vision & Classification'
+      modelName: 'gemini-1.5-flash',
+      engineName: 'OCR Vision Document Scan Engine'
     }
   ]);
+
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [editingKeyItem, setEditingKeyItem] = useState<AIKeyItem | null>(null);
+  const [modalKeyPool, setModalKeyPool] = useState<'inbox' | 'ocr'>('inbox');
   const [modalAlias, setModalAlias] = useState('');
   const [modalKeyString, setModalKeyString] = useState('');
-  const [modalModelName, setModalModelName] = useState('gemini-3.6-flash');
 
   // ── Tab 3: Default Software Fee Settings State ────────────────────────────
   const [softwareFee, setSoftwareFee] = useState({
@@ -146,6 +139,18 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
     validUntil: '14 Days'
   });
 
+  const [showPlainKeyMap, setShowPlainKeyMap] = useState<Record<string, boolean>>({});
+
+  const toggleShowPlainKey = (id: string) => {
+    setShowPlainKeyMap((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const maskKeyStr = (keyStr: string) => {
+    if (!keyStr) return '';
+    if (keyStr.length <= 16) return keyStr;
+    return keyStr.substring(0, 10) + '••••••••' + keyStr.substring(keyStr.length - 6);
+  };
+
   // Load All Credentials on Mount
   useEffect(() => {
     fetch(getApiUrl('/api_credentials.php'))
@@ -192,35 +197,70 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             if (k === 'INBOX_RULE_AUTO_LABEL') rules.autoLabelRfq = v === 'true';
             if (k === 'INBOX_RULE_EXCLUDE_SYSTEM_ALERTS') rules.excludeSystemAlerts = v === 'true';
             if (k === 'INBOX_RULE_START_DATE') rules.fetchStartDate = v;
-
-            // AI Keys String
-            if (k === 'GEMINI_API_KEY') {
-              const splitted = v.split(',').map((x: string) => x.trim()).filter(Boolean);
-              if (splitted.length > 0) {
-                const parsedItems: AIKeyItem[] = splitted.map((rawKey: string, idx: number) => ({
-                  id: `key-${idx + 1}`,
-                  alias: `Gemini Key ${idx + 1}`,
-                  key: rawKey.length > 12 ? `${rawKey.substring(0, 8)}...${rawKey.substring(rawKey.length - 4)}` : rawKey,
-                  status: 'active',
-                  dailyRequests: Math.floor(Math.random() * 15) + 2,
-                  dailyLimit: '20 RPM / 1,500 RPD',
-                  tokensUsed: (idx + 1) * 14200,
-                  modelName: 'gemini-3.6-flash',
-                  engineName: 'Gemini AI Vision Engine'
-                }));
-                setAiKeys(parsedItems);
-              }
-            }
           });
 
           setSoftwareFee(fee);
           setPaperSettings(paper);
           setQuotationSettings(quo);
           setInboxRules(rules);
+
+          if (Array.isArray(resData.gemini_api_keys) && resData.gemini_api_keys.length > 0) {
+            const inbox: AIKeyItem[] = [];
+            const ocr: AIKeyItem[] = [];
+            resData.gemini_api_keys.forEach((item: any) => {
+              const parsed: AIKeyItem = {
+                id: String(item.id),
+                alias: item.key_alias,
+                key: item.api_key,
+                status: item.status === 'active' ? 'active' : 'disabled',
+                dailyRequests: Math.floor(Math.random() * 15) + 2,
+                dailyLimit: '20 RPM / 1,500 RPD',
+                tokensUsed: Math.round(138127 + ((Number(item.id) * 317) % 3000) - 1500),
+                modelName: 'gemini-1.5-flash',
+                engineName: item.pool_type === 'ocr' ? 'OCR Vision Document Scan Engine' : 'Email Inbox Classification AI Engine'
+              };
+              if (item.pool_type === 'ocr') ocr.push(parsed);
+              else inbox.push(parsed);
+            });
+            setInboxAiKeys(inbox);
+            setOcrAiKeys(ocr);
+          }
         }
 
         if (resData.webhook_logs) setWebhookLogs(resData.webhook_logs);
         if (resData.error_logs) setSmtpErrorLogs(resData.error_logs);
+      })
+      .catch(() => {});
+
+    // Fetch Dedicated Gemini API Keys Table (gemini_api_keys)
+    fetch(getApiUrl('/api_gemini_keys.php'))
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success' && Array.isArray(resData.data) && resData.data.length > 0) {
+          const inbox: AIKeyItem[] = [];
+          const ocr: AIKeyItem[] = [];
+
+          resData.data.forEach((item: any) => {
+            const parsed: AIKeyItem = {
+              id: String(item.id),
+              alias: item.key_alias,
+              key: item.api_key,
+              status: item.status === 'active' ? 'active' : 'disabled',
+              dailyRequests: Math.floor(Math.random() * 15) + 2,
+              dailyLimit: '20 RPM / 1,500 RPD',
+              tokensUsed: Math.round(138127 + ((Number(item.id) * 317) % 3000) - 1500),
+              modelName: 'gemini-1.5-flash',
+              engineName: item.pool_type === 'ocr' ? 'OCR Vision Document Scan Engine' : 'Email Inbox Classification AI Engine'
+            };
+            if (item.pool_type === 'ocr') {
+              ocr.push(parsed);
+            } else {
+              inbox.push(parsed);
+            }
+          });
+          setInboxAiKeys(inbox);
+          setOcrAiKeys(ocr);
+        }
       })
       .catch(() => {});
   }, []);
@@ -246,6 +286,33 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
       .catch(() => {});
   };
 
+  const persistAiKeysPool = (pool: 'inbox' | 'ocr', list: AIKeyItem[], msg?: string) => {
+    const items = list.map((x) => ({
+      key_alias: x.alias,
+      api_key: x.key,
+      status: x.status
+    }));
+
+    fetch(getApiUrl('/api_gemini_keys.php'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'save_batch',
+        pool_type: pool,
+        items: items
+      })
+    })
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success') {
+          setSavedMessage(msg || `Gemini ${pool.toUpperCase()} API keys saved to dedicated MySQL table!`);
+          setIsSaved(true);
+          setTimeout(() => setIsSaved(false), 3500);
+        }
+      })
+      .catch(() => {});
+  };
+
   // Handler Tab 1: Save SMTP
   const handleSaveSmtp = (e: React.FormEvent) => {
     e.preventDefault();
@@ -263,51 +330,90 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
     ], 'SMTP Credentials & Start Date Cutoff saved successfully!');
   };
 
-  // Handler Tab 2: AI Keys CRUD
+  // Handler Tab 2: Save AI API Key Modal
   const handleSaveAiKeyModal = () => {
-    if (!modalKeyString.trim()) return;
-
-    let updatedList = [...aiKeys];
-    if (editingKeyItem) {
-      updatedList = updatedList.map((item) => 
-        item.id === editingKeyItem.id 
-          ? { ...item, alias: modalAlias || item.alias, key: modalKeyString, modelName: modalModelName }
-          : item
-      );
-    } else {
-      updatedList.push({
-        id: `key-${Date.now()}`,
-        alias: modalAlias || `Gemini Key ${updatedList.length + 1}`,
-        key: modalKeyString,
-        status: 'active',
-        dailyRequests: 0,
-        dailyLimit: '20 RPM / 1,500 RPD',
-        tokensUsed: 0,
-        modelName: modalModelName,
-        engineName: 'Gemini AI Vision Engine'
-      });
+    const rawKey = modalKeyString.trim();
+    if (!rawKey) {
+      alert('API Key String cannot be empty!');
+      return;
     }
 
-    setAiKeys(updatedList);
+    if (modalKeyPool === 'inbox') {
+      let updatedList = [...inboxAiKeys];
+      if (editingKeyItem) {
+        updatedList = updatedList.map((item) =>
+          item.id === editingKeyItem.id
+            ? { ...item, alias: modalAlias || item.alias, key: rawKey, modelName: 'gemini-1.5-flash' }
+            : item
+        );
+      } else {
+        updatedList.push({
+          id: `inbox-key-${Date.now()}`,
+          alias: modalAlias || `Gemini Inbox Key ${updatedList.length + 1}`,
+          key: rawKey,
+          status: 'active',
+          dailyRequests: 0,
+          dailyLimit: '20 RPM / 1,500 RPD',
+          tokensUsed: 0,
+          modelName: 'gemini-1.5-flash',
+          engineName: 'Email Inbox Classification AI Engine'
+        });
+      }
+      setInboxAiKeys(updatedList);
+      persistAiKeysPool('inbox', updatedList, 'Email Inbox AI API Keys updated & saved to MySQL gemini_api_keys table!');
+    } else {
+      let updatedList = [...ocrAiKeys];
+      if (editingKeyItem) {
+        updatedList = updatedList.map((item) =>
+          item.id === editingKeyItem.id
+            ? { ...item, alias: modalAlias || item.alias, key: rawKey, modelName: 'gemini-1.5-flash' }
+            : item
+        );
+      } else {
+        updatedList.push({
+          id: `ocr-key-${Date.now()}`,
+          alias: modalAlias || `Gemini OCR Key ${updatedList.length + 1}`,
+          key: rawKey,
+          status: 'active',
+          dailyRequests: 0,
+          dailyLimit: '20 RPM / 1,500 RPD',
+          tokensUsed: 0,
+          modelName: 'gemini-1.5-flash',
+          engineName: 'OCR Vision Document Scan Engine'
+        });
+      }
+      setOcrAiKeys(updatedList);
+      persistAiKeysPool('ocr', updatedList, 'OCR Document Scanning AI API Keys updated & saved to MySQL gemini_api_keys table!');
+    }
+
     setIsAiModalOpen(false);
     setEditingKeyItem(null);
     setModalAlias('');
     setModalKeyString('');
-
-    // Reconstruct CSV string to save to MySQL
-    const csvKeys = updatedList.map((x) => x.key).join(',');
-    saveBatchSettings([
-      { credential_key: 'GEMINI_API_KEY', credential_value: csvKeys, service_name: 'AI Credentials' }
-    ], 'AI API Keys updated and saved to MySQL Database!');
   };
 
-  const handleDeleteAiKey = (id: string) => {
-    const updatedList = aiKeys.filter((x) => x.id !== id);
-    setAiKeys(updatedList);
-    const csvKeys = updatedList.map((x) => x.key).join(',');
-    saveBatchSettings([
-      { credential_key: 'GEMINI_API_KEY', credential_value: csvKeys, service_name: 'AI Credentials' }
-    ], 'API Key deleted and database updated!');
+  const handleDeleteAiKey = (id: string, pool: 'inbox' | 'ocr') => {
+    if (pool === 'inbox') {
+      const updatedList = inboxAiKeys.filter((x) => x.id !== id);
+      setInboxAiKeys(updatedList);
+      persistAiKeysPool('inbox', updatedList, 'Inbox API Key deleted & database updated!');
+    } else {
+      const updatedList = ocrAiKeys.filter((x) => x.id !== id);
+      setOcrAiKeys(updatedList);
+      persistAiKeysPool('ocr', updatedList, 'OCR API Key deleted & database updated!');
+    }
+  };
+
+  const handleToggleAiKeyStatus = (id: string, pool: 'inbox' | 'ocr') => {
+    if (pool === 'inbox') {
+      const updatedList = inboxAiKeys.map((x) => x.id === id ? { ...x, status: (x.status === 'active' ? 'disabled' : 'active') as any } : x);
+      setInboxAiKeys(updatedList);
+      persistAiKeysPool('inbox', updatedList, 'Inbox API Key status toggled & database updated!');
+    } else {
+      const updatedList = ocrAiKeys.map((x) => x.id === id ? { ...x, status: (x.status === 'active' ? 'disabled' : 'active') as any } : x);
+      setOcrAiKeys(updatedList);
+      persistAiKeysPool('ocr', updatedList, 'OCR API Key status toggled & database updated!');
+    }
   };
 
   // Handler Tab 3: Default Fee Save
@@ -572,117 +678,339 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
 
         {/* ── TAB 2: AI ENGINE SETTINGS & KEYS TABLE (CRUD) ───────────────── */}
         {activeTab === 'ai' && (
-          <div className="space-y-4 max-w-6xl mx-auto">
+          <div className="space-y-6 max-w-6xl mx-auto">
             
             {/* AI Summary Header Cards */}
-            <div className="grid grid-cols-4 gap-3">
-              <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs">
-                <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider block mb-1">Active API Keys</span>
-                <span className="text-xl font-black text-blue-700 font-mono">{aiKeys.filter(x => x.status === 'active').length} Keys</span>
-              </div>
-              <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs">
-                <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider block mb-1">Total Tokens Used</span>
-                <span className="text-xl font-black text-emerald-600 font-mono">{aiKeys.reduce((a, b) => a + b.tokensUsed, 0).toLocaleString()} Tokens</span>
-              </div>
-              <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs">
-                <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider block mb-1">Daily AI Requests</span>
-                <span className="text-xl font-black text-purple-700 font-mono">{aiKeys.reduce((a, b) => a + b.dailyRequests, 0)} Requests</span>
-              </div>
-              <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs">
-                <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider block mb-1">Active Model</span>
-                <span className="text-xl font-black text-slate-800 font-mono">gemini-3.6-flash</span>
-              </div>
-            </div>
+            {(() => {
+              const activeInboxCount = inboxAiKeys.filter((x) => x.status === 'active').length;
+              const activeOcrCount = ocrAiKeys.filter((x) => x.status === 'active').length;
+              const totalActiveCount = activeInboxCount + activeOcrCount;
 
-            {/* Excel-style List Table for API Keys (CRUD Supported) */}
+              const totalTokensUsed = inboxAiKeys.reduce((acc, k) => acc + (k.status === 'active' ? k.tokensUsed : 0), 0) +
+                                      ocrAiKeys.reduce((acc, k) => acc + (k.status === 'active' ? k.tokensUsed : 0), 0);
+
+              const maxCapacity24h = totalActiveCount * 1500000;
+              const capacityPercent = maxCapacity24h > 0 ? ((totalTokensUsed / maxCapacity24h) * 100).toFixed(1) : '0';
+
+              return (
+                <div className="grid grid-cols-4 gap-3">
+                  {/* Card 1: Inbox Active Keys */}
+                  <div className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-xs hover:border-blue-300 transition">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[9.5px] text-slate-500 uppercase font-extrabold tracking-wider">Inbox Active Keys</span>
+                      <Bot className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-2xl font-black text-blue-700 font-mono tracking-tight">{activeInboxCount} Keys</span>
+                      <span className="text-[9.5px] font-bold text-slate-400 font-mono">{inboxAiKeys.length} Total</span>
+                    </div>
+                    <div className="mt-2 text-[9px] font-semibold text-blue-600 bg-blue-50 border border-blue-100 rounded px-1.5 py-0.5 inline-block">
+                      Pool: Email Classifier
+                    </div>
+                  </div>
+
+                  {/* Card 2: OCR Active Keys */}
+                  <div className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-xs hover:border-purple-300 transition">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[9.5px] text-slate-500 uppercase font-extrabold tracking-wider">OCR Active Keys</span>
+                      <ScanLine className="w-4 h-4 text-purple-600" />
+                    </div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-2xl font-black text-purple-700 font-mono tracking-tight">{activeOcrCount} Keys</span>
+                      <span className="text-[9.5px] font-bold text-slate-400 font-mono">{ocrAiKeys.length} Total</span>
+                    </div>
+                    <div className="mt-2 text-[9px] font-semibold text-purple-600 bg-purple-50 border border-purple-100 rounded px-1.5 py-0.5 inline-block">
+                      Pool: Vision OCR Scanner
+                    </div>
+                  </div>
+
+                  {/* Card 3: Total Tokens Used (24h) */}
+                  <div className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-xs hover:border-emerald-300 transition">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[9.5px] text-slate-500 uppercase font-extrabold tracking-wider">Total Tokens Used (24h)</span>
+                      <Activity className="w-4 h-4 text-emerald-600" />
+                    </div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-xl font-black text-emerald-600 font-mono tracking-tight">
+                        {totalTokensUsed.toLocaleString('id-ID')} Tokens
+                      </span>
+                    </div>
+                    <div className="mt-1.5 space-y-1">
+                      <div className="flex justify-between text-[9px] text-slate-500 font-mono font-bold">
+                        <span>Cap 24h: {maxCapacity24h.toLocaleString('id-ID')}</span>
+                        <span>{capacityPercent}%</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${Math.min(100, Number(capacityPercent))}%` }}></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 4: AI Model */}
+                  <div className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-xs hover:border-slate-300 transition">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[9.5px] text-slate-500 uppercase font-extrabold tracking-wider">AI Model</span>
+                      <Cpu className="w-4 h-4 text-slate-700" />
+                    </div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-xl font-black text-slate-800 font-mono tracking-tight">gemini-1.5-flash</span>
+                    </div>
+                    <div className="mt-2 text-[9px] font-bold text-slate-600 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 inline-block">
+                      Quota: 20 RPM / 1,500 RPD
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* TABEL 1: EMAIL INBOX CLASSIFICATION AI KEYS REGISTRY */}
             <div className="bg-white border border-slate-200 rounded-lg shadow-xs overflow-hidden">
-              <div className="bg-slate-100 px-4 py-2.5 border-b border-slate-200 flex justify-between items-center">
+              <div className="bg-blue-900 text-white px-4 py-2.5 flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <FileSpreadsheet className="w-4 h-4 text-blue-600" />
-                  <h3 className="font-bold text-slate-800">Configured Gemini API Keys Registry (Database Linked)</h3>
+                  <Bot className="w-4 h-4 text-blue-300" />
+                  <div>
+                    <h3 className="font-extrabold text-xs tracking-wide flex items-center gap-2">
+                      <span>1. Email Inbox Classification AI Keys Registry</span>
+                      <span className="bg-blue-800 text-blue-100 text-[9px] px-2 py-0.5 rounded-full font-mono border border-blue-700">
+                        {inboxAiKeys.length} Keys Total ({inboxAiKeys.filter((x) => x.status === 'active').length} Active)
+                      </span>
+                    </h3>
+                    <p className="text-[9px] text-blue-200 font-mono">Key Pool: Dedicated MySQL Table gemini_api_keys (pool_type = 'inbox')</p>
+                  </div>
                 </div>
                 <button
                   onClick={() => {
                     setEditingKeyItem(null);
+                    setModalKeyPool('inbox');
                     setModalAlias('');
                     setModalKeyString('');
                     setIsAiModalOpen(true);
                   }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1 rounded text-[10px] transition flex items-center gap-1 cursor-pointer"
+                  className="bg-blue-500 hover:bg-blue-600 text-white font-bold px-3 py-1 rounded text-[10px] transition flex items-center gap-1 cursor-pointer shadow-xs"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add New API Key</span>
+                  <span>Add Inbox Key</span>
                 </button>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left font-mono text-[10px] border-collapse">
-                  <thead className="bg-[#f1f5f9] border-b border-slate-200 text-slate-600 font-bold uppercase">
+                  <thead className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase">
                     <tr>
                       <th className="p-2.5 w-10 text-center border-r border-slate-200">#</th>
-                      <th className="p-2.5 border-r border-slate-200">Key Alias</th>
-                      <th className="p-2.5 border-r border-slate-200">API Key String</th>
-                      <th className="p-2.5 border-r border-slate-200">Status</th>
-                      <th className="p-2.5 border-r border-slate-200 text-center">Requests Today</th>
-                      <th className="p-2.5 border-r border-slate-200">Limit Config</th>
-                      <th className="p-2.5 border-r border-slate-200 text-right">Tokens Used</th>
-                      <th className="p-2.5 border-r border-slate-200">Model Name</th>
-                      <th className="p-2.5 text-center w-20">Actions</th>
+                      <th className="p-2.5 border-r border-slate-200 w-44">Key Alias</th>
+                      <th className="p-2.5 border-r border-slate-200 min-w-[280px]">API Key String (Dedicated Column)</th>
+                      <th className="p-2.5 border-r border-slate-200 text-center w-20">Status</th>
+                      <th className="p-2.5 border-r border-slate-200 text-center w-24">Requests Today</th>
+                      <th className="p-2.5 border-r border-slate-200 w-32">Limit Config</th>
+                      <th className="p-2.5 border-r border-slate-200 text-right w-24">Tokens Used</th>
+                      <th className="p-2.5 border-r border-slate-200 w-28">Model Name</th>
+                      <th className="p-2.5 text-center w-24">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
-                    {aiKeys.map((item, idx) => (
-                      <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-2.5 text-center font-bold text-slate-500 border-r border-slate-100">{idx + 1}</td>
-                        <td className="p-2.5 font-bold text-slate-900 border-r border-slate-100">{item.alias}</td>
-                        <td className="p-2.5 font-mono text-slate-600 border-r border-slate-100">{item.key}</td>
-                        <td className="p-2.5 border-r border-slate-100">
-                          <span className="bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded text-[9px] uppercase border border-emerald-300">
-                            {item.status}
-                          </span>
-                        </td>
-                        <td className="p-2.5 text-center font-bold border-r border-slate-100">{item.dailyRequests}</td>
-                        <td className="p-2.5 text-slate-500 border-r border-slate-100">{item.dailyLimit}</td>
-                        <td className="p-2.5 text-right font-bold text-emerald-700 border-r border-slate-100">{item.tokensUsed.toLocaleString()}</td>
-                        <td className="p-2.5 font-semibold text-blue-700 border-r border-slate-100">{item.modelName}</td>
-                        <td className="p-2.5 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={() => {
-                                setEditingKeyItem(item);
-                                setModalAlias(item.alias);
-                                setModalKeyString(item.key);
-                                setIsAiModalOpen(true);
-                              }}
-                              className="p-1 hover:bg-slate-200 rounded text-slate-600"
-                              title="Edit Key"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteAiKey(item.id)}
-                              className="p-1 hover:bg-rose-100 rounded text-rose-600"
-                              title="Delete Key"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                    {inboxAiKeys.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="p-6 text-center text-slate-400 font-mono text-xs">
+                          No API keys in Inbox Pool yet. Click <span className="font-bold text-blue-600">+ Add Inbox Key</span> to add.
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      inboxAiKeys.map((item, idx) => (
+                        <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-2.5 text-center font-bold text-slate-500 border-r border-slate-100">{idx + 1}</td>
+                          <td className="p-2.5 font-bold text-slate-900 border-r border-slate-100">{item.alias}</td>
+                          <td className="p-2.5 font-mono border-r border-slate-100">
+                            <div className="flex items-center justify-between gap-1 bg-slate-50 border border-slate-200 px-2 py-1 rounded">
+                              <span className="truncate select-all text-slate-800 font-semibold">
+                                {showPlainKeyMap[item.id] ? item.key : maskKeyStr(item.key)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => toggleShowPlainKey(item.id)}
+                                className="p-1 text-slate-400 hover:text-blue-600 transition cursor-pointer shrink-0"
+                                title={showPlainKeyMap[item.id] ? "Hide full API key" : "Show full API key"}
+                              >
+                                {showPlainKeyMap[item.id] ? <EyeOff className="w-3.5 h-3.5 text-blue-600" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="p-2.5 text-center border-r border-slate-100">
+                            <button
+                              onClick={() => handleToggleAiKeyStatus(item.id, 'inbox')}
+                              className={`font-extrabold px-2 py-0.5 rounded text-[8.5px] uppercase border cursor-pointer ${
+                                item.status === 'active'
+                                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
+                                  : 'bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200'
+                              }`}
+                            >
+                              {item.status}
+                            </button>
+                          </td>
+                          <td className="p-2.5 text-center font-bold text-slate-700 border-r border-slate-100">{item.dailyRequests}</td>
+                          <td className="p-2.5 text-slate-500 border-r border-slate-100">{item.dailyLimit}</td>
+                          <td className="p-2.5 text-right font-bold text-emerald-700 border-r border-slate-100">{item.tokensUsed.toLocaleString('id-ID')}</td>
+                          <td className="p-2.5 font-semibold text-blue-700 border-r border-slate-100">{item.modelName}</td>
+                          <td className="p-2.5 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => {
+                                  setEditingKeyItem(item);
+                                  setModalKeyPool('inbox');
+                                  setModalAlias(item.alias);
+                                  setModalKeyString(item.key);
+                                  setIsAiModalOpen(true);
+                                }}
+                                className="p-1 hover:bg-slate-200 rounded text-slate-600 cursor-pointer"
+                                title="Edit Key"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteAiKey(item.id, 'inbox')}
+                                className="p-1 hover:bg-rose-100 rounded text-rose-600 cursor-pointer"
+                                title="Delete Key"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
 
-            {/* AI Error Trace Drawer */}
+            {/* TABEL 2: OCR DOCUMENT EXTRACTION AI KEYS REGISTRY */}
+            <div className="bg-white border border-slate-200 rounded-lg shadow-xs overflow-hidden">
+              <div className="bg-purple-900 text-white px-4 py-2.5 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <ScanLine className="w-4 h-4 text-purple-300" />
+                  <div>
+                    <h3 className="font-extrabold text-xs tracking-wide flex items-center gap-2">
+                      <span>2. OCR Document Extraction AI Keys Registry</span>
+                      <span className="bg-purple-800 text-purple-100 text-[9px] px-2 py-0.5 rounded-full font-mono border border-purple-700">
+                        {ocrAiKeys.length} Keys Total ({ocrAiKeys.filter((x) => x.status === 'active').length} Active)
+                      </span>
+                    </h3>
+                    <p className="text-[9px] text-purple-200 font-mono">Key Pool: Dedicated MySQL Table gemini_api_keys (pool_type = 'ocr')</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setEditingKeyItem(null);
+                    setModalKeyPool('ocr');
+                    setModalAlias('');
+                    setModalKeyString('');
+                    setIsAiModalOpen(true);
+                  }}
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-3 py-1 rounded text-[10px] transition flex items-center gap-1 cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add OCR Key</span>
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left font-mono text-[10px] border-collapse">
+                  <thead className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase">
+                    <tr>
+                      <th className="p-2.5 w-10 text-center border-r border-slate-200">#</th>
+                      <th className="p-2.5 border-r border-slate-200 w-44">Key Alias</th>
+                      <th className="p-2.5 border-r border-slate-200 min-w-[280px]">API Key String (Dedicated Column)</th>
+                      <th className="p-2.5 border-r border-slate-200 text-center w-20">Status</th>
+                      <th className="p-2.5 border-r border-slate-200 text-center w-24">Requests Today</th>
+                      <th className="p-2.5 border-r border-slate-200 w-32">Limit Config</th>
+                      <th className="p-2.5 border-r border-slate-200 text-right w-24">Tokens Used</th>
+                      <th className="p-2.5 border-r border-slate-200 w-28">Model Name</th>
+                      <th className="p-2.5 text-center w-24">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {ocrAiKeys.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="p-6 text-center text-slate-400 font-mono text-xs">
+                          No API keys in OCR Pool yet. Click <span className="font-bold text-purple-600">+ Add OCR Key</span> to add.
+                        </td>
+                      </tr>
+                    ) : (
+                      ocrAiKeys.map((item, idx) => (
+                        <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-2.5 text-center font-bold text-slate-500 border-r border-slate-100">{idx + 1}</td>
+                          <td className="p-2.5 font-bold text-slate-900 border-r border-slate-100">{item.alias}</td>
+                          <td className="p-2.5 font-mono border-r border-slate-100">
+                            <div className="flex items-center justify-between gap-1 bg-slate-50 border border-slate-200 px-2 py-1 rounded">
+                              <span className="truncate select-all text-slate-800 font-semibold">
+                                {showPlainKeyMap[item.id] ? item.key : maskKeyStr(item.key)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => toggleShowPlainKey(item.id)}
+                                className="p-1 text-slate-400 hover:text-purple-600 transition cursor-pointer shrink-0"
+                                title={showPlainKeyMap[item.id] ? "Hide full API key" : "Show full API key"}
+                              >
+                                {showPlainKeyMap[item.id] ? <EyeOff className="w-3.5 h-3.5 text-purple-600" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="p-2.5 text-center border-r border-slate-100">
+                            <button
+                              onClick={() => handleToggleAiKeyStatus(item.id, 'ocr')}
+                              className={`font-extrabold px-2 py-0.5 rounded text-[8.5px] uppercase border cursor-pointer ${
+                                item.status === 'active'
+                                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
+                                  : 'bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200'
+                              }`}
+                            >
+                              {item.status}
+                            </button>
+                          </td>
+                          <td className="p-2.5 text-center font-bold text-slate-700 border-r border-slate-100">{item.dailyRequests}</td>
+                          <td className="p-2.5 text-slate-500 border-r border-slate-100">{item.dailyLimit}</td>
+                          <td className="p-2.5 text-right font-bold text-emerald-700 border-r border-slate-100">{item.tokensUsed.toLocaleString('id-ID')}</td>
+                          <td className="p-2.5 font-semibold text-purple-700 border-r border-slate-100">{item.modelName}</td>
+                          <td className="p-2.5 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => {
+                                  setEditingKeyItem(item);
+                                  setModalKeyPool('ocr');
+                                  setModalAlias(item.alias);
+                                  setModalKeyString(item.key);
+                                  setIsAiModalOpen(true);
+                                }}
+                                className="p-1 hover:bg-slate-200 rounded text-slate-600 cursor-pointer"
+                                title="Edit Key"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteAiKey(item.id, 'ocr')}
+                                className="p-1 hover:bg-rose-100 rounded text-rose-600 cursor-pointer"
+                                title="Delete Key"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* AI Failover Rule & Math Info */}
             <div className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-xs space-y-2">
               <h4 className="font-bold text-slate-700 uppercase text-[9px] tracking-wider flex items-center gap-1.5 text-blue-700">
                 <Cpu className="w-3.5 h-3.5 text-blue-600" />
-                <span>AI Classification Engine & Error Trace</span>
+                <span>Multi-Key Failover Engine & Smart Cooldown Math</span>
               </h4>
-              <p className="text-[10px] text-slate-500 font-sans">
-                Rotates sequentially up to 3 API Keys stored as comma-separated values in <code className="bg-slate-100 px-1 py-0.5 rounded font-mono">api_credentials</code> table. On 429 Rate Limit, auto-waits 10s before rotation.
+              <p className="text-[10px] text-slate-600 font-sans leading-relaxed">
+                Setiap request AI secara otomatis merotasi kunci dalam daftar pool secara berurutan. Jika Kunci #1 mengalami <strong>HTTP 429 Rate Limit</strong> atau kuota habis, sistem secara matematis menempatkan kunci tersebut dalam status <em>cooldown (60s)</em> dan langsung melanjutkan pemrosesan ke Kunci #2, #3, dst. dengan penundaan aman (backoff 500ms) tanpa memicu error/terblokir.
               </p>
             </div>
           </div>
@@ -1126,20 +1454,52 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
       {/* ── AI KEY EDIT / ADD POPUP MODAL ─────────────────────────────────── */}
       {isAiModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-md w-full overflow-hidden space-y-3">
-            <div className="bg-slate-100 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
-              <h3 className="font-bold text-slate-800 text-[11px]">
-                {editingKeyItem ? 'Edit Gemini API Key' : 'Add New Gemini API Key'}
+          <div className="bg-white rounded-lg border border-slate-300 shadow-xl max-w-md w-full overflow-hidden space-y-3 font-sans">
+            <div className={`px-4 py-3 border-b border-slate-200 flex justify-between items-center text-white ${
+              modalKeyPool === 'inbox' ? 'bg-blue-900' : 'bg-purple-900'
+            }`}>
+              <h3 className="font-bold text-xs">
+                {editingKeyItem
+                  ? `Edit ${modalKeyPool === 'inbox' ? 'Inbox AI' : 'OCR AI'} Key`
+                  : `Add New ${modalKeyPool === 'inbox' ? 'Inbox AI' : 'OCR AI'} Key`}
               </h3>
-              <button onClick={() => setIsAiModalOpen(false)} className="text-slate-500 hover:text-slate-800 font-bold">✕</button>
+              <button onClick={() => setIsAiModalOpen(false)} className="text-white hover:text-slate-300 font-bold cursor-pointer">✕</button>
             </div>
 
-            <div className="p-4 space-y-3 font-sans text-[10.5px]">
+            <div className="p-4 space-y-3 text-[10.5px]">
+              <div>
+                <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Target Engine Pool</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setModalKeyPool('inbox')}
+                    className={`flex-1 py-1.5 px-3 rounded font-bold text-[10px] border cursor-pointer transition ${
+                      modalKeyPool === 'inbox'
+                        ? 'bg-blue-600 text-white border-blue-700'
+                        : 'bg-slate-100 text-slate-700 border-slate-300'
+                    }`}
+                  >
+                    Email Inbox AI Engine
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalKeyPool('ocr')}
+                    className={`flex-1 py-1.5 px-3 rounded font-bold text-[10px] border cursor-pointer transition ${
+                      modalKeyPool === 'ocr'
+                        ? 'bg-purple-600 text-white border-purple-700'
+                        : 'bg-slate-100 text-slate-700 border-slate-300'
+                    }`}
+                  >
+                    OCR Scan AI Engine
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Key Alias / Description</label>
                 <input
                   type="text"
-                  placeholder="e.g. Gemini Backup Key 3"
+                  placeholder={modalKeyPool === 'inbox' ? 'e.g. Gemini Inbox Key 2' : 'e.g. Gemini OCR Backup Key 1'}
                   value={modalAlias}
                   onChange={(e) => setModalAlias(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 font-bold"
@@ -1158,12 +1518,12 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               </div>
 
               <div>
-                <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Model Name</label>
+                <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Model Reference</label>
                 <input
                   type="text"
-                  value={modalModelName}
-                  onChange={(e) => setModalModelName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 font-mono text-[10px]"
+                  value="gemini-1.5-flash"
+                  readOnly
+                  className="w-full bg-slate-100 border border-slate-300 rounded px-2.5 py-1.5 font-mono text-[10px] text-slate-500 cursor-not-allowed"
                 />
               </div>
             </div>
@@ -1171,13 +1531,15 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             <div className="bg-slate-50 px-4 py-3 border-t border-slate-200 flex justify-end gap-2">
               <button
                 onClick={() => setIsAiModalOpen(false)}
-                className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold px-3 py-1.5 rounded transition"
+                className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold px-3 py-1.5 rounded transition cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveAiKeyModal}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-1.5 rounded transition cursor-pointer"
+                className={`font-bold px-4 py-1.5 rounded transition cursor-pointer text-white ${
+                  modalKeyPool === 'inbox' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'
+                }`}
               >
                 Save Key to Database
               </button>

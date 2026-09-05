@@ -120,14 +120,14 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
         return (
           <span className="backdrop-blur-md bg-emerald-500/15 text-emerald-950 border border-emerald-400/50 font-black px-2.5 py-0.5 text-[10px] rounded-none flex items-center gap-1 shadow-2xs">
             <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-            <span>Berhasil</span>
+            <span>Success</span>
           </span>
         );
       default:
         return (
           <span className="backdrop-blur-md bg-blue-500/15 text-blue-950 border border-blue-400/50 font-bold px-2.5 py-0.5 text-[10px] rounded-none flex items-center gap-1 shadow-2xs">
             <Info className="w-3 h-3 text-blue-600 shrink-0" />
-            <span>Informasi</span>
+            <span>Information</span>
           </span>
         );
     }
@@ -208,7 +208,7 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
           <Search className="w-3.5 h-3.5 absolute left-3 top-2 text-slate-500" />
           <input
             type="search"
-            placeholder="Cari riwayat notifikasi..."
+            placeholder="Search notification history..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full bg-white border border-slate-300 rounded-full pl-9 pr-3 py-1 text-xs text-slate-800 focus:outline-none focus:border-blue-500 shadow-inner"

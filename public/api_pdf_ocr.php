@@ -10,21 +10,45 @@ header('Content-Type: application/json; charset=utf-8');
 
 // Fetch dynamic Gemini API Keys from MySQL database api_credentials
 function getAllGeminiApiKeysFromDatabase() {
-    require __DIR__ . '/db_connect.php';
+    global $conn;
+    require_once __DIR__ . '/db_connect.php';
 
     $keys = [];
-    $res = $conn->query("SELECT credential_key, credential_value FROM api_credentials WHERE credential_key LIKE '%GEMINI%' OR service_name LIKE '%Gemini%' ORDER BY id ASC");
-    if ($res) {
+    if (!$conn) return $keys;
+
+    // 1. Primary lookup from dedicated gemini_api_keys table
+    $res = $conn->query("SELECT id, key_alias, api_key, pool_type FROM gemini_api_keys WHERE status = 'active' ORDER BY pool_type DESC, id ASC");
+    if ($res && $res->num_rows > 0) {
         while ($row = $res->fetch_assoc()) {
-            if (!empty($row['credential_value'])) {
-                $keys[] = [
-                    'key_name' => $row['credential_key'],
-                    'key_value' => trim($row['credential_value'])
-                ];
+            $k_val = trim($row['api_key']);
+            if (empty($k_val) || strpos($k_val, '...') !== false) continue;
+            $keys[] = [
+                'key_name' => $row['key_alias'],
+                'key_value' => $k_val,
+                'is_ocr' => ($row['pool_type'] === 'ocr')
+            ];
+        }
+    }
+
+    // 2. Fallback to api_credentials if gemini_api_keys is empty
+    if (empty($keys)) {
+        $res_cred = $conn->query("SELECT credential_key, credential_value FROM api_credentials WHERE credential_key LIKE 'GEMINI_API_KEY%' ORDER BY id ASC");
+        if ($res_cred && $res_cred->num_rows > 0) {
+            while ($row = $res_cred->fetch_assoc()) {
+                $val = trim($row['credential_value']);
+                if (empty($val)) continue;
+                $splitted = array_values(array_filter(array_map('trim', explode(',', $val))));
+                foreach ($splitted as $idx => $k) {
+                    if (strpos($k, '...') !== false || strlen($k) < 10) continue;
+                    $keys[] = [
+                        'key_name' => $row['credential_key'] . '_' . ($idx + 1),
+                        'key_value' => $k,
+                        'is_ocr' => (strpos($row['credential_key'], 'OCR') !== false)
+                    ];
+                }
             }
         }
     }
-    $conn->close();
     return $keys;
 }
 
@@ -90,9 +114,9 @@ function callGeminiMultimodalPdfOcr($pdfFilePath, $apiKey) {
         // Mode 1: Text-based PDF (Tiny token footprint)
         $prompt = "You are an AI ERP OCR assistant for ABM Malaya. We have extracted the following plain text from the RFQ PDF specification document ('" . basename($pdfFilePath) . "'):\n\n"
                 . $extractedText . "\n\n"
-                . "Extract all requested equipment specifications, part numbers, quantities, and units. Note: RFQ documents sent by clients do not contain unit prices. Set 'unit_price' to 0 so Sales Engineer can fill the price. Return a JSON array where each object has keys: 'description' (full complete detailed technical spec), 'quantity' (number), 'unit' (e.g. Package/Unit/Set/Meter/Pcs), 'unit_price' (0), 'discount_percent' (0). Return ONLY the raw JSON array.";
+                . "Extract all requested equipment specifications, part numbers, quantities, and units. Note: RFQ documents sent by clients do not contain unit prices. Set 'unit_price' to 0 so user can fill the price. Return a JSON array where each object has keys: 'description' (full complete detailed technical spec), 'quantity' (number), 'unit' (e.g. Package/Unit/Set/Meter/Pcs), 'unit_price' (0), 'discount_percent' (0). Return ONLY the raw JSON array.";
 
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" . $apiKey;
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey;
         $payload = json_encode([
             'contents' => [
                 [
@@ -111,9 +135,9 @@ function callGeminiMultimodalPdfOcr($pdfFilePath, $apiKey) {
         if (empty($pdfBinary)) return null;
         $base64Pdf = base64_encode($pdfBinary);
 
-        $prompt = "You are an AI ERP OCR assistant for ABM Malaya. Analyze this authentic RFQ PDF specification document ('" . basename($pdfFilePath) . "'). Extract all requested equipment specifications, part numbers, quantities, and units across all pages. Note: RFQ documents sent by clients do not contain unit prices. Set 'unit_price' to 0 so Sales Engineer can fill the price. Return a JSON array where each object has keys: 'description' (full complete detailed technical spec), 'quantity' (number), 'unit' (e.g. Package/Unit/Set/Meter/Pcs), 'unit_price' (0), 'discount_percent' (0). Return ONLY the raw JSON array.";
+        $prompt = "You are an AI ERP OCR assistant for ABM Malaya. Analyze this authentic RFQ PDF specification document ('" . basename($pdfFilePath) . "'). Extract all requested equipment specifications, part numbers, quantities, and units across all pages. Note: RFQ documents sent by clients do not contain unit prices. Set 'unit_price' to 0 so user can fill the price. Return a JSON array where each object has keys: 'description' (full complete detailed technical spec), 'quantity' (number), 'unit' (e.g. Package/Unit/Set/Meter/Pcs), 'unit_price' (0), 'discount_percent' (0). Return ONLY the raw JSON array.";
 
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" . $apiKey;
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey;
         $payload = json_encode([
             'contents' => [
                 [
@@ -205,7 +229,7 @@ try {
     $fn_req = trim($input['fn'] ?? '');
     $target_file = '';
 
-    require __DIR__ . '/db_connect.php';
+    require_once __DIR__ . '/db_connect.php';
 
     if (!empty($quo_id)) {
         $s_quo = $conn->prepare("SELECT r.attachment_url FROM quotations q LEFT JOIN rfq_requests r ON q.rfq_id = r.id WHERE q.id = ? OR q.quotation_number = ? LIMIT 1");
@@ -268,7 +292,7 @@ try {
         }
     }
 
-    $default_prompt = "You are an AI ERP OCR assistant for ABM Malaya. Analyze this authentic RFQ PDF specification document ('" . basename($target_file) . "'). Extract all requested equipment specifications, part numbers, quantities, and units across all pages. Note: RFQ documents sent by clients do not contain unit prices. Set 'unit_price' to 0 so Sales Engineer can fill the price. Return a JSON array. Return ONLY the raw JSON array.";
+    $default_prompt = "You are an AI ERP OCR assistant for ABM Malaya. Analyze this authentic RFQ PDF specification document ('" . basename($target_file) . "'). Extract all requested equipment specifications, part numbers, quantities, and units across all pages. Note: RFQ documents sent by clients do not contain unit prices. Set 'unit_price' to 0 so user can fill the price. Return a JSON array. Return ONLY the raw JSON array.";
 
     if ($geminiRes && !empty($geminiRes['items'])) {
         ob_end_clean();

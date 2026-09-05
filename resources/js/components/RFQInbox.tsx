@@ -1,7 +1,7 @@
 // @ts-nocheck
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { RFQ, RFQStatus, EmailAttachment } from '../types/erp';
-import { Search, Mail, Send, CheckCircle2, Clock, Building, User, Phone, Loader2, Paperclip, Eye, ShieldCheck, RefreshCw, PlusCircle, FileType, Image as ImageIcon, Maximize2, AlertTriangle, X, ExternalLink, ChevronDown, ChevronUp, MoreVertical, Menu, Sparkles, Settings, Info, ArrowRightLeft, Copy, Download } from 'lucide-react';
+import { Search, Mail, Send, CheckCircle2, Clock, Building, User, Phone, Loader2, Paperclip, Eye, ShieldCheck, RefreshCw, PlusCircle, FileType, Image as ImageIcon, Maximize2, AlertTriangle, X, ExternalLink, ChevronDown, ChevronUp, MoreVertical, Menu, Sparkles, Settings, Info, ArrowRightLeft, Copy, Download, Terminal, FileText } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
 interface RFQInboxProps {
@@ -24,15 +24,23 @@ interface RFQInboxProps {
   currentUser?: any;
 }
 
+const bodyCleanCache = new Map<string, string>();
 const cleanEmailBodyText = (text: string): string => {
   if (!text) return '';
+  if (bodyCleanCache.has(text)) return bodyCleanCache.get(text)!;
+
   let cleaned = text;
 
-  // 1. Remove boundary header parameters
+  // 1. Remove <style>...</style> and <script>...</script> blocks
+  cleaned = cleaned.replace(/<style[\s\S]*?<\/style>/gi, '');
+  cleaned = cleaned.replace(/<script[\s\S]*?<\/script>/gi, '');
+
+  // 2. Remove HTML comments <!-- ... -->
+  cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, '');
+
+  // 3. Remove boundary header parameters & MIME headers
   cleaned = cleaned.replace(/boundary="[^"]*"/gi, '');
   cleaned = cleaned.replace(/boundary=[a-zA-Z0-9-@._]+/gi, '');
-
-  // 2. Remove MIME headers
   cleaned = cleaned.replace(/content-type:[^\n]*/gi, '');
   cleaned = cleaned.replace(/content-transfer-encoding:[^\n]*/gi, '');
   cleaned = cleaned.replace(/content-description:[^\n]*/gi, '');
@@ -41,14 +49,17 @@ const cleanEmailBodyText = (text: string): string => {
   cleaned = cleaned.replace(/content-id:[^\n]*/gi, '');
   cleaned = cleaned.replace(/content-disposition:[^\n]*/gi, '');
 
-  // 3. Remove [cid:...] and inline cid:...
+  // 4. Remove [cid:...] and inline cid:...
   cleaned = cleaned.replace(/\[cid:[^\]]*\]/gi, '');
   cleaned = cleaned.replace(/cid:[a-zA-Z0-9-@.]+/gi, '');
 
-  // 4. Remove CSS styles
-  cleaned = cleaned.replace(/[a-zA-Z0-9_-]+\s*\{[^}]*\}/g, '');
+  // 5. Remove CSS rule blocks like: table { ... }, th, td { ... }, a { ... }, #id { ... }, .class { ... }
+  cleaned = cleaned.replace(/[a-zA-Z0-9_#.,\s-]+\{[^}]*\}/g, '');
 
-  // 5. Remove long base64 chunks
+  // 6. Strip remaining HTML tags (like <div>, <p>, <table>, <tr>, <td>, etc.)
+  cleaned = cleaned.replace(/<\/?[^>]+(>|$)/g, '');
+
+  // 7. Remove long base64 lines
   const lines = cleaned.split('\n');
   const filteredLines = lines.filter(line => {
     const trimmed = line.trim();
@@ -59,10 +70,12 @@ const cleanEmailBodyText = (text: string): string => {
   });
   cleaned = filteredLines.join('\n');
 
-  // 6. Clean consecutive newlines
+  // 8. Clean consecutive newlines
   cleaned = cleaned.replace(/\n\s*\n\s*\n+/g, '\n\n');
-  
-  return cleaned.trim();
+  const result = cleaned.trim();
+  if (bodyCleanCache.size > 500) bodyCleanCache.clear();
+  bodyCleanCache.set(text, result);
+  return result;
 };
 
 export const RFQInbox: React.FC<RFQInboxProps> = ({
@@ -109,6 +122,27 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
   const [isInfoModalOpen, setIsInfoModalOpen] = useState<boolean>(false);
   const [connectedEmail, setConnectedEmail] = useState<string>('abmalayaindustry@gmail.com');
   const [isReplyOpen, setIsReplyOpen] = useState<boolean>(true);
+
+  // Live Daemon Log Viewer States
+  const [isLogViewerOpen, setIsLogViewerOpen] = useState<boolean>(false);
+  const [logFiles, setLogFiles] = useState<any[]>([]);
+  const [dbErrors, setDbErrors] = useState<any[]>([]);
+  const [activeLogTab, setActiveLogTab] = useState<string>('all');
+  const [isLoadingLogs, setIsLoadingLogs] = useState<boolean>(false);
+
+  const fetchLiveLogs = () => {
+    setIsLoadingLogs(true);
+    fetch(getApiUrl('/api_daemons.php?action=get_logs'))
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'success') {
+          setLogFiles(data.log_files || []);
+          setDbErrors(data.db_errors || []);
+        }
+      })
+      .catch(err => console.error('Error fetching live logs:', err))
+      .finally(() => setIsLoadingLogs(false));
+  };
 
   const handleMoveToRequisition = (rfq: RFQ) => {
     setIsOcrProcessing(true);
@@ -178,7 +212,10 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
             if (item.credential_key === 'INBOX_RULE_REQUIRE_ATTACHMENT') rules.requireAttachment = item.credential_value === 'true';
             if (item.credential_key === 'INBOX_RULE_AUTO_LABEL') rules.autoLabelRfq = item.credential_value === 'true';
             if (item.credential_key === 'INBOX_RULE_EXCLUDE_SYSTEM_ALERTS') rules.excludeSystemAlerts = item.credential_value === 'true';
-            if (item.credential_key === 'INBOX_RULE_START_DATE') rules.startDate = item.credential_value || '';
+            if (item.credential_key === 'INBOX_RULE_START_DATE') {
+              rules.startDate = item.credential_value || '';
+              rules.fetchStartDate = item.credential_value || '';
+            }
             if (item.credential_key === 'COMPANY_EMAIL') setConnectedEmail(item.credential_value || 'abmalayaindustry@gmail.com');
           });
           setInboxRules(rules);
@@ -278,7 +315,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
     return rfq.ai_classification === 'client_rfq';
   };
 
-  const uniqueRecipients = [
+  const uniqueRecipients = useMemo(() => [
     'all',
     ...Array.from(
       new Set(
@@ -287,14 +324,31 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
           .filter(Boolean)
       )
     ),
-  ];
+  ], [rfqs]);
 
-  const filteredRfqs = (rfqs || []).filter((item) => {
+  const parsedStartDateLimit = useMemo(() => {
+    if (!inboxRules.fetchStartDate) return null;
+    const limitTime = new Date(inboxRules.fetchStartDate + 'T00:00:00').getTime();
+    return isNaN(limitTime) ? null : limitTime;
+  }, [inboxRules.fetchStartDate]);
+
+  const parsedCutoffDate = useMemo(() => {
+    if (!inboxRules.startDate) return null;
+    const parts = inboxRules.startDate.split('-');
+    const cutoffDate = parts.length === 3
+      ? new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0, 0)
+      : new Date(inboxRules.startDate);
+    const time = cutoffDate.getTime();
+    return isNaN(time) ? null : time;
+  }, [inboxRules.startDate]);
+
+  const satisfiesInboxFilter = useCallback((item: RFQ, targetSubTab: 'detected' | 'unrecognized') => {
+    if (!item) return false;
     const sender = (item.sender_email || '').toLowerCase();
     const subject = (item.subject || '').toLowerCase();
     const name = (item.sender_name || '').toLowerCase();
 
-    // Apply MySQL Inbox Rules
+    // MySQL Inbox Rules
     if (inboxRules.excludeNoreply && isSystemOrNoreplyEmail(item)) {
       return false;
     }
@@ -323,67 +377,22 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
       return false;
     }
 
-    if (inboxRules.fetchStartDate) {
-      const itemDateStr = item.created_at || item.received_at || item.date;
+    if (parsedStartDateLimit !== null) {
+      const itemDateStr = item.created_at || item.received_at || item.date || (item as any).date_received;
       if (itemDateStr) {
         const itemTime = new Date(itemDateStr).getTime();
-        const limitTime = new Date(inboxRules.fetchStartDate + 'T00:00:00').getTime();
-        if (!isNaN(itemTime) && !isNaN(limitTime) && itemTime < limitTime) {
+        if (!isNaN(itemTime) && itemTime < parsedStartDateLimit) {
           return false;
         }
       }
     }
 
-
-
-    const isDetected = isDetectedClientEmail(item);
-    const matchesSubTab = activeSubTab === 'detected' ? isDetected : !isDetected;
-
-    // Apply Inbox Rules
-    if (activeSubTab === 'detected') {
-      if (inboxRules.excludeNoreply && isSystemOrNoreplyEmail(item)) {
-        return false;
-      }
-      if (
-        inboxRules.excludeMedsos &&
-        (sender.includes('facebook') ||
-          sender.includes('linkedin') ||
-          sender.includes('instagram') ||
-          subject.includes('newsletter') ||
-          subject.includes('promo'))
-      ) {
-        return false;
-      }
-    } else {
-      // In General Email sub-tab, hide social media promo & system alerts if rule enabled, but display general inquiries
-      if (
-        inboxRules.excludeMedsos &&
-        (sender.includes('facebook') ||
-          sender.includes('linkedin') ||
-          sender.includes('instagram') ||
-          subject.includes('newsletter') ||
-          subject.includes('promo'))
-      ) {
-        return false;
-      }
-    }
-
-    if (inboxRules.requireAttachment && (!item.attachments || item.attachments.length === 0)) {
-      return false;
-    }
-
-    // Filter out emails received before Fetch Start Date if configured
-    if (inboxRules.startDate) {
-      const rawDateStr = item.date_received || (item as any).created_at || '';
-      const emailDate = new Date(rawDateStr);
-      const parts = inboxRules.startDate.split('-');
-      const cutoffDate = parts.length === 3
-        ? new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0, 0)
-        : new Date(inboxRules.startDate);
-
-      if (!isNaN(emailDate.getTime()) && !isNaN(cutoffDate.getTime())) {
-        if (emailDate < cutoffDate) {
-          return false; // Exclude old emails prior to start date
+    if (parsedCutoffDate !== null) {
+      const rawDateStr = (item as any).date_received || (item as any).created_at || item.date || '';
+      if (rawDateStr) {
+        const emailDate = new Date(rawDateStr).getTime();
+        if (!isNaN(emailDate) && emailDate < parsedCutoffDate) {
+          return false;
         }
       }
     }
@@ -397,72 +406,103 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
     }
 
     const term = searchTerm.toLowerCase();
-    const matchesSearch =
-      (item.sender_name || '').toLowerCase().includes(term) ||
-      (item.sender_email || '').toLowerCase().includes(term) ||
-      (item.recipient_email || '').toLowerCase().includes(term) ||
-      (item.company || '').toLowerCase().includes(term) ||
-      (item.subject || '').toLowerCase().includes(term) ||
-      (item.message_body || '').toLowerCase().includes(term) ||
-      (item.item_requested || '').toLowerCase().includes(term) ||
-      (item.id || '').toLowerCase().includes(term) ||
-      (item.rfq_number || '').toLowerCase().includes(term);
+    if (term) {
+      const matchesSearch =
+        (item.sender_name || '').toLowerCase().includes(term) ||
+        (item.sender_email || '').toLowerCase().includes(term) ||
+        (item.recipient_email || '').toLowerCase().includes(term) ||
+        (item.company || '').toLowerCase().includes(term) ||
+        (item.subject || '').toLowerCase().includes(term) ||
+        (item.message_body || '').toLowerCase().includes(term) ||
+        (item.item_requested || '').toLowerCase().includes(term) ||
+        (item.id || '').toLowerCase().includes(term) ||
+        (item.rfq_number || '').toLowerCase().includes(term);
+      if (!matchesSearch) return false;
+    }
 
-    const st = (item.status || 'received').toLowerCase();
-    // All statuses that mean the email is no longer just "received"
-    const isAlreadyConverted =
-      st === 'in_progress' || st === 'diproses' ||
-      st === 'quotation_build' || st === 'requisition' ||
+    const isDetected = isDetectedClientEmail(item);
+    const matchesSubTab = targetSubTab === 'detected' ? isDetected : !isDetected;
+    if (!matchesSubTab) return false;
+
+    const st = (item.status || 'masuk').toLowerCase();
+
+    // Statuses that mean email was moved into active quotation building:
+    const isInProgress =
+      st === 'in_progress' || st === 'diproses' || st === 'quotation_build' || st === 'requisition';
+
+    // Statuses that mean quotation was sent to client:
+    const isSent =
       st === 'penawaran_terkirim' || st === 'siap_kirim' ||
-      st === 'ready_to_send' || st === 'terkirim' ||
-      st === 'sent' || st === 'done_send' ||
+      st === 'ready_to_send' || st === 'terkirim' || st === 'sent';
+
+    // Statuses that mean closed / done deal:
+    const isDone =
       st === 'deal' || st === 'selesai' || st === 'done' ||
-      st === 'disetujui' || st === 'acc';
+      st === 'done_send' || st === 'disetujui' || st === 'acc';
+
+    const isConvertedToQuotation = isInProgress || isSent || isDone;
 
     if (activeMainTab === 'received') {
-      return matchesSearch && matchesSubTab && !isAlreadyConverted;
+      return !isConvertedToQuotation;
     }
-    // In Progress: email has been moved to quotation (any active quotation status)
     if (activeMainTab === 'diproses') {
-      return matchesSearch && (
-        st === 'diproses' || st === 'in_progress' ||
-        st === 'quotation_build' || st === 'requisition'
-      );
+      return isInProgress;
     }
-    // Sent / Replied: quotation has been sent to client
     if (activeMainTab === 'siap_kirim') {
-      return matchesSearch && (
-        st === 'penawaran_terkirim' || st === 'siap_kirim' ||
-        st === 'ready_to_send' || st === 'terkirim' || st === 'sent'
-      );
+      return isSent;
     }
-    // Done: quotation approved / deal closed
     if (activeMainTab === 'done') {
-      return matchesSearch && (
-        st === 'deal' || st === 'selesai' || st === 'done' ||
-        st === 'done_send' || st === 'disetujui' || st === 'acc'
-      );
+      return isDone;
     }
 
-    return matchesSearch && matchesSubTab;
-  }).sort((a, b) => {
-    if (inboxRules.prioritizePdf) {
-      const aHasPdf = a.attachments && a.attachments.some((att) => (att.filename || '').toLowerCase().endsWith('.pdf'));
-      const bHasPdf = b.attachments && b.attachments.some((att) => (att.filename || '').toLowerCase().endsWith('.pdf'));
-      const aHasGdrive = a.attachments && a.attachments.some((att) => att.is_gdrive);
-      const bHasGdrive = b.attachments && b.attachments.some((att) => att.is_gdrive);
-      const aHasFile = aHasPdf || aHasGdrive;
-      const bHasFile = bHasPdf || bHasGdrive;
-      if (aHasFile && !bHasFile) return -1;
-      if (!aHasFile && bHasFile) return 1;
+    return true;
+  }, [inboxRules, parsedStartDateLimit, parsedCutoffDate, selectedToFilter, searchTerm, activeMainTab]);
+
+  const { detectedCount, unrecognizedCount, filteredRfqs } = useMemo(() => {
+    let dCount = 0;
+    let uCount = 0;
+    const filtered: RFQ[] = [];
+
+    const list = rfqs || [];
+    for (let i = 0; i < list.length; i++) {
+      const item = list[i];
+      const isDet = satisfiesInboxFilter(item, 'detected');
+      if (isDet) dCount++;
+      const isUnrec = satisfiesInboxFilter(item, 'unrecognized');
+      if (isUnrec) uCount++;
+
+      if (activeSubTab === 'detected' && isDet) {
+        filtered.push(item);
+      } else if (activeSubTab === 'unrecognized' && isUnrec) {
+        filtered.push(item);
+      }
     }
-    return 0;
-  });
+
+    if (inboxRules.prioritizePdf) {
+      filtered.sort((a, b) => {
+        const aHasPdf = a.attachments && a.attachments.some((att) => (att.filename || '').toLowerCase().endsWith('.pdf'));
+        const bHasPdf = b.attachments && b.attachments.some((att) => (att.filename || '').toLowerCase().endsWith('.pdf'));
+        const aHasGdrive = a.attachments && a.attachments.some((att) => att.is_gdrive);
+        const bHasGdrive = b.attachments && b.attachments.some((att) => att.is_gdrive);
+        const aHasFile = aHasPdf || aHasGdrive;
+        const bHasFile = bHasPdf || bHasGdrive;
+        if (aHasFile && !bHasFile) return -1;
+        if (!aHasFile && bHasFile) return 1;
+        return 0;
+      });
+    }
+
+    return { detectedCount: dCount, unrecognizedCount: uCount, filteredRfqs: filtered };
+  }, [rfqs, activeSubTab, satisfiesInboxFilter, inboxRules.prioritizePdf]);
 
   const totalPages = Math.ceil(filteredRfqs.length / itemsPerPage) || 1;
-  const paginatedRfqs = filteredRfqs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const paginatedRfqs = useMemo(() => {
+    return filteredRfqs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  }, [filteredRfqs, currentPage, itemsPerPage]);
 
-  const selectedRfq = filteredRfqs.find((r) => r.id === selectedRfqId) || filteredRfqs[0] || null;
+  const selectedRfq = useMemo(() => {
+    return filteredRfqs.find((r) => r.id === selectedRfqId) || filteredRfqs[0] || null;
+  }, [filteredRfqs, selectedRfqId]);
 
   const getAttachmentPreviewUrl = (att: EmailAttachment | null) => {
     if (!att) return '';
@@ -621,8 +661,8 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                   </button>
                 )}
                 <h2 className="font-extrabold text-xs text-slate-900 uppercase tracking-wider">RFQ Inbox</h2>
-                <span className="bg-amber-500 text-white font-extrabold text-[10px] px-1.5 py-0.5">
-                  {pendingCount}
+                <span className="bg-amber-500 text-white font-extrabold text-[10px] px-1.5 py-0.5 rounded">
+                  {filteredRfqs.length}
                 </span>
               </div>
 
@@ -696,24 +736,9 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
               )}
             </div>
 
-            {/* Filter Tabs: Received | Filter To Dropdown | More Statuses Dropdown */}
-            <div className="flex gap-1.5 border-b border-slate-200 pb-1.5 text-xs pt-1 items-center w-full">
+            {/* Filter Tabs: To Dropdown | Status Dropdown */}
+            <div className="flex gap-1.5 border-b border-slate-200 pb-1.5 text-xs pt-1 items-center w-full justify-between">
               
-              {/* RECEIVED TAB */}
-              <button
-                onClick={() => {
-                  setActiveMainTab('received');
-                }}
-                className={`px-3 py-1 font-bold text-[11px] rounded-md transition cursor-pointer flex items-center gap-1 ${
-                  activeMainTab === 'received'
-                    ? 'bg-blue-600 text-white shadow-2xs'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                }`}
-                style={{ fontFamily: "'Eurostile', 'Microgramma D OT', 'Euro Stile', monospace" }}
-              >
-                <span>Received</span>
-              </button>
-
               {/* FILTER TO DROP-DOWN */}
               <div className="relative">
                 <button
@@ -721,7 +746,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                   className={`px-2.5 py-1 font-bold text-[11px] rounded-md transition cursor-pointer flex items-center gap-1 border ${
                     selectedToFilter !== 'all'
                       ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-transparent'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
                   }`}
                   style={{ fontFamily: "'Eurostile', 'Microgramma D OT', 'Euro Stile', monospace" }}
                   title="Filter by recipient email alias / domain"
@@ -753,35 +778,36 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 )}
               </div>
 
-              {/* CORNER dropdown FOR OTHER STATUSES */}
+              {/* STATUS DROPDOWN (Received, In Progress, Sent / Replied, Done) */}
               <div className="relative ml-auto shrink-0">
                 <button
                   onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
                   className={`px-2.5 py-1 font-bold text-[11px] rounded-md transition cursor-pointer flex items-center gap-1 border ${
-                    activeMainTab !== 'received'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-transparent'
+                    activeMainTab === 'received'
+                      ? 'bg-blue-600 text-white shadow-2xs'
+                      : 'bg-indigo-600 text-white shadow-2xs'
                   }`}
                   style={{ fontFamily: "'Eurostile', 'Microgramma D OT', 'Euro Stile', monospace" }}
-                  title="Filter by status: In Progress, Sent, Done"
+                  title="Filter by status: Received, In Progress, Sent, Done"
                 >
                   <span>
                     {activeMainTab === 'received'
-                      ? 'Status...'
+                      ? 'Status: Received'
                       : activeMainTab === 'diproses'
-                      ? 'In Progress'
+                      ? 'Status: In Progress'
                       : activeMainTab === 'siap_kirim'
-                      ? 'Sent / Replied'
-                      : 'Done'}
+                      ? 'Status: Sent / Replied'
+                      : 'Status: Done'}
                   </span>
-                  <MoreVertical className="w-3 h-3" />
+                  <ChevronDown className="w-3 h-3 text-white/80" />
                 </button>
 
                 {isStatusDropdownOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setIsStatusDropdownOpen(false)} />
-                    <div className="absolute right-0 mt-1.5 w-60 bg-white border border-slate-300 shadow-lg rounded-md overflow-hidden z-50 py-1 font-sans text-xs">
+                    <div className="absolute right-0 mt-1.5 w-56 bg-white border border-slate-300 shadow-lg rounded-md overflow-hidden z-50 py-1 font-sans text-xs">
                       {[
+                        { id: 'received', label: 'Received' },
                         { id: 'diproses', label: 'In Progress' },
                         { id: 'siap_kirim', label: 'Sent / Replied' },
                         { id: 'done', label: 'Done' },
@@ -792,11 +818,12 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                             setActiveMainTab(st.id);
                             setIsStatusDropdownOpen(false);
                           }}
-                          className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 transition cursor-pointer font-bold ${
+                          className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 transition cursor-pointer font-bold flex items-center justify-between ${
                             activeMainTab === st.id ? 'text-blue-600 bg-blue-50/50' : 'text-slate-700'
                           }`}
                         >
-                          {st.label}
+                          <span>{st.label}</span>
+                          {activeMainTab === st.id && <span className="text-blue-600 font-extrabold">✓</span>}
                         </button>
                       ))}
                     </div>
@@ -819,7 +846,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 style={{ fontFamily: "'Eurostile', monospace" }}
               >
                 <ShieldCheck className={`w-3.5 h-3.5 ${activeSubTab === 'detected' ? 'text-emerald-400' : 'text-emerald-600'}`} />
-                <span>REQUISITION ({(rfqs || []).filter(isDetectedClientEmail).length})</span>
+                <span>RECEIVED ({detectedCount})</span>
               </button>
 
               <button
@@ -833,7 +860,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 style={{ fontFamily: "'Eurostile', monospace" }}
               >
                 <AlertTriangle className={`w-3.5 h-3.5 ${activeSubTab === 'unrecognized' ? 'text-amber-400' : 'text-amber-600'}`} />
-                <span>OTHERS ({(rfqs || []).filter(r => !isDetectedClientEmail(r)).length})</span>
+                <span>OTHERS ({unrecognizedCount})</span>
               </button>
             </div>
 
@@ -1898,7 +1925,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                     </tr>
                     <tr className="border-b border-slate-100">
                       <td className="py-2.5 font-bold text-slate-500">Error Log (Count)</td>
-                      <td className="py-2.5 font-mono">
+                      <td className="py-2.5 font-mono flex items-center justify-between">
                         {rfqs.filter(r => r.ai_error && r.ai_error.trim() !== '').length > 0 ? (
                           <span className="font-extrabold text-rose-600 bg-rose-50 px-1.5 py-0.5 border border-rose-200 rounded-sm">
                             {rfqs.filter(r => r.ai_error && r.ai_error.trim() !== '').length} Errors
@@ -1908,6 +1935,16 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                             0 Errors
                           </span>
                         )}
+                        <button
+                          onClick={() => {
+                            fetchLiveLogs();
+                            setIsLogViewerOpen(true);
+                          }}
+                          className="px-2 py-1 bg-slate-800 hover:bg-slate-900 text-slate-100 font-extrabold text-[11px] rounded flex items-center gap-1 cursor-pointer transition"
+                        >
+                          <Terminal className="w-3 h-3 text-emerald-400" />
+                          <span>View Full Logs</span>
+                        </button>
                       </td>
                     </tr>
                   </tbody>
@@ -1915,23 +1952,200 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
               </div>
             </div>
 
-            <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
-              <button
-                onClick={() => {
-                  setIsInfoModalOpen(false);
-                  if (onNavigateView) onNavigateView('system_settings');
-                }}
-                className="px-4 py-2 backdrop-blur-sm bg-white/50 hover:bg-white/80 border border-white/70 ring-1 ring-blue-200/60 hover:ring-blue-400/60 text-blue-700 font-extrabold text-xs cursor-pointer rounded-xl shadow-sm transition flex items-center gap-1.5"
-              >
-                <Settings className="w-3.5 h-3.5" />
-                <span>Advanced Settings</span>
-              </button>
+            <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setIsInfoModalOpen(false);
+                    if (onNavigateView) onNavigateView('system_settings');
+                  }}
+                  className="px-3.5 py-1.5 backdrop-blur-sm bg-white/50 hover:bg-white/80 border border-white/70 ring-1 ring-blue-200/60 hover:ring-blue-400/60 text-blue-700 font-extrabold text-xs cursor-pointer rounded-lg shadow-sm transition flex items-center gap-1.5"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>Advanced Settings</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    fetchLiveLogs();
+                    setIsLogViewerOpen(true);
+                  }}
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs cursor-pointer rounded-lg shadow-sm transition flex items-center gap-1.5"
+                >
+                  <Terminal className="w-3.5 h-3.5 text-emerald-200" />
+                  <span>View Full Logs</span>
+                </button>
+              </div>
 
               <button
                 onClick={() => setIsInfoModalOpen(false)}
                 className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-extrabold text-xs cursor-pointer rounded-md shadow-sm transition"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Terminal Live Log Viewer Modal */}
+      {isLogViewerOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-[99999] backdrop-blur-md animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col h-[85vh] animate-in zoom-in-95">
+            {/* Header */}
+            <div className="bg-slate-950 px-5 py-3.5 flex items-center justify-between border-b border-slate-800 text-white">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                  <Terminal className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-100 flex items-center gap-2">
+                    <span>Live Daemon & System Execution Logs</span>
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded-full border border-emerald-500/30">FTP & Host Ready</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-medium">Realtime inspection for AI Gemini Scanner, Gmail Sync & System Errors</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fetchLiveLogs}
+                  disabled={isLoadingLogs}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg border border-slate-700 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingLogs ? 'animate-spin text-emerald-400' : 'text-slate-400'}`} />
+                  <span>{isLoadingLogs ? 'Refreshing...' : 'Refresh Logs'}</span>
+                </button>
+                <button
+                  onClick={() => setIsLogViewerOpen(false)}
+                  className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer rounded-lg border border-transparent hover:border-slate-700"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Sub-Header Tabs */}
+            <div className="bg-slate-950/60 px-5 py-2 border-b border-slate-800/80 flex items-center gap-2 overflow-x-auto scrollbar-none">
+              <button
+                onClick={() => setActiveLogTab('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  activeLogTab === 'all'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>All Log Files ({logFiles.length})</span>
+              </button>
+
+              {logFiles.map((lf) => (
+                <button
+                  key={lf.file}
+                  onClick={() => setActiveLogTab(lf.file)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    activeLogTab === lf.file
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  <Terminal className="w-3 h-3 text-blue-400" />
+                  <span>{lf.file}</span>
+                </button>
+              ))}
+
+              <button
+                onClick={() => setActiveLogTab('db_errors')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ml-auto ${
+                  activeLogTab === 'db_errors'
+                    ? 'bg-rose-600 text-white shadow-sm'
+                    : 'bg-rose-950/40 text-rose-300 hover:bg-rose-900/60 border border-rose-800/50'
+                }`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                <span>Database Errors ({dbErrors.length})</span>
+              </button>
+            </div>
+
+            {/* Log Content Area */}
+            <div className="flex-1 p-4 bg-slate-950 font-mono text-xs text-slate-200 overflow-y-auto space-y-4">
+              {isLoadingLogs ? (
+                <div className="flex flex-col items-center justify-center h-64 text-slate-400 gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
+                  <p className="font-sans font-bold">Loading live execution logs from server...</p>
+                </div>
+              ) : activeLogTab === 'db_errors' ? (
+                <div className="space-y-3 font-sans">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-extrabold text-rose-400 flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4" />
+                      <span>MySQL Database Trace Errors ({dbErrors.length})</span>
+                    </h4>
+                  </div>
+                  {dbErrors.length === 0 ? (
+                    <div className="p-6 bg-slate-900/50 border border-slate-800 rounded-xl text-center text-slate-400">
+                      <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+                      <p className="font-bold">No AI errors recorded in database!</p>
+                    </div>
+                  ) : (
+                    dbErrors.map((err, idx) => (
+                      <div key={idx} className="p-3.5 bg-rose-950/20 border border-rose-900/40 rounded-xl font-mono text-xs text-rose-200 space-y-1">
+                        <div className="flex items-center justify-between text-[11px] text-slate-400">
+                          <span className="font-bold text-rose-300">RFQ #{err.rfq_number}</span>
+                          <span>{err.created_at}</span>
+                        </div>
+                        <p className="font-semibold text-slate-200 font-sans">{err.subject}</p>
+                        <p className="text-rose-400 bg-slate-900/90 p-2 rounded border border-rose-900/60 whitespace-pre-wrap">{err.error}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {logFiles
+                    .filter((lf) => activeLogTab === 'all' || activeLogTab === lf.file)
+                    .map((lf) => (
+                      <div key={lf.file} className="border border-slate-800 rounded-xl overflow-hidden bg-slate-900/90 shadow-lg">
+                        <div className="bg-slate-800/80 px-4 py-2 flex items-center justify-between border-b border-slate-700/60 text-slate-300 font-sans text-xs">
+                          <div className="flex items-center gap-2 font-mono">
+                            <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                            <span className="font-bold text-slate-100">{lf.file}</span>
+                            <span className="text-[10px] text-slate-400">({lf.mtime})</span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(lf.content);
+                              alert(`Copied ${lf.file} content to clipboard!`);
+                            }}
+                            className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
+                          >
+                            <Copy className="w-3 h-3 text-slate-400" />
+                            <span>Copy</span>
+                          </button>
+                        </div>
+                        <pre className="p-4 text-[11px] leading-relaxed overflow-x-auto text-emerald-300/90 whitespace-pre-wrap font-mono">
+                          {lf.content || 'Log file is empty.'}
+                        </pre>
+                      </div>
+                    ))}
+                  {logFiles.length === 0 && (
+                    <div className="p-8 text-center text-slate-400 font-sans">
+                      <p className="font-bold">No log files found in daemon/logs directory yet.</p>
+                      <p className="text-xs text-slate-500 mt-1">Run daemon tasks to generate execution log files.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="bg-slate-950 px-5 py-3 border-t border-slate-800 flex items-center justify-between text-slate-400 text-xs">
+              <span className="font-mono text-[11px] text-slate-500">Log Directory: /daemon/logs/*.log</span>
+              <button
+                onClick={() => setIsLogViewerOpen(false)}
+                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-xs cursor-pointer rounded-lg transition"
+              >
+                Close Terminal
               </button>
             </div>
           </div>

@@ -13,24 +13,29 @@ try {
 
     // GET USERS
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        $res = $db_conn->query("SELECT id, name, email, role, department, status, created_at FROM users ORDER BY created_at ASC");
+        // Seed standard 4 team email accounts if missing
+        $seed_users = [
+            ['USR-101', 'Aiman Zaki', 'aimanzaki@abmalaya.com', 'Admin', 'Sales & Business Development'],
+            ['USR-102', 'Info AB Malaya', 'info@abmalaya.com', 'Admin', 'General Executive & Operations'],
+            ['USR-103', 'Sales Requisition Team', 'sales@abmalaya.com', 'Karyawan', 'Sales Requisition'],
+            ['USR-104', 'Purchasing & Operations', 'purchasing@abmalaya.com', 'Karyawan', 'Purchasing & Supply Chain'],
+        ];
+
+        $ins = $db_conn->prepare("INSERT IGNORE INTO users (id, name, email, password, role, department, status) VALUES (?, ?, ?, 'default_hash', ?, ?, 'Active')");
+        if ($ins) {
+            foreach ($seed_users as $su) {
+                $ins->bind_param("sssss", $su[0], $su[1], $su[2], $su[3], $su[4]);
+                $ins->execute();
+            }
+            $ins->close();
+        }
+
+        $res = $db_conn->query("SELECT id, name, email, role, department, status, created_at FROM users ORDER BY id ASC");
         $users = [];
         if ($res && $res->num_rows > 0) {
             while ($row = $res->fetch_assoc()) {
                 $users[] = $row;
             }
-        } else {
-            // Seed initial admin user if table empty
-            $db_conn->query("INSERT IGNORE INTO users (id, name, email, password, role, department, status) VALUES ('USR-001', 'Ilham Pradani, S.T.', 'ilham@abmalaya.com', 'hash', 'Admin', 'Sales', 'Active')");
-            $users[] = [
-                'id' => 'USR-001',
-                'name' => 'Ilham Pradani, S.T.',
-                'email' => 'ilham@abmalaya.com',
-                'role' => 'Admin',
-                'department' => 'Sales & Business Development',
-                'status' => 'Active',
-                'created_at' => date('Y-m-d')
-            ];
         }
 
         ob_end_clean();
@@ -41,6 +46,7 @@ try {
         exit;
     }
 
+
     // POST NEW USER
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $input = json_decode(file_get_contents('php_input'), true);
@@ -49,9 +55,9 @@ try {
         }
 
         $id = isset($input['id']) ? $input['id'] : 'USR-' . time();
-        $name = isset($input['name']) ? $input['name'] : 'New User';
-        $email = isset($input['email']) ? $input['email'] : 'user@abmalaya.com';
-        $role = isset($input['role']) ? $input['role'] : 'Sales Engineer';
+        $name = isset($input['name']) ? $input['name'] : 'Team Member';
+        $email = isset($input['email']) ? $input['email'] : 'aimanzaki@abmalaya.com';
+        $role = isset($input['role']) ? $input['role'] : 'Sales';
         $department = isset($input['department']) ? $input['department'] : 'Sales';
 
         $stmt = $db_conn->prepare("INSERT INTO users (id, name, email, password, role, department, status) VALUES (?, ?, ?, 'default_hash', ?, ?, 'Active') ON DUPLICATE KEY UPDATE name=VALUES(name)");
