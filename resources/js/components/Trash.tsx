@@ -69,7 +69,9 @@ export const Trash: React.FC<TrashProps> = ({
   });
 
   const formatCurrency = (val: number, curr = 'MYR') => {
-    return `${curr} ${Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const num = Number(val || 0);
+    const hasDec = num % 1 !== 0;
+    return `${curr} ${num.toLocaleString('en-US', { minimumFractionDigits: hasDec ? 2 : 0, maximumFractionDigits: 2 })}`;
   };
 
   const handleRestoreQuotation = (id: string) => {
@@ -129,19 +131,25 @@ export const Trash: React.FC<TrashProps> = ({
   };
 
   const handleRestoreProduct = (id: number, name: string) => {
+    setProductList((prev) => prev.filter((p) => p.id !== id));
+
     fetch(getApiUrl(`/api_products.php?action=restore&id=${id}`))
       .then((res) => res.json())
       .then((resData) => {
         if (resData.status === 'success') {
           setNotification(`Product "${name}" restored to active product list.`);
           setTimeout(() => setNotification(null), 4000);
+        } else {
           fetchJunkProducts();
         }
-      });
+      })
+      .catch(() => fetchJunkProducts());
   };
 
   const handlePermanentDeleteProduct = (id: number, name: string) => {
-    if (!window.confirm(`PERINGATAN: Hapus secara PERMANEN produk "${name}"? Tindakan ini tidak dapat dibatalkan.`)) return;
+    if (!window.confirm(`WARNING: Delete product "${name}" PERMANENTLY? This action cannot be undone.`)) return;
+
+    setProductList((prev) => prev.filter((p) => p.id !== id));
 
     fetch(getApiUrl(`/api_products.php?action=delete_permanent&id=${id}`))
       .then((res) => res.json())
@@ -149,9 +157,11 @@ export const Trash: React.FC<TrashProps> = ({
         if (resData.status === 'success') {
           setNotification(`Product "${name}" permanently deleted.`);
           setTimeout(() => setNotification(null), 4000);
+        } else {
           fetchJunkProducts();
         }
-      });
+      })
+      .catch(() => fetchJunkProducts());
   };
 
   return (

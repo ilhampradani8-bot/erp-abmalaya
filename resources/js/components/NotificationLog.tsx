@@ -61,7 +61,7 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
   };
 
   const handleClearAllHistory = () => {
-    if (!window.confirm('Hapus seluruh riwayat log notifikasi dari database MySQL?')) return;
+    if (!window.confirm('Delete all notification log history from MySQL database?')) return;
 
     fetch(getApiUrl('/api_notifications.php'), {
       method: 'DELETE',
@@ -113,7 +113,7 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
         return (
           <span className="backdrop-blur-md bg-amber-500/15 text-amber-900 border border-amber-400/50 font-black px-2.5 py-0.5 text-[10px] rounded-none flex items-center gap-1 shadow-2xs">
             <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
-            <span>Peringatan Sync</span>
+            <span>Sync Warning</span>
           </span>
         );
       case 'success':
@@ -160,7 +160,7 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
             className="px-3 py-1 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-white text-[#3d3d3d] font-bold text-xs border border-[#a0a0a0] rounded-md shadow-inner transition cursor-pointer flex items-center gap-1 disabled:opacity-50"
           >
             <Check className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Tandai Semua Dibaca</span>
+            <span>Mark All as Read</span>
           </button>
 
           <button
@@ -169,7 +169,7 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
             className="px-3 py-1 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-rose-50 text-rose-700 font-bold text-xs border border-[#a0a0a0] rounded-md shadow-inner transition cursor-pointer flex items-center gap-1"
           >
             <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-            <span>Bersihkan Riwayat</span>
+            <span>Clear History</span>
           </button>
 
           <button
@@ -226,7 +226,7 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
         ) : filteredNotifications.length === 0 ? (
           <div className="py-20 text-center text-slate-400 text-xs space-y-2">
             <Bell className="w-8 h-8 text-slate-300 mx-auto" />
-            <p className="font-bold text-slate-600">Tidak ada riwayat notifikasi ditemukan.</p>
+            <p className="font-bold text-slate-600">No notification history found.</p>
           </div>
         ) : (
           <div className="w-full overflow-x-auto border-t border-b border-[rgba(0,0,0,0.2)]">
@@ -234,11 +234,11 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
               <thead className="bg-gradient-to-b from-[#DFDFDF] to-[#EDEDED] border-b border-[rgba(0,0,0,0.15)] text-[#626262] font-semibold text-[11px] uppercase tracking-wide">
                 <tr>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-8 text-center">^</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-32">Status / Jenis</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-60">Judul Notifikasi</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">Pesan & Detail Aktivitas</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-44 text-center">Waktu Dibuat</th>
-                  <th className="p-2.5 text-center w-24">Aksi</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-32">Status / Type</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-60">Notification Title</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">Message & Activity Details</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-44 text-center">Created At</th>
+                  <th className="p-2.5 text-center w-24">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 bg-white">
@@ -287,7 +287,7 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
                           }}
                           className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[10px] rounded shadow-2xs transition"
                         >
-                          Lihat Detail
+                          View Details
                         </button>
                       </td>
                     </tr>

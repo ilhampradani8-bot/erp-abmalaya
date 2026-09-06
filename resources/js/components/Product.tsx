@@ -1,11 +1,12 @@
 // @ts-nocheck
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Trash2, Edit3, Image as ImageIcon, Package, Check, X, Loader2, RefreshCw, Eye, Upload, AlertTriangle, Cloud, HardDrive, Settings, FileJson, CheckCircle2, Zap, ShieldAlert, MoreVertical, Filter, FileText, Copy } from 'lucide-react';
+import { Search, Plus, Trash2, Edit3, Image as ImageIcon, Package, Check, X, Loader2, RefreshCw, Eye, Upload, AlertTriangle, Cloud, HardDrive, Settings, FileJson, CheckCircle2, Zap, ShieldAlert, MoreVertical, Filter, FileText, Copy, ExternalLink, Tag } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
 export interface ProductItem {
   id: number;
   product_code?: string;
+  impa_code?: string;
   product_name?: string;
   category_code?: string;
   category_name?: string;
@@ -100,11 +101,36 @@ const compressImageFile = (
   });
 };
 
+export const resolveProductImageUrl = (urlStr?: string): string => {
+  if (!urlStr) return '';
+  let cleanUrl = urlStr.trim();
+  // Strip hardcoded local server hostnames so relative proxy/tunnel resolves correctly
+  cleanUrl = cleanUrl.replace(/^http:\/\/(127\.0\.0\.1|localhost)(:8000)?/i, '');
+  if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://') || cleanUrl.startsWith('data:')) {
+    return cleanUrl;
+  }
+  return getApiUrl(cleanUrl);
+};
+
 export const Product: React.FC<ProductProps> = ({}) => {
-  const [products, setProducts] = useState<ProductItem[]>([]);
+  const [products, setProducts] = useState<ProductItem[]>(() => {
+    try {
+      const cached = localStorage.getItem('erp_products_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    try {
+      const cached = localStorage.getItem('erp_products_cache');
+      return !(cached && JSON.parse(cached).length > 0);
+    } catch (e) {
+      return true;
+    }
+  });
   const [activeRowIdx, setActiveRowIdx] = useState<number | null>(null);
 
   const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'junk'>('products');
@@ -118,8 +144,16 @@ export const Product: React.FC<ProductProps> = ({}) => {
   const [syncModalTab, setSyncModalTab] = useState<'config' | 'logs' | 'conflicts' | 'session_audit'>('config');
   const [syncLogs, setSyncLogs] = useState<any[]>([]);
   const [conflictsList, setConflictsList] = useState<any[]>([]);
+  const [backupsList, setBackupsList] = useState<any[]>([]);
+  const [isCopiedEmail, setIsCopiedEmail] = useState<boolean>(false);
   const [isSyncingSpreadsheet, setIsSyncingSpreadsheet] = useState<boolean>(false);
   const [isCheckingConflicts, setIsCheckingConflicts] = useState<boolean>(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(false);
+  const [draggedFile, setDraggedFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [isUploadingCSV, setIsUploadingCSV] = useState<boolean>(false);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(25);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Google Drive Cloud Sync & Conflict Detection States
@@ -134,13 +168,16 @@ export const Product: React.FC<ProductProps> = ({}) => {
   const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
+  const [photoInputMode, setPhotoInputMode] = useState<'upload' | 'url'>('upload');
 
   // Form Fields State
   const [productCode, setProductCode] = useState('');
+  const [impaCode, setImpaCode] = useState('');
   const [productName, setProductName] = useState('');
   const [description, setDescription] = useState('');
   const [specification, setSpecification] = useState('');
   const [offerText, setOfferText] = useState('');
+  const [showAlternativeOfferInput, setShowAlternativeOfferInput] = useState<boolean>(false);
   const [supplierName, setSupplierName] = useState('');
   const [unit, setUnit] = useState('Package');
   const [unitPrice, setUnitPrice] = useState<number>(0);
@@ -151,6 +188,29 @@ export const Product: React.FC<ProductProps> = ({}) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [category, setCategory] = useState('Hose & Fitting');
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [productHistoryLogs, setProductHistoryLogs] = useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
+  const [backgroundUploadStatus, setBackgroundUploadStatus] = useState<{ fileName: string; status: 'compressing' | 'uploading' | 'completed' | 'error'; progress: number } | null>(null);
+
+  // Fetch product change history from MySQL when drawer is opened
+  useEffect(() => {
+    if (selectedProductDetail && selectedProductDetail.id) {
+      setIsLoadingHistory(true);
+      fetch(getApiUrl(`/api_products.php?action=get_history&product_id=${selectedProductDetail.id}`))
+        .then((res) => res.json())
+        .then((resData) => {
+          if (resData.status === 'success' && resData.data) {
+            setProductHistoryLogs(resData.data);
+          } else {
+            setProductHistoryLogs([]);
+          }
+        })
+        .catch((err) => console.log('Fetch product history error:', err))
+        .finally(() => setIsLoadingHistory(false));
+    } else {
+      setProductHistoryLogs([]);
+    }
+  }, [selectedProductDetail]);
 
   const logSessionAudit = (action: string, detail: string) => {
     try {
@@ -171,6 +231,27 @@ export const Product: React.FC<ProductProps> = ({}) => {
         }
       })
       .catch((err) => console.log('Sync log fetch error:', err));
+  };
+
+  const fetchSpreadsheetBackups = () => {
+    fetch(getApiUrl('/api_spreadsheet_sync.php?action=get_backups'))
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success' && Array.isArray(resData.backups)) {
+          setBackupsList(resData.backups);
+        }
+      })
+      .catch((err) => console.log('Spreadsheet backups fetch error:', err));
+  };
+
+  const handleCopyEmail = (emailStr: string) => {
+    try {
+      navigator.clipboard.writeText(emailStr);
+      setIsCopiedEmail(true);
+      setTimeout(() => setIsCopiedEmail(false), 3000);
+    } catch (e) {
+      alert('Email Service Account: ' + emailStr);
+    }
   };
 
   const handleManualSyncSpreadsheet = () => {
@@ -210,10 +291,32 @@ export const Product: React.FC<ProductProps> = ({}) => {
     logSessionAudit('DOWNLOAD_CSV', isTemplate ? 'Downloaded CSV Template' : `Downloaded Filtered CSV (${filteredProducts.length} items)`);
   };
 
-  const handleUploadCSVFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
 
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      setDraggedFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleExecuteCSVUpload = (fileToUpload?: File) => {
+    const file = fileToUpload || draggedFile;
+    if (!file) {
+      alert('Pilih atau tarik (drag) file CSV terlebih dahulu!');
+      return;
+    }
+
+    setIsUploadingCSV(true);
     const formData = new FormData();
     formData.append('csv_file', file);
     formData.append('action', 'upload_csv');
@@ -229,11 +332,14 @@ export const Product: React.FC<ProductProps> = ({}) => {
           logSessionAudit('UPLOAD_CSV', resData.message);
           setTimeout(() => setSaveSuccessMessage(null), 5000);
           fetchProducts();
+          setIsUploadModalOpen(false);
+          setDraggedFile(null);
         } else {
           alert('Upload failed: ' + resData.message);
         }
       })
-      .catch((err) => alert('Upload error: ' + err.message));
+      .catch((err) => alert('Upload error: ' + err.message))
+      .finally(() => setIsUploadingCSV(false));
   };
 
 
@@ -245,9 +351,11 @@ export const Product: React.FC<ProductProps> = ({}) => {
     ratio: number;
   } | null>(null);
 
-  // Fetch Products from MySQL Database
+  // Fetch Products from MySQL Database (Stale-While-Revalidate Instant Cache)
   const fetchProducts = () => {
-    setIsLoading(true);
+    if (!products || products.length === 0) {
+      setIsLoading(true);
+    }
     const url = activeTab === 'categories'
       ? getApiUrl('/api_products.php?get_categories=1')
       : getApiUrl('/api_products.php');
@@ -260,6 +368,9 @@ export const Product: React.FC<ProductProps> = ({}) => {
             setCategoriesBlueprints(resData.data);
           } else {
             setProducts(resData.data);
+            try {
+              localStorage.setItem('erp_products_cache', JSON.stringify(resData.data));
+            } catch (e) {}
           }
         }
       })
@@ -326,6 +437,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
   useEffect(() => {
     checkGDriveSyncStatus();
     fetchCurrencySetting();
+    fetchSpreadsheetBackups();
   }, []);
 
 
@@ -365,20 +477,42 @@ export const Product: React.FC<ProductProps> = ({}) => {
       });
   };
 
+  const generateNextProductCode = (productList: ProductItem[]): string => {
+    const existingNumbers = new Set<number>();
+    productList.forEach((p) => {
+      if (p.product_code) {
+        const match = p.product_code.match(/PRD-(\d+)/i);
+        if (match && match[1]) {
+          existingNumbers.add(parseInt(match[1], 10));
+        }
+      }
+    });
+
+    let nextNum = 1;
+    while (existingNumbers.has(nextNum)) {
+      nextNum++;
+    }
+
+    const padded = nextNum.toString().padStart(4, '0');
+    return `PRD-${padded}`;
+  };
+
   const resetForm = () => {
     setEditingProduct(null);
-    setProductCode(`PRD-00${products.length + 1}`);
+    setProductCode(generateNextProductCode(products));
+    setImpaCode('');
     setProductName('');
     setDescription('');
     setSpecification('');
     setOfferText('');
+    setShowAlternativeOfferInput(false);
     setSupplierName('');
     setUnit('Package');
     setUnitPrice(0);
     setCapitalCost(0);
     setStockQuantity(50);
     setDiscountPercent(0);
-    setImageUrl('https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=600&q=80');
+    setImageUrl('');
     setSelectedFile(null);
     setCompressionInfo(null);
     setCategory('Hose & Fitting');
@@ -392,10 +526,13 @@ export const Product: React.FC<ProductProps> = ({}) => {
   const handleOpenEditModal = (p: ProductItem) => {
     setEditingProduct(p);
     setProductCode(p.product_code || '');
+    setImpaCode(p.impa_code || '');
     setProductName(p.product_name || '');
     setDescription(p.description || '');
     setSpecification(p.specification || '');
-    setOfferText(p.offer || p.offered_item || '');
+    const currentOffer = p.offer || p.offered_item || '';
+    setOfferText(currentOffer);
+    setShowAlternativeOfferInput(!!currentOffer.trim());
     setSupplierName(p.supplier_name || '');
     setUnit(p.unit || 'Package');
     setUnitPrice(p.unit_price || 0);
@@ -436,8 +573,23 @@ export const Product: React.FC<ProductProps> = ({}) => {
 
     setIsSaving(true);
 
+    const userSessionRaw = localStorage.getItem('abmalaya_user_session');
+    let actorName = 'Super Admin';
+    let actorEmail = 'admin@abmalaya.com';
+    if (userSessionRaw) {
+      try {
+        const uObj = JSON.parse(userSessionRaw);
+        if (uObj.name) actorName = uObj.name;
+        if (uObj.email) actorEmail = uObj.email;
+      } catch (e) {}
+    }
+
     const formData = new FormData();
+    if (editingProduct && editingProduct.id) {
+      formData.append('id', editingProduct.id.toString());
+    }
     formData.append('product_code', productCode);
+    formData.append('impa_code', impaCode);
     formData.append('product_name', productName);
     formData.append('description', description);
     formData.append('specification', specification);
@@ -450,44 +602,118 @@ export const Product: React.FC<ProductProps> = ({}) => {
     formData.append('discount_percent', discountPercent.toString());
     formData.append('category', category);
     formData.append('image_url', imageUrl);
+    formData.append('actor_name', actorName);
+    formData.append('actor_email', actorEmail);
 
-
+    const uploadFileName = selectedFile ? selectedFile.name : (productName || 'Product Data');
     if (selectedFile) {
       formData.append('product_image', selectedFile);
+      setBackgroundUploadStatus({
+        fileName: uploadFileName,
+        status: 'uploading',
+        progress: 10
+      });
     }
 
-    fetch(getApiUrl('/api_products.php'), {
-      method: 'POST',
-      body: formData,
-    })
-      .then((res) => res.json())
-      .then((resData) => {
+    // Immediately close modal popup so user can continue working while upload runs in background
+    setIsFormModalOpen(false);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', getApiUrl('/api_products.php'), true);
+
+    if (xhr.upload) {
+      xhr.upload.onprogress = (evt) => {
+        if (evt.lengthComputable) {
+          const percent = Math.round((evt.loaded / evt.total) * 100);
+          if (selectedFile) {
+            setBackgroundUploadStatus({
+              fileName: uploadFileName,
+              status: 'uploading',
+              progress: percent
+            });
+          }
+        }
+      };
+    }
+
+    xhr.onload = () => {
+      setIsSaving(false);
+      try {
+        const resData = JSON.parse(xhr.responseText);
         if (resData.status === 'success') {
+          if (selectedFile) {
+            setBackgroundUploadStatus({
+              fileName: uploadFileName,
+              status: 'completed',
+              progress: 100
+            });
+            setTimeout(() => setBackgroundUploadStatus(null), 3500);
+          }
           setSaveSuccessMessage(`Product "${productName}" saved to dedicated folder & MySQL!`);
-          logSessionAudit('SAVE_PRODUCT', `Saved product ${productCode} - ${productName} (Capital: ${capitalCost})`);
+          logSessionAudit('SAVE_PRODUCT', `Saved product ${productCode} - ${productName}`);
           setTimeout(() => setSaveSuccessMessage(null), 4000);
-          setIsFormModalOpen(false);
           fetchProducts();
           checkGDriveSyncStatus();
+        } else {
+          if (selectedFile) {
+            setBackgroundUploadStatus({
+              fileName: uploadFileName,
+              status: 'error',
+              progress: 0
+            });
+          }
         }
-      })
-      .catch((err) => console.log('Save product error:', err))
-      .finally(() => setIsSaving(false));
+      } catch (err) {
+        console.error('Parse save response error:', err);
+      }
+    };
+
+    xhr.onerror = () => {
+      setIsSaving(false);
+      if (selectedFile) {
+        setBackgroundUploadStatus({
+          fileName: uploadFileName,
+          status: 'error',
+          progress: 0
+        });
+      }
+    };
+
+    xhr.send(formData);
   };
 
   const handleTrashProduct = (id: number, name: string) => {
-    if (!window.confirm(`Pindahkan produk "${name}" ke Sampah (Junk)?`)) return;
+    if (!window.confirm(`Move product "${name}" to Trash (Junk)?`)) return;
 
-    fetch(getApiUrl(`/api_products.php?action=trash&id=${id}`))
+    // Optimistically remove row from UI table immediately for real-time feel!
+    setProducts((prev) => prev.filter((p) => p.id !== id));
+    if (selectedProductDetail && selectedProductDetail.id === id) {
+      setSelectedProductDetail(null);
+    }
+
+    const userSessionRaw = localStorage.getItem('abmalaya_user_session');
+    let actorName = 'Super Admin';
+    let actorEmail = 'admin@abmalaya.com';
+    if (userSessionRaw) {
+      try {
+        const uObj = JSON.parse(userSessionRaw);
+        if (uObj.name) actorName = uObj.name;
+        if (uObj.email) actorEmail = uObj.email;
+      } catch (e) {}
+    }
+
+    fetch(getApiUrl(`/api_products.php?action=trash&id=${id}&actor_name=${encodeURIComponent(actorName)}&actor_email=${encodeURIComponent(actorEmail)}`))
       .then((res) => res.json())
       .then((resData) => {
         if (resData.status === 'success') {
-          setSaveSuccessMessage(`Produk "${name}" dipindahkan ke Sampah.`);
+          setSaveSuccessMessage(`Product "${name}" moved to Trash.`);
           logSessionAudit('TRASH_PRODUCT', `Moved product #${id} (${name}) to Junk`);
           setTimeout(() => setSaveSuccessMessage(null), 3000);
+        } else {
           fetchProducts();
         }
-      });
+      })
+      .catch(() => fetchProducts());
   };
 
   const handleRestoreProduct = (id: number, name: string) => {
@@ -495,7 +721,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
       .then((res) => res.json())
       .then((resData) => {
         if (resData.status === 'success') {
-          setSaveSuccessMessage(`Produk "${name}" dipulihkan ke daftar aktif.`);
+          setSaveSuccessMessage(`Product "${name}" restored to active list.`);
           logSessionAudit('RESTORE_PRODUCT', `Restored product #${id} (${name})`);
           setTimeout(() => setSaveSuccessMessage(null), 3000);
           fetchProducts();
@@ -504,23 +730,32 @@ export const Product: React.FC<ProductProps> = ({}) => {
   };
 
   const handlePermanentDelete = (id: number, name: string) => {
-    if (!window.confirm(`PERINGATAN: Hapus secara PERMANEN produk "${name}"? Tindakan ini tidak dapat dibatalkan.`)) return;
+    if (!window.confirm(`WARNING: PERMANENTLY delete product "${name}"? This action cannot be undone.`)) return;
+
+    // Optimistically remove row from UI table immediately for real-time feel!
+    setProducts((prev) => prev.filter((p) => p.id !== id));
+    if (selectedProductDetail && selectedProductDetail.id === id) {
+      setSelectedProductDetail(null);
+    }
 
     fetch(getApiUrl(`/api_products.php?action=delete_permanent&id=${id}`))
       .then((res) => res.json())
       .then((resData) => {
         if (resData.status === 'success') {
-          setSaveSuccessMessage(`Produk "${name}" dihapus permanen.`);
+          setSaveSuccessMessage(`Product "${name}" permanently deleted.`);
           logSessionAudit('PERMANENT_DELETE', `Permanently deleted product #${id} (${name})`);
           setTimeout(() => setSaveSuccessMessage(null), 3000);
+        } else {
           fetchProducts();
         }
-      });
+      })
+      .catch(() => fetchProducts());
   };
 
   const formatCurrency = (val: number, curr = currencySymbol || 'RM') => {
     const num = Number(val) || 0;
-    return `${curr} ${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const hasDec = num % 1 !== 0;
+    return `${curr} ${num.toLocaleString('en-US', { minimumFractionDigits: hasDec ? 2 : 0, maximumFractionDigits: 2 })}`;
   };
 
 
@@ -531,10 +766,16 @@ export const Product: React.FC<ProductProps> = ({}) => {
   ]));
 
   const filteredProducts = products.filter((p) => {
+    const pStatus = (p.status || 'active').toLowerCase();
+    if (pStatus === 'junk' || pStatus === 'trash' || pStatus === 'deleted' || pStatus === 'archived') {
+      return false;
+    }
+
     const q = searchTerm.toLowerCase();
     const matchesSearch =
       (p.product_name || '').toLowerCase().includes(q) ||
       (p.product_code || '').toLowerCase().includes(q) ||
+      (p.impa_code || '').toLowerCase().includes(q) ||
       (p.description || '').toLowerCase().includes(q) ||
       (p.category || '').toLowerCase().includes(q);
 
@@ -560,6 +801,24 @@ export const Product: React.FC<ProductProps> = ({}) => {
     );
   });
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, activeCategory, activeTab]);
+
+  const totalProductItems = filteredProducts.length;
+  const totalCategoryItems = filteredCategories.length;
+  const currentTotal = activeTab === 'categories' ? totalCategoryItems : totalProductItems;
+  const effectivePageSize = pageSize === 0 ? Math.max(1, currentTotal) : pageSize;
+  const totalPages = Math.max(1, Math.ceil(currentTotal / effectivePageSize));
+
+  const paginatedProducts = pageSize === 0 
+    ? filteredProducts 
+    : filteredProducts.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize);
+
+  const paginatedCategories = pageSize === 0 
+    ? filteredCategories 
+    : filteredCategories.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize);
+
   const totalMasterCatalogValue = products.reduce((acc, p) => acc + (p.unit_price || 0) * (p.stock_quantity || 1), 0);
 
   // Real Discrepancy Items between Local MySQL & Google Drive Backup from Backend API
@@ -568,6 +827,54 @@ export const Product: React.FC<ProductProps> = ({}) => {
   return (
     <div className="w-full h-full bg-[#f0f0f0] overflow-y-auto flex flex-col font-sans p-0 m-0">
       
+      {/* FLOATING TOP PROGRESS BAR INDICATOR (GARIS ATAS UPLOADING BACKGROUND) */}
+      {backgroundUploadStatus && (
+        <div className="sticky top-0 z-50 bg-slate-900 text-white border-b-2 border-blue-500 shadow-xl px-4 py-2 flex items-center justify-between text-xs font-sans animate-in slide-in-from-top duration-200 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-1.5 bg-blue-500/20 text-blue-400 rounded-full animate-pulse">
+              <Upload className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-extrabold text-blue-300 flex items-center gap-2">
+                <span>Photo Upload Progress ({backgroundUploadStatus.progress}%)</span>
+                {backgroundUploadStatus.status === 'completed' && (
+                  <span className="text-[10px] text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded font-mono font-bold">
+                    ✓ Upload Complete
+                  </span>
+                )}
+                {backgroundUploadStatus.status === 'error' && (
+                  <span className="text-[10px] text-rose-300 bg-rose-950/80 px-2 py-0.5 rounded font-mono font-bold">
+                    ✕ Upload Error
+                  </span>
+                )}
+              </span>
+              <p className="text-[10px] text-slate-300 font-mono mt-0.5">
+                {backgroundUploadStatus.fileName} • Running in background (drawer can be closed safely)
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="w-36 bg-slate-800 h-2 rounded-full overflow-hidden border border-slate-700">
+              <div
+                className="bg-gradient-to-r from-blue-500 to-emerald-400 h-full transition-all duration-200"
+                style={{ width: `${backgroundUploadStatus.progress}%` }}
+              />
+            </div>
+            {backgroundUploadStatus.status === 'completed' && (
+              <button
+                type="button"
+                onClick={() => setBackgroundUploadStatus(null)}
+                className="p-1 text-slate-400 hover:text-white cursor-pointer"
+                title="Dismiss indicator"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ITUNES-STYLE TOP METALLIC HEADER BAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] px-4 py-2 border-b border-[#7b7b7b] shrink-0 w-full shadow-xs">
         
@@ -739,11 +1046,11 @@ export const Product: React.FC<ProductProps> = ({}) => {
                 
                 <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-300 shadow-2xl rounded-lg p-3 z-20 font-sans space-y-3">
                   
-                  {/* CARD 1: SPREADSHEET CLOUD SYNC */}
+                  {/* COMBINED CARD 1: SPREADSHEET BACKUP, SYNC & AUDIT LOGS */}
                   <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-md space-y-1.5 shadow-2xs">
                     <span className="font-extrabold text-[11px] text-blue-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 pb-1">
                       <Cloud className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Spreadsheet Backup & Sync</span>
+                      <span>Spreadsheet Backup, Sync & Audit Logs</span>
                     </span>
                     
                     <div className="grid grid-cols-2 gap-1.5 pt-0.5">
@@ -753,7 +1060,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                           setIsMoreMenuOpen(false);
                         }}
                         disabled={isSyncingSpreadsheet}
-                        className="w-full text-left p-2 bg-white hover:bg-blue-50 border border-slate-200 rounded text-[11px] font-bold text-slate-800 transition cursor-pointer flex items-center gap-1.5"
+                        className="w-full text-left p-1.5 bg-white hover:bg-blue-50 border border-slate-200 rounded text-[11px] font-semibold text-slate-800 transition cursor-pointer flex items-center gap-1.5"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${isSyncingSpreadsheet ? 'animate-spin' : ''}`} />
                         <span>Sync Manual</span>
@@ -765,10 +1072,36 @@ export const Product: React.FC<ProductProps> = ({}) => {
                           setIsMoreMenuOpen(false);
                         }}
                         disabled={isCheckingConflicts}
-                        className="w-full text-left p-2 bg-white hover:bg-amber-50 border border-slate-200 rounded text-[11px] font-bold text-slate-800 transition cursor-pointer flex items-center gap-1.5"
+                        className="w-full text-left p-1.5 bg-white hover:bg-amber-50 border border-slate-200 rounded text-[11px] font-semibold text-slate-800 transition cursor-pointer flex items-center gap-1.5"
                       >
                         <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
                         <span>Cek Konflik</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          fetchSyncLogs();
+                          setSyncModalTab('logs');
+                          setIsSettingsModalOpen(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="w-full text-left p-1.5 bg-white hover:bg-purple-50 border border-slate-200 rounded text-[11px] font-semibold text-slate-800 transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-purple-600" />
+                        <span>Log Error Sync</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          fetchProducts();
+                          checkGDriveSyncStatus();
+                          setIsMoreMenuOpen(false);
+                        }}
+                        disabled={isLoading}
+                        className="w-full text-left p-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded text-[11px] font-semibold text-slate-800 transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${isLoading ? 'animate-spin' : ''}`} />
+                        <span>Refresh Data</span>
                       </button>
                     </div>
                   </div>
@@ -794,60 +1127,13 @@ export const Product: React.FC<ProductProps> = ({}) => {
 
                       <button
                         onClick={() => {
-                          handleDownloadFilteredCSV(true);
-                          setIsMoreMenuOpen(false);
-                        }}
-                        className="w-full text-left p-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded text-[11px] font-semibold text-slate-800 transition cursor-pointer flex items-center gap-1.5"
-                      >
-                        <FileJson className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Download Template CSV</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          fileInputRef.current?.click();
+                          setIsUploadModalOpen(true);
                           setIsMoreMenuOpen(false);
                         }}
                         className="w-full text-left p-1.5 bg-white hover:bg-purple-50 border border-slate-200 rounded text-[11px] font-semibold text-slate-800 transition cursor-pointer flex items-center gap-1.5"
                       >
                         <Upload className="w-3.5 h-3.5 text-purple-600" />
                         <span>Upload Data CSV / Spreadsheet</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* CARD 3: SYSTEM LOGS & AUDIT TRAIL */}
-                  <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-md space-y-1.5 shadow-2xs">
-                    <span className="font-extrabold text-[11px] text-purple-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 pb-1">
-                      <Settings className="w-3.5 h-3.5 text-purple-600" />
-                      <span>System Logs & Audit</span>
-                    </span>
-
-                    <div className="grid grid-cols-2 gap-1.5 pt-0.5">
-                      <button
-                        onClick={() => {
-                          fetchSyncLogs();
-                          setSyncModalTab('logs');
-                          setIsSettingsModalOpen(true);
-                          setIsMoreMenuOpen(false);
-                        }}
-                        className="w-full text-left p-1.5 bg-white hover:bg-purple-50 border border-slate-200 rounded text-[11px] font-semibold text-slate-800 transition cursor-pointer flex items-center gap-1.5"
-                      >
-                        <Eye className="w-3.5 h-3.5 text-purple-600" />
-                        <span>Log Error Sync</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          fetchProducts();
-                          checkGDriveSyncStatus();
-                          setIsMoreMenuOpen(false);
-                        }}
-                        disabled={isLoading}
-                        className="w-full text-left p-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded text-[11px] font-semibold text-slate-800 transition cursor-pointer flex items-center gap-1.5"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${isLoading ? 'animate-spin' : ''}`} />
-                        <span>Refresh Data</span>
                       </button>
                     </div>
                   </div>
@@ -895,7 +1181,8 @@ export const Product: React.FC<ProductProps> = ({}) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredCategories.map((p, idx) => {
+                  {paginatedCategories.map((p, idx) => {
+                    const globalIdx = (currentPage - 1) * effectivePageSize + idx + 1;
                     const isEven = idx % 2 === 1;
                     const isActive = activeRowIdx === idx;
 
@@ -909,7 +1196,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                         className={`border-b border-[rgba(0,0,0,0.1)] transition ${rowBgClass}`}
                       >
                         <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center font-mono font-bold text-[11px]">
-                          {idx + 1}
+                          {globalIdx}
                         </td>
 
                         <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center font-mono font-bold text-xs text-slate-800">
@@ -971,9 +1258,10 @@ export const Product: React.FC<ProductProps> = ({}) => {
                   </th>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-14 text-center">Photo</th>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-32 font-mono">Product Code</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-28 font-mono text-purple-900">IMPA Code</th>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] min-w-[180px]">Product Name</th>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] min-w-[200px]">Specification</th>
-                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] min-w-[150px]">Offered Item (Offer)</th>
+                  <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] min-w-[160px]">Alternative Offered</th>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-32 font-mono">Supplier / Seller</th>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-36">Category</th>
                   <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-20 text-center">Unit</th>
@@ -985,7 +1273,8 @@ export const Product: React.FC<ProductProps> = ({}) => {
                 </tr>
               </thead>
               <tbody>
-                {filteredProducts.map((p, idx) => {
+                {paginatedProducts.map((p, idx) => {
+                  const globalIdx = (currentPage - 1) * effectivePageSize + idx + 1;
                   const isEven = idx % 2 === 1;
                   const isActive = activeRowIdx === idx;
 
@@ -1002,41 +1291,56 @@ export const Product: React.FC<ProductProps> = ({}) => {
                       className={`border-b border-[rgba(0,0,0,0.1)] transition cursor-pointer hover:bg-blue-50/40 ${rowBgClass}`}
                     >
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center font-mono font-bold text-[11px]">
-                        {idx + 1}
+                        {globalIdx}
                       </td>
 
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center">
                         <Check className={`w-3.5 h-3.5 mx-auto ${isActive ? 'text-emerald-400' : 'text-emerald-600'}`} />
                       </td>
 
-                      <td className="p-1 border-r border-[rgba(0,0,0,0.1)] text-center">
+                      <td className="p-1 border-r border-[rgba(0,0,0,0.1)] text-center w-14">
                         {p.image_url ? (
-                          <div className="relative group mx-auto w-10 h-10">
+                          <div className="relative group mx-auto w-full max-w-[52px] h-12">
                             <img
-                              src={p.image_url}
-                              alt={p.product_name}
+                              src={resolveProductImageUrl(p.image_url)}
+                              alt={p.product_name || 'Product Photo'}
+                              loading="lazy"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).onerror = null;
+                                (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>';
+                              }}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setPreviewPhotoUrl(p.image_url);
+                                setPreviewPhotoUrl(p.image_url || null);
                               }}
-                              className="w-10 h-10 object-cover border border-slate-300 shadow-2xs cursor-pointer group-hover:opacity-80 transition"
+                              className="w-full h-12 object-cover border border-slate-300 shadow-2xs cursor-pointer group-hover:opacity-80 transition rounded-xs"
                               title="Click to preview photo"
                             />
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setPreviewPhotoUrl(p.image_url);
+                                setPreviewPhotoUrl(p.image_url || null);
                               }}
-                              className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition cursor-pointer"
+                              className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition cursor-pointer rounded-xs"
                             >
-                              <Eye className="w-3.5 h-3.5" />
+                              <Eye className="w-4 h-4" />
                             </button>
                           </div>
                         ) : (
-                          <div className="w-10 h-10 bg-slate-200 border border-slate-300 mx-auto flex items-center justify-center text-slate-400" title="No photo">
-                            <ImageIcon className="w-4 h-4 opacity-50" />
-                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditProduct(p);
+                              setPhotoInputMode('upload');
+                            }}
+                            className="w-full max-w-[52px] h-12 bg-slate-100 hover:bg-blue-50 border border-slate-300 hover:border-blue-400 rounded-xs flex flex-col items-center justify-center text-slate-400 hover:text-blue-600 transition cursor-pointer group mx-auto"
+                            title="No photo uploaded yet. Click to upload photo for this product"
+                          >
+                            <Upload className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 mb-0.5" />
+                            <span className="text-[8px] font-bold text-slate-400 group-hover:text-blue-600">Upload</span>
+                          </button>
                         )}
                       </td>
 
@@ -1044,8 +1348,27 @@ export const Product: React.FC<ProductProps> = ({}) => {
                         {p.product_code}
                       </td>
 
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] font-mono font-bold text-xs">
+                        {p.impa_code ? (
+                          <span className="bg-purple-100 text-purple-900 border border-purple-300 px-1.5 py-0.5 rounded text-[10px] shadow-2xs font-extrabold" title={`Kode Maritim IMPA: ${p.impa_code}`}>
+                            IMPA {p.impa_code}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic text-[10px]">—</span>
+                        )}
+                      </td>
+
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] font-bold text-xs">
-                        {p.product_name}
+                        <div
+                          className="line-clamp-2 text-slate-800 leading-snug cursor-pointer hover:text-blue-600 transition"
+                          title={p.product_name || ''}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedProductDetail(p);
+                          }}
+                        >
+                          {p.product_name}
+                        </div>
                       </td>
 
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-[11px]">
@@ -1061,11 +1384,18 @@ export const Product: React.FC<ProductProps> = ({}) => {
                         </div>
                       </td>
 
-                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-[11px] font-semibold text-emerald-800">
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-[11px] text-slate-800">
                         {p.offer || p.offered_item ? (
-                          <span className="bg-emerald-50 text-emerald-900 border border-emerald-300 font-extrabold px-2 py-0.5 rounded text-[10px]">
+                          <div
+                            className="line-clamp-2 leading-tight max-w-[220px] cursor-pointer hover:text-blue-600 transition font-medium"
+                            title={`Alternative Offered: ${p.offer || p.offered_item} (Alternatif produk/merek jika spesifikasi sama)`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedProductDetail(p);
+                            }}
+                          >
                             {p.offer || p.offered_item}
-                          </span>
+                          </div>
                         ) : (
                           <span className="text-slate-400 italic text-[10px]">—</span>
                         )}
@@ -1133,7 +1463,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                                   handleRestoreProduct(p.id, p.product_name || '');
                                 }}
                                 className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded transition cursor-pointer flex items-center gap-1"
-                                title="Pulihkan dari Sampah"
+                                title="Restore from Trash"
                               >
                                 <RefreshCw className="w-3 h-3" />
                                 <span>Restore</span>
@@ -1146,7 +1476,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                                   handlePermanentDelete(p.id, p.product_name || '');
                                 }}
                                 className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
-                                title="Hapus Permanen"
+                                title="Permanently Delete"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -1172,7 +1502,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                                   handleTrashProduct(p.id, p.product_name || '');
                                 }}
                                 className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
-                                title="Pindah ke Sampah (Junk)"
+                                title="Move to Trash (Junk)"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -1188,6 +1518,51 @@ export const Product: React.FC<ProductProps> = ({}) => {
           </div>
         )}
 
+        {/* PAGINATION CONTROL BAR */}
+        <div className="bg-slate-100 border-t border-[#7b7b7b] px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-700 font-sans shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-600">Per Page:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="bg-white border border-slate-300 rounded px-2 py-1 font-bold text-xs cursor-pointer shadow-2xs focus:ring-1 focus:ring-blue-500"
+            >
+              <option value={25}>25 Products</option>
+              <option value={50}>50 Products</option>
+              <option value={100}>100 Products</option>
+              <option value={0}>Show All (Full)</option>
+            </select>
+            <span className="text-[11px] text-slate-500 font-medium">
+              Showing {currentTotal === 0 ? 0 : (currentPage - 1) * effectivePageSize + 1} - {Math.min(currentPage * effectivePageSize, currentTotal)} of {currentTotal} items
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 font-bold">
+            <button
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              className="px-2.5 py-1 bg-white hover:bg-slate-200 border border-slate-300 rounded text-xs text-slate-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs transition"
+            >
+              « Prev
+            </button>
+            <span className="px-2 py-1 bg-slate-200 text-slate-800 rounded font-mono text-xs">
+              Page {currentPage} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              className="px-2.5 py-1 bg-white hover:bg-slate-200 border border-slate-300 rounded text-xs text-slate-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs transition"
+            >
+              Next »
+            </button>
+          </div>
+        </div>
+
         {/* FOOTER SUMMARY LINE */}
         <footer className="bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] border-t border-b border-[#7b7b7b] text-center py-1.5 text-[11px] text-[#3d3d3d] font-semibold w-full shrink-0">
           <span>
@@ -1197,160 +1572,259 @@ export const Product: React.FC<ProductProps> = ({}) => {
             } • MySQL Database (abmalaya_erp.products)
           </span>
         </footer>
-
       </div>
 
-      {/* POP-UP MODAL: PRODUCT DETAILS & QUICK ACTIONS */}
+      {/* POP-UP DRAWER: PRODUCT DETAILS & QUICK ACTIONS (RIGHT-SIDE SLIDE-IN) */}
       {selectedProductDetail && (
-        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in font-sans">
-          <div className="bg-white border border-slate-300 w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden rounded-lg">
-            
-            {/* Modal Header */}
-            <div className="p-3.5 bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] text-[#3d3d3d] flex items-center justify-between border-b border-[#7b7b7b] shrink-0">
-              <div className="flex items-center gap-2">
-                <Package className="w-4 h-4 text-blue-600 shrink-0" />
-                <h3 className="font-extrabold text-xs text-slate-900 uppercase tracking-wide">
-                  Rincian Detail Produk & Aksi Quick Action
-                </h3>
-              </div>
-              <button
-                onClick={() => setSelectedProductDetail(null)}
-                className="p-1 text-slate-500 hover:text-slate-900 transition cursor-pointer"
-              >
-                <X className="w-4.5 h-4.5" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-5 overflow-y-auto max-h-[75vh] space-y-4 text-slate-800 text-xs">
+        <div className="fixed inset-y-0 right-0 z-50 pointer-events-none flex justify-end font-sans">
+          {/* Right-Side Slide-in Drawer Container (No dark backdrop) */}
+          <div className="pointer-events-auto w-full max-w-xl bg-white border-l border-slate-300 shadow-2xl flex flex-col h-full animate-in slide-in-from-right duration-300">
               
-              {/* Top Summary Banner */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-50 border border-slate-200 p-3 rounded-md">
-                <div className="flex items-center gap-3">
-                  {selectedProductDetail.image_url ? (
-                    <img
-                      src={selectedProductDetail.image_url}
-                      alt={selectedProductDetail.product_name}
-                      className="w-16 h-16 object-cover border border-slate-300 rounded shadow-xs shrink-0 cursor-pointer"
-                      onClick={() => setPreviewPhotoUrl(selectedProductDetail.image_url || null)}
-                    />
-                  ) : (
-                    <div className="w-16 h-16 bg-slate-200 border border-slate-300 rounded flex items-center justify-center text-slate-400 shrink-0">
-                      <ImageIcon className="w-6 h-6 opacity-40" />
-                    </div>
-                  )}
+              {/* Drawer Header */}
+              <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-950 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <Package className="w-5 h-5 text-emerald-400 shrink-0" />
                   <div>
-                    <span className="bg-blue-100 text-blue-800 border border-blue-300 px-2 py-0.5 rounded font-mono font-extrabold text-[11px]">
-                      {selectedProductDetail.product_code}
-                    </span>
-                    <h2 className="font-extrabold text-sm text-slate-900 mt-1">
-                      {selectedProductDetail.product_name}
-                    </h2>
-                    <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
-                      Kategori: <strong className="text-slate-700">{selectedProductDetail.category || 'Equipment'}</strong>
+                    <h3 className="font-extrabold text-sm text-white uppercase tracking-wide">
+                      Product Details & Quick Actions
+                    </h3>
+                    <p className="text-[10px] text-slate-400">
+                      Product Code: {selectedProductDetail.product_code} • ID: #{selectedProductDetail.id}
                     </p>
                   </div>
                 </div>
 
-                <div className="text-right sm:border-l sm:border-slate-200 sm:pl-4 shrink-0">
-                  <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Harga Master (MYR)</div>
-                  <div className="text-sm font-extrabold text-emerald-700 font-mono">
-                    {formatCurrency(selectedProductDetail.unit_price || 0)}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const item = selectedProductDetail;
+                      setSelectedProductDetail(null);
+                      handleOpenEditModal(item);
+                    }}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Edit Product</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedProductDetail(null)}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 p-1.5 rounded transition cursor-pointer"
+                    title="Close Drawer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Drawer Body (Scrollable) */}
+              <div className="flex-1 p-5 overflow-y-auto space-y-4 bg-slate-50/50 text-slate-800 text-xs">
+                
+                {/* Top Summary Banner */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white border border-slate-200 p-3.5 rounded-md shadow-2xs">
+                  <div className="flex items-center gap-3">
+                    {selectedProductDetail.image_url ? (
+                      <img
+                        src={resolveProductImageUrl(selectedProductDetail.image_url)}
+                        alt={selectedProductDetail.product_name || 'Product'}
+                        className="w-16 h-16 object-cover border border-slate-300 rounded shadow-xs shrink-0 cursor-pointer hover:opacity-80 transition"
+                        onClick={() => setPreviewPhotoUrl(selectedProductDetail.image_url || null)}
+                      />
+                    ) : (
+                      <div className="w-16 h-16 bg-slate-200 border border-slate-300 rounded flex items-center justify-center text-slate-400 shrink-0">
+                        <ImageIcon className="w-6 h-6 opacity-40" />
+                      </div>
+                    )}
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="bg-blue-100 text-blue-800 border border-blue-300 px-2 py-0.5 rounded font-mono font-extrabold text-[11px]">
+                          SKU: {selectedProductDetail.product_code}
+                        </span>
+                        {selectedProductDetail.impa_code && (
+                          <span className="bg-purple-100 text-purple-900 border border-purple-300 px-2 py-0.5 rounded font-mono font-extrabold text-[11px]">
+                            IMPA: {selectedProductDetail.impa_code}
+                          </span>
+                        )}
+                      </div>
+                      <h2 className="font-extrabold text-sm text-slate-900 mt-1">
+                        {selectedProductDetail.product_name}
+                      </h2>
+                      <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                        Category: <strong className="text-slate-700">{selectedProductDetail.category || 'Equipment'}</strong>
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
-                    Modal: <span className="font-mono font-bold text-slate-700">{formatCurrency(selectedProductDetail.capital || 0)}</span>
+
+                  <div className="text-right sm:border-l sm:border-slate-200 sm:pl-4 shrink-0">
+                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Unit Price (MYR)</div>
+                    <div className="text-sm font-extrabold text-emerald-700 font-mono">
+                      {formatCurrency(selectedProductDetail.unit_price || 0)}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                      Capital: <span className="font-mono font-bold text-slate-700">{formatCurrency(selectedProductDetail.capital || 0)}</span>
+                    </div>
                   </div>
                 </div>
+
+                {/* Full Specification Box */}
+                <div className="space-y-1 bg-amber-50/60 border border-amber-200 p-3.5 rounded-md">
+                  <h4 className="font-bold text-amber-950 uppercase tracking-wide text-[11px] flex items-center gap-1.5 border-b border-amber-200 pb-1">
+                    <FileText className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Full Product Specifications</span>
+                  </h4>
+                  <p className="leading-relaxed text-slate-800 whitespace-pre-line text-xs font-sans pt-1">
+                    {selectedProductDetail.specification || selectedProductDetail.description || 'No specific technical details recorded in database.'}
+                  </p>
+                </div>
+
+                {/* Alternative Offered Box */}
+                {(selectedProductDetail.offer || selectedProductDetail.offered_item) && (
+                  <div className="space-y-1 bg-emerald-50/60 border border-emerald-200 p-3.5 rounded-md">
+                    <h4 className="font-bold text-emerald-950 uppercase tracking-wide text-[11px] flex items-center gap-1.5 border-b border-emerald-200 pb-1">
+                      <Tag className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Alternative Offered (Produk / Merek Alternatif)</span>
+                    </h4>
+                    <p className="leading-relaxed text-emerald-900 font-bold text-xs font-sans pt-1">
+                      {selectedProductDetail.offer || selectedProductDetail.offered_item}
+                    </p>
+                    <p className="text-[10px] text-emerald-700 font-medium italic">
+                      *Penawaran alternatif produk/merek dengan spesifikasi teknis yang setara.
+                    </p>
+                  </div>
+                )}
+
+                {/* Grid Properties */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="bg-white p-3 rounded border border-slate-200 space-y-0.5 shadow-2xs">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Supplier / Vendor</span>
+                    <span className="font-extrabold text-slate-800 block truncate">
+                      {selectedProductDetail.supplier_name || '—'}
+                    </span>
+                  </div>
+
+                  <div className="bg-white p-3 rounded border border-slate-200 space-y-0.5 shadow-2xs">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Unit</span>
+                    <span className="font-extrabold text-slate-800 block">
+                      {selectedProductDetail.unit || 'Package'}
+                    </span>
+                  </div>
+
+                  <div className="bg-white p-3 rounded border border-slate-200 space-y-0.5 shadow-2xs">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Available Stock</span>
+                    <span className="font-extrabold text-emerald-700 font-mono block">
+                      {selectedProductDetail.stock_quantity || 0} unit
+                    </span>
+                  </div>
+
+                  <div className="bg-white p-3 rounded border border-slate-200 space-y-0.5 shadow-2xs">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Discount (%)</span>
+                    <span className="font-extrabold text-slate-800 font-mono block">
+                      {selectedProductDetail.discount_percent || 0}%
+                    </span>
+                  </div>
+
+                  <div className="bg-white p-3 rounded border border-slate-200 space-y-0.5 shadow-2xs">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Status Record</span>
+                    <span className="font-extrabold text-slate-800 uppercase block">
+                      {selectedProductDetail.status || 'active'}
+                    </span>
+                  </div>
+
+                  <div className="bg-white p-3 rounded border border-slate-200 space-y-0.5 shadow-2xs">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">ID Database</span>
+                    <span className="font-mono text-slate-700 block">
+                      #{selectedProductDetail.id}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Product Change History Audit Logs (JSON Format) */}
+                <div className="bg-white border border-slate-200 rounded-md p-3.5 space-y-2 shadow-2xs">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <h4 className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5 uppercase tracking-wide">
+                      <FileJson className="w-4 h-4 text-purple-600" />
+                      <span>Product Audit Trail & Change Logs</span>
+                    </h4>
+                    <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded font-mono">
+                      {productHistoryLogs.length} Records
+                    </span>
+                  </div>
+
+                  {isLoadingHistory ? (
+                    <div className="py-4 text-center text-slate-400 text-xs font-semibold flex items-center justify-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                      <span>Loading history records from MySQL...</span>
+                    </div>
+                  ) : productHistoryLogs.length === 0 ? (
+                    <p className="text-[11px] text-slate-400 italic py-2 text-center font-medium">
+                      No change history recorded for this product yet.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                      {productHistoryLogs.map((log: any) => {
+                        let parsedDiff: any = null;
+                        try {
+                          parsedDiff = typeof log.changes_json === 'string' ? JSON.parse(log.changes_json) : log.changes_json;
+                        } catch (e) {}
+
+                        return (
+                          <div key={log.id} className="p-2.5 bg-slate-50 border border-slate-200 rounded text-xs space-y-1">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-extrabold text-slate-900 flex items-center gap-1.5">
+                                <span className={`px-1.5 py-0.2 text-[9px] rounded font-bold uppercase ${
+                                  log.action_type === 'CREATE' ? 'bg-emerald-100 text-emerald-800' :
+                                  log.action_type === 'UPDATE' ? 'bg-blue-100 text-blue-800' :
+                                  log.action_type === 'TRASH' ? 'bg-amber-100 text-amber-800' :
+                                  'bg-rose-100 text-rose-800'
+                                }`}>
+                                  {log.action_type}
+                                </span>
+                                <span>{log.actor_name}</span>
+                              </span>
+                              <span className="font-mono text-[10px] text-slate-400 font-semibold">{log.created_at}</span>
+                            </div>
+
+                            <p className="text-[10px] text-slate-500 font-mono">
+                              User Email: <strong className="text-slate-700">{log.actor_email}</strong>
+                            </p>
+
+                            {/* Diff Display */}
+                            {parsedDiff && (
+                              <div className="bg-white p-2 border border-slate-200 rounded text-[11px] font-mono space-y-1 mt-1">
+                                {Object.entries(parsedDiff).map(([key, val]: [string, any]) => (
+                                  <div key={key} className="flex items-center justify-between gap-2 border-b border-slate-100 pb-0.5 last:border-0 last:pb-0">
+                                    <span className="font-bold text-slate-600 uppercase text-[10px]">{key}:</span>
+                                    {val && typeof val === 'object' && 'old' in val && 'new' in val ? (
+                                      <span className="text-[10px]">
+                                        <span className="line-through text-rose-600 mr-1">{String(val.old)}</span>
+                                        <span className="text-emerald-700 font-extrabold">➔ {String(val.new)}</span>
+                                      </span>
+                                    ) : (
+                                      <span className="text-emerald-700 text-[10px] font-bold truncate max-w-[200px]">{JSON.stringify(val)}</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
               </div>
 
-              {/* Full Specification Box */}
-              <div className="space-y-1 bg-amber-50/60 border border-amber-200 p-3 rounded-md">
-                <h4 className="font-bold text-amber-950 uppercase tracking-wide text-[11px] flex items-center gap-1.5 border-b border-amber-200 pb-1">
-                  <FileText className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Spesifikasi Lengkap Produk</span>
-                </h4>
-                <p className="leading-relaxed text-slate-800 whitespace-pre-line text-xs font-sans pt-1">
-                  {selectedProductDetail.specification || selectedProductDetail.description || 'Tidak ada spesifikasi khusus tercatat dalam database.'}
-                </p>
-              </div>
-
-              {/* Grid Properties */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                <div className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-0.5">
-                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Supplier / Vendor</span>
-                  <span className="font-extrabold text-slate-800 block truncate">
-                    {selectedProductDetail.supplier_name || '—'}
-                  </span>
-                </div>
-
-                <div className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-0.5">
-                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Satuan (Unit)</span>
-                  <span className="font-extrabold text-slate-800 block">
-                    {selectedProductDetail.unit || 'Package'}
-                  </span>
-                </div>
-
-                <div className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-0.5">
-                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Stok Tersedia</span>
-                  <span className="font-extrabold text-emerald-700 font-mono block">
-                    {selectedProductDetail.stock_quantity || 0} unit
-                  </span>
-                </div>
-
-                <div className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-0.5">
-                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Diskon (%)</span>
-                  <span className="font-extrabold text-slate-800 font-mono block">
-                    {selectedProductDetail.discount_percent || 0}%
-                  </span>
-                </div>
-
-                <div className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-0.5">
-                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Status Record</span>
-                  <span className="font-extrabold text-slate-800 uppercase block">
-                    {selectedProductDetail.status || 'active'}
-                  </span>
-                </div>
-
-                <div className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-0.5">
-                  <span className="text-[10px] text-slate-500 font-bold uppercase block">ID Database</span>
-                  <span className="font-mono text-slate-700 block">
-                    #{selectedProductDetail.id}
-                  </span>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Modal Footer with Actions */}
-            <div className="p-3 bg-slate-100 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
-              
-              <button
-                type="button"
-                onClick={() => {
-                  if (selectedProductDetail.product_code) {
-                    navigator.clipboard.writeText(selectedProductDetail.product_code);
-                    setCopiedCodeToast(true);
-                    setTimeout(() => setCopiedCodeToast(false), 2000);
-                  }
-                }}
-                className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs rounded transition cursor-pointer flex items-center gap-1.5"
-              >
-                <Copy className="w-3.5 h-3.5 text-slate-500" />
-                <span>{copiedCodeToast ? 'Kode Tersalin!' : 'Copy Kode Produk'}</span>
-              </button>
-
-              <div className="flex items-center gap-2">
+              {/* Drawer Footer with Actions */}
+              <div className="p-3.5 bg-white border-t border-slate-200 flex items-center justify-between gap-2 shrink-0 shadow-md">
                 <button
                   type="button"
-                  onClick={() => {
-                    const item = selectedProductDetail;
-                    setSelectedProductDetail(null);
-                    handleOpenEditModal(item);
-                  }}
-                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                  onClick={() => setSelectedProductDetail(null)}
+                  className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-300 rounded shadow-xs transition cursor-pointer"
                 >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Edit Produk</span>
+                  Close
                 </button>
 
                 <button
@@ -1364,23 +1838,13 @@ export const Product: React.FC<ProductProps> = ({}) => {
                   className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded transition cursor-pointer flex items-center gap-1.5 shadow-xs"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>Pindah ke Sampah</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedProductDetail(null)}
-                  className="px-4 py-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-white text-[#3d3d3d] font-bold text-xs border border-[#a0a0a0] rounded shadow-xs transition cursor-pointer"
-                >
-                  Tutup
+                  <span>Move to Trash</span>
                 </button>
               </div>
 
             </div>
-
           </div>
-        </div>
-      )}
+        )}
 
       {/* POP-UP MODAL: CATEGORY BLUEPRINT DETAILS */}
       {selectedBlueprint && (
@@ -1579,7 +2043,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
               <div className="flex items-center gap-2">
                 <Settings className="w-4 h-4 text-[#0099ec]" />
                 <h3 className="font-extrabold text-xs text-slate-900">
-                  Pengaturan Sync & Backup Cloud Google Drive / Spreadsheet
+                  Google Drive & Spreadsheet Cloud Sync & Backup Settings
                 </h3>
               </div>
               <button
@@ -1612,7 +2076,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                 }`}
               >
                 <Eye className="w-3.5 h-3.5" />
-                <span>Log Error Sync ({syncLogs.length})</span>
+                <span>Sync Error Logs ({syncLogs.length})</span>
               </button>
 
               <button
@@ -1625,7 +2089,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                 }`}
               >
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                <span>Cek Konflik Manual ({conflictsList.length})</span>
+                <span>Manual Conflict Check ({conflictsList.length})</span>
               </button>
 
               <button
@@ -1635,7 +2099,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                 }`}
               >
                 <FileJson className="w-3.5 h-3.5 text-purple-600" />
-                <span>Audit Sesi Edit</span>
+                <span>Edit Session Audit</span>
               </button>
             </div>
 
@@ -1644,43 +2108,101 @@ export const Product: React.FC<ProductProps> = ({}) => {
               {/* TAB 1: CONFIG & SPREADSHEET LINK */}
               {syncModalTab === 'config' && (
                 <>
-                  <div className="bg-white p-4 border border-slate-300 space-y-3 shadow-2xs">
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                      <span className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
-                        <Cloud className="w-4 h-4 text-blue-600" />
-                        Google Spreadsheet Link (.env:L89)
-                      </span>
-                      <a
-                        href="https://docs.google.com/spreadsheets/d/1PHMV-f5fEZzdzCHXXMZFn2laEIRnOWrDoH9ZJcxi1UQ/edit?usp=drive_link"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1 rounded text-[10px] flex items-center gap-1 cursor-pointer transition"
-                      >
-                        <span>Buka Spreadsheet Live</span>
-                        <Eye className="w-3 h-3" />
-                      </a>
-                    </div>
+                  {(() => {
+                    const activeTarget = backupsList.find((b: any) => b.is_primary == 1) || backupsList[0] || {};
+                    const rawTitle = activeTarget.title || 'Google Spreadsheet Backup Utama';
+                    const fileTitle = rawTitle.includes('Utama') ? 'Primary Master Product Spreadsheet Backup' : rawTitle;
+                    const spId = activeTarget.spreadsheet_id || '1PHMV-f5fEZzdzCHXXMZFn2laEIRnOWrDoH9ZJcxi1UQ';
+                    const spUrl = spId.startsWith('http') ? spId : `https://docs.google.com/spreadsheets/d/${spId}/edit`;
+                    const saEmail = activeTarget.service_account_email || 'erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com';
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                      <div className="space-y-1">
-                        <span className="text-slate-500 font-bold text-[10px] uppercase block">Spreadsheet Backup URL:</span>
-                        <div className="font-mono font-bold text-blue-800 bg-blue-50 p-2 border border-blue-200 text-[11px] truncate">
-                          https://docs.google.com/spreadsheets/d/1PHMV-f5fEZzdzCHXXMZFn2laEIRnOWrDoH9ZJcxi1UQ
+                    return (
+                      <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-2xs space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                          <div>
+                            <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                              <Cloud className="w-4.5 h-4.5 text-blue-600" />
+                              <span>Primary Google Spreadsheet Integration (Connected to MySQL)</span>
+                            </h3>
+                            <p className="text-slate-500 text-xs mt-0.5">
+                              Configuration dynamically fetched 100% from MySQL <code className="bg-slate-100 px-1 py-0.5 rounded text-blue-700 font-mono font-bold">spreadsheet_backups</code> table.
+                            </p>
+                          </div>
+                          <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold px-3 py-1 rounded-full text-xs flex items-center gap-1.5 shadow-2xs">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Google Sheets API Connected</span>
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                          <div className="bg-slate-50 p-3.5 rounded-md border border-slate-200 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-slate-500 font-bold uppercase block">Spreadsheet Backup Filename</span>
+                              <span className="bg-blue-100 text-blue-800 text-[9px] font-bold px-1.5 py-0.2 rounded font-mono">SQL Dynamic Record</span>
+                            </div>
+                            
+                            <div className="bg-white p-2.5 rounded border border-slate-200 space-y-2">
+                              <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                                <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                                <span>{fileTitle}</span>
+                              </div>
+
+                              <div className="pt-1 flex items-center justify-between border-t border-slate-100 text-[11px]">
+                                <span className="text-slate-500 font-mono">Tab: <strong>{activeTarget.sheet_name || 'Master_Products'}</strong></span>
+                                <a
+                                  href={spUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-[10px] flex items-center gap-1.5 cursor-pointer shadow-xs transition"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                  <span>Open / Visit File</span>
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-50 p-3.5 rounded-md border border-slate-200 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-slate-500 font-bold uppercase block">Google Service Account Access</span>
+                              <span className="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-1.5 py-0.2 rounded font-mono">Authorized Key</span>
+                            </div>
+
+                            <div className="bg-white p-2.5 rounded border border-slate-200 space-y-2">
+                              <div className="font-mono font-bold text-slate-800 text-[11px] truncate" title={saEmail}>
+                                {saEmail}
+                              </div>
+
+                              <div className="pt-1 flex items-center justify-between border-t border-slate-100 text-[11px]">
+                                <span className="text-slate-500 text-[10px]">Share edit access in Google Drive</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyEmail(saEmail)}
+                                  className="px-2.5 py-1 bg-slate-800 hover:bg-slate-900 text-white rounded font-bold text-[10px] flex items-center gap-1.5 cursor-pointer shadow-xs transition"
+                                >
+                                  {isCopiedEmail ? (
+                                    <>
+                                      <Check className="w-3 h-3 text-emerald-400" />
+                                      <span>Copied!</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="w-3 h-3" />
+                                      <span>Copy Email</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
-
-                      <div className="space-y-1">
-                        <span className="text-slate-500 font-bold text-[10px] uppercase block">Google Service Account:</span>
-                        <div className="font-mono font-bold text-slate-900 bg-slate-100 p-2 border border-slate-300 text-[11px] truncate">
-                          erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   <div className="bg-white p-4 border border-slate-300 space-y-2 shadow-2xs">
                     <h4 className="font-bold text-slate-900 uppercase text-xs border-b border-slate-200 pb-2">
-                      Tombol Manual Sync & Backup Spreadsheet:
+                      Spreadsheet Manual Sync & Backup Actions:
                     </h4>
 
                     <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -1691,7 +2213,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                         className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs px-3.5 py-1.5 rounded cursor-pointer transition shadow-xs disabled:opacity-50"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${isSyncingSpreadsheet ? 'animate-spin' : ''}`} />
-                        <span>Sync Manual MySQL ➔ Spreadsheet</span>
+                        <span>Manual Sync: MySQL ➔ Spreadsheet</span>
                       </button>
 
                       <button
@@ -1701,7 +2223,19 @@ export const Product: React.FC<ProductProps> = ({}) => {
                         className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs px-3.5 py-1.5 rounded cursor-pointer transition shadow-xs disabled:opacity-50"
                       >
                         <AlertTriangle className="w-3.5 h-3.5" />
-                        <span>Jalankan Cek Konflik Manual</span>
+                        <span>Run Manual Conflict Check</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsSettingsModalOpen(false);
+                          if (onNavigateView) onNavigateView('system_settings');
+                        }}
+                        className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white font-extrabold text-xs px-3.5 py-1.5 rounded cursor-pointer transition shadow-xs"
+                      >
+                        <Settings className="w-3.5 h-3.5 text-blue-300" />
+                        <span>Advanced System Settings »</span>
                       </button>
                     </div>
                   </div>
@@ -1712,7 +2246,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
               {syncModalTab === 'logs' && (
                 <div className="bg-white p-4 border border-slate-300 space-y-3 shadow-2xs">
                   <h4 className="font-bold text-slate-900 uppercase text-xs border-b border-slate-200 pb-2 flex items-center justify-between">
-                    <span>Log Error & Peringatan System Notifications:</span>
+                    <span>System Error & Warning Log Notifications:</span>
                     <button
                       onClick={fetchSyncLogs}
                       className="text-blue-600 hover:underline text-[10px] font-normal cursor-pointer flex items-center gap-1"
@@ -1724,7 +2258,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
 
                   {syncLogs.length === 0 ? (
                     <div className="p-8 text-center text-slate-400 font-bold text-xs">
-                      Belum ada log error sync tercatat di database.
+                      No sync error logs recorded in database.
                     </div>
                   ) : (
                     <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
@@ -1746,22 +2280,22 @@ export const Product: React.FC<ProductProps> = ({}) => {
               {syncModalTab === 'conflicts' && (
                 <div className="bg-white p-4 border border-slate-300 space-y-3 shadow-2xs">
                   <h4 className="font-bold text-slate-900 uppercase text-xs border-b border-slate-200 pb-2">
-                    Hasil Pemindaian Konflik Data (MySQL vs Spreadsheet):
+                    Data Conflict Scan Results (MySQL vs Spreadsheet):
                   </h4>
 
                   {conflictsList.length === 0 ? (
                     <div className="p-8 text-center text-emerald-700 bg-emerald-50 border border-emerald-200 font-bold text-xs rounded">
-                      ✅ Seluruh data MySQL dan Spreadsheet sinkron 100%. Tidak ditemukan perbedaan tak terduga.
+                      ✅ All MySQL and Spreadsheet data are 100% synchronized. No unexpected discrepancies found.
                     </div>
                   ) : (
                     <table className="w-full text-left text-xs border-collapse bg-white border border-slate-300">
                       <thead className="bg-slate-100 text-slate-700 font-bold text-[11px] uppercase">
                         <tr>
-                          <th className="p-2 border-r border-slate-200">Kode Produk</th>
-                          <th className="p-2 border-r border-slate-200">Nama Produk</th>
+                          <th className="p-2 border-r border-slate-200">Product Code</th>
+                          <th className="p-2 border-r border-slate-200">Product Name</th>
                           <th className="p-2 border-r border-slate-200">Field</th>
-                          <th className="p-2 border-r border-slate-200 bg-blue-50 text-blue-900">Versi MySQL</th>
-                          <th className="p-2 bg-emerald-50 text-emerald-900">Versi Spreadsheet</th>
+                          <th className="p-2 border-r border-slate-200 bg-blue-50 text-blue-900">MySQL Version</th>
+                          <th className="p-2 bg-emerald-50 text-emerald-900">Spreadsheet Version</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1784,23 +2318,23 @@ export const Product: React.FC<ProductProps> = ({}) => {
               {syncModalTab === 'session_audit' && (
                 <div className="bg-white p-4 border border-slate-300 space-y-3 shadow-2xs">
                   <h4 className="font-bold text-slate-900 uppercase text-xs border-b border-slate-200 pb-2 flex items-center justify-between">
-                    <span>Riwayat Edit Sesi Pengguna (LocalStorage Audit Trail):</span>
+                    <span>User Session Edit History (LocalStorage Audit Trail):</span>
                     <button
                       onClick={() => {
                         localStorage.removeItem('product_edit_history_session');
-                        setSaveSuccessMessage('Riwayat sesi dibersihkan.');
+                        setSaveSuccessMessage('Session audit history cleared.');
                         setTimeout(() => setSaveSuccessMessage(null), 3000);
                       }}
                       className="text-rose-600 hover:underline text-[10px] font-normal cursor-pointer"
                     >
-                      Bersihkan Log Sesi
+                      Clear Session Logs
                     </button>
                   </h4>
 
                   {(() => {
                     const logs = JSON.parse(localStorage.getItem('product_edit_history_session') || '[]');
                     if (logs.length === 0) {
-                      return <div className="p-8 text-center text-slate-400 font-bold text-xs">Belum ada riwayat aktivitas edit pada sesi peramban ini.</div>;
+                      return <div className="p-8 text-center text-slate-400 font-bold text-xs">No edit activity history in this browser session.</div>;
                     }
                     return (
                       <div className="space-y-1.5 max-h-80 overflow-y-auto">
@@ -1819,13 +2353,25 @@ export const Product: React.FC<ProductProps> = ({}) => {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-3 bg-[#e9e9e9] border-t border-[#dbdbdb] flex justify-end shrink-0">
+            <div className="p-3 bg-[#e9e9e9] border-t border-[#dbdbdb] flex items-center justify-between shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSettingsModalOpen(false);
+                  if (onNavigateView) onNavigateView('system_settings');
+                }}
+                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-extrabold text-xs rounded-sm cursor-pointer transition flex items-center gap-1.5"
+              >
+                <Settings className="w-3.5 h-3.5 text-blue-300" />
+                <span>Advanced System Settings</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setIsSettingsModalOpen(false)}
                 className="px-4 py-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] text-[#3d3d3d] border border-[#a0a0a0] font-bold text-xs rounded-sm cursor-pointer hover:bg-white"
               >
-                Tutup Pengaturan
+                Close Settings
               </button>
             </div>
 
@@ -1846,274 +2392,654 @@ export const Product: React.FC<ProductProps> = ({}) => {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-3 flex items-center justify-center bg-slate-950 overflow-hidden">
+            <div className="p-3 flex items-center justify-center bg-slate-950 overflow-hidden min-h-[250px]">
               <img
-                src={previewPhotoUrl}
+                src={resolveProductImageUrl(previewPhotoUrl)}
                 alt="Product Preview"
-                className="max-w-full max-h-[70vh] object-contain shadow-lg"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).onerror = null;
+                  (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>';
+                }}
+                className="max-w-full max-h-[70vh] object-contain shadow-lg bg-white/5 rounded"
               />
             </div>
           </div>
         </div>
       )}
 
-      {/* ADD / EDIT PRODUCT FORM MODAL */}
+      {/* ADD / EDIT PRODUCT FORM SIDE DRAWER PANEL (NO DARK BACKDROP) */}
       {isFormModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in font-sans">
-          <div className="bg-white border border-slate-300 w-full max-w-xl shadow-2xl overflow-hidden rounded-md">
+        <div className="fixed inset-y-0 right-0 z-50 pointer-events-none flex justify-end font-sans">
+          <div className="pointer-events-auto bg-white border-l border-slate-300 w-full max-w-3xl h-full flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-right duration-300">
             
-            <div className="p-3 bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] text-[#3d3d3d] flex items-center justify-between border-b border-[#7b7b7b]">
+            {/* Drawer Header */}
+            <div className="p-3.5 bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] text-[#3d3d3d] flex items-center justify-between border-b border-[#7b7b7b] shrink-0 shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 bg-[#0099ec]/15 rounded border border-[#0099ec]/30 text-[#0099ec]">
+                  <Package className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-xs text-slate-900">
+                    {editingProduct ? `Edit Master Product — ${editingProduct.product_code}` : 'Add New Product to Database'}
+                  </h3>
+                  <p className="text-[10px] text-slate-600 font-medium">
+                    {editingProduct ? 'Update product specifications & pricing in database' : 'Form input for new product record'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsFormModalOpen(false)}
+                className="p-1 text-slate-500 hover:text-slate-900 transition cursor-pointer rounded hover:bg-slate-200/50"
+                title="Close Panel"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveProduct} className="flex-1 flex flex-col min-h-0">
+              
+              {/* Scrollable Form Body */}
+              <div className="flex-1 overflow-y-auto p-3.5 space-y-3 text-xs text-slate-900 bg-slate-100">
+                
+                {/* Form Table Container */}
+                <div className="border border-slate-300 rounded shadow-xs overflow-hidden bg-white text-xs">
+                  
+                  {/* Section 1 Header */}
+                  <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-300 font-bold text-slate-800 flex items-center justify-between text-[11px]">
+                    <span className="flex items-center gap-1.5">
+                      <Package className="w-3.5 h-3.5 text-[#0099ec]" />
+                      IDENTIFIKASI & METADATA PRODUK
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-normal">Detail Master Barang</span>
+                  </div>
+
+                  <table className="w-full border-collapse text-xs">
+                    <tbody>
+                      <tr className="border-b border-slate-200">
+                        <td className="w-28 bg-slate-50 px-2.5 py-1.5 font-bold text-slate-700 border-r border-slate-200 align-middle">
+                          Product Code <span className="text-rose-500">*</span>
+                        </td>
+                        <td className="p-1 border-r border-slate-200 align-middle w-1/2">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="text"
+                              required
+                              value={productCode}
+                              onChange={(e) => setProductCode(e.target.value)}
+                              className="w-full bg-slate-50/50 focus:bg-white border border-slate-300 focus:border-[#0099ec] px-2 py-1 font-mono text-xs font-bold text-slate-900 rounded-xs"
+                            />
+                            {!editingProduct && (
+                              <button
+                                type="button"
+                                onClick={() => setProductCode(generateNextProductCode(products))}
+                                title="Auto-generate next available unused code"
+                                className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] rounded border border-blue-200 shrink-0 cursor-pointer transition"
+                              >
+                                Auto Next
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td className="w-28 bg-purple-50/80 px-2.5 py-1.5 font-bold text-purple-950 border-r border-slate-200 align-middle">
+                          Kode IMPA
+                        </td>
+                        <td className="p-1 align-middle">
+                          <input
+                            type="text"
+                            value={impaCode}
+                            onChange={(e) => setImpaCode(e.target.value)}
+                            placeholder="E.g. 330101"
+                            className="w-full bg-purple-50/30 focus:bg-white border border-purple-300 focus:border-purple-600 px-2 py-1 font-mono text-xs font-bold text-purple-950 rounded-xs"
+                          />
+                        </td>
+                      </tr>
+
+                      <tr className="border-b border-slate-200">
+                        <td className="bg-slate-50 px-2.5 py-1.5 font-bold text-slate-700 border-r border-slate-200 align-middle">
+                          Category
+                        </td>
+                        <td className="p-1 border-r border-slate-200 align-middle">
+                          <select
+                            value={category}
+                            onChange={(e) => {
+                              if (e.target.value === '__custom__') {
+                                const custom = prompt('Masukkan nama kategori baru:');
+                                if (custom && custom.trim()) {
+                                  setCategory(custom.trim());
+                                }
+                              } else {
+                                setCategory(e.target.value);
+                              }
+                            }}
+                            className="w-full bg-slate-50/50 focus:bg-white border border-slate-300 focus:border-[#0099ec] px-2 py-1 text-xs font-bold text-slate-800 rounded-xs cursor-pointer"
+                          >
+                            {Array.from(
+                              new Set([
+                                'Hose & Fitting',
+                                'Valves',
+                                'Hardware & Tools',
+                                'Deck Store',
+                                'Engine Store',
+                                'Stationery & Office',
+                                'Chemicals & Solvents',
+                                'Safety Equipment',
+                                'Electrical & Spares',
+                                ...products.map((p) => p.category).filter(Boolean),
+                              ])
+                            )
+                              .sort()
+                              .map((cat) => (
+                                <option key={cat} value={cat}>
+                                  {cat}
+                                </option>
+                              ))}
+                            <option value="__custom__">+ Kategori Baru / Custom...</option>
+                          </select>
+                        </td>
+                        <td className="bg-slate-50 px-2.5 py-1.5 font-bold text-slate-700 border-r border-slate-200 align-middle">
+                          Supplier/Vendor
+                        </td>
+                        <td className="p-1 align-middle">
+                          <input
+                            type="text"
+                            value={supplierName}
+                            onChange={(e) => setSupplierName(e.target.value)}
+                            placeholder="Nama Supplier / Vendor"
+                            className="w-full bg-slate-50/50 focus:bg-white border border-slate-300 focus:border-[#0099ec] px-2 py-1 text-xs font-semibold text-emerald-800 rounded-xs"
+                          />
+                        </td>
+                      </tr>
+
+                      <tr className="border-b border-slate-200">
+                        <td className="bg-slate-50 px-2.5 py-1.5 font-bold text-slate-700 border-r border-slate-200 align-middle">
+                          Product Name <span className="text-rose-500">*</span>
+                        </td>
+                        <td colSpan={3} className="p-1 align-middle">
+                          <input
+                            type="text"
+                            required
+                            value={productName}
+                            onChange={(e) => setProductName(e.target.value)}
+                            placeholder="Nama Produk Lengkap..."
+                            className="w-full bg-slate-50/50 focus:bg-white border border-slate-300 focus:border-[#0099ec] px-2 py-1 text-xs font-bold text-slate-900 rounded-xs"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* Section 2 Header */}
+                  <div className="bg-slate-100 px-3 py-1.5 border-y border-slate-300 font-bold text-slate-800 flex items-center justify-between text-[11px]">
+                    <span>DESKRIPSI & SPESIFIKASI TEKNIS</span>
+                  </div>
+
+                  <table className="w-full border-collapse text-xs">
+                    <tbody>
+                      <tr className="border-b border-slate-200">
+                        <td className="w-36 bg-slate-50 px-2.5 py-1.5 font-bold text-slate-700 border-r border-slate-200 align-top">
+                          Short Description
+                        </td>
+                        <td className="p-1 align-top">
+                          <textarea
+                            rows={2}
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder="Ringkasan singkat produk..."
+                            className="w-full bg-slate-50/50 focus:bg-white border border-slate-300 focus:border-[#0099ec] p-1.5 text-xs text-slate-800 rounded-xs resize-y"
+                          />
+                        </td>
+                      </tr>
+                      <tr className="border-b border-slate-200">
+                        <td className="bg-slate-50 px-2.5 py-1.5 font-bold text-slate-700 border-r border-slate-200 align-top">
+                          Tech Specs / Maker
+                        </td>
+                        <td className="p-1 align-top">
+                          <textarea
+                            rows={2}
+                            value={specification}
+                            onChange={(e) => setSpecification(e.target.value)}
+                            placeholder="Spesifikasi teknis, model, dimensi, tekanan..."
+                            className="w-full bg-slate-50/50 focus:bg-white border border-slate-300 focus:border-[#0099ec] p-1.5 text-xs font-mono text-slate-900 rounded-xs resize-y"
+                          />
+                        </td>
+                      </tr>
+                      {/* Conditional Alternative Offered Row */}
+                      {!showAlternativeOfferInput && !offerText.trim() ? (
+                        <tr className="border-b border-slate-200">
+                          <td className="bg-slate-50 px-2.5 py-1.5 font-bold text-slate-700 border-r border-slate-200 align-middle">
+                            Alternative Offered
+                          </td>
+                          <td className="p-1.5 align-middle bg-emerald-50/20">
+                            <button
+                              type="button"
+                              onClick={() => setShowAlternativeOfferInput(true)}
+                              className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-white hover:bg-emerald-50 border border-emerald-300 hover:border-emerald-500 px-3 py-1 rounded cursor-pointer transition shadow-2xs"
+                            >
+                              <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>+ Add Alternative Offered (Produk / Merek Alternatif)</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr className="border-b border-slate-200">
+                          <td className="bg-emerald-50/70 px-2.5 py-1.5 font-bold text-emerald-950 border-r border-slate-200 align-top">
+                            <div className="flex flex-col gap-1">
+                              <span>Alternative Offered</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOfferText('');
+                                  setShowAlternativeOfferInput(false);
+                                }}
+                                className="text-[10px] text-rose-600 hover:text-rose-800 font-bold underline text-left cursor-pointer"
+                              >
+                                Hapus / Batal
+                              </button>
+                            </div>
+                          </td>
+                          <td className="p-1 align-top">
+                            <textarea
+                              rows={2}
+                              value={offerText}
+                              onChange={(e) => setOfferText(e.target.value)}
+                              placeholder="Penawaran alternatif produk/merek jika spesifikasi sama (contoh: BRAND B - EQUIVALENT SPEC...)"
+                              className="w-full bg-emerald-50/20 focus:bg-white border border-emerald-300 focus:border-emerald-600 p-1.5 text-xs font-bold text-emerald-900 rounded-xs resize-y"
+                            />
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+
+                  {/* Section 3 Header */}
+                  <div className="bg-slate-100 px-3 py-1.5 border-y border-slate-300 font-bold text-slate-800 flex items-center justify-between text-[11px]">
+                    <span>HARGA, HPP & STOK BARANG</span>
+                  </div>
+
+                  <div className="p-1 bg-slate-50">
+                    <table className="w-full border-collapse text-xs border border-slate-300 bg-white">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-700 border-b border-slate-300 font-bold text-[11px]">
+                          <th className="p-1 text-center border-r border-slate-200 w-1/5">Stock Qty</th>
+                          <th className="p-1 text-center border-r border-slate-200 w-1/5">Unit</th>
+                          <th className="p-1 text-center border-r border-slate-200 w-1/5">Capital Cost ({currencySymbol})</th>
+                          <th className="p-1 text-center border-r border-slate-200 w-1/5">Unit Price ({currencySymbol})</th>
+                          <th className="p-1 text-center w-1/5">Disc (%)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td className="p-1 border-r border-slate-200">
+                            <input
+                              type="number"
+                              min={0}
+                              value={stockQuantity}
+                              onChange={(e) => setStockQuantity(parseInt(e.target.value) || 0)}
+                              className="w-full bg-slate-50 focus:bg-white border border-slate-300 p-1 text-xs text-center font-mono font-bold text-slate-900 rounded-xs"
+                            />
+                          </td>
+                          <td className="p-1 border-r border-slate-200">
+                            <select
+                              value={unit}
+                              onChange={(e) => setUnit(e.target.value)}
+                              className="w-full bg-slate-50 focus:bg-white border border-slate-300 p-1 text-xs text-center font-bold cursor-pointer rounded-xs"
+                            >
+                              {['Package', 'Pcs', 'Unit', 'Set', 'Box', 'Roll', 'Meter', 'Kg', 'Ltr', 'Can', 'Pair', 'Drum', 'Dozen', 'Bottle', 'Sheet', 'Canister', 'Bag', 'Coil'].map((u) => (
+                                <option key={u} value={u}>
+                                  {u}
+                                </option>
+                              ))}
+                              {unit && !['Package', 'Pcs', 'Unit', 'Set', 'Box', 'Roll', 'Meter', 'Kg', 'Ltr', 'Can', 'Pair', 'Drum', 'Dozen', 'Bottle', 'Sheet', 'Canister', 'Bag', 'Coil'].includes(unit) && (
+                                <option value={unit}>{unit}</option>
+                              )}
+                            </select>
+                          </td>
+                          <td className="p-1 border-r border-slate-200">
+                            <input
+                              type="number"
+                              min={0}
+                              step="any"
+                              value={capitalCost}
+                              onChange={(e) => setCapitalCost(parseFloat(e.target.value) || 0)}
+                              placeholder="0.00"
+                              className="w-full bg-emerald-50/40 focus:bg-white border border-emerald-300 p-1 text-xs text-center font-mono font-bold text-emerald-800 rounded-xs"
+                            />
+                          </td>
+                          <td className="p-1 border-r border-slate-200">
+                            <input
+                              type="number"
+                              min={0}
+                              step="any"
+                              value={unitPrice}
+                              onChange={(e) => setUnitPrice(parseFloat(e.target.value) || 0)}
+                              placeholder="0.00"
+                              className="w-full bg-blue-50/40 focus:bg-white border border-blue-300 p-1 text-xs text-center font-mono font-bold text-slate-900 rounded-xs"
+                            />
+                          </td>
+                          <td className="p-1">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={discountPercent}
+                              onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)}
+                              className="w-full bg-amber-50/40 focus:bg-white border border-amber-300 p-1 text-xs text-center font-mono font-bold text-amber-800 rounded-xs"
+                            />
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Section 4 Header */}
+                  <div className="bg-slate-100 px-3 py-1.5 border-y border-slate-300 font-bold text-slate-800 flex items-center justify-between text-[11px]">
+                    <span>FOTO PRODUK & UPLOAD</span>
+                  </div>
+
+                  {/* Photo Section Row */}
+                  <div className="p-2.5 bg-white space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
+                        <Upload className="w-3.5 h-3.5 text-[#0099ec]" />
+                        <span>Product Photo</span>
+                      </span>
+
+                      <div className="flex items-center gap-2">
+                        {photoInputMode === 'upload' ? (
+                          <button
+                            type="button"
+                            onClick={() => setPhotoInputMode('url')}
+                            className="text-[10px] text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer bg-blue-50 px-2 py-0.5 rounded border border-blue-200"
+                          >
+                            <span>Use Web Image URL »</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setPhotoInputMode('upload')}
+                            className="text-[10px] text-emerald-700 font-bold hover:underline flex items-center gap-1 cursor-pointer bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200"
+                          >
+                            <span>« Upload File from PC</span>
+                          </button>
+                        )}
+
+                        <span className="text-[9px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
+                          <Zap className="w-3 h-3 text-emerald-600" />
+                          Auto-Compress
+                        </span>
+                      </div>
+                    </div>
+
+                    {photoInputMode === 'upload' && (
+                      <div className="space-y-1">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleFileChange(e.target.files[0]);
+                            }
+                          }}
+                          className="w-full text-[11px] text-slate-700 bg-slate-50 border border-slate-300 p-1 cursor-pointer rounded-xs"
+                        />
+
+                        {isCompressingImage && (
+                          <div className="flex items-center gap-1 text-[10px] text-blue-600 font-bold">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            <span>Compressing photo...</span>
+                          </div>
+                        )}
+
+                        {compressionInfo && (
+                          <div className="p-1.5 bg-emerald-50 border border-emerald-300 rounded text-[10px] text-emerald-950 font-semibold flex items-center justify-between">
+                            <span>Original: {compressionInfo.originalKb} KB → Compressed: {compressionInfo.compressedKb} KB</span>
+                            <span className="text-emerald-700 font-bold">Saved {compressionInfo.ratio}%</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {photoInputMode === 'url' && (
+                      <div>
+                        <input
+                          type="text"
+                          value={imageUrl}
+                          onChange={(e) => setImageUrl(e.target.value)}
+                          placeholder="https://... or relative URL path"
+                          className="w-full bg-slate-50 border border-slate-300 p-1.5 text-xs font-mono rounded-xs"
+                        />
+                      </div>
+                    )}
+
+                    {(selectedFile || imageUrl) && (
+                      <div className="p-1.5 bg-slate-50 border border-slate-300 rounded flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <img
+                            src={selectedFile ? URL.createObjectURL(selectedFile) : resolveProductImageUrl(imageUrl)}
+                            alt="Product Preview"
+                            className="w-12 h-12 object-cover border border-slate-300 rounded bg-white"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                          <div>
+                            <span className="text-[11px] font-bold text-slate-800 block">
+                              Photo Preview ({selectedFile ? 'New Upload File' : 'Saved Photo'})
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-mono block max-w-[250px] truncate">
+                              {selectedFile ? selectedFile.name : imageUrl}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedFile(null);
+                            setImageUrl('');
+                            setCompressionInfo(null);
+                          }}
+                          className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded border border-rose-200 text-[10px] font-bold cursor-pointer transition"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+
+              </div>
+
+              {/* Drawer Footer Action Buttons */}
+              <div className="p-3.5 bg-white border-t border-slate-300 flex items-center justify-between gap-3 shrink-0 shadow-md">
+                <span className="text-[10px] text-slate-500 font-bold">
+                  {editingProduct ? `Editing ID: #${editingProduct.id}` : 'New Product Record'}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsFormModalOpen(false)}
+                    className="px-4 py-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] text-[#3d3d3d] border border-[#a0a0a0] font-bold text-xs rounded-sm cursor-pointer hover:bg-slate-100 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSaving || isCompressingImage}
+                    className="flex items-center gap-1.5 bg-gradient-to-b from-[#00b4ff] to-[#0080d0] text-white font-extrabold text-xs px-5 py-1.5 rounded-sm border border-[#0060b0] shadow-sm cursor-pointer hover:brightness-105 transition disabled:opacity-50"
+                  >
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        <span>Saving to Server & MySQL...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 text-white" />
+                        <span>Save Product</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* CSV / SPREADSHEET UPLOAD POPUP MODAL */}
+      {isUploadModalOpen && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsUploadModalOpen(false);
+              setDraggedFile(null);
+            }
+          }}
+          className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in font-sans"
+        >
+          <div className="bg-white border border-slate-300 w-full max-w-lg shadow-2xl overflow-hidden rounded-md animate-in zoom-in-95 duration-200">
+            
+            {/* Modal Header */}
+            <div className="p-3.5 bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] text-[#3d3d3d] flex items-center justify-between border-b border-[#7b7b7b]">
               <div className="flex items-center gap-2">
-                <Package className="w-4 h-4 text-[#0099ec]" />
+                <Upload className="w-4 h-4 text-[#0099ec]" />
                 <h3 className="font-extrabold text-xs text-slate-900">
-                  {editingProduct ? `Edit Master Product — ${editingProduct.product_code}` : 'Add New Product to Database'}
+                  Upload Data CSV / Spreadsheet Produk
                 </h3>
               </div>
               <button
-                onClick={() => setIsFormModalOpen(false)}
+                type="button"
+                onClick={() => {
+                  setIsUploadModalOpen(false);
+                  setDraggedFile(null);
+                }}
                 className="p-1 text-slate-500 hover:text-slate-900 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveProduct} className="p-5 space-y-3.5 text-xs text-slate-900 bg-slate-50">
+            {/* Modal Content */}
+            <div className="p-5 space-y-4 text-xs text-slate-900 bg-slate-50">
               
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Product Code:</label>
-                  <input
-                    type="text"
-                    required
-                    value={productCode}
-                    onChange={(e) => setProductCode(e.target.value)}
-                    className="w-full bg-white border border-slate-300 p-1.5 font-mono text-xs font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Category:</label>
-                  <input
-                    type="text"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    placeholder="E.g. Hose & Fitting / Valves / Hardware"
-                    className="w-full bg-white border border-slate-300 p-1.5 text-xs font-semibold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Supplier / Seller Vendor:</label>
-                  <input
-                    type="text"
-                    value={supplierName}
-                    onChange={(e) => setSupplierName(e.target.value)}
-                    placeholder="E.g. 125 / Vendor Supplier Name"
-                    className="w-full bg-white border border-slate-300 p-1.5 text-xs font-semibold text-emerald-800"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Product Name:</label>
-                <input
-                  type="text"
-                  required
-                  value={productName}
-                  onChange={(e) => setProductName(e.target.value)}
-                  placeholder="E.g. RO WATER MAKER HIGH PRESSURE HOSE"
-                  className="w-full bg-white border border-slate-300 p-1.5 text-xs font-bold focus:ring-1 focus:ring-[#0099ec]"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Short Description:</label>
-                  <textarea
-                    rows={2}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Short product summary..."
-                    className="w-full bg-white border border-slate-300 p-1.5 text-xs"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Technical Specification Details:</label>
-                  <textarea
-                    rows={2}
-                    value={specification}
-                    onChange={(e) => setSpecification(e.target.value)}
-                    placeholder="Full tech specs, maker/model, operating pressure..."
-                    className="w-full bg-white border border-slate-300 p-1.5 text-xs font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Offered Item (Penawaran SPH):</label>
-                  <textarea
-                    rows={2}
-                    value={offerText}
-                    onChange={(e) => setOfferText(e.target.value)}
-                    placeholder="Contoh: KETTLEBELL CAST IRON 12 KG GRADE A..."
-                    className="w-full bg-white border border-slate-300 p-1.5 text-xs font-bold text-emerald-800"
-                  />
-                </div>
-              </div>
-
-
-              <div className="grid grid-cols-5 gap-2">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Stock Qty:</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={stockQuantity}
-                    onChange={(e) => setStockQuantity(parseInt(e.target.value) || 0)}
-                    className="w-full bg-white border border-slate-300 p-1.5 text-xs text-center font-mono font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Unit:</label>
-                  <input
-                    type="text"
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
-                    placeholder="Package / Pcs"
-                    className="w-full bg-white border border-slate-300 p-1.5 text-xs text-center"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Capital Cost ({currencySymbol}):</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={10000}
-                    value={capitalCost}
-                    onChange={(e) => setCapitalCost(parseFloat(e.target.value) || 0)}
-                    placeholder="0"
-                    className="w-full bg-white border border-slate-300 p-1.5 text-xs font-mono font-bold text-emerald-800"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Unit Price ({currencySymbol}):</label>
-
-                  <input
-                    type="number"
-                    min={0}
-                    step={50000}
-                    value={unitPrice}
-                    onChange={(e) => setUnitPrice(parseFloat(e.target.value) || 0)}
-                    placeholder="0"
-                    className="w-full bg-white border border-slate-300 p-1.5 text-xs font-mono font-bold text-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Disc (%):</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={discountPercent}
-                    onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-white border border-slate-300 p-1.5 text-xs text-center font-mono font-bold text-amber-700"
-                  />
-                </div>
-              </div>
-
-              {/* UPLOAD LOCAL FILE (WITH AUTOMATIC CANVAS COMPRESSION) OR PASTE IMAGE URL */}
-              <div className="space-y-2 bg-white p-3 border border-slate-300">
-                <label className="block font-bold text-slate-800 text-xs flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Upload className="w-3.5 h-3.5 text-[#0099ec]" />
-                    Product Photo (Upload Local File or Paste URL):
+              {/* Template Download Card */}
+              <div className="bg-blue-50/80 border border-blue-200 p-3 rounded-md flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <span className="font-extrabold text-blue-900 block text-xs flex items-center gap-1.5">
+                    <FileJson className="w-4 h-4 text-blue-600" />
+                    Need Standard CSV File Format?
                   </span>
-                  <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-bold flex items-center gap-1">
-                    <Zap className="w-3 h-3 text-emerald-600" />
-                    Auto-Compress Enabled
-                  </span>
-                </label>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-500 block mb-1">Option A: Upload File from PC</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          handleFileChange(e.target.files[0]);
-                        }
-                      }}
-                      className="w-full text-[11px] text-slate-700 bg-slate-50 border border-slate-300 p-1 cursor-pointer"
-                    />
-
-                    {isCompressingImage && (
-                      <div className="mt-1 flex items-center gap-1 text-[10px] text-blue-600 font-bold">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        <span>Mekompresi foto secara otomatis...</span>
-                      </div>
-                    )}
-
-                    {compressionInfo && (
-                      <div className="mt-1 p-1.5 bg-emerald-50 border border-emerald-300 rounded text-[10px] text-emerald-950 font-semibold space-y-0.5 animate-in fade-in">
-                        <div className="flex items-center justify-between font-bold">
-                          <span>Ukuran Asli: {compressionInfo.originalKb} KB</span>
-                          <span className="text-emerald-700">Hasil: {compressionInfo.compressedKb} KB</span>
-                        </div>
-                        <p className="text-[9px] text-emerald-800 font-bold">
-                          ✨ Hemat {compressionInfo.ratio}% memori! Foto teroptimasi otomatis.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-500 block mb-1">Option B: Image Web URL</span>
-                    <input
-                      type="text"
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="https://... or relative URL path"
-                      className="w-full bg-slate-50 border border-slate-300 p-1.5 text-xs font-mono"
-                    />
-                  </div>
+                  <p className="text-[11px] text-blue-800">
+                    Download ERP ABMALAYA standard template file as column format reference.
+                  </p>
                 </div>
-              </div>
-
-              {/* Form Action Buttons */}
-              <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsFormModalOpen(false)}
-                  className="px-4 py-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] text-[#3d3d3d] border border-[#a0a0a0] font-bold text-xs rounded-sm cursor-pointer"
+                  onClick={() => handleDownloadFilteredCSV(true)}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-[11px] flex items-center gap-1.5 shrink-0 shadow-xs transition cursor-pointer"
+                >
+                  <FileJson className="w-3.5 h-3.5" />
+                  <span>Download Template CSV</span>
+                </button>
+              </div>
+
+              {/* Drag & Drop Upload Zone */}
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition flex flex-col items-center justify-center gap-2 ${
+                  isDragging
+                    ? 'border-blue-500 bg-blue-50/80 scale-[1.01]'
+                    : draggedFile
+                    ? 'border-emerald-500 bg-emerald-50/50'
+                    : 'border-slate-300 bg-white hover:bg-slate-100/70 hover:border-blue-400'
+                }`}
+              >
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".csv,.xlsx,.xls"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      setDraggedFile(e.target.files[0]);
+                    }
+                  }}
+                />
+
+                {draggedFile ? (
+                  <div className="space-y-1.5">
+                    <div className="p-2.5 bg-emerald-100 text-emerald-700 rounded-full w-11 h-11 mx-auto flex items-center justify-center shadow-xs">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <p className="font-extrabold text-slate-900 text-xs">{draggedFile.name}</p>
+                    <p className="text-[10px] text-slate-500 font-mono font-bold">
+                      {(draggedFile.size / 1024).toFixed(1)} KB • {draggedFile.type || 'CSV File'}
+                    </p>
+                    <span className="inline-block mt-1 text-[10px] text-blue-600 font-bold hover:underline">
+                      Click to choose another file
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="p-3 bg-blue-50 text-blue-600 rounded-full shadow-2xs">
+                      <Upload className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="font-extrabold text-slate-800 text-xs">
+                        Drag & Drop CSV file here
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        or <span className="text-blue-600 font-bold hover:underline">click to browse file</span> from your computer
+                      </p>
+                    </div>
+                    <span className="text-[9px] text-slate-500 font-mono font-bold uppercase bg-slate-200 px-2 py-0.5 rounded">
+                      Supported format: .CSV
+                    </span>
+                  </>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsUploadModalOpen(false);
+                    setDraggedFile(null);
+                  }}
+                  className="px-4 py-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] text-[#3d3d3d] border border-[#a0a0a0] font-bold text-xs rounded-sm cursor-pointer hover:bg-slate-100 transition"
                 >
                   Cancel
                 </button>
                 <button
-                  type="submit"
-                  disabled={isSaving || isCompressingImage}
-                  className="flex items-center gap-1.5 bg-gradient-to-b from-[#00b4ff] to-[#0080d0] text-white font-extrabold text-xs px-4 py-1.5 rounded-sm border border-[#0060b0] shadow-sm cursor-pointer disabled:opacity-50"
+                  type="button"
+                  onClick={() => handleExecuteCSVUpload()}
+                  disabled={!draggedFile || isUploadingCSV}
+                  className="flex items-center gap-1.5 bg-gradient-to-b from-[#00b4ff] to-[#0080d0] text-white font-extrabold text-xs px-5 py-1.5 rounded-sm border border-[#0060b0] shadow-sm cursor-pointer hover:brightness-105 transition disabled:opacity-50"
                 >
-                  {isSaving ? (
+                  {isUploadingCSV ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin text-white" />
-                      <span>Saving to Server & MySQL...</span>
+                      <span>Uploading & Processing CSV...</span>
                     </>
                   ) : (
                     <>
-                      <Check className="w-4 h-4 text-white" />
-                      <span>Save Product</span>
+                      <Upload className="w-4 h-4 text-white" />
+                      <span>Process Data Upload</span>
                     </>
                   )}
                 </button>
               </div>
 
-            </form>
+            </div>
 
           </div>
         </div>

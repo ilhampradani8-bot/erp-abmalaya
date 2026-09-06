@@ -79,10 +79,10 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
         <div>
           <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
             <Users className="w-5 h-5 text-blue-600" />
-            Manajemen Sesi Login & Log Aktivitas Pengguna — abmalaya.com
+            User Login Sessions & Activity Log — abmalaya.com
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Pilih dan aktifkan sesi pengguna tim tanpa kredensial password. Seluruh aktivitas SPH & login tercatat otomatis.
+            Select and activate team user sessions. All SPH & login activity is automatically logged.
           </p>
         </div>
 
@@ -100,7 +100,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
       <div className="space-y-2">
         <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
           <Key className="w-4 h-4 text-blue-600" />
-          4 Akun Tim Resmi (1-Click Switch Active Session):
+          4 Official Team Accounts (1-Click Switch Active Session):
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {users
@@ -122,7 +122,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                       <span className="font-extrabold text-xs text-slate-900 truncate">{u.name}</span>
                       {isActiveSession && (
                         <span className="text-[10px] font-black bg-blue-600 text-white px-2 py-0.5 rounded-full">
-                          SESI AKTIF
+                          ACTIVE SESSION
                         </span>
                       )}
                     </div>
@@ -143,12 +143,12 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                     {isActiveSession ? (
                       <>
                         <ShieldCheck className="w-3.5 h-3.5" />
-                        <span>Sesi Aktif Saat Ini</span>
+                        <span>Current Active Session</span>
                       </>
                     ) : (
                       <>
                         <Key className="w-3.5 h-3.5" />
-                        <span>Login Sebagai {u.name.split(' ')[0]}</span>
+                        <span>Login as {u.name.split(' ')[0]}</span>
                       </>
                     )}
                   </button>
@@ -184,7 +184,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
               <th className="p-3.5">User Name & Email</th>
               <th className="p-3.5">Role Permission</th>
               <th className="p-3.5">Department</th>
-              <th className="p-3.5 text-center">Status Sesi</th>
+              <th className="p-3.5 text-center">Session Status</th>
               <th className="p-3.5 text-center">Actions</th>
             </tr>
           </thead>
@@ -198,7 +198,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                       <span>{user.name}</span>
                       {isSelf && (
                         <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5">
-                          (Sesi Aktif Saat Ini)
+                          (Current Active Session)
                         </span>
                       )}
                     </div>
@@ -211,7 +211,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 border border-slate-200 text-xs px-2.5 py-0.5 font-semibold">
-                        <Users className="w-3.5 h-3.5 text-slate-500" /> Karyawan
+                        <Users className="w-3.5 h-3.5 text-slate-500" /> Employee
                       </span>
                     )}
                   </td>
@@ -219,7 +219,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                   <td className="p-3.5 text-center">
                     {isSelf ? (
                       <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] px-2 py-0.5 font-bold">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Aktif (Logged-in)
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Active (Logged-in)
                       </span>
                     ) : (
                       <button
@@ -227,7 +227,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                         onClick={() => onSwitchUser(user)}
                         className="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] px-2.5 py-1 font-bold cursor-pointer transition"
                       >
-                        <Key className="w-3 h-3 text-blue-600" /> Aktifkan Sesi Login
+                        <Key className="w-3 h-3 text-blue-600" /> Activate Login Session
                       </button>
                     )}
                   </td>

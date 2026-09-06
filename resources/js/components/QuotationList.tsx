@@ -421,8 +421,8 @@ export const QuotationList: React.FC<QuotationListProps> = ({
           </div>
           
           <p style="font-size: 12px; margin-bottom: 15px;">
-            Dengan hormat,<br/>
-            Sehubungan dengan permintaan penawaran harga (RFQ) yang kami terima, bersama surat ini kami mengajukan penawaran harga untuk barang/jasa dengan rincian sebagai berikut:
+            Dear Valued Customer,<br/>
+            In response to your Request for Quotation (RFQ), we hereby submit our official quotation for the items/services detailed below:
           </p>
           
           <table>
@@ -506,9 +506,17 @@ export const QuotationList: React.FC<QuotationListProps> = ({
       setIsLoading(true);
     }
     fetch(getApiUrl('/api_quotations.php'))
-      .then((res) => res.json())
+      .then(async (res) => {
+        const text = await res.text();
+        try {
+          return JSON.parse(text);
+        } catch (e) {
+          console.error('Failed to parse quotations JSON:', e, 'Raw text length:', text.length);
+          return null;
+        }
+      })
       .then((resData) => {
-        if (resData.status === 'success' && resData.data) {
+        if (resData && resData.status === 'success' && Array.isArray(resData.data)) {
           const jsonStr = JSON.stringify(resData.data);
           if (prevQuotationsJsonRef.current !== jsonStr) {
             prevQuotationsJsonRef.current = jsonStr;
@@ -698,11 +706,14 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   }, [quotations, searchTerm, activeTab]);
 
   const formatCurrency = (val: number) => {
+    const num = Number(val) || 0;
+    const hasDec = num % 1 !== 0;
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'MYR',
-      minimumFractionDigits: 2,
-    }).format(val || 0);
+      minimumFractionDigits: hasDec ? 2 : 0,
+      maximumFractionDigits: 2,
+    }).format(num);
   };
 
   return (
@@ -1584,11 +1595,11 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                       onClick={() => {
                         if (ocrRetryTimerRef.current) clearTimeout(ocrRetryTimerRef.current);
                         setOcrRateLimitInfo(null);
-                        setOcrErrorMsg('Auto-retry dibatalkan.');
+                        setOcrErrorMsg('Auto-retry cancelled.');
                         setTimeout(() => setOcrErrorMsg(null), 4000);
                       }}
                       className="shrink-0 text-slate-400 hover:text-slate-600 mt-0.5"
-                      title="Batalkan auto-retry"
+                      title="Cancel auto-retry"
                     >
                       <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -2308,7 +2319,7 @@ onClick={() => {
                         <span>Status Mesin Automasi Daemon PHP ({dynamicDaemons.length} Script Terdeteksi)</span>
                       </h4>
                       <p className="text-[10px] text-slate-500 mt-0.5">
-                        Pemindaian realtime dari direktori <code className="text-blue-700 font-mono">daemon/</code> & <code className="text-blue-700 font-mono">public/api_*.php</code> — Skrip baru otomatis terdeteksi tanpa ubah kode.
+                        Real-time scan of <code className="text-blue-700 font-mono">daemon/</code> & <code className="text-blue-700 font-mono">public/api_*.php</code> directory — New scripts are automatically detected without code changes.
                       </p>
                     </div>
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-300">
@@ -2420,7 +2431,7 @@ onClick={() => {
                       </div>
                       <div className="pt-1 flex items-start gap-2">
                         <span className="text-emerald-400 font-bold shrink-0">[IMAP-GMAIL]</span>
-                        <span><code className="text-emerald-300 font-bold">daemon/sync_gmail.php</code>: Koneksi IMAP SSL Gmail aktif (99 RFQ tersimpan).</span>
+                        <span><code className="text-emerald-300 font-bold">daemon/sync_gmail.php</code>: Active Gmail IMAP SSL connection (99 RFQs saved).</span>
                       </div>
                       <div className="pt-1 flex items-start gap-2">
                         <span className="text-cyan-400 font-bold shrink-0">[GEMINI-AI]</span>
@@ -2672,7 +2683,15 @@ onClick={() => {
                         selectedFullDbQuotation.items.map((it, idx) => (
                           <tr key={idx} className="hover:bg-slate-50 border-b border-slate-200">
                             <td className="p-2 text-center font-bold text-slate-500 border-r border-slate-200">{idx + 1}</td>
-                            <td className="p-2 font-mono font-bold text-slate-800 border-r border-slate-200">{it.item_code || '—'}</td>
+                            <td className="p-2 font-mono font-bold text-slate-800 border-r border-slate-200">
+                              {it.impa_code ? (
+                                <span className="bg-indigo-50 text-indigo-800 border border-indigo-200 font-extrabold px-1.5 py-0.5 rounded text-[10px]">
+                                  IMPA {it.impa_code}
+                                </span>
+                              ) : (
+                                it.product_code || it.item_code || '—'
+                              )}
+                            </td>
                             <td className="p-2 font-sans font-bold text-slate-900 border-r border-slate-200">{it.description}</td>
                             <td className="p-2 text-center font-bold border-r border-slate-200">{it.qty}</td>
                             <td className="p-2 text-center text-slate-600 border-r border-slate-200">{it.unit}</td>
@@ -2682,7 +2701,7 @@ onClick={() => {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={7} className="p-4 text-center text-slate-400 font-sans italic">Belum ada rincian item barang tersimpan untuk penawaran ini.</td>
+                          <td colSpan={7} className="p-4 text-center text-slate-400 font-sans italic">No item details saved for this quotation yet.</td>
                         </tr>
                       )}
                     </tbody>

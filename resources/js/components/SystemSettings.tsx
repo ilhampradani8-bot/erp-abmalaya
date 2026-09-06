@@ -6,7 +6,7 @@ import {
   FileText, Sliders, Bot, AlertTriangle, 
   Plus, Edit3, Trash2, Percent, ExternalLink, 
   Activity, Layers, Server, Cpu, Calendar, ScanLine,
-  Cloud, RefreshCw
+  Cloud, RefreshCw, ShieldCheck, Copy, Check
 } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
@@ -50,6 +50,20 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
   const [backupKeyFile, setBackupKeyFile] = useState('erp-abmalaya-connect-0fc0c4cb6314.json');
   const [backupIsPrimary, setBackupIsPrimary] = useState(false);
   const [isSavingBackup, setIsSavingBackup] = useState(false);
+  const [testingConnectionId, setTestingConnectionId] = useState<number | null>(null);
+  const [runningBackupId, setRunningBackupId] = useState<number | null>(null);
+  const [connectionResultsMap, setConnectionResultsMap] = useState<Record<number, { status: 'success' | 'error'; message: string; docTitle?: string }>>({});
+  const [isCopiedEmail, setIsCopiedEmail] = useState(false);
+
+  const handleCopyEmail = (emailStr: string) => {
+    try {
+      navigator.clipboard.writeText(emailStr);
+      setIsCopiedEmail(true);
+      setTimeout(() => setIsCopiedEmail(false), 3000);
+    } catch (e) {
+      alert('Email Service Account: ' + emailStr);
+    }
+  };
 
   // Common Notification Banner State
   const [isSaved, setIsSaved] = useState(false);
@@ -353,7 +367,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
           setIsAddBackupModalOpen(false);
           setBackupTitle('');
           setBackupSpreadsheetId('');
-          setSavedMessage('File backup spreadsheet baru berhasil ditambahkan!');
+          setSavedMessage('New spreadsheet backup file added successfully!');
           setIsSaved(true);
           setTimeout(() => setIsSaved(false), 3000);
           fetchSpreadsheetBackups();
@@ -363,7 +377,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
   };
 
   const handleDeleteBackupTarget = (id: number) => {
-    if (!window.confirm('Hapus konfigurasi file backup ini?')) return;
+    if (!window.confirm('Delete this backup file configuration?')) return;
     fetch(getApiUrl(`/api_spreadsheet_sync.php?action=delete_backup&id=${id}`))
       .then((res) => res.json())
       .then(() => fetchSpreadsheetBackups())
@@ -375,6 +389,59 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
       .then((res) => res.json())
       .then(() => fetchSpreadsheetBackups())
       .catch(() => {});
+  };
+
+  const handleTestConnection = (id: number, spreadsheetId?: string) => {
+    setTestingConnectionId(id);
+    fetch(getApiUrl(`/api_spreadsheet_sync.php?action=test_connection&id=${id}&spreadsheet_id=${encodeURIComponent(spreadsheetId || '')}`))
+      .then((res) => res.json())
+      .then((resData) => {
+        setTestingConnectionId(null);
+        if (resData.status === 'success') {
+          setConnectionResultsMap((prev) => ({
+            ...prev,
+            [id]: { status: 'success', message: resData.message, docTitle: resData.document_title }
+          }));
+          setSavedMessage(`✓ Connection Verified: '${resData.document_title || 'Google Sheet'}'`);
+          setIsSaved(true);
+          setTimeout(() => setIsSaved(false), 4500);
+        } else {
+          setConnectionResultsMap((prev) => ({
+            ...prev,
+            [id]: { status: 'error', message: resData.message }
+          }));
+          alert(`Connection Check Failed: ${resData.message}`);
+        }
+      })
+      .catch((err) => {
+        setTestingConnectionId(null);
+        alert('Connection check error: ' + err.message);
+      });
+  };
+
+  const handleRunBackupNow = (id: number) => {
+    setRunningBackupId(id);
+    fetch(getApiUrl('/api_spreadsheet_sync.php?action=run_backup_now'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    })
+      .then((res) => res.json())
+      .then((resData) => {
+        setRunningBackupId(null);
+        if (resData.status === 'success') {
+          setSavedMessage('✓ Master Product backup to Google Sheets executed successfully!');
+          setIsSaved(true);
+          setTimeout(() => setIsSaved(false), 4500);
+          fetchSpreadsheetBackups();
+        } else {
+          alert('Backup failed: ' + (resData.message || 'Error occurred'));
+        }
+      })
+      .catch((err) => {
+        setRunningBackupId(null);
+        alert('Backup execution error: ' + err.message);
+      });
   };
 
   // Save Function Helper
@@ -675,7 +742,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 }`}
               >
                 <Activity className="w-3.5 h-3.5" />
-                <span>Audit Sesi Edit</span>
+                <span>Session Audit</span>
               </button>
 
               <button
@@ -692,53 +759,122 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             {/* SUB-TAB 1: SPREADSHEET LINK & INFO */}
             {cloudSubTab === 'info' && (
               <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-xs space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <div>
-                    <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
-                      <Cloud className="w-4.5 h-4.5 text-blue-600" />
-                      <span>Integrasi Google Spreadsheet Utama</span>
-                    </h3>
-                    <p className="text-slate-500 text-xs mt-0.5">
-                      Koneksi resmi Google Sheets API v4 menggunakan Service Account resmi project erp-abmalaya-connect.
-                    </p>
-                  </div>
-                  <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold px-3 py-1 rounded-full text-xs flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Google Sheets API Connected</span>
-                  </span>
-                </div>
+                {(() => {
+                  const activeTarget = backupsList.find((b: any) => b.is_primary == 1) || backupsList[0] || {};
+                  const fileTitle = activeTarget.title || 'Backup Master Produk Google Sheets (Utama)';
+                  const spId = activeTarget.spreadsheet_id || '1PHMV-f5fEZzdzCHXXMZFn2laEIRnOWrDoH9ZJcxi1UQ';
+                  const spUrl = spId.startsWith('http') ? spId : `https://docs.google.com/spreadsheets/d/${spId}/edit`;
+                  const saEmail = activeTarget.service_account_email || 'erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com';
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                  <div className="bg-slate-50 p-3.5 rounded-md border border-slate-200 space-y-1.5">
-                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Target Spreadsheet ID</span>
-                    <div className="font-mono font-extrabold text-blue-700 bg-white p-2 rounded border border-slate-200 break-all flex items-center justify-between">
-                      <span>1PHMV-f5fEZzdzCHXXMZFn2laEIRnOWrDoH9ZJcxi1UQ</span>
-                      <a
-                        href="https://docs.google.com/spreadsheets/d/1PHMV-f5fEZzdzCHXXMZFn2laEIRnOWrDoH9ZJcxi1UQ/edit"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-blue-600 hover:underline flex items-center gap-1 shrink-0 ml-2"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        <span>Buka</span>
-                      </a>
-                    </div>
-                  </div>
+                  return (
+                    <>
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div>
+                          <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                            <Cloud className="w-4.5 h-4.5 text-blue-600" />
+                            <span>Main Google Spreadsheet Integration</span>
+                          </h3>
+                          <p className="text-slate-500 text-xs mt-0.5">
+                            Configuration dynamically pulled from <code className="bg-slate-100 px-1 py-0.5 rounded text-blue-700 font-mono font-bold">spreadsheet_backups</code> table.
+                          </p>
+                        </div>
+                        <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold px-3 py-1 rounded-full text-xs flex items-center gap-1.5 shadow-2xs">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Google Sheets API Connected</span>
+                        </span>
+                      </div>
 
-                  <div className="bg-slate-50 p-3.5 rounded-md border border-slate-200 space-y-1.5">
-                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Service Account Email</span>
-                    <div className="font-mono font-bold text-slate-800 bg-white p-2 rounded border border-slate-200 truncate">
-                      erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com
-                    </div>
-                  </div>
-                </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <div className="bg-slate-50 p-3.5 rounded-md border border-slate-200 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-slate-500 font-bold uppercase block">Backup Filename</span>
+                            <span className="bg-blue-100 text-blue-800 text-[9px] font-bold px-1.5 py-0.2 rounded font-mono">SQL Dynamic Record</span>
+                          </div>
+                          
+                          <div className="bg-white p-2.5 rounded border border-slate-200 space-y-2">
+                            <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                              <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span>{fileTitle}</span>
+                            </div>
 
-                <div className="bg-blue-50/60 border border-blue-200 p-3.5 rounded-md text-xs text-blue-950 space-y-1">
-                  <span className="font-bold block">Status Mesin Auto-Sync Daemon:</span>
-                  <p className="text-[11px] leading-relaxed text-blue-900">
-                    Mesin daemon background diset otomatis berjalan setiap <strong>5 Menit</strong> (`cron_spreadsheet_auto_sync.php`) untuk memperbarui data produk MySQL ke Google Spreadsheet secara aman.
-                  </p>
-                </div>
+                            <div className="pt-1 flex items-center justify-between border-t border-slate-100 text-[11px]">
+                              <span className="text-slate-500 font-mono">Tab: <strong>{activeTarget.sheet_name || 'Master_Products'}</strong></span>
+                              <a
+                                href={spUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-[10px] flex items-center gap-1.5 cursor-pointer shadow-xs transition"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                                <span>Open Spreadsheet</span>
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-50 p-3.5 rounded-md border border-slate-200 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-slate-500 font-bold uppercase block">Google Service Account Access</span>
+                            <span className="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-1.5 py-0.2 rounded font-mono">Authorized Key</span>
+                          </div>
+
+                          <div className="bg-white p-2.5 rounded border border-slate-200 space-y-2">
+                            <div className="font-mono font-bold text-slate-800 text-[11px] truncate" title={saEmail}>
+                              {saEmail}
+                            </div>
+
+                            <div className="pt-1 flex items-center justify-between border-t border-slate-100 text-[11px]">
+                              <span className="text-slate-500 text-[10px]">Grant edit access in Drive</span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyEmail(saEmail)}
+                                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-900 text-white rounded font-bold text-[10px] flex items-center gap-1.5 cursor-pointer shadow-xs transition"
+                              >
+                                {isCopiedEmail ? (
+                                  <>
+                                    <Check className="w-3 h-3 text-emerald-400" />
+                                    <span>Copied!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3 h-3" />
+                                    <span>Copy Email</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-blue-50/60 border border-blue-200 p-3.5 rounded-md text-xs text-blue-950 flex items-center justify-between gap-3">
+                        <div className="space-y-0.5">
+                          <span className="font-bold block flex items-center gap-1.5 text-blue-900">
+                            <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Auto-Sync Daemon Status (24/7 Service):</span>
+                          </span>
+                          <p className="text-[11px] leading-relaxed text-blue-900">
+                            Running automatically in background via <code className="bg-blue-100 px-1 py-0.2 rounded font-mono font-bold">erp-daemon.service</code> (every 60 mins).
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => activeTarget.id && handleRunBackupNow(activeTarget.id)}
+                          disabled={runningBackupId === activeTarget.id}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded shadow-xs transition cursor-pointer shrink-0 flex items-center gap-1.5"
+                        >
+                          {runningBackupId === activeTarget.id ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Cloud className="w-3.5 h-3.5" />
+                          )}
+                          <span>Run Sync Now</span>
+                        </button>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             )}
 
@@ -748,14 +884,14 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <h3 className="font-bold text-xs text-slate-900 flex items-center gap-2">
                     <Eye className="w-4 h-4 text-purple-600" />
-                    <span>Riwayat System Notifications & Log Sync ({syncLogsList.length})</span>
+                    <span>System Sync Logs ({syncLogsList.length})</span>
                   </h3>
                   <button
                     onClick={fetchSyncLogs}
                     className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-bold text-[11px] flex items-center gap-1 cursor-pointer"
                   >
                     <RefreshCw className="w-3 h-3" />
-                    <span>Refresh Logs</span>
+                    <span>Refresh</span>
                   </button>
                 </div>
 
@@ -764,17 +900,17 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     <thead className="bg-slate-100 text-slate-700 font-bold text-[10px] uppercase border-b border-slate-200">
                       <tr>
                         <th className="p-2 w-12 text-center">ID</th>
-                        <th className="p-2 w-36">Waktu Record</th>
-                        <th className="p-2 w-48">Judul Log</th>
-                        <th className="p-2">Pesan & Keterangan</th>
-                        <th className="p-2 w-24 text-center">Tipe</th>
+                        <th className="p-2 w-36">Timestamp</th>
+                        <th className="p-2 w-48">Event Title</th>
+                        <th className="p-2">Message</th>
+                        <th className="p-2 w-24 text-center">Type</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
                       {syncLogsList.length === 0 ? (
                         <tr>
                           <td colSpan={5} className="p-6 text-center text-slate-400 italic">
-                            Belum ada riwayat log sync tercatat.
+                            No log entries found.
                           </td>
                         </tr>
                       ) : (
@@ -806,14 +942,14 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <h3 className="font-bold text-xs text-slate-900 flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-amber-600" />
-                    <span>Inspeksi Konflik Perbedaan Data (MySQL vs Google Sheet)</span>
+                    <span>Conflict Inspection (MySQL vs Sheet)</span>
                   </h3>
                   <button
                     onClick={fetchConflicts}
                     className="px-2.5 py-1 bg-amber-600 text-white rounded font-bold text-[11px] flex items-center gap-1 cursor-pointer hover:bg-amber-700"
                   >
                     <RefreshCw className="w-3 h-3" />
-                    <span>Jalankan Cek Konflik</span>
+                    <span>Run Conflict Check</span>
                   </button>
                 </div>
 
@@ -821,18 +957,18 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   <table className="w-full text-left text-xs font-sans">
                     <thead className="bg-slate-100 text-slate-700 font-bold text-[10px] uppercase border-b border-slate-200">
                       <tr>
-                        <th className="p-2 w-28 font-mono">Kode Produk</th>
-                        <th className="p-2">Nama Produk</th>
-                        <th className="p-2 w-32">Field Berbeda</th>
-                        <th className="p-2 w-32 bg-blue-50 text-blue-900">Nilai MySQL</th>
-                        <th className="p-2 w-32 bg-emerald-50 text-emerald-900">Nilai Cloud Sheet</th>
+                        <th className="p-2 w-28 font-mono">Product Code</th>
+                        <th className="p-2">Name</th>
+                        <th className="p-2 w-32">Conflict Field</th>
+                        <th className="p-2 w-32 bg-blue-50 text-blue-900">MySQL Val</th>
+                        <th className="p-2 w-32 bg-emerald-50 text-emerald-900">Cloud Sheet Val</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
                       {syncConflictsList.length === 0 ? (
                         <tr>
                           <td colSpan={5} className="p-6 text-center text-slate-400 italic">
-                            Tidak ditemukan perbedaan data. Database MySQL dan Google Sheet 100% identik!
+                            No conflicts found. Systems are in sync!
                           </td>
                         </tr>
                       ) : (
@@ -862,7 +998,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <h3 className="font-bold text-xs text-slate-900 flex items-center gap-2">
                     <Activity className="w-4 h-4 text-emerald-600" />
-                    <span>Audit Sesi Perubahan Local Storage ({sessionAuditLogs.length})</span>
+                    <span>Local Session Edit Audit ({sessionAuditLogs.length})</span>
                   </h3>
                 </div>
 
@@ -871,16 +1007,16 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     <thead className="bg-slate-100 text-slate-700 font-bold text-[10px] uppercase border-b border-slate-200">
                       <tr>
                         <th className="p-2 w-12 text-center">#</th>
-                        <th className="p-2 w-36">Waktu Aksi</th>
-                        <th className="p-2 w-32">Tipe Aksi</th>
-                        <th className="p-2">Rincian Perubahan</th>
+                        <th className="p-2 w-36">Timestamp</th>
+                        <th className="p-2 w-32">Action Type</th>
+                        <th className="p-2">Change Details</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
                       {sessionAuditLogs.length === 0 ? (
                         <tr>
                           <td colSpan={4} className="p-6 text-center text-slate-400 italic">
-                            Belum ada aktivitas edit produk pada sesi ini.
+                            No edit activity recorded in this session.
                           </td>
                         </tr>
                       ) : (
@@ -910,10 +1046,10 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   <div>
                     <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
                       <Sliders className="w-4.5 h-4.5 text-blue-600" />
-                      <span>Manajemen Multi-File Backup Spreadsheet</span>
+                      <span>Multi-Backup File Manager</span>
                     </h3>
                     <p className="text-slate-500 text-xs mt-0.5">
-                      Kelola lebih dari 1 lokasi file backup Google Spreadsheet dan kunci kredensial Service Account.
+                      Manage multiple Google Spreadsheet backup endpoints and service account credentials.
                     </p>
                   </div>
 
@@ -923,7 +1059,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded transition cursor-pointer flex items-center gap-1.5 shadow-xs"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>Tambah Detail File Backup & Key</span>
+                    <span>Add Backup File Detail & Key</span>
                   </button>
                 </div>
 
@@ -933,67 +1069,151 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     <thead className="bg-slate-100 text-slate-700 font-bold text-[10px] uppercase border-b border-slate-200">
                       <tr>
                         <th className="p-2.5 w-10 text-center">#</th>
-                        <th className="p-2.5">Judul Backup</th>
-                        <th className="p-2.5 w-64">Spreadsheet ID / Share Link</th>
-                        <th className="p-2.5 w-24">Tab Sheet</th>
-                        <th className="p-2.5 w-64">Service Account Key File</th>
-                        <th className="p-2.5 w-20 text-center">Primary</th>
-                        <th className="p-2.5 w-28 text-center">Aksi</th>
+                        <th className="p-2.5">File Name & Tab</th>
+                        <th className="p-2.5 w-56">Spreadsheet Link / ID</th>
+                        <th className="p-2.5 w-64">Service Account</th>
+                        <th className="p-2.5 w-56">Status</th>
+                        <th className="p-2.5 w-64 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
                       {backupsList.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="p-6 text-center text-slate-400 italic">
-                            Belum ada file backup didaftarkan.
+                          <td colSpan={6} className="p-6 text-center text-slate-400 italic">
+                            No backup files registered yet. Click "Add Backup File Detail" above.
                           </td>
                         </tr>
                       ) : (
-                        backupsList.map((bk: any, idx: number) => (
-                          <tr key={bk.id} className="hover:bg-slate-50">
-                            <td className="p-2.5 text-center font-mono font-bold text-slate-500">{idx + 1}</td>
-                            <td className="p-2.5 font-bold text-slate-900">
-                              {bk.title}
-                              {bk.is_primary == 1 && (
-                                <span className="ml-1.5 bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold px-1.5 py-0.2 rounded text-[9px]">
-                                  Utama
+                        backupsList.map((bk: any, idx: number) => {
+                          const spUrl = bk.spreadsheet_id.startsWith('http')
+                            ? bk.spreadsheet_id
+                            : `https://docs.google.com/spreadsheets/d/${bk.spreadsheet_id}/edit`;
+                          const testRes = connectionResultsMap[bk.id];
+
+                          return (
+                            <tr key={bk.id} className="hover:bg-slate-50 transition">
+                              <td className="p-2.5 text-center font-mono font-bold text-slate-500">{idx + 1}</td>
+                              
+                              <td className="p-2.5">
+                                <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                                  <span>{bk.title}</span>
+                                  {bk.is_primary == 1 && (
+                                    <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold px-1.5 py-0.2 rounded text-[9px]">
+                                      Primary
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-mono mt-0.5 flex items-center gap-2">
+                                  <span>Tab: <strong>{bk.sheet_name || 'Master_Products'}</strong></span>
+                                  <span>•</span>
+                                  <span>Interval: {bk.backup_interval_minutes || 60}m</span>
+                                </div>
+                              </td>
+
+                              <td className="p-2.5">
+                                <a
+                                  href={spUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-mono text-blue-700 text-[11px] hover:underline flex items-center gap-1 max-w-[200px] truncate"
+                                  title={spUrl}
+                                >
+                                  <ExternalLink className="w-3 h-3 text-blue-600 shrink-0" />
+                                  <span className="truncate">{bk.spreadsheet_id}</span>
+                                </a>
+                              </td>
+
+                              <td className="p-2.5">
+                                <div className="font-mono text-[10px] text-slate-700 font-semibold truncate max-w-[220px]" title={bk.service_account_email || 'erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com'}>
+                                  {bk.service_account_email || 'erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com'}
+                                </div>
+                                <span className="bg-blue-50 text-blue-700 border border-blue-200 font-mono px-1.5 py-0.2 rounded text-[9px] inline-block mt-0.5">
+                                  Authorized SA
                                 </span>
-                              )}
-                            </td>
-                            <td className="p-2.5 font-mono text-blue-700 text-[11px] truncate max-w-[200px]">
-                              {bk.spreadsheet_id}
-                            </td>
-                            <td className="p-2.5 font-semibold text-slate-700">{bk.sheet_name}</td>
-                            <td className="p-2.5 font-mono text-[10px] text-slate-600 truncate max-w-[200px]">
-                              {bk.key_filename}
-                            </td>
-                            <td className="p-2.5 text-center">
-                              {bk.is_primary == 1 ? (
-                                <CheckCircle2 className="w-4 h-4 text-emerald-600 mx-auto" />
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => handleSetPrimaryBackupTarget(bk.id)}
-                                  className="text-[10px] text-blue-600 hover:underline font-bold cursor-pointer"
-                                >
-                                  Set Utama
-                                </button>
-                              )}
-                            </td>
-                            <td className="p-2.5 text-center">
-                              {bk.is_primary != 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteBackupTarget(bk.id)}
-                                  className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
-                                  title="Hapus Target Backup"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))
+                              </td>
+
+                              <td className="p-2.5">
+                                {testRes ? (
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold border inline-block ${testRes.status === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-rose-50 text-rose-800 border-rose-300'}`}>
+                                    {testRes.status === 'success' ? '✓ Connection Verified' : '✕ Connection Failed'}
+                                  </span>
+                                ) : bk.last_status === 'success' ? (
+                                  <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-extrabold px-1.5 py-0.5 rounded text-[9px] inline-block">
+                                    ✓ Active & Backed Up
+                                  </span>
+                                ) : (
+                                  <span className="bg-slate-100 text-slate-600 border border-slate-200 font-bold px-1.5 py-0.5 rounded text-[9px] inline-block">
+                                    Ready
+                                  </span>
+                                )}
+
+                                <div className="text-[10px] text-slate-500 mt-1 font-sans">
+                                  {bk.last_backup_at ? (
+                                    <span>Sync: {bk.last_backup_at} ({bk.total_rows_backed_up || 0} items)</span>
+                                  ) : (
+                                    <span className="italic text-slate-400">Never synced</span>
+                                  )}
+                                </div>
+                              </td>
+
+                              <td className="p-2.5 text-center">
+                                <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTestConnection(bk.id, bk.spreadsheet_id)}
+                                    disabled={testingConnectionId === bk.id}
+                                    className="px-2 py-1 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white font-extrabold text-[10px] rounded transition cursor-pointer flex items-center gap-1"
+                                    title="Check Connection"
+                                  >
+                                    {testingConnectionId === bk.id ? (
+                                      <RefreshCw className="w-3 h-3 animate-spin text-amber-400" />
+                                    ) : (
+                                      <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                                    )}
+                                    <span>Test</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRunBackupNow(bk.id)}
+                                    disabled={runningBackupId === bk.id}
+                                    className="px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-extrabold text-[10px] rounded transition cursor-pointer flex items-center gap-1"
+                                    title="Backup Now"
+                                  >
+                                    {runningBackupId === bk.id ? (
+                                      <RefreshCw className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                      <Cloud className="w-3 h-3" />
+                                    )}
+                                    <span>Sync Now</span>
+                                  </button>
+
+                                  {bk.is_primary != 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSetPrimaryBackupTarget(bk.id)}
+                                      className="px-1.5 py-0.5 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded cursor-pointer"
+                                      title="Set Primary"
+                                    >
+                                      Primary
+                                    </button>
+                                  )}
+
+                                  {bk.is_primary != 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteBackupTarget(bk.id)}
+                                      className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                                      title="Delete Backup"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
@@ -1002,7 +1222,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               </div>
             )}
 
-            {/* POP-UP MODAL: TAMBAH DETAIL FILE BACKUP */}
+            {/* POP-UP MODAL: ADD BACKUP FILE DETAIL */}
             {isAddBackupModalOpen && (
               <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in">
                 <div className="bg-white border border-slate-300 w-full max-w-lg rounded-lg shadow-2xl overflow-hidden flex flex-col">
@@ -1011,7 +1231,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     <div className="flex items-center gap-2">
                       <Plus className="w-4 h-4 text-blue-600" />
                       <h3 className="font-extrabold text-xs text-slate-900 uppercase">
-                        Tambah Detail File Backup Spreadsheet
+                        Add Spreadsheet Backup File Detail
                       </h3>
                     </div>
                     <button
@@ -1024,10 +1244,10 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
 
                   <form onSubmit={handleAddBackupTarget} className="p-4 space-y-3 text-xs">
                     <div className="space-y-1">
-                      <label className="font-bold text-slate-700 block">Judul File Backup</label>
+                      <label className="font-bold text-slate-700 block">Backup Filename</label>
                       <input
                         type="text"
-                        placeholder="Contoh: Spreadsheet Backup Cadangan VPS 2"
+                        placeholder="e.g. Master Products Sync Backup"
                         value={backupTitle}
                         onChange={(e) => setBackupTitle(e.target.value)}
                         required
@@ -1049,7 +1269,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
 
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
-                        <label className="font-bold text-slate-700 block">Nama Tab Sheet</label>
+                        <label className="font-bold text-slate-700 block">Sheet Name</label>
                         <input
                           type="text"
                           value={backupSheetName}
@@ -1059,7 +1279,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                       </div>
 
                       <div className="space-y-1">
-                        <label className="font-bold text-slate-700 block">File Key (.json)</label>
+                        <label className="font-bold text-slate-700 block">Key Filename (.json)</label>
                         <input
                           type="text"
                           value={backupKeyFile}
@@ -1088,7 +1308,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                         className="rounded text-blue-600 cursor-pointer"
                       />
                       <label htmlFor="primaryCheck" className="font-bold text-slate-800 cursor-pointer select-none">
-                        Jadikan sebagai File Backup Utama (Primary Target)
+                        Set as Primary Backup Target
                       </label>
                     </div>
 
@@ -1098,7 +1318,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                         onClick={() => setIsAddBackupModalOpen(false)}
                         className="px-3.5 py-1.5 bg-white border border-slate-300 text-slate-700 font-bold rounded cursor-pointer"
                       >
-                        Batal
+                        Cancel
                       </button>
                       <button
                         type="submit"
@@ -2249,7 +2469,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 onClick={() => setIsPreviewModalOpen(false)}
                 className="px-4 py-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] text-[#3d3d3d] border border-[#a0a0a0] font-bold text-xs rounded-sm cursor-pointer hover:bg-white"
               >
-                Tutup Pratinjau
+                Close Preview
               </button>
             </div>
 

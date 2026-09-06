@@ -55,10 +55,15 @@ $match_prod_out = shell_exec(escapeshellarg($php) . ' ' . escapeshellarg($base .
 daemon_log($match_prod_out ?? 'No output from matching_text_product.php');
 
 // Step 6: Run Database Change Watcher & System Notifications Engine
-daemon_log('[6/6] Running Database Change Watcher Engine...');
+daemon_log('[6/7] Running Database Change Watcher Engine...');
 $watch_db_out = shell_exec(escapeshellarg($php) . ' ' . escapeshellarg($base . '/watch_db_changes.php') . ' 2>&1');
 daemon_log($watch_db_out ?? 'No output from watch_db_changes.php');
 
-daemon_log('=== Done ===');
-exit(0);
+// Step 7: Run Automated Product Google Sheets Backup Engine
+daemon_log('[7/7] Running Product Catalog Google Sheets Backup Engine...');
+$backup_sheets_out = shell_exec(escapeshellarg($php) . ' ' . escapeshellarg($base . '/backup_products_sheets.php') . ' 2>&1');
+daemon_log($backup_sheets_out ?? 'No output from backup_products_sheets.php');
 
+daemon_log('=== Daemon execution finished successfully. ===');
+
+exit(0);

@@ -151,10 +151,10 @@ export const ElectronDownloads: React.FC = () => {
           <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
             <div className="font-bold text-slate-800 flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-blue-600" />
-              <span>Offline Offline PDF Rendering</span>
+              <span>Direct Local Printing</span>
             </div>
             <p className="text-slate-600 text-[11px] leading-relaxed">
-              Cetak SPH Surat Penawaran Harga langsung ke printer lokal tanpa perlu membuka tab browser tambahan.
+              Print SPH Quotation documents directly to local printers without opening extra browser tabs.
             </p>
           </div>
 
@@ -164,7 +164,7 @@ export const ElectronDownloads: React.FC = () => {
               <span>Native Desktop Push Notifications</span>
             </div>
             <p className="text-slate-600 text-[11px] leading-relaxed">
-              Dapatkan notifikasi sistem secara instan saat email RFQ baru dari Gmail IMAP tiba di server.
+              Receive instant system notifications when new RFQ emails arrive from Gmail IMAP on the server.
             </p>
           </div>
 

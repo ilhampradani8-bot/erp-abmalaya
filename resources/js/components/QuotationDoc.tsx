@@ -24,11 +24,14 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
   };
 
   const formatCurrency = (val: number) => {
+    const num = Number(val) || 0;
+    const hasDec = num % 1 !== 0;
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'MYR',
-      minimumFractionDigits: 2,
-    }).format(val || 0);
+      minimumFractionDigits: hasDec ? 2 : 0,
+      maximumFractionDigits: 2,
+    }).format(num);
   };
 
   const handlePrint = () => {
@@ -108,7 +111,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
 
           <div className="text-right shrink-0">
             <span className="inline-block bg-slate-900 text-white text-xs font-extrabold px-3 py-1 uppercase tracking-wider mb-2">
-              SURAT PENAWARAN HARGA
+              OFFICIAL QUOTATION (SPH)
             </span>
             <div className="text-xs font-mono font-bold text-slate-800">
               No: {safeQuotation.quotation_number || safeQuotation.id || 'SPH-ABM/MY/2026/0403'}
@@ -123,28 +126,28 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
         <div className="grid grid-cols-2 gap-6 bg-slate-50 p-4 border border-slate-200 text-xs mb-6 w-full">
           <div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-              Penerima Penawaran (Kepada Yth):
+              Quotation Recipient (To):
             </span>
             <strong className="text-sm text-slate-900 block">{safeQuotation.company_name || 'Client Company'}</strong>
-            <p className="text-slate-700 mt-0.5">U.p. Bpk/Ibu: <strong>{safeQuotation.client_name || 'Client Contact'}</strong></p>
+            <p className="text-slate-700 mt-0.5">Attn: <strong>{safeQuotation.client_name || 'Client Contact'}</strong></p>
             <p className="text-slate-500 mt-1">Email: {safeQuotation.client_email || 'client@company.com'}</p>
           </div>
 
           <div className="text-right space-y-1">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-              Detail Dokumen Penawaran:
+              Quotation Document Details:
             </span>
-            <p><span className="text-slate-500">Tanggal Terbit:</span> <strong>{safeQuotation.date_issued || new Date().toISOString().split('T')[0]}</strong></p>
-            <p><span className="text-slate-500">Masa Berlaku s.d:</span> <strong className="text-amber-700">{safeQuotation.valid_until || '14 Days'}</strong></p>
-            <p><span className="text-slate-500">Mata Uang:</span> <strong>MYR (Malaysian Ringgit)</strong></p>
-            <p><span className="text-slate-500">Penanggung Jawab:</span> <strong>{safeQuotation.created_by || 'Aiman Zaki'}</strong></p>
+            <p><span className="text-slate-500">Date Issued:</span> <strong>{safeQuotation.date_issued || new Date().toISOString().split('T')[0]}</strong></p>
+            <p><span className="text-slate-500">Valid Until:</span> <strong className="text-amber-700">{safeQuotation.valid_until || '14 Days'}</strong></p>
+            <p><span className="text-slate-500">Currency:</span> <strong>MYR (Malaysian Ringgit)</strong></p>
+            <p><span className="text-slate-500">Issued By:</span> <strong>{safeQuotation.created_by || 'Aiman Zaki'}</strong></p>
           </div>
         </div>
 
         {/* Introduction text */}
         <p className="text-xs text-slate-700 mb-4 leading-relaxed">
-          Dengan hormat,<br />
-          Sehubungan dengan permintaan penawaran harga (RFQ) yang kami terima, bersama surat ini kami <strong>ABMALAYA.COM (MALAYSIA)</strong> mengajukan penawaran harga untuk barang/jasa dengan rincian sebagai berikut:
+          Dear Valued Customer,<br />
+          In response to your Request for Quotation (RFQ), <strong>ABMALAYA.COM (MALAYSIA)</strong> hereby submits our official quotation for the items/services detailed below:
         </p>
 
         {/* Quotation Table */}
@@ -153,10 +156,10 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
             <thead className="bg-slate-100 text-slate-800 font-bold border-b border-slate-300 uppercase">
               <tr>
                 <th className="p-3 w-12 text-center">No</th>
-                <th className="p-3">Deskripsi Barang / Spesifikasi Layanan</th>
+                <th className="p-3">Item Description / Service Specification</th>
                 <th className="p-3 text-center w-20">Qty</th>
-                <th className="p-3 text-center w-24">Satuan</th>
-                <th className="p-3 text-right w-44">Harga Satuan</th>
+                <th className="p-3 text-center w-24">Unit</th>
+                <th className="p-3 text-right w-44">Unit Price</th>
                 <th className="p-3 text-center w-20">Disc</th>
                 <th className="p-3 text-right w-44">Total (RM)</th>
               </tr>
@@ -187,7 +190,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
           {/* Terms & Notes */}
           <div className="w-full sm:w-1/2 space-y-3 text-xs">
             <div className="bg-slate-50 p-3.5 border border-slate-200">
-              <strong className="block text-slate-900 mb-1">Catatan Penawaran:</strong>
+              <strong className="block text-slate-900 mb-1">Quotation Notes & Terms:</strong>
               <p className="text-slate-600 leading-relaxed">{safeQuotation.notes || 'Standard SPH terms apply.'}</p>
             </div>
           </div>
@@ -200,7 +203,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
             </div>
 
             <div className="flex justify-between text-slate-600">
-              <span>PPN ({safeQuotation.tax_percent || 11}%):</span>
+              <span>Tax / VAT ({safeQuotation.tax_percent || 11}%):</span>
               <span className="font-mono">{formatCurrency(safeQuotation.tax_amount || 0)}</span>
             </div>
 
@@ -217,14 +220,14 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
         {/* Authorized Signature Block */}
         <div className="flex justify-between items-end pt-8 border-t border-slate-200 text-xs w-full">
           <div>
-            <p className="text-slate-500">Penerima / Pemesan,</p>
+            <p className="text-slate-500">Accepted & Confirmed By,</p>
             <div className="h-16"></div>
             <p className="font-bold text-slate-900">({safeQuotation.client_name || 'Client Name'})</p>
             <p className="text-slate-500">{safeQuotation.company_name || 'Client Company'}</p>
           </div>
 
           <div className="text-right">
-            <p className="text-slate-500">Hormat Kami,</p>
+            <p className="text-slate-500">Sincerely,</p>
             <strong className="block text-slate-900 font-bold">ABMALAYA.COM (MALAYSIA)</strong>
             
             <div className="h-16 flex items-center justify-end my-1">

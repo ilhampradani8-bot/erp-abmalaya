@@ -17,6 +17,7 @@ export default defineConfig({
     proxy: {
       '^/api_.*': 'http://127.0.0.1:8000',
       '^/import_.*': 'http://127.0.0.1:8000',
+      '^/uploads/.*': 'http://127.0.0.1:8000',
       '/.+\\.php$': 'http://127.0.0.1:8000'
     }
   }

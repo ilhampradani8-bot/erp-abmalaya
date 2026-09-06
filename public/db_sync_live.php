@@ -75,6 +75,13 @@ try {
         $log[] = "Added column `impa_code` to `quotation_items`.";
     }
 
+    $chk_off = $db_conn->query("SHOW COLUMNS FROM `quotation_items` LIKE 'offer'");
+    if ($chk_off && $chk_off->num_rows === 0) {
+        $db_conn->query("ALTER TABLE `quotation_items` ADD COLUMN `offer` TEXT DEFAULT NULL AFTER `specification`");
+        $log[] = "Added column `offer` to `quotation_items`.";
+    }
+
+
     // 3. Ensure `quotations` table has impa_code
     $chk_qic = $db_conn->query("SHOW COLUMNS FROM `quotations` LIKE 'impa_code'");
     if ($chk_qic && $chk_qic->num_rows === 0) {

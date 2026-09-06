@@ -24,23 +24,33 @@ Portal ERP Modern & Komprehensif untuk **ABMALAYA.COM (MALAYSIA)** yang menangan
    - Pemantau perubahan data otomatis (`daemon/watch_db_changes.php`) yang mendeteksi perubahan pada tabel `rfq_requests`, `quotations`, `products`, dan `users`.
    - Menghasilkan notifikasi sistem otomatis berformat bahasa Inggris yang dicatat ke dalam tabel `system_notifications`.
 
-4. **Master Katalog Produk & Standardisasi Kode Kategori IMPA**:
-   - Penapisan otomatis kode kategori internasional dunia maritim (contoh: IMPA `11` Clothing, IMPA `39` Medicine, IMPA `45` Petroleum, IMPA `49` Hardware, IMPA `51` Cleaning Chemicals, IMPA `79` Provision).
-   - Daemon pencocokan teks otomatis (`daemon/matching_text_impa.php`) untuk memberikan kode IMPA pada SPH dan item barang.
+4. **Master Katalog Produk, Kode IMPA 6-Digit & Penawaran Alternatif (Offer)**:
+   - Pemisahan terstruktur antara SKU internal (`product_code`, contoh: `PRD-233886`), Kode IMPA Presisi 6-Digit (`impa_code`, contoh: `233886`), serta Penawaran Alternatif (`offer` / `offered_item`).
+   - Dukungan unggah banyak foto produk (*multiple photo upload*) dan link gambar web.
+   - Filter otomatis yang menyembunyikan item berstatus trash/deleted dari daftar aktif.
 
-5. **Quotation Builder & Pop-Up Pemilih Multi-Barang**:
+5. **Mesin Daemon Product Text Matching (Tiered & Fast-Path Matching)**:
+   - Daemon dedicated (`daemon/matching_text_product.php`) yang mencocokkan item permintaan RFQ dengan Master Produk:
+     - **Tingkat 1 (Fast-Path Exact IMPA / SKU)**: Pencocokan 100% instan untuk Kode IMPA 6-digit atau SKU.
+     - **Tingkat 2 (Fuzzy Token Overlap ≥ 65%)**: Pencocokan kemiripan kata kunci pada nama produk, spesifikasi teknis, dan alternatif penawaran (`offer`).
+   - Melampirkan `product_code`, `impa_code`, `unit_price`, `offer`, `specification`, dan `total` secara otomatis ke `quotation_items` tanpa duplikasi data.
+
+6. **Engine Cloud Backup Google Sheets Otomatis 24/7**:
+   - Skrip daemon latar belakang (`daemon/backup_products_sheets.php`) yang menggunakan Google Service Account JWT OAuth.
+   - Otomatis mencadangkan katalog master produk (termasuk kode IMPA, harga modal, harga jual, stok, & link foto) ke private Google Spreadsheet milik `abmalayaindustry@gmail.com`.
+
+7. **Quotation Builder & Tabel Item Rincian (10 Kolom Lengkap)**:
    - Form pembuatan Surat Penawaran Harga (SPH) interaktif dengan kalkulasi PPN, diskon, dan subtotal otomatis.
-   - Pop-Up Pemilih Multi-Barang dari katalog master database.
-   - Synchronised history audit trail & log aktivitas scan OCR per SPH.
+   - Tabel Rincian Item Penawaran (10 Kolom Lengkap: `#`, `Photo Thumbnail`, `Product Code / IMPA`, `Product Name / Offer`, `Detailed Specification`, `Qty`, `Unit`, `Unit Price MYR`, `Disc %`, `Subtotal MYR`).
+   - Pemilik universal Trash Sidebar untuk RFQ, Quotations, dan Produk.
 
-6. **Tabel Data SPH Quotation (Dropdown Filter, Count Badges & Sticky Header)**:
+8. **Tabel Data SPH Quotation (Dropdown Filter, Count Badges & Sticky Header)**:
    - Fitur **Dropdown Filter** terpadu menggantikan tombol tab dengan live count badges (`All`, `Requisition`, `In Progress`, `Quotation`, `ACC Approved`, `Done`, `Trash`).
    - Pemetaan status akurat (`in_progress`, `draft`, `siap_kirim`, `approved`, `done_send`, `junk`).
    - Header tabel melayang permanen (*Sticky Top Header*) saat di-scroll down.
-   - Mode Opsi **"Tampilkan Semua Kolom Database (Full)"** pada menu 3-titik yang melebarkan tampilan hingga **21 Kolom MySQL LENGKAP**.
 
-7. **Layanan Server Mandiri 24/7 di Linux VPS (Systemd Services & Cron)**:
-   - Berjalan 24 jam non-stop di Linux VPS tanpa perlu membuka IDE / terminal SSH:
+9. **Layanan Server Mandiri 24/7 di UTM Virtual Machine (31GB RAM) (Systemd Services & Cron)**:
+   - Berjalan 24 jam non-stop di UTM VM (31GB RAM) tanpa perlu membuka IDE / terminal SSH:
      - `mariadb.service` (Port 3306)
      - `erp-php.service` (Port 8000 Multi-Worker)
      - `erp-vite.service` (Port 3000 Production Preview)
@@ -103,9 +113,9 @@ erp-abmalaya/
 
 ---
 
-## 🖥️ Cara Menjalankan Layanan & Akses Lingkungan (Dev / Local VPS / Live Hosting)
+## 🖥️ Cara Menjalankan Layanan & Akses Lingkungan (Dev / UTM VM 31GB RAM / Live Hosting)
 
-### 1. Status Service Systemd di Local VPS
+### 1. Status Service Systemd di UTM Virtual Machine (31GB RAM)
 Layanan backend, frontend preview, dan background daemon berjalan secara otomatis via `systemd`:
 ```bash
 systemctl status erp-php.service      # Backend API (Port 8000)
@@ -120,16 +130,17 @@ tail -f daemon/logs/watch_db_$(date +%Y-%m-%d).log
 tail -f daemon/logs/scan_ocr_$(date +%Y-%m-%d).log
 ```
 
-### 3. Akses Production Live
+### 3. Akses Production Live & Local UTM VM (31GB RAM)
 - **Portal ERP Live:** `https://erp.abmalaya.com`
-- **Local VPS Preview:** `http://202.155.94.144:3000`
-- **Local VPS API:** `http://202.155.94.144:8000`
+- **UTM VM Preview (Host / Network):** `http://172.24.180.133:3000` (`http://localhost:3000`)
+- **UTM VM API (Host / Network):** `http://172.24.180.133:8000` (`http://localhost:8000`)
+- **Local Database Adminer GUI:** `http://172.24.180.133:8000/adminer.php`
 
 ---
 
 ## 🗄️ Sinkronisasi & Migrasi Database SQL
 
-Struktur database pada lingkungan lokal/testing VPS (`abmalaya_erp`) disinkronkan identik dengan lingkungan hosting produksi (`abmalaya_abmalaya_erp`):
+Struktur database pada lingkungan UTM VM (31GB RAM) (`abmalaya_erp`) disinkronkan identik dengan lingkungan hosting produksi (`abmalaya_abmalaya_erp`):
 
 1. **Skema Terbaru Database:**
    - Skema struktur tabel lengkap: `cpanel/database_schema.sql`

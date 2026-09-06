@@ -12,6 +12,61 @@ $spreadsheet_id = '1PHMV-f5fEZzdzCHXXMZFn2laEIRnOWrDoH9ZJcxi1UQ';
 try {
     require_once __DIR__ . '/db_connect.php';
 
+    // OAuth2 Token Helper
+    if (!function_exists('getGoogleOAuthToken')) {
+        function getGoogleOAuthToken() {
+            $json_file = __DIR__ . '/erp-abmalaya-connect-0fc0c4cb6314.json';
+            if (!file_exists($json_file)) {
+                $json_file = __DIR__ . '/../erp-abmalaya-connect-0fc0c4cb6314.json';
+            }
+            if (!file_exists($json_file)) {
+                throw new Exception("Service Account JSON key file not found.");
+            }
+            $creds = json_decode(file_get_contents($json_file), true);
+            if (!$creds || empty($creds['private_key']) || empty($creds['client_email'])) {
+                throw new Exception("Invalid Service Account JSON key format.");
+            }
+
+            $header = json_encode(['alg' => 'RS256', 'typ' => 'JWT']);
+            $now = time();
+            $claim = json_encode([
+                'iss' => $creds['client_email'],
+                'scope' => 'https://www.googleapis.com/auth/spreadsheets',
+                'aud' => $creds['token_uri'],
+                'exp' => $now + 3600,
+                'iat' => $now
+            ]);
+
+            $b64Header = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($header));
+            $b64Claim = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($claim));
+            $jwt_input = $b64Header . '.' . $b64Claim;
+            $signature = '';
+            if (!openssl_sign($jwt_input, $signature, $creds['private_key'], 'SHA256')) {
+                throw new Exception("OpenSSL JWT signing failed.");
+            }
+            $jwt = $jwt_input . '.' . str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
+
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $creds['token_uri']);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                'assertion' => $jwt
+            ]));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            $token_res = curl_exec($ch);
+            curl_close($ch);
+
+            $token_data = json_decode($token_res, true);
+            $token = $token_data['access_token'] ?? '';
+            if (empty($token)) {
+                throw new Exception("Failed to obtain Google OAuth2 Access Token.");
+            }
+            return $token;
+        }
+    }
+
     $action = isset($_GET['action']) ? trim($_GET['action']) : (isset($_POST['action']) ? trim($_POST['action']) : 'status');
 
     // 1. STATUS & SYNC LOGS
@@ -129,58 +184,98 @@ try {
         exit;
     }
 
-    // OAuth2 Token Helper
-    function getGoogleOAuthToken() {
-        $json_file = __DIR__ . '/erp-abmalaya-connect-0fc0c4cb6314.json';
-        if (!file_exists($json_file)) {
-            $json_file = __DIR__ . '/../erp-abmalaya-connect-0fc0c4cb6314.json';
-        }
-        if (!file_exists($json_file)) {
-            throw new Exception("Service Account JSON key file not found.");
-        }
-        $creds = json_decode(file_get_contents($json_file), true);
-        if (!$creds || empty($creds['private_key']) || empty($creds['client_email'])) {
-            throw new Exception("Invalid Service Account JSON key format.");
+    // 1F. TEST CONNECTION TO GOOGLE SHEETS API
+    if ($action === 'test_connection') {
+        $raw = file_get_contents('php://input');
+        $input = json_decode($raw, true) ?: $_REQUEST;
+        $sp_id = trim($input['spreadsheet_id'] ?? '');
+
+        if (empty($sp_id)) {
+            $id = (int)($input['id'] ?? $_GET['id'] ?? $_POST['id'] ?? 0);
+            if ($id > 0) {
+                $r = $db_conn->query("SELECT spreadsheet_id FROM spreadsheet_backups WHERE id = {$id}");
+                if ($r && $row = $r->fetch_assoc()) {
+                    $sp_id = $row['spreadsheet_id'];
+                }
+            }
         }
 
-        $header = json_encode(['alg' => 'RS256', 'typ' => 'JWT']);
-        $now = time();
-        $claim = json_encode([
-            'iss' => $creds['client_email'],
-            'scope' => 'https://www.googleapis.com/auth/spreadsheets',
-            'aud' => $creds['token_uri'],
-            'exp' => $now + 3600,
-            'iat' => $now
+        if (empty($sp_id)) {
+            throw new Exception("Spreadsheet Link or ID is missing for test connection.");
+        }
+
+        if (strpos($sp_id, 'spreadsheets/d/') !== false) {
+            preg_match('/spreadsheets\/d\/([a-zA-Z0-9-_]+)/', $sp_id, $matches);
+            if (!empty($matches[1])) {
+                $sp_id = $matches[1];
+            }
+        }
+
+        $token = getGoogleOAuthToken();
+        $metaUrl = "https://sheets.googleapis.com/v4/spreadsheets/{$sp_id}?fields=properties.title,sheets.properties.title";
+        
+        $ch = curl_init($metaUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => ["Authorization: Bearer {$token}"],
+            CURLOPT_TIMEOUT => 15,
+            CURLOPT_SSL_VERIFYPEER => false
         ]);
-
-        $b64Header = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($header));
-        $b64Claim = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($claim));
-        $jwt_input = $b64Header . '.' . $b64Claim;
-        $signature = '';
-        if (!openssl_sign($jwt_input, $signature, $creds['private_key'], 'SHA256')) {
-            throw new Exception("OpenSSL JWT signing failed.");
-        }
-        $jwt = $jwt_input . '.' . str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
-
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $creds['token_uri']);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
-            'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-            'assertion' => $jwt
-        ]));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        $token_res = curl_exec($ch);
+        $res = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        $token_data = json_decode($token_res, true);
-        $token = $token_data['access_token'] ?? '';
-        if (empty($token)) {
-            throw new Exception("Failed to obtain Google OAuth2 Access Token.");
+        $resData = json_decode($res, true);
+
+        if ($httpCode !== 200) {
+            $err = $resData['error']['message'] ?? 'Failed to access Google Sheet.';
+            ob_end_clean();
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'status' => 'error',
+                'message' => "Koneksi Gagal (HTTP {$httpCode}): {$err}. Pastikan file di-share ke erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com"
+            ]);
+            exit;
         }
-        return $token;
+
+        $docTitle = $resData['properties']['title'] ?? 'Google Sheet Document';
+        $sheetsList = [];
+        if (!empty($resData['sheets'])) {
+            foreach ($resData['sheets'] as $s) {
+                if (isset($s['properties']['title'])) {
+                    $sheetsList[] = $s['properties']['title'];
+                }
+            }
+        }
+
+        ob_end_clean();
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'status' => 'success',
+            'message' => "Koneksi Terverifikasi & Safe! Terhubung ke file: '{$docTitle}'",
+            'document_title' => $docTitle,
+            'service_account' => 'erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com',
+            'sheets' => $sheetsList
+        ]);
+        exit;
     }
+
+    // 1G. RUN BACKUP NOW (MANUAL TRIGGER)
+    if ($action === 'run_backup_now') {
+        $raw = file_get_contents('php://input');
+        $input = json_decode($raw, true) ?: $_REQUEST;
+        $targetId = (int)($input['id'] ?? 0);
+
+        require_once __DIR__ . '/../daemon/backup_products_sheets.php';
+        $res = runProductSpreadsheetBackup(true, $targetId > 0 ? $targetId : null);
+
+        ob_end_clean();
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($res);
+        exit;
+    }
+
+
 
     // 2. MANUAL LIVE SYNC TRIGGER (Pushes 100% Real MySQL Data to Google Sheet)
     if ($action === 'manual_sync') {

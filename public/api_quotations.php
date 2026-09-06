@@ -151,12 +151,15 @@ try {
             }
         }
 
-        ob_end_clean();
+        if (ob_get_level() > 0) {
+            @ob_end_clean();
+        }
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             'status' => 'success',
             'fetched_count' => count($data),
             'data' => $data
-        ]);
+        ], JSON_UNESCAPED_UNICODE | (defined('JSON_INVALID_UTF8_SUBSTITUTE') ? JSON_INVALID_UTF8_SUBSTITUTE : 0));
         exit;
     }
 

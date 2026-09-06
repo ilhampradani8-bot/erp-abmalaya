@@ -137,6 +137,30 @@ if ($res_prod && $row = $res_prod->fetch_assoc()) {
     $state['last_product_count'] = $current_prod_count;
 }
 
+// ── 4. Check Product Change Logs (product_change_logs) ───────────────────
+$last_history_id = intval($state['last_history_id'] ?? 0);
+$res_hist = $db_conn->query("SELECT * FROM product_change_logs WHERE id > " . $last_history_id . " ORDER BY id ASC");
+$max_hist_id = $last_history_id;
+
+if ($res_hist && $res_hist->num_rows > 0) {
+    while ($r = $res_hist->fetch_assoc()) {
+        $h_id = intval($r['id']);
+        if ($h_id > $max_hist_id) $max_hist_id = $h_id;
+
+        if ($state['initialized']) {
+            $code = $r['product_code'];
+            $actor = $r['actor_name'];
+            $action = $r['action_type'];
+            $type = ($action === 'TRASH' || $action === 'DELETE') ? 'warning' : 'info';
+            
+            $msg = "Product {$code} was {$action}d by {$actor} ({$r['actor_email']}).";
+            addSystemNotification($db_conn, "Product Change: {$code}", $msg, $type, "product", "products");
+            daemon_watch_log("Detected product change log ID {$h_id}: {$code} by {$actor}");
+        }
+    }
+}
+$state['last_history_id'] = $max_hist_id;
+
 // First time run initialization
 if (!$state['initialized']) {
     $state['initialized'] = true;

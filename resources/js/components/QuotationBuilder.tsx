@@ -152,11 +152,17 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
   // Apply catalog product details to an item row
   const handleApplyCatalogProduct = (index: number, product: ProductItem) => {
     const updatedItems = [...(quotation?.items || [])];
+    const offerVal = product.offer || product.offered_item || '';
     updatedItems[index] = {
       ...updatedItems[index],
-      description: product.product_name,
-      unit: product.unit || 'Package',
+      product_code: product.product_code || `PRD-${product.id}`,
+      impa_code: product.impa_code || '',
+      description: product.product_name || updatedItems[index].description,
+      specification: product.specification || product.description || offerVal,
+      offer: offerVal,
+      unit: product.unit || 'Unit',
       unit_price: product.unit_price || 0,
+      discount_percent: product.discount_percent || 0,
       image_url: product.image_url,
     };
     updateQuotationTotals(updatedItems, quotation?.tax_percent || 11);
@@ -328,12 +334,12 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
             impa_code: scanRes?.impa_code || prev.impa_code,
           }));
 
-          setSaveSuccessMessage(`Hasil Scan AI Gemini PDF (${formattedItems.length} item) berhasil diisikan ke tabel SPH!`);
+          setSaveSuccessMessage(`Gemini AI PDF scan results (${formattedItems.length} items) populated into quotation table successfully!`);
           setTimeout(() => setSaveSuccessMessage(null), 4000);
         } else if (resData.status === 'skipped') {
-          setScanOcrLog({ status: 'skipped', message: resData.message || 'File lampiran RFQ tidak ditemukan.' });
+          setScanOcrLog({ status: 'skipped', message: resData.message || 'RFQ attachment file not found.' });
         } else {
-          setScanOcrLog({ status: 'error', message: resData.message || scanRes?.reason || 'Gagal mengekstrak item dari dokumen.' });
+          setScanOcrLog({ status: 'error', message: resData.message || scanRes?.reason || 'Failed to extract items from document.' });
         }
       })
       .catch((err) => {
@@ -403,11 +409,14 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
   };
 
   const formatCurrency = (val: number) => {
+    const num = Number(val) || 0;
+    const hasDec = num % 1 !== 0;
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'MYR',
-      minimumFractionDigits: 2,
-    }).format(val || 0);
+      minimumFractionDigits: hasDec ? 2 : 0,
+      maximumFractionDigits: 2,
+    }).format(num);
   };
 
   const saveQuotationToMySQL = (quo: Quotation, callback?: () => void) => {
@@ -838,14 +847,14 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                     <RefreshCw className="w-3.5 h-3.5 mx-auto text-[#626262]" />
                   </th>
                   <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-14 text-center">Photo</th>
-                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-28 font-mono">Kode Barang</th>
-                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-48">Nama Produk</th>
-                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)]">Spesifikasi Detail</th>
+                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-28 font-mono">Product Code</th>
+                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-48">Product Name</th>
+                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)]">Detailed Specification</th>
                   <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-20 text-center">Qty</th>
-                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-24">Satuan</th>
-                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-36">Harga Unit (RM)</th>
+                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-24">Unit</th>
+                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-36">Unit Price (MYR)</th>
                   <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-20 text-center">Disc (%)</th>
-                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-36 text-right">Subtotal (RM)</th>
+                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-36 text-right">Subtotal (MYR)</th>
                   <th className="p-2 text-center w-12">Action</th>
                 </tr>
               </thead>
@@ -1253,7 +1262,9 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                           </td>
 
                           <td className="p-2 border-r border-slate-200 font-bold text-xs text-slate-900">
-                            {p.product_name}
+                            <div className="line-clamp-2 leading-snug" title={p.product_name || ''}>
+                              {p.product_name}
+                            </div>
                           </td>
 
                           <td className="p-2 border-r border-slate-200 text-[11px] text-slate-600 italic">
@@ -1507,8 +1518,8 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                   </pre>
                 ) : (
                   <div className="py-6 text-center text-slate-500 font-sans">
-                    <p className="font-bold text-slate-400">Belum ada jejak riwayat khusus tersimpan.</p>
-                    <p className="text-[11px]">Setiap tindakan pembuatan, pengubahan, approval ACC, dan pengiriman email akan dicatat di sini.</p>
+                    <p className="font-bold text-slate-400">No audit history log recorded yet.</p>
+                    <p className="text-[11px]">Every creation, modification, manager approval, and email dispatch will be recorded here.</p>
                   </div>
                 )}
               </div>

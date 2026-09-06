@@ -106,8 +106,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: 'bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold',
     },
     {
-      id: 'trash_quotation',
-      label: 'Trash Quotation',
+      id: 'trash',
+      label: 'Trash',
       icon: Trash2,
       badge: 'Junk',
       badgeColor: 'bg-rose-100 text-rose-800 border border-rose-200 font-bold',
