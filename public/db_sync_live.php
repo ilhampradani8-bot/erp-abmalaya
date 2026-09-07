@@ -114,7 +114,37 @@ try {
     $import_output = ob_get_clean();
     $log[] = "Product & Category Sheet Import executed successfully.";
 
-    // 6. Optional: Full Database Backup SQL Import (cpanel/database_backup_full.sql)
+    // 6. Ensure system_paper_settings table exists & has header_image_url column
+    $db_conn->query("CREATE TABLE IF NOT EXISTS system_paper_settings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        company_name VARCHAR(255) DEFAULT 'AB MALAYA SDN. BHD.',
+        company_address TEXT,
+        phone VARCHAR(100) DEFAULT '+60 3-8000 1234',
+        email VARCHAR(100) DEFAULT 'sales@abmalaya.com',
+        logo_url LONGTEXT,
+        stamp_url LONGTEXT,
+        header_image_url LONGTEXT DEFAULT NULL,
+        header_title VARCHAR(255) DEFAULT 'SURAT PENAWARAN HARGA (SPH) / QUOTATION',
+        footer_terms TEXT,
+        header_color VARCHAR(50) DEFAULT '#0080d0',
+        default_notes TEXT,
+        header_template VARCHAR(50) DEFAULT 'default',
+        table_header_bg VARCHAR(50) DEFAULT '#0f172a',
+        table_header_text_color VARCHAR(50) DEFAULT '#ffffff',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $chk_hi = $db_conn->query("SHOW COLUMNS FROM system_paper_settings LIKE 'header_image_url'");
+    if ($chk_hi && $chk_hi->num_rows === 0) {
+        $db_conn->query("ALTER TABLE system_paper_settings ADD COLUMN header_image_url LONGTEXT DEFAULT NULL AFTER stamp_url");
+        $log[] = "Added column `header_image_url` to `system_paper_settings`.";
+    }
+
+    $db_conn->query("UPDATE system_paper_settings SET company_address = '2-2-40, 2nd Floor Wisma Rampai, Jalan 34/26, Taman Sri Rampai, 53300 Kuala Lumpur.' WHERE id = 1 AND (company_address LIKE '%No. 12%' OR company_address IS NULL OR company_address = '')");
+    $log[] = "Verified & synced `system_paper_settings` table.";
+
+    // 7. Optional: Full Database Backup SQL Import (cpanel/database_backup_full.sql)
     if (isset($_GET['import_sql']) && $_GET['import_sql'] === '1') {
         $sql_file = __DIR__ . '/cpanel/database_backup_full.sql';
         if (!file_exists($sql_file)) {

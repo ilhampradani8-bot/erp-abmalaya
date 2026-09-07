@@ -6,7 +6,7 @@ import {
   FileText, Sliders, Bot, AlertTriangle, 
   Plus, Edit3, Trash2, Percent, ExternalLink, 
   Activity, Layers, Server, Cpu, Calendar, ScanLine,
-  Cloud, RefreshCw, ShieldCheck, Copy, Check
+  Cloud, RefreshCw, ShieldCheck, Copy, Check, Receipt, Building2, CreditCard
 } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
@@ -31,9 +31,9 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
   smtpConfig,
   onSaveSmtpConfig,
 }) => {
-  // 8 Tabs: 'credentials' | 'ai' | 'cloud_sync' | 'default_fee' | 'paper' | 'inbox_rules' | 'database' | 'quotation_settings'
+  // 9 Tabs: 'credentials' | 'ai' | 'cloud_sync' | 'default_fee' | 'paper' | 'inbox_rules' | 'database' | 'quotation_settings' | 'invoice_settings'
   const [activeTab, setActiveTab] = useState<
-    'credentials' | 'ai' | 'cloud_sync' | 'default_fee' | 'paper' | 'inbox_rules' | 'database' | 'quotation_settings'
+    'credentials' | 'ai' | 'cloud_sync' | 'default_fee' | 'paper' | 'inbox_rules' | 'database' | 'quotation_settings' | 'invoice_settings'
   >('credentials');
 
   // Cloud Sync & Multi-Spreadsheet Backup State
@@ -120,12 +120,18 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
 
   // ── Tab 4: Setting Paper & Branding State ─────────────────────────────────
   const [paperSettings, setPaperSettings] = useState({
-    companyName: 'PT ABMALAYA NUSA SEJAHTERA (MALAYSIA)',
-    companyAddress: 'Kuala Lumpur Tech Park, Block B-12, Wilayah Persekutuan Kuala Lumpur',
-    phone: '+60 3-8900 4455',
+    companyName: 'AB MALAYA SDN. BHD.',
+    companyAddress: '2-2-40, 2nd Floor Wisma Rampai, Jalan 34/26, Taman Sri Rampai, 53300 Kuala Lumpur.',
+    phone: '+60 3-8000 1234',
     email: 'sales@abmalaya.com',
     logoUrl: '/favicon.png',
     stampUrl: '',
+    signatureUrl: '',
+    headerImageUrl: '',
+    bankName: 'PUBLIC BANK',
+    bankAccountNumber: '3818192115',
+    bankAccountName: 'AB MALAYA INDUSTRY',
+    bankEmail: 'abmalayaindustry@gmail.com',
     headerTitle: 'SURAT PENAWARAN HARGA (SPH) / COMMERCIAL QUOTATION',
     footerTerms: '1. 50% DP payment required after PO is issued.\n2. Remaining 50% payment upon delivery completion.\n3. Quotation valid for 14 days from issue date.',
     headerColor: '#0080d0',
@@ -136,6 +142,31 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
   const [tableHeaderBg, setTableHeaderBg] = useState<string>('#0f172a');
   const [tableHeaderTextColor, setTableHeaderTextColor] = useState<string>('#ffffff');
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
+
+  // ── Tab 9: Setting Invoice State ──────────────────────────────────────────
+  const [invoiceSettings, setInvoiceSettings] = useState({
+    companyName: 'AB MALAYA INDUSTRY',
+    companyRegNo: '003320457-D',
+    companyAddress: 'No 3. Jalan Melati Utama 1, Taman Melati Utama, 53100 Setapak, Kuala Lumpur',
+    phone: '+60 3-8000 1234',
+    email: 'abmalayaindustry@gmail.com',
+    logoUrl: '/favicon.png',
+    stampUrl: '',
+    signatureUrl: '',
+    headerImageUrl: '',
+    invoiceTitle: 'OFFICIAL INVOICE',
+    bankName: 'PUBLIC BANK',
+    bankAccountNumber: '3818192115',
+    bankAccountName: 'AB MALAYA INDUSTRY',
+    bankEmail: 'abmalayaindustry@gmail.com',
+    remarksText: `1. Please make all payment crossed & payable to: PUBLIC BANK; 3818192115 (AB MALAYA INDUSTRY)\n2. PLEASE EMAIL ALL RELEVANT DOCUMENTS TO: abmalayaindustry@gmail.com\n3. Do not forget to keep a copy of any document as a prove of any transaction.\nKindly contact us should you have further enquiries.`,
+    authorisedByName: 'Muhammad Aimanuddin Bin Mohd Zaki',
+    authorisedByTitle: 'Procurement Manager / Head of Sales',
+    receivedByLabel: 'Received by,',
+    tableHeaderBg: '#0070c0',
+    tableHeaderTextColor: '#ffffff'
+  });
+  const [isUploadingInvoiceImage, setIsUploadingInvoiceImage] = useState(false);
 
   useEffect(() => {
     const handleNav = (e: any) => {
@@ -157,9 +188,6 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
     excludeSystemAlerts: true,
     fetchStartDate: ''
   });
-
-  // ── Tab 6: Database & Adminer Drawer State ────────────────────────────────
-  const [isDbDrawerOpen, setIsDbDrawerOpen] = useState(false);
 
   // ── Tab 7: Quotation Settings State ───────────────────────────────────────
   const [quotationSettings, setQuotationSettings] = useState({
@@ -290,6 +318,69 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
           });
           setInboxAiKeys(inbox);
           setOcrAiKeys(ocr);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch Dedicated Paper & Letterhead Settings Table (system_paper_settings)
+    fetch(getApiUrl('/api_paper_settings.php'))
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success' && resData.data) {
+          const d = resData.data;
+          setPaperSettings({
+            companyName: d.company_name || 'AB MALAYA SDN. BHD.',
+            companyAddress: d.company_address || '',
+            phone: d.phone || '',
+            email: d.email || '',
+            logoUrl: d.logo_url || '/favicon.png',
+            stampUrl: d.stamp_url || '',
+            signatureUrl: d.signature_url || '',
+            headerImageUrl: d.header_image_url || '',
+            bankName: d.bank_name || 'PUBLIC BANK',
+            bankAccountNumber: d.bank_account_number || '3818192115',
+            bankAccountName: d.bank_account_name || 'AB MALAYA INDUSTRY',
+            bankEmail: d.bank_email || 'abmalayaindustry@gmail.com',
+            headerTitle: d.header_title || 'SURAT PENAWARAN HARGA (SPH) / QUOTATION',
+            footerTerms: d.footer_terms || '',
+            headerColor: d.header_color || '#0080d0',
+            defaultNotes: d.default_notes || ''
+          });
+          if (d.header_template) setHeaderTemplate(d.header_template);
+          if (d.table_header_bg) setTableHeaderBg(d.table_header_bg);
+          if (d.table_header_text_color) setTableHeaderTextColor(d.table_header_text_color);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch Dedicated Invoice Settings Table (system_invoice_settings)
+    fetch(getApiUrl('/api_invoice_settings.php'))
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success' && resData.data) {
+          const d = resData.data;
+          setInvoiceSettings({
+            companyName: d.company_name || 'AB MALAYA INDUSTRY',
+            companyRegNo: d.company_reg_no || '003320457-D',
+            companyAddress: d.company_address || '',
+            phone: d.phone || '',
+            email: d.email || '',
+            logoUrl: d.logo_url || '/favicon.png',
+            stampUrl: d.stamp_url || '',
+            signatureUrl: d.signature_url || '',
+            headerImageUrl: d.header_image_url || '',
+            invoiceTitle: d.invoice_title || 'OFFICIAL INVOICE',
+            bankName: d.bank_name || 'PUBLIC BANK',
+            bankAccountNumber: d.bank_account_number || '3818192115',
+            bankAccountName: d.bank_account_name || 'AB MALAYA INDUSTRY',
+            bankEmail: d.bank_email || 'abmalayaindustry@gmail.com',
+            remarksText: d.remarks_text || '',
+            authorisedByName: d.authorised_by_name || 'Muhammad Aimanuddin Bin Mohd Zaki',
+            authorisedByTitle: d.authorised_by_title || 'Procurement Manager / Head of Sales',
+            receivedByLabel: d.received_by_label || 'Received by,',
+            tableHeaderBg: d.table_header_bg || '#0070c0',
+            tableHeaderTextColor: d.table_header_text_color || '#ffffff'
+          });
         }
       })
       .catch(() => {});
@@ -603,34 +694,98 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
     ], 'Software Fee rules saved to MySQL Database!');
   };
 
-  // Handler Tab 4: Paper Settings Save
+  // Handler Tab 4: Paper Settings Save (Dedicated Table system_paper_settings)
+  const [isUploadingPaperImage, setIsUploadingPaperImage] = useState(false);
+
   const handleSavePaper = () => {
-    saveBatchSettings([
-      { credential_key: 'COMPANY_NAME', credential_value: paperSettings.companyName, service_name: 'Branding' },
-      { credential_key: 'COMPANY_ADDRESS', credential_value: paperSettings.companyAddress, service_name: 'Branding' },
-      { credential_key: 'COMPANY_PHONE', credential_value: paperSettings.phone, service_name: 'Branding' },
-      { credential_key: 'COMPANY_EMAIL', credential_value: paperSettings.email, service_name: 'Branding' },
-      { credential_key: 'COMPANY_LOGO', credential_value: paperSettings.logoUrl, service_name: 'Branding' },
-      { credential_key: 'COMPANY_STAMP', credential_value: paperSettings.stampUrl, service_name: 'Branding' },
-      { credential_key: 'DOC_HEADER_TITLE', credential_value: paperSettings.headerTitle, service_name: 'Document Paper' },
-      { credential_key: 'DOC_FOOTER_TERMS', credential_value: paperSettings.footerTerms, service_name: 'Document Paper' },
-      { credential_key: 'DOC_HEADER_COLOR', credential_value: paperSettings.headerColor, service_name: 'Document Paper' },
-      { credential_key: 'DOC_DEFAULT_NOTES', credential_value: paperSettings.defaultNotes, service_name: 'Document Paper' }
-    ], 'Paper & Branding Settings saved successfully!');
+    fetch(getApiUrl('/api_paper_settings.php'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        company_name: paperSettings.companyName,
+        company_address: paperSettings.companyAddress,
+        phone: paperSettings.phone,
+        email: paperSettings.email,
+        logo_url: paperSettings.logoUrl,
+        stamp_url: paperSettings.stampUrl,
+        signature_url: paperSettings.signatureUrl,
+        header_image_url: paperSettings.headerImageUrl,
+        bank_name: paperSettings.bankName,
+        bank_account_number: paperSettings.bankAccountNumber,
+        bank_account_name: paperSettings.bankAccountName,
+        bank_email: paperSettings.bankEmail,
+        header_title: paperSettings.headerTitle,
+        footer_terms: paperSettings.footerTerms,
+        header_color: paperSettings.headerColor,
+        default_notes: paperSettings.defaultNotes,
+        header_template: headerTemplate,
+        table_header_bg: tableHeaderBg,
+        table_header_text_color: tableHeaderTextColor
+      })
+    })
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success') {
+          setSavedMessage('Paper & Letterhead settings saved to dedicated system_paper_settings MySQL table!');
+          setIsSaved(true);
+          setTimeout(() => setIsSaved(false), 4000);
+        } else {
+          alert('Save failed: ' + (resData.message || 'Error occurred'));
+        }
+      })
+      .catch((err) => alert('Save paper settings error: ' + err.message));
   };
 
-  // Handler Tab 5: Inbox Rules Save
-  const handleSaveInboxRules = () => {
-    saveBatchSettings([
-      { credential_key: 'INBOX_RULE_EXCLUDE_NOREPLY', credential_value: String(inboxRules.excludeNoreply), service_name: 'Inbox Rules' },
-      { credential_key: 'INBOX_RULE_EXCLUDE_MEDSOS', credential_value: String(inboxRules.excludeMedsos), service_name: 'Inbox Rules' },
-      { credential_key: 'INBOX_RULE_PRIORITIZE_PDF', credential_value: String(inboxRules.prioritizePdf), service_name: 'Inbox Rules' },
-      { credential_key: 'INBOX_RULE_REQUIRE_ATTACHMENT', credential_value: String(inboxRules.requireAttachment), service_name: 'Inbox Rules' },
-      { credential_key: 'INBOX_RULE_AUTO_LABEL', credential_value: String(inboxRules.autoLabelRfq), service_name: 'Inbox Rules' },
-      { credential_key: 'INBOX_RULE_EXCLUDE_SYSTEM_ALERTS', credential_value: String(inboxRules.excludeSystemAlerts), service_name: 'Inbox Rules' },
-      { credential_key: 'INBOX_RULE_START_DATE', credential_value: inboxRules.fetchStartDate, service_name: 'Inbox Rules' }
-    ], 'Inbox Filtering Rules saved successfully!');
+  const handleUploadPaperImage = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'stamp' | 'signature' | 'header_image') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    if (type === 'logo') {
+      formData.append('logo_file', file);
+    } else if (type === 'stamp') {
+      formData.append('stamp_file', file);
+    } else if (type === 'signature') {
+      formData.append('signature_file', file);
+    } else {
+      formData.append('header_image_file', file);
+    }
+
+    setIsUploadingPaperImage(true);
+    fetch(getApiUrl('/api_paper_settings.php'), {
+      method: 'POST',
+      body: formData
+    })
+      .then((res) => res.json())
+      .then((resData) => {
+        setIsUploadingPaperImage(false);
+        if (resData.status === 'success' && resData.data) {
+          if (type === 'logo' && resData.data.logo_url) {
+            setPaperSettings((prev) => ({ ...prev, logoUrl: resData.data.logo_url }));
+          }
+          if (type === 'stamp' && resData.data.stamp_url) {
+            setPaperSettings((prev) => ({ ...prev, stampUrl: resData.data.stamp_url }));
+          }
+          if (type === 'signature' && resData.data.signature_url) {
+            setPaperSettings((prev) => ({ ...prev, signatureUrl: resData.data.signature_url }));
+          }
+          if (type === 'header_image' && resData.data.header_image_url) {
+            setPaperSettings((prev) => ({ ...prev, headerImageUrl: resData.data.header_image_url }));
+          }
+          setSavedMessage(`Uploaded ${type === 'logo' ? 'Company Logo' : type === 'stamp' ? 'Official Stamp' : type === 'signature' ? 'Digital Signature' : 'Header Image'} successfully to server!`);
+          setIsSaved(true);
+          setTimeout(() => setIsSaved(false), 3500);
+        } else {
+          alert('Upload failed: ' + (resData.message || 'Error occurred'));
+        }
+      })
+      .catch((err) => {
+        setIsUploadingPaperImage(false);
+        alert('Upload error: ' + err.message);
+      });
   };
+
+
 
   // Handler Tab 7: Quotation Settings Save
   const handleSaveQuotationSettings = () => {
@@ -642,8 +797,97 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
     ], 'Quotation Defaults saved successfully!');
   };
 
-  // Dynamic host for Adminer / Database Tab 6
-  const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+  // Handler Tab 9: Invoice Settings Save (Dedicated Table system_invoice_settings)
+  const handleSaveInvoiceSettings = () => {
+    fetch(getApiUrl('/api_invoice_settings.php'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        company_name: invoiceSettings.companyName,
+        company_reg_no: invoiceSettings.companyRegNo,
+        company_address: invoiceSettings.companyAddress,
+        phone: invoiceSettings.phone,
+        email: invoiceSettings.email,
+        logo_url: invoiceSettings.logoUrl,
+        stamp_url: invoiceSettings.stampUrl,
+        signature_url: invoiceSettings.signatureUrl,
+        header_image_url: invoiceSettings.headerImageUrl,
+        invoice_title: invoiceSettings.invoiceTitle,
+        bank_name: invoiceSettings.bankName,
+        bank_account_number: invoiceSettings.bankAccountNumber,
+        bank_account_name: invoiceSettings.bankAccountName,
+        bank_email: invoiceSettings.bankEmail,
+        remarks_text: invoiceSettings.remarksText,
+        authorised_by_name: invoiceSettings.authorisedByName,
+        authorised_by_title: invoiceSettings.authorisedByTitle,
+        received_by_label: invoiceSettings.receivedByLabel,
+        table_header_bg: invoiceSettings.tableHeaderBg,
+        table_header_text_color: invoiceSettings.tableHeaderTextColor
+      })
+    })
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success') {
+          setSavedMessage('Invoice settings saved to dedicated system_invoice_settings MySQL table!');
+          setIsSaved(true);
+          setTimeout(() => setIsSaved(false), 4000);
+        } else {
+          alert('Save failed: ' + (resData.message || 'Error occurred'));
+        }
+      })
+      .catch((err) => alert('Save invoice settings error: ' + err.message));
+  };
+
+  const handleUploadInvoiceImage = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'stamp' | 'signature' | 'header_image') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    if (type === 'logo') {
+      formData.append('logo_file', file);
+    } else if (type === 'stamp') {
+      formData.append('stamp_file', file);
+    } else if (type === 'signature') {
+      formData.append('signature_file', file);
+    } else {
+      formData.append('header_image_file', file);
+    }
+
+    setIsUploadingInvoiceImage(true);
+    fetch(getApiUrl('/api_invoice_settings.php'), {
+      method: 'POST',
+      body: formData
+    })
+      .then((res) => res.json())
+      .then((resData) => {
+        setIsUploadingInvoiceImage(false);
+        if (resData.status === 'success' && resData.data) {
+          if (type === 'logo' && resData.data.logo_url) {
+            setInvoiceSettings((prev) => ({ ...prev, logoUrl: resData.data.logo_url }));
+          }
+          if (type === 'stamp' && resData.data.stamp_url) {
+            setInvoiceSettings((prev) => ({ ...prev, stampUrl: resData.data.stamp_url }));
+          }
+          if (type === 'signature' && resData.data.signature_url) {
+            setInvoiceSettings((prev) => ({ ...prev, signatureUrl: resData.data.signature_url }));
+          }
+          if (type === 'header_image' && resData.data.header_image_url) {
+            setInvoiceSettings((prev) => ({ ...prev, headerImageUrl: resData.data.header_image_url }));
+          }
+          setSavedMessage(`Uploaded Invoice ${type === 'logo' ? 'Logo' : type === 'stamp' ? 'Stamp' : type === 'signature' ? 'Digital Signature' : 'Header Image'} successfully!`);
+          setIsSaved(true);
+          setTimeout(() => setIsSaved(false), 3500);
+        } else {
+          alert('Upload failed: ' + (resData.message || 'Error occurred'));
+        }
+      })
+      .catch((err) => {
+        setIsUploadingInvoiceImage(false);
+        alert('Upload error: ' + err.message);
+      });
+  };
+
+
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8fafc] text-slate-800 text-[11px] overflow-hidden">
@@ -659,17 +903,18 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         </div>
       )}
 
-      {/* 8 Tab Navigation Header */}
+      {/* 9 Tab Navigation Header */}
       <div className="bg-white border-b border-slate-200 px-4 pt-3 flex gap-1 overflow-x-auto select-none shadow-xs">
         {[
           { id: 'credentials', label: '1. SMTP Credential', icon: Key },
           { id: 'ai', label: '2. AI Engine & Keys', icon: Bot },
           { id: 'cloud_sync', label: '3. Cloud Sync & Backup', icon: Cloud },
           { id: 'default_fee', label: '4. Default Setting (Fee)', icon: Percent },
-          { id: 'paper', label: '5. Setting Paper', icon: FileText },
+          { id: 'paper', label: '5. Setting Paper (SPH)', icon: FileText },
           { id: 'inbox_rules', label: '6. Inbox Rules', icon: Sliders },
           { id: 'database', label: '7. Database', icon: Database },
           { id: 'quotation_settings', label: '8. Setting Quotation', icon: Layers },
+          { id: 'invoice_settings', label: '9. Setting Invoice', icon: Receipt },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -1903,15 +2148,18 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
           </div>
         )}
 
-        {/* ── TAB 4: SETTING PAPER & BRANDING + SPH HEADER STYLE ──────────────────────── */}
+        {/* ── TAB 5: PAPER & BRANDING SETTINGS ───────────────────────────── */}
         {activeTab === 'paper' && (
-          <div className="space-y-4 max-w-4xl mx-auto">
+          <div className="space-y-4 w-full max-w-full font-sans">
             <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-xs space-y-4 font-sans">
               <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-blue-600" />
-                  <span>Setting Paper, Header Choice, Footer & Table Styling</span>
-                </h3>
+                <div>
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                    <span>Setting Paper, Logo Header, Footer & Table Styling</span>
+                  </h3>
+                  <p className="text-[10px] text-slate-500 font-mono">Dedicated Table: <code className="bg-slate-100 px-1 py-0.5 rounded text-blue-700 font-bold">system_paper_settings</code></p>
+                </div>
 
                 <button
                   onClick={() => setIsPreviewModalOpen(true)}
@@ -1961,239 +2209,128 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 </div>
               </div>
 
+              {/* LOGO, STAMP, SIGNATURE & HEADER IMAGE BANNER UPLOAD SECTION */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 border border-slate-200 p-3.5 rounded-md">
+                
+                {/* Logo Upload Box */}
+                <div className="bg-white p-3 border border-slate-200 rounded space-y-2">
+                  <span className="font-bold text-xs text-slate-900 block border-b border-slate-100 pb-1">Company Logo</span>
+                  <div className="flex items-center gap-3">
+                    {paperSettings.logoUrl ? (
+                      <div className="w-14 h-14 bg-slate-100 border border-slate-300 rounded flex items-center justify-center p-1 overflow-hidden shrink-0 shadow-2xs">
+                        <img src={paperSettings.logoUrl} alt="Company Logo" className="max-w-full max-h-full object-contain" />
+                      </div>
+                    ) : (
+                      <div className="w-14 h-14 bg-slate-200 border border-slate-300 rounded flex items-center justify-center text-slate-400 font-bold text-[10px] shrink-0">No Logo</div>
+                    )}
+                    <div className="space-y-1.5 flex-1">
+                      <label className="block text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-300 px-2 py-1 rounded cursor-pointer text-center transition">
+                        {isUploadingPaperImage ? '...' : '📁 Upload'}
+                        <input type="file" accept="image/*" onChange={(e) => handleUploadPaperImage(e, 'logo')} disabled={isUploadingPaperImage} className="hidden" />
+                      </label>
+                      <input type="text" value={paperSettings.logoUrl} onChange={(e) => setPaperSettings({ ...paperSettings, logoUrl: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-0.5 font-mono text-[10px]" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stamp Upload Box */}
+                <div className="bg-white p-3 border border-slate-200 rounded space-y-2">
+                  <span className="font-bold text-xs text-slate-900 block border-b border-slate-100 pb-1">Official Stamp</span>
+                  <div className="flex items-center gap-3">
+                    {paperSettings.stampUrl ? (
+                      <div className="w-14 h-14 bg-slate-100 border border-slate-300 rounded flex items-center justify-center p-1 overflow-hidden shrink-0 shadow-2xs">
+                        <img src={paperSettings.stampUrl} alt="Company Stamp" className="max-w-full max-h-full object-contain" />
+                      </div>
+                    ) : (
+                      <div className="w-14 h-14 bg-slate-200 border border-slate-300 rounded flex items-center justify-center text-slate-400 font-bold text-[10px] shrink-0">No Stamp</div>
+                    )}
+                    <div className="space-y-1.5 flex-1">
+                      <label className="block text-[10px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-300 px-2 py-1 rounded cursor-pointer text-center transition">
+                        {isUploadingPaperImage ? '...' : '📁 Upload'}
+                        <input type="file" accept="image/*" onChange={(e) => handleUploadPaperImage(e, 'stamp')} disabled={isUploadingPaperImage} className="hidden" />
+                      </label>
+                      <input type="text" value={paperSettings.stampUrl} onChange={(e) => setPaperSettings({ ...paperSettings, stampUrl: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-0.5 font-mono text-[10px]" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Signature Upload Box */}
+                <div className="bg-white p-3 border border-slate-200 rounded space-y-2">
+                  <span className="font-bold text-xs text-slate-900 block border-b border-slate-100 pb-1">Digital Signature</span>
+                  <div className="flex items-center gap-3">
+                    {paperSettings.signatureUrl ? (
+                      <div className="w-14 h-14 bg-slate-100 border border-slate-300 rounded flex items-center justify-center p-1 overflow-hidden shrink-0 shadow-2xs">
+                        <img src={paperSettings.signatureUrl} alt="Signature" className="max-w-full max-h-full object-contain" />
+                      </div>
+                    ) : (
+                      <div className="w-14 h-14 bg-slate-200 border border-slate-300 rounded flex items-center justify-center text-slate-400 font-bold text-[10px] shrink-0">No TTD</div>
+                    )}
+                    <div className="space-y-1.5 flex-1">
+                      <label className="block text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-300 px-2 py-1 rounded cursor-pointer text-center transition">
+                        {isUploadingPaperImage ? '...' : '✍️ Upload'}
+                        <input type="file" accept="image/*" onChange={(e) => handleUploadPaperImage(e, 'signature')} disabled={isUploadingPaperImage} className="hidden" />
+                      </label>
+                      <input type="text" value={paperSettings.signatureUrl} onChange={(e) => setPaperSettings({ ...paperSettings, signatureUrl: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-0.5 font-mono text-[10px]" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top Header Banner Upload Box */}
+                <div className="bg-white p-3 border border-slate-200 rounded space-y-2">
+                  <span className="font-bold text-xs text-slate-900 block border-b border-slate-100 pb-1">Header Banner</span>
+                  <div className="flex items-center gap-3">
+                    {paperSettings.headerImageUrl ? (
+                      <div className="w-14 h-14 bg-slate-100 border border-slate-300 rounded flex items-center justify-center p-0.5 overflow-hidden shrink-0 shadow-2xs">
+                        <img src={paperSettings.headerImageUrl} alt="Header" className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="w-14 h-14 bg-slate-200 border border-slate-300 rounded flex items-center justify-center text-slate-400 font-bold text-[10px] shrink-0">No Banner</div>
+                    )}
+                    <div className="space-y-1.5 flex-1">
+                      <label className="block text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2 py-1 rounded cursor-pointer text-center transition">
+                        {isUploadingPaperImage ? '...' : '📁 Upload'}
+                        <input type="file" accept="image/*" onChange={(e) => handleUploadPaperImage(e, 'header_image')} disabled={isUploadingPaperImage} className="hidden" />
+                      </label>
+                      <input type="text" value={paperSettings.headerImageUrl || ''} onChange={(e) => setPaperSettings({ ...paperSettings, headerImageUrl: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-0.5 font-mono text-[10px]" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* COMPANY INFORMATION FORM */}
               <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Company Name</label>
+                  <input type="text" value={paperSettings.companyName} onChange={(e) => setPaperSettings({ ...paperSettings, companyName: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-[11px] font-bold text-slate-900" />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Company Email</label>
+                  <input type="email" value={paperSettings.email} onChange={(e) => setPaperSettings({ ...paperSettings, email: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-[11px] font-mono font-bold" />
+                </div>
                 <div className="col-span-2">
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Header Title Text</label>
-                  <input
-                    type="text"
-                    value={paperSettings.headerTitle}
-                    onChange={(e) => setPaperSettings({ ...paperSettings, headerTitle: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-[11px] font-bold"
-                  />
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Company Address</label>
+                  <input type="text" value={paperSettings.companyAddress} onChange={(e) => setPaperSettings({ ...paperSettings, companyAddress: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-[11px] font-bold text-slate-900" />
                 </div>
-
                 <div>
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Header Accent Color</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={paperSettings.headerColor}
-                      onChange={(e) => setPaperSettings({ ...paperSettings, headerColor: e.target.value })}
-                      className="w-8 h-8 rounded border border-slate-300 cursor-pointer"
-                    />
-                    <span className="font-mono text-[10px] font-bold">{paperSettings.headerColor}</span>
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Company Phone</label>
+                  <input type="text" value={paperSettings.phone} onChange={(e) => setPaperSettings({ ...paperSettings, phone: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-[11px] font-mono" />
+                </div>
+                
+                <div className="col-span-2 border-t border-slate-200 pt-3 mt-1">
+                  <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wide mb-2">Bank Settings</h4>
+                  <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded border border-slate-200">
+                    <input type="text" value={paperSettings.bankName} onChange={(e) => setPaperSettings({...paperSettings, bankName: e.target.value})} className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-[11px] font-bold" placeholder="Bank Name" />
+                    <input type="text" value={paperSettings.bankAccountNumber} onChange={(e) => setPaperSettings({...paperSettings, bankAccountNumber: e.target.value})} className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-[11px] font-mono font-bold" placeholder="Account Number" />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Table Header Background Color</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={tableHeaderBg}
-                      onChange={(e) => setTableHeaderBg(e.target.value)}
-                      className="w-8 h-8 rounded border border-slate-300 cursor-pointer"
-                    />
-                    <span className="font-mono text-[10px] font-bold">{tableHeaderBg}</span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Logo URL</label>
-                  <input
-                    type="text"
-                    value={paperSettings.logoUrl}
-                    onChange={(e) => setPaperSettings({ ...paperSettings, logoUrl: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 font-mono text-[10px]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Table Header Text Color</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={tableHeaderTextColor}
-                      onChange={(e) => setTableHeaderTextColor(e.target.value)}
-                      className="w-8 h-8 rounded border border-slate-300 cursor-pointer"
-                    />
-                    <span className="font-mono text-[10px] font-bold">{tableHeaderTextColor}</span>
-                  </div>
-                </div>
-
-                <div className="col-span-2">
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Default Notes Template</label>
-                  <textarea
-                    rows={2}
-                    value={paperSettings.defaultNotes}
-                    onChange={(e) => setPaperSettings({ ...paperSettings, defaultNotes: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-[10px]"
-                  />
-                </div>
-
-                <div className="col-span-2">
-                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Footer Terms & Disclaimer</label>
-                  <textarea
-                    rows={3}
-                    value={paperSettings.footerTerms}
-                    onChange={(e) => setPaperSettings({ ...paperSettings, footerTerms: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 font-mono text-[10px]"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsPreviewModalOpen(true)}
-                  className="bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 font-bold px-3 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer text-xs"
-                >
-                  <Eye className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Preview Pop-Up</span>
-                </button>
-
-                <button
-                  onClick={handleSavePaper}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  <span>Save Paper Settings</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── TAB 5: INBOX RULES ───────────────────────────────────────────── */}
-        {activeTab === 'inbox_rules' && (
-          <div className="space-y-4 max-w-3xl mx-auto">
-            <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-xs space-y-3">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
-                <Sliders className="w-4 h-4 text-blue-600" />
-                <span>Inbox Filtering & AI Classification Rules</span>
-              </h3>
-
-              <div className="bg-[#f0f9ff] border border-blue-200 p-3 rounded-md space-y-2 mb-3">
-                <label className="block text-[10px] font-extrabold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Info Start From (Date Cutoff) — Batas Tanggal Ingest Email & AI Scan</span>
-                </label>
-                <p className="text-[10px] text-slate-600 font-sans">
-                  Sistem IMAP Gmail & Scanner AI hanya akan memproses email yang masuk <strong>mulai dari tanggal ini ke atas</strong>. Email lama sebelum tanggal ini diabaikan agar kuota API Gemini tidak cepat habis.
-                </p>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    value={inboxRules.fetchStartDate}
-                    onChange={(e) => setInboxRules({ ...inboxRules, fetchStartDate: e.target.value })}
-                    className="bg-white border border-blue-300 rounded px-3 py-1.5 font-mono text-xs font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs cursor-pointer"
-                  />
-                  <span className="text-[10px] font-mono text-slate-500">
-                    {inboxRules.fetchStartDate ? `Cutoff Active: >= ${inboxRules.fetchStartDate}` : 'No cutoff set (ingesting all email history)'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-2 pt-1">
-                {[
-                  { key: 'excludeNoreply', label: 'Automatically filter out noreply@ & newsletter emails' },
-                  { key: 'excludeMedsos', label: 'Exclude social media & promotional marketing emails' },
-                  { key: 'prioritizePdf', label: 'Prioritize emails containing attached PDF specifications' },
-                  { key: 'requireAttachment', label: 'Only ingest emails that have explicit file attachments' },
-                  { key: 'autoLabelRfq', label: 'Automatically assign IMPA category codes via Gemini AI' },
-                  { key: 'excludeSystemAlerts', label: 'Filter out automated server & payment receipt alerts' },
-                ].map((rule) => (
-                  <label key={rule.key} className="flex items-center gap-2 bg-slate-50 border border-slate-200 p-2 rounded cursor-pointer hover:bg-slate-100 transition">
-                    <input
-                      type="checkbox"
-                      checked={(inboxRules as any)[rule.key]}
-                      onChange={(e) => setInboxRules({ ...inboxRules, [rule.key]: e.target.checked })}
-                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="font-semibold text-slate-700 text-[10.5px]">{rule.label}</span>
-                  </label>
-                ))}
-              </div>
-
-              <div className="pt-2 flex justify-end">
-                <button
-                  onClick={handleSaveInboxRules}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  <span>Save Inbox Rules</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── TAB 6: DATABASE & ADMINER DRAWER ────────────────────────────── */}
-        {activeTab === 'database' && (
-          <div className="space-y-4 max-w-3xl mx-auto">
-            <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-xs space-y-4">
-              <div className="border-b border-slate-100 pb-2 flex justify-between items-center">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                  <Database className="w-4 h-4 text-blue-600" />
-                  <span>Dynamic MySQL Database Credentials & Adminer Access</span>
-                </h3>
-                <span className="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[9px] uppercase border border-emerald-300">
-                  Host: {currentHost}
-                </span>
-              </div>
-
-              <div className="bg-slate-50 border border-slate-200 rounded-md p-3.5 space-y-3 font-mono">
-                <div className="grid grid-cols-2 gap-2 text-[10px]">
-                  <div>
-                    <span className="text-slate-400 uppercase font-bold block">Database Host & Port</span>
-                    <span className="font-bold text-slate-800">127.0.0.1:3306 / localhost</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 uppercase font-bold block">Database Name</span>
-                    <span className="font-bold text-blue-700">abmalaya_erp</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 uppercase font-bold block">MySQL Username</span>
-                    <span className="font-bold text-slate-800">root</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 uppercase font-bold block">MySQL Password</span>
-                    <span className="font-bold text-slate-800">root</span>
-                  </div>
-                </div>
-
-                <div className="pt-2 flex gap-2">
-                  <a
-                    href={`http://${currentHost}:8000/adminer.php`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded transition flex items-center gap-1.5 text-[10.5px] cursor-pointer"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Open Adminer Web Panel (http://{currentHost}:8000/adminer.php)</span>
-                  </a>
-                  <button
-                    onClick={() => setIsDbDrawerOpen(!isDbDrawerOpen)}
-                    className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold px-3 py-2 rounded transition"
-                  >
-                    {isDbDrawerOpen ? 'Hide Credentials Popup' : 'Show Credentials Popup'}
+                <div className="pt-2 flex justify-end gap-2 col-span-2">
+                  <button onClick={handleSavePaper} className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer">
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Save Paper Settings</span>
                   </button>
                 </div>
               </div>
-
-              {/* Popup Drawer Info Login */}
-              {isDbDrawerOpen && (
-                <div className="bg-blue-50 border border-blue-200 rounded-md p-3.5 space-y-2 font-mono text-[10px]">
-                  <h4 className="font-bold text-blue-900 uppercase">Adminer Login Popup Credentials Info:</h4>
-                  <ul className="list-disc list-inside space-y-1 text-slate-700">
-                    <li>System: <strong>MySQL</strong></li>
-                    <li>Server: <strong>127.0.0.1</strong> (or <strong>localhost</strong>)</li>
-                    <li>Username: <strong>root</strong></li>
-                    <li>Password: <strong>root</strong></li>
-                    <li>Database: <strong>abmalaya_erp</strong></li>
-                  </ul>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -2270,6 +2407,430 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   <span>Save Quotation Defaults</span>
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+        {/* ── TAB 9: INVOICE SETTINGS & CUSTOMIZATION ──────────────────── */}
+        {activeTab === 'invoice_settings' && (
+          <div className="space-y-4 max-w-4xl mx-auto font-sans">
+            <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-xs space-y-4">
+              
+              <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                    <Receipt className="w-4 h-4 text-blue-600" />
+                    <span>Setting Invoice, Kop Faktur, Bank & Tulisan Resmi</span>
+                  </h3>
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    Dedicated Table: <code className="bg-slate-100 px-1 py-0.5 rounded text-blue-700 font-bold">system_invoice_settings</code>
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSaveInvoiceSettings}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Simpan Pengaturan Invoice</span>
+                </button>
+              </div>
+
+              {/* SECTION 1: INVOICE LOGO, STAMP & HEADER BACKGROUND IMAGE */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 border border-slate-200 p-3.5 rounded-md">
+                
+                {/* Logo Upload */}
+                <div className="bg-white p-3 border border-slate-200 rounded space-y-2">
+                  <span className="font-bold text-xs text-slate-900 block border-b border-slate-100 pb-1">
+                    Invoice Logo (Kop Faktur)
+                  </span>
+                  
+                  <div className="flex items-center gap-3">
+                    {invoiceSettings.logoUrl ? (
+                      <div className="w-14 h-14 bg-slate-100 border border-slate-300 rounded flex items-center justify-center p-1 overflow-hidden shrink-0 shadow-2xs">
+                        <img src={invoiceSettings.logoUrl} alt="Invoice Logo" className="max-w-full max-h-full object-contain" />
+                      </div>
+                    ) : (
+                      <div className="w-14 h-14 bg-slate-200 border border-slate-300 rounded flex items-center justify-center text-slate-400 font-bold text-[10px] shrink-0">
+                        No Logo
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5 flex-1">
+                      <label className="block text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-300 px-2 py-1 rounded cursor-pointer text-center transition">
+                        {isUploadingInvoiceImage ? 'Uploading...' : '📁 Upload Logo'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleUploadInvoiceImage(e, 'logo')}
+                          disabled={isUploadingInvoiceImage}
+                          className="hidden"
+                        />
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Logo URL (/favicon.png)"
+                        value={invoiceSettings.logoUrl}
+                        onChange={(e) => setInvoiceSettings({ ...invoiceSettings, logoUrl: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-0.5 font-mono text-[10px]"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stamp Upload */}
+                <div className="bg-white p-3 border border-slate-200 rounded space-y-2">
+                  <span className="font-bold text-xs text-slate-900 block border-b border-slate-100 pb-1">
+                    Official Stamp / Cap Invoice
+                  </span>
+                  
+                  <div className="flex items-center gap-3">
+                    {invoiceSettings.stampUrl ? (
+                      <div className="w-14 h-14 bg-slate-100 border border-slate-300 rounded flex items-center justify-center p-1 overflow-hidden shrink-0 shadow-2xs">
+                        <img src={invoiceSettings.stampUrl} alt="Invoice Stamp" className="max-w-full max-h-full object-contain" />
+                      </div>
+                    ) : (
+                      <div className="w-14 h-14 bg-slate-200 border border-slate-300 rounded flex items-center justify-center text-slate-400 font-bold text-[10px] shrink-0">
+                        No Stamp
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5 flex-1">
+                      <label className="block text-[10px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-300 px-2 py-1 rounded cursor-pointer text-center transition">
+                        {isUploadingInvoiceImage ? 'Uploading...' : '📁 Upload Stamp'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleUploadInvoiceImage(e, 'stamp')}
+                          disabled={isUploadingInvoiceImage}
+                          className="hidden"
+                        />
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Stamp URL"
+                        value={invoiceSettings.stampUrl}
+                        onChange={(e) => setInvoiceSettings({ ...invoiceSettings, stampUrl: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-0.5 font-mono text-[10px]"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Digital Signature Upload Box */}
+                <div className="bg-white p-3 border border-slate-200 rounded space-y-2">
+                  <span className="font-bold text-xs text-slate-900 block border-b border-slate-100 pb-1">
+                    Digital Signature (Tanda Tangan Image Invoice)
+                  </span>
+                  
+                  <div className="flex items-center gap-3">
+                    {invoiceSettings.signatureUrl ? (
+                      <div className="w-14 h-14 bg-slate-100 border border-slate-300 rounded flex items-center justify-center p-1 overflow-hidden shrink-0 shadow-2xs">
+                        <img src={invoiceSettings.signatureUrl} alt="Invoice Signature" className="max-w-full max-h-full object-contain" />
+                      </div>
+                    ) : (
+                      <div className="w-14 h-14 bg-slate-200 border border-slate-300 rounded flex items-center justify-center text-slate-400 font-bold text-[10px] shrink-0">
+                        No TTD
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5 flex-1">
+                      <label className="block text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-300 px-2 py-1 rounded cursor-pointer text-center transition">
+                        {isUploadingInvoiceImage ? 'Uploading...' : '✍️ Upload TTD'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleUploadInvoiceImage(e, 'signature')}
+                          disabled={isUploadingInvoiceImage}
+                          className="hidden"
+                        />
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Signature URL"
+                        value={invoiceSettings.signatureUrl}
+                        onChange={(e) => setInvoiceSettings({ ...invoiceSettings, signatureUrl: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-0.5 font-mono text-[10px]"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Header Image Background */}
+                <div className="bg-white p-3 border border-slate-200 rounded space-y-2">
+                  <span className="font-bold text-xs text-slate-900 block border-b border-slate-100 pb-1">
+                    Header Banner Background
+                  </span>
+                  
+                  <div className="flex items-center gap-3">
+                    {invoiceSettings.headerImageUrl ? (
+                      <div className="w-14 h-14 bg-slate-100 border border-slate-300 rounded flex items-center justify-center p-1 overflow-hidden shrink-0 shadow-2xs">
+                        <img src={invoiceSettings.headerImageUrl} alt="Header Background" className="max-w-full max-h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="w-14 h-14 bg-slate-200 border border-slate-300 rounded flex items-center justify-center text-slate-400 font-bold text-[10px] shrink-0">
+                        No Banner
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5 flex-1">
+                      <label className="block text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2 py-1 rounded cursor-pointer text-center transition">
+                        {isUploadingInvoiceImage ? 'Uploading...' : '📁 Upload Banner'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleUploadInvoiceImage(e, 'header_image')}
+                          disabled={isUploadingInvoiceImage}
+                          className="hidden"
+                        />
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Banner Image URL"
+                        value={invoiceSettings.headerImageUrl}
+                        onChange={(e) => setInvoiceSettings({ ...invoiceSettings, headerImageUrl: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-0.5 font-mono text-[10px]"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* SECTION 2: COMPANY IDENTITY FOR INVOICE */}
+              <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-md space-y-3">
+                <span className="font-bold text-xs text-slate-900 flex items-center gap-1.5 border-b border-slate-200 pb-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Identitas Perusahaan Pada Faktur / Invoice</span>
+                </span>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Company Name (Nama Entitas Faktur):</label>
+                    <input
+                      type="text"
+                      value={invoiceSettings.companyName}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, companyName: e.target.value })}
+                      placeholder="e.g. AB MALAYA INDUSTRY"
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 font-bold text-xs text-slate-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Registration No. / SSM (Nomor Registrasi Bisnis):</label>
+                    <input
+                      type="text"
+                      value={invoiceSettings.companyRegNo}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, companyRegNo: e.target.value })}
+                      placeholder="e.g. 003320457-D"
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 font-mono font-bold text-xs text-slate-900"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Company Address (Alamat Surat Menyurat):</label>
+                    <textarea
+                      rows={2}
+                      value={invoiceSettings.companyAddress}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, companyAddress: e.target.value })}
+                      placeholder="Alamat kantor resmi pada faktur"
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Contact Phone (No. Telepon):</label>
+                    <input
+                      type="text"
+                      value={invoiceSettings.phone}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, phone: e.target.value })}
+                      placeholder="+60 3-8000 1234"
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 font-mono text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Company Email (Email Faktur):</label>
+                    <input
+                      type="text"
+                      value={invoiceSettings.email}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, email: e.target.value })}
+                      placeholder="abmalayaindustry@gmail.com"
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 font-mono text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 3: BANK & PAYMENT INSTRUCTIONS */}
+              <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-md space-y-3">
+                <span className="font-bold text-xs text-slate-900 flex items-center gap-1.5 border-b border-slate-200 pb-1.5">
+                  <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Informasi Rekening Bank Pembayaran (Payment Account)</span>
+                </span>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Bank Name (Nama Bank):</label>
+                    <input
+                      type="text"
+                      value={invoiceSettings.bankName}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, bankName: e.target.value })}
+                      placeholder="PUBLIC BANK"
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 font-bold text-xs text-slate-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Account Number (Nomor Rekening):</label>
+                    <input
+                      type="text"
+                      value={invoiceSettings.bankAccountNumber}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, bankAccountNumber: e.target.value })}
+                      placeholder="3818192115"
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 font-mono font-bold text-xs text-slate-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Beneficiary Account Name (Nama Pemilik Rekening):</label>
+                    <input
+                      type="text"
+                      value={invoiceSettings.bankAccountName}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, bankAccountName: e.target.value })}
+                      placeholder="AB MALAYA INDUSTRY"
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 font-bold text-xs text-slate-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Payment Proof Email (Email Bukti Transfer):</label>
+                    <input
+                      type="text"
+                      value={invoiceSettings.bankEmail}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, bankEmail: e.target.value })}
+                      placeholder="abmalayaindustry@gmail.com"
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 font-mono text-xs"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-bold text-slate-700 mb-1">
+                      Remarks / Bank Payment Instructions Box (Instruksi Pembayaran Faktur):
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={invoiceSettings.remarksText}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, remarksText: e.target.value })}
+                      placeholder="Tuliskan petunjuk transfer bank dan catatan penting pada invoice..."
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-800 leading-relaxed font-sans"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 4: INVOICE TITLE, SIGNATORIES & TABLE STYLING */}
+              <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-md space-y-3">
+                <span className="font-bold text-xs text-slate-900 flex items-center gap-1.5 border-b border-slate-200 pb-1.5">
+                  <Sliders className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Judul Dokumen, Penandatangan & Warna Tabel</span>
+                </span>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Invoice Banner Title (Judul Banner Faktur):</label>
+                    <input
+                      type="text"
+                      value={invoiceSettings.invoiceTitle}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, invoiceTitle: e.target.value })}
+                      placeholder="OFFICIAL INVOICE"
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 font-black text-xs text-slate-900 uppercase"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Table Header Color (Warna Header Tabel):</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={invoiceSettings.tableHeaderBg}
+                        onChange={(e) => setInvoiceSettings({ ...invoiceSettings, tableHeaderBg: e.target.value })}
+                        className="w-8 h-8 rounded border border-slate-300 cursor-pointer p-0.5"
+                      />
+                      <input
+                        type="text"
+                        value={invoiceSettings.tableHeaderBg}
+                        onChange={(e) => setInvoiceSettings({ ...invoiceSettings, tableHeaderBg: e.target.value })}
+                        className="flex-1 bg-white border border-slate-300 rounded px-2 py-1 font-mono text-xs uppercase"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Authorised By Name (Nama Penandatangan Resmi):</label>
+                    <input
+                      type="text"
+                      value={invoiceSettings.authorisedByName}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, authorisedByName: e.target.value })}
+                      placeholder="Muhammad Aimanuddin Bin Mohd Zaki"
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 font-bold text-xs text-slate-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Authorised By Title (Jabatan Penandatangan):</label>
+                    <input
+                      type="text"
+                      value={invoiceSettings.authorisedByTitle}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, authorisedByTitle: e.target.value })}
+                      placeholder="Procurement Manager / Head of Sales"
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Received By Label (Label Penerima Klien):</label>
+                    <input
+                      type="text"
+                      value={invoiceSettings.receivedByLabel}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, receivedByLabel: e.target.value })}
+                      placeholder="Received by,"
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-700 mb-1">Table Header Text Color (Warna Teks Header Tabel):</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={invoiceSettings.tableHeaderTextColor}
+                        onChange={(e) => setInvoiceSettings({ ...invoiceSettings, tableHeaderTextColor: e.target.value })}
+                        className="w-8 h-8 rounded border border-slate-300 cursor-pointer p-0.5"
+                      />
+                      <input
+                        type="text"
+                        value={invoiceSettings.tableHeaderTextColor}
+                        onChange={(e) => setInvoiceSettings({ ...invoiceSettings, tableHeaderTextColor: e.target.value })}
+                        className="flex-1 bg-white border border-slate-300 rounded px-2 py-1 font-mono text-xs uppercase"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* SAVE BUTTON AT BOTTOM */}
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleSaveInvoiceSettings}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2 rounded transition flex items-center gap-1.5 cursor-pointer shadow-xs text-xs"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Simpan Pengaturan Invoice ke MySQL</span>
+                </button>
+              </div>
+
             </div>
           </div>
         )}

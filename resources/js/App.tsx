@@ -6,6 +6,7 @@ import { Header } from './components/Header';
 import { RFQInbox } from './components/RFQInbox';
 import { QuotationList } from './components/QuotationList';
 import { QuotationBuilder } from './components/QuotationBuilder';
+import { InvoiceBuilder } from './components/InvoiceBuilder';
 import { QuotationDoc } from './components/QuotationDoc';
 import { Product } from './components/Product';
 import { EmailReplyModal } from './components/EmailReplyModal';
@@ -183,7 +184,7 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  const [viewMode, setViewModeState] = useState<'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads'>('inbox');
+  const [viewMode, setViewModeState] = useState<'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads'>('inbox');
   const [showEmailModal, setShowEmailModal] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -493,7 +494,18 @@ export const App: React.FC = () => {
                     setShowEmailModal(true);
                   }}
                   onCancel={() => setViewMode('inbox')}
+                  onNavigateView={(mode) => setViewMode(mode)}
                   currentUser={currentUser}
+                />
+              )}
+
+              {viewMode === 'invoice_builder' && (
+                <InvoiceBuilder
+                  onBack={() => setViewMode('inbox')}
+                  onSendEmail={() => {
+                    setShowEmailModal(true);
+                  }}
+                  onNavigateView={(mode) => setViewMode(mode)}
                 />
               )}
 

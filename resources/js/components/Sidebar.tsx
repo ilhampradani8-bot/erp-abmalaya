@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserAccount } from '../types/erp';
-import { Mail, FileText, FileCheck, Users, Settings, ChevronRight, Check, PanelLeftClose, PanelLeft, FileSpreadsheet, Package, Bell, Trash2, Download } from 'lucide-react';
+import { Mail, FileText, FileCheck, Users, Settings, ChevronRight, Check, PanelLeftClose, PanelLeft, FileSpreadsheet, Package, Bell, Trash2, Download, Receipt } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
 interface SidebarProps {
-  viewMode: 'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads';
+  viewMode: 'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads';
   setViewMode: (mode: any) => void;
   onNewQuotation: () => void;
   pendingCount: number;
@@ -132,6 +132,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: FileCheck,
       badge: 'PDF',
       badgeColor: 'backdrop-blur-md bg-blue-500/15 text-blue-800 border border-blue-300/60 font-bold',
+    },
+    {
+      id: 'invoice_builder',
+      label: 'Invoice Builder',
+      icon: Receipt,
+      badge: 'Invoice',
+      badgeColor: 'bg-[#0070c0] text-white font-bold',
     },
     {
       id: 'account_settings',

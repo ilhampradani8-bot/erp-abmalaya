@@ -128,6 +128,7 @@ try {
                 $row['total_items_count'] = $total_items;
                 $row['unregistered_items_count'] = $unregistered_count;
                 $row['items_details'] = $items_arr;
+                $row['items'] = $items_arr;
                 
                 // Fetch email source details if rfq_id is set
                 $row['email_source'] = null;
@@ -257,6 +258,7 @@ try {
             ], JSON_UNESCAPED_UNICODE);
         }
 
+        $client_name = isset($input['client_name']) && !empty($input['client_name']) ? $input['client_name'] : (isset($input['contact_person']) ? $input['contact_person'] : 'Valued Client');
         $company_name = isset($input['company_name']) && !empty($input['company_name']) ? $input['company_name'] : (isset($input['company']) ? $input['company'] : $client_name);
         $date_issued = isset($input['date_issued']) && !empty($input['date_issued']) ? $input['date_issued'] : date('Y-m-d');
         $valid_until = isset($input['valid_until']) && !empty($input['valid_until']) ? $input['valid_until'] : '14 Days';
@@ -277,10 +279,10 @@ try {
 
         $client_phone = isset($input['client_phone']) && !empty($input['client_phone']) ? $input['client_phone'] : (isset($input['phone']) ? $input['phone'] : null);
 
-        $stmt = $db_conn->prepare("INSERT INTO quotations (id, rfq_id, quotation_number, client_name, client_email, client_phone, company_name, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?) ON DUPLICATE KEY UPDATE grand_total=VALUES(grand_total), status=VALUES(status), rfq_id=VALUES(rfq_id), client_phone=VALUES(client_phone), client_email=VALUES(client_email)");
+        $stmt = $db_conn->prepare("INSERT INTO quotations (id, rfq_id, quotation_number, client_name, client_email, client_phone, company_name, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?) ON DUPLICATE KEY UPDATE quotation_number=VALUES(quotation_number), client_name=VALUES(client_name), client_email=VALUES(client_email), client_phone=VALUES(client_phone), company_name=VALUES(company_name), date_issued=VALUES(date_issued), valid_until=VALUES(valid_until), subtotal=VALUES(subtotal), discount_total=VALUES(discount_total), tax_percent=VALUES(tax_percent), tax_amount=VALUES(tax_amount), grand_total=VALUES(grand_total), notes=VALUES(notes), created_by=VALUES(created_by)");
         
         if ($stmt) {
-            $stmt->bind_param("sissssssdddddss", $id, $rfq_id_val, $quo_num, $client_name, $client_email, $client_phone, $company_name, $date_issued, $valid_until, $subtotal, $discount_total, $tax_percent, $tax_amount, $grand_total, $notes, $created_by);
+            $stmt->bind_param("sissssssdddddsss", $id, $rfq_id_val, $quo_num, $client_name, $client_email, $client_phone, $company_name, $date_issued, $valid_until, $subtotal, $discount_total, $tax_percent, $tax_amount, $grand_total, $notes, $created_by);
             $stmt->execute();
             $stmt->close();
         } else {

@@ -109,6 +109,55 @@ export interface EmailReplyPayload {
   attach_pdf: boolean;
 }
 
+export type InvoiceStatus = 'unpaid' | 'paid' | 'partially_paid' | 'overdue' | 'cancelled';
+
+export interface InvoiceItem {
+  id?: string | number;
+  invoice_id?: string;
+  product_code?: string;
+  description: string;
+  specification?: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  discount_percent?: number;
+  total: number;
+  image_url?: string;
+}
+
+export interface Invoice {
+  id: string;
+  invoice_number: string;
+  quotation_id?: string;
+  po_number?: string;
+  invoice_date: string;
+  due_date?: string;
+  client_name: string;
+  client_email: string;
+  client_phone?: string;
+  company_name: string;
+  billing_address?: string;
+  delivery_company?: string;
+  delivery_address?: string;
+  delivery_pic?: string;
+  delivery_phone?: string;
+  items: InvoiceItem[];
+  subtotal: number;
+  discount_total?: number;
+  tax_percent?: number;
+  tax_amount?: number;
+  grand_total: number;
+  currency?: string;
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_account_name?: string;
+  bank_email?: string;
+  notes?: string;
+  status: InvoiceStatus;
+  created_by?: string;
+  created_at?: string;
+}
+
 export type UserRole = 'Admin' | 'Karyawan';
 
 export interface UserAccount {

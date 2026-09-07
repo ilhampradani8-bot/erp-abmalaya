@@ -40,3 +40,70 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* PRISTINE PRINT STYLES FOR QUOTATIONS & INVOICES (PRECISE A4 FIT) */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0mm; /* Zero browser margins to prevent double margin clipping */
+  }
+  
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 210mm !important;
+    height: auto !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide non-printable navigation, sidebars, buttons, drag indicators */
+  .no-print, nav, header, sidebar, aside, button, select, input[type="file"], .no-print * {
+    display: none !important;
+  }
+
+  /* Clean print paper sheet container fitting exactly within A4 boundaries */
+  #quotation-pdf-document, #official-invoice-document {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 8mm 10mm !important;
+    margin: 0 auto !important;
+    width: 210mm !important;
+    max-width: 210mm !important;
+    box-sizing: border-box !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+  }
+
+  /* Fix letterhead banner negative margins during print so headers never overflow or cut off */
+  #quotation-pdf-document .relative,
+  #official-invoice-document .relative {
+    max-width: 100% !important;
+  }
+
+  #quotation-pdf-document div[class*="-mx-"],
+  #official-invoice-document div[class*="-mx-"] {
+    margin-left: -10mm !important;
+    margin-right: -10mm !important;
+    margin-top: -8mm !important;
+    width: calc(100% + 20mm) !important;
+  }
+
+  /* Table break safety and repeating headers/footers */
+  tr, .avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+}
+
+
