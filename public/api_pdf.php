@@ -39,13 +39,13 @@ if ($type === 'invoice') {
         $stmt->close();
     }
 } else {
-    $stmt = $connection->prepare("SELECT ref_no FROM quotations WHERE id = ? OR ref_no = ? LIMIT 1");
+    $stmt = $connection->prepare("SELECT quotation_number FROM quotations WHERE id = ? OR quotation_number = ? LIMIT 1");
     if ($stmt) {
         $stmt->bind_param("ss", $id, $id);
         $stmt->execute();
         $r = $stmt->get_result();
         if ($r && $row = $r->fetch_assoc()) {
-            if (!empty($row['ref_no'])) $refNo = $row['ref_no'];
+            if (!empty($row['quotation_number'])) $refNo = $row['quotation_number'];
         }
         $stmt->close();
     }
@@ -87,17 +87,17 @@ if (!file_exists($pdfPath) || filesize($pdfPath) < 100) {
 
 // Update quotation status in database upon successful generation
 if ($type === 'quotation') {
-    $stmt_upd = $connection->prepare("UPDATE quotations SET pdf_created = 1, pdf_created_at = NOW(), status = 'acc' WHERE id = ? OR ref_no = ? OR quotation_number = ?");
+    $stmt_upd = $connection->prepare("UPDATE quotations SET pdf_created = 1, pdf_created_at = NOW(), status = 'acc' WHERE id = ? OR quotation_number = ?");
     if ($stmt_upd) {
-        $stmt_upd->bind_param("sss", $id, $id, $id);
+        $stmt_upd->bind_param("ss", $id, $id);
         $stmt_upd->execute();
         $stmt_upd->close();
     }
     
     // Fetch rfq_id to log history
-    $stmt_rfq = $connection->prepare("SELECT rfq_id, quotation_number FROM quotations WHERE id = ? OR ref_no = ? OR quotation_number = ? LIMIT 1");
+    $stmt_rfq = $connection->prepare("SELECT rfq_id, quotation_number FROM quotations WHERE id = ? OR quotation_number = ? LIMIT 1");
     if ($stmt_rfq) {
-        $stmt_rfq->bind_param("sss", $id, $id, $id);
+        $stmt_rfq->bind_param("ss", $id, $id);
         $stmt_rfq->execute();
         $res_rfq = $stmt_rfq->get_result();
         if ($res_rfq && $row_q = $res_rfq->fetch_assoc()) {

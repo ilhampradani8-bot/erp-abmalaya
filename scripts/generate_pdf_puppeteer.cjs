@@ -58,10 +58,25 @@ try {
             }
         }
 
+        const { execSync } = require('child_process');
+        let htmlContent = null;
+        try {
+            const viewDocScript = path.join(__dirname, '../public/view_doc.php');
+            if (fs.existsSync(viewDocScript)) {
+                htmlContent = execSync(`php ${JSON.stringify(viewDocScript)} type=${JSON.stringify(docType)} id=${JSON.stringify(docId)}`, { encoding: 'utf-8', timeout: 10000 });
+            }
+        } catch (e) {
+            // Fallback to HTTP URL navigation
+        }
+
         const browser = await puppeteer.launch(launchOptions);
         const page = await browser.newPage();
         
-        await page.goto(targetUrl, { waitUntil: 'networkidle0', timeout: 30000 });
+        if (htmlContent && htmlContent.includes('<html')) {
+            await page.setContent(htmlContent, { waitUntil: 'domcontentloaded' });
+        } else {
+            await page.goto(targetUrl, { waitUntil: 'networkidle0', timeout: 30000 });
+        }
 
         await page.pdf({
             path: outputPath,

@@ -6,6 +6,15 @@ ob_start();
 require_once __DIR__ . '/db_connect.php';
 $connection = isset($conn) ? $conn : $db_conn;
 
+if (php_sapi_name() === 'cli' && isset($argv) && is_array($argv)) {
+    foreach ($argv as $arg) {
+        if (strpos($arg, '=') !== false) {
+            list($k, $v) = explode('=', $arg, 2);
+            $_GET[$k] = $v;
+        }
+    }
+}
+
 $type = isset($_GET['type']) ? trim($_GET['type']) : 'quotation';
 $id = isset($_GET['id']) ? trim($_GET['id']) : '';
 
@@ -90,7 +99,7 @@ if ($type === 'invoice') {
         $stmt->close();
     }
 } else {
-    $stmt = $connection->prepare("SELECT * FROM quotations WHERE id = ? OR ref_no = ? LIMIT 1");
+    $stmt = $connection->prepare("SELECT * FROM quotations WHERE id = ? OR quotation_number = ? LIMIT 1");
     if ($stmt) {
         $stmt->bind_param("ss", $id, $id);
         $stmt->execute();
