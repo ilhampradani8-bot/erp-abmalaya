@@ -54,7 +54,7 @@ export interface QuotationItem {
 }
 
 
-export type QuotationStatus = 'draft' | 'terkirim' | 'disetujui' | 'ditolak' | 'siap_kirim' | 'quotation_build' | 'penawaran_terkirim' | 'deal' | 'masuk' | 'diproses';
+export type QuotationStatus = 'draft' | 'terkirim' | 'disetujui' | 'ditolak' | 'siap_kirim' | 'quotation_build' | 'penawaran_terkirim' | 'deal' | 'masuk' | 'diproses' | 'acc';
 
 export interface Quotation {
   id: string;
@@ -77,6 +77,8 @@ export interface Quotation {
   notes?: string;
   terms_conditions?: string;
   status: QuotationStatus;
+  pdf_created?: number;
+  pdf_created_at?: string;
   created_by?: string;
   created_at?: string;
   history_log?: string;

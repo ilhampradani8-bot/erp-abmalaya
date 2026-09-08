@@ -85,6 +85,31 @@ if (!file_exists($pdfPath) || filesize($pdfPath) < 100) {
     exit;
 }
 
+// Update quotation status in database upon successful generation
+if ($type === 'quotation') {
+    $stmt_upd = $connection->prepare("UPDATE quotations SET pdf_created = 1, pdf_created_at = NOW(), status = 'acc' WHERE id = ? OR ref_no = ? OR quotation_number = ?");
+    if ($stmt_upd) {
+        $stmt_upd->bind_param("sss", $id, $id, $id);
+        $stmt_upd->execute();
+        $stmt_upd->close();
+    }
+    
+    // Fetch rfq_id to log history
+    $stmt_rfq = $connection->prepare("SELECT rfq_id, quotation_number FROM quotations WHERE id = ? OR ref_no = ? OR quotation_number = ? LIMIT 1");
+    if ($stmt_rfq) {
+        $stmt_rfq->bind_param("sss", $id, $id, $id);
+        $stmt_rfq->execute();
+        $res_rfq = $stmt_rfq->get_result();
+        if ($res_rfq && $row_q = $res_rfq->fetch_assoc()) {
+            if (!empty($row_q['rfq_id'])) {
+                $clean_rfq_id = (int)str_replace(['GMAIL-LIVE-', 'RFQ-'], '', $row_q['rfq_id']);
+                appendRfqHistoryLog($connection, $clean_rfq_id, 'Generate PDF SPH', 'System Generator', 'system@abmalaya.com', "Dokumen PDF SPH {$row_q['quotation_number']} berhasil digenerate dan dikonfirmasi. Status penawaran otomatis masuk ke tab ACC / Approve.");
+            }
+        }
+        $stmt_rfq->close();
+    }
+}
+
 // Action JSON response for API calls / email attachments
 if ($action === 'generate' || $action === 'json') {
     header('Content-Type: application/json; charset=utf-8');

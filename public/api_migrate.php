@@ -112,9 +112,22 @@ foreach ($invoice_cols as $col => $sql) {
     }
 }
 
-// 3. Update quotations table valid_until column type
+// 3. Update quotations table valid_until column type & add pdf_created tracking columns
 $connection->query("ALTER TABLE quotations MODIFY valid_until VARCHAR(50) DEFAULT '14 Days'");
 $results['quotations'][] = "Modified valid_until to VARCHAR(50)";
+
+$quo_cols = [
+    'pdf_created' => "ALTER TABLE quotations ADD COLUMN pdf_created TINYINT(1) DEFAULT 0",
+    'pdf_created_at' => "ALTER TABLE quotations ADD COLUMN pdf_created_at DATETIME DEFAULT NULL"
+];
+
+foreach ($quo_cols as $col => $sql) {
+    $res = $connection->query("SHOW COLUMNS FROM quotations LIKE '$col'");
+    if ($res && $res->num_rows === 0) {
+        $connection->query($sql);
+        $results['quotations'][] = "Added column $col";
+    }
+}
 
 ob_end_clean();
 echo json_encode([

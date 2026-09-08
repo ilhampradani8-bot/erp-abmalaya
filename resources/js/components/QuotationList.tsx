@@ -96,6 +96,38 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   const [openRowActionId, setOpenRowActionId] = useState<string | null>(null);
   const [selectedInfoQuotation, setSelectedInfoQuotation] = useState<Quotation | null>(null);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState<boolean>(false);
+  const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
+
+  const handleCreatePdfBackground = async (q: Quotation) => {
+    setGeneratingPdfId(q.id);
+
+    // Trigger background file download for user
+    const downloadUrl = getApiUrl(`/api_pdf.php?action=download&type=quotation&id=${q.id}`);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `SPH_${q.quotation_number || q.id}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    try {
+      const res = await fetch(getApiUrl(`/api_pdf.php?action=generate&type=quotation&id=${q.id}`));
+      const data = await res.json();
+      if (data.status === 'success') {
+        setQuotations((prev) =>
+          prev.map((item) =>
+            item.id === q.id
+              ? { ...item, pdf_created: 1, status: 'acc', pdf_created_at: new Date().toISOString() }
+              : item
+          )
+        );
+      }
+    } catch (err) {
+      console.error('Error generating PDF in background:', err);
+    } finally {
+      setGeneratingPdfId(null);
+    }
+  };
   
   // Drawer tabs and email body states
   const [drawerTab, setDrawerTab] = useState<'summary' | 'email' | 'history' | 'acc'>('summary');
@@ -779,6 +811,21 @@ export const QuotationList: React.FC<QuotationListProps> = ({
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-[#0099ec]' : ''}`} />
           </button>
 
+          <button
+            onClick={() => {
+              const target = selectedInfoQuotation || quotations[0];
+              if (target) {
+                setSelectedFullDbQuotation(target);
+                setIsFullDbModalOpen(true);
+              }
+            }}
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-b from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 border border-blue-300 text-blue-900 rounded-md shadow-xs transition cursor-pointer text-xs font-bold shrink-0"
+            title="View Full Database Record & Schema"
+          >
+            <Database className="w-3.5 h-3.5 text-blue-600" />
+            <span>View Full Record (DB)</span>
+          </button>
+
           <div className="relative shrink-0" ref={actionsMenuRef}>
             <button
               onClick={() => setShowActionsMenu(!showActionsMenu)}
@@ -1094,7 +1141,12 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                         </td>
                       )}
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center text-xs font-sans">
-                        {st === 'requisition' ? (
+                        {q.pdf_created === 1 || q.status === 'acc' ? (
+                          <span className="font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full inline-flex items-center gap-1 text-[10.5px]">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            PDF ✔ (ACC)
+                          </span>
+                        ) : st === 'requisition' ? (
                           <span className="font-extrabold text-amber-700 inline-flex items-center gap-1">
                             <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                             Requisition
@@ -1270,61 +1322,48 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                             </button>
 
                             {openRowActionId === q.id && (
-                              <div className="absolute right-0 mt-1 w-44 bg-white border border-[#9b9b9b] rounded-md shadow-lg z-50 py-1 text-left font-sans text-xs">
+                              <div className="absolute right-0 mt-1 w-48 bg-white border border-[#9b9b9b] rounded-md shadow-lg z-50 py-1 text-left font-sans text-xs">
+                                
+                                {/* 1. CREATE PDF (Background Download + Move to ACC) */}
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setOpenRowActionId(null);
-                                    if (ocrRetryTimerRef.current) clearTimeout(ocrRetryTimerRef.current);
-                                    ocrRetryAttemptRef.current = 0;
-                                    triggerOcrScan(q.id, 1);
+                                    handleCreatePdfBackground(q);
                                   }}
-                                  className="w-full text-left px-3.5 py-2 hover:bg-blue-50 text-blue-700 transition flex items-center gap-2 cursor-pointer font-bold"
+                                  disabled={generatingPdfId === q.id}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-blue-50 text-blue-900 transition flex items-center gap-2 cursor-pointer font-bold disabled:opacity-60"
                                 >
-                                  <ScanLine className="w-3.5 h-3.5 text-blue-600" />
-                                  <span>Rescan AI + IMPA</span>
+                                  {generatingPdfId === q.id ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                                  ) : (
+                                    <FileType className="w-3.5 h-3.5 text-blue-600" />
+                                  )}
+                                  <span>
+                                    {generatingPdfId === q.id
+                                      ? 'Generating PDF...'
+                                      : q.pdf_created === 1 || q.status === 'acc'
+                                      ? 'Re-Create PDF (ACC)'
+                                      : 'Create PDF'}
+                                  </span>
                                 </button>
 
+                                {/* 2. TO BUILDER */}
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setOpenRowActionId(null);
-                                    window.open(getApiUrl(`/api_pdf.php?action=download&type=quotation&id=${q.id}`), '_blank');
+                                    onEditQuotation(q);
                                   }}
-                                  className="w-full text-left px-3.5 py-2 hover:bg-blue-50 text-blue-900 transition flex items-center gap-2 cursor-pointer font-bold border-t border-slate-100"
+                                  className="w-full text-left px-3.5 py-2 hover:bg-amber-50 text-amber-900 transition flex items-center gap-2 cursor-pointer font-semibold border-t border-slate-100"
                                 >
-                                  <FileType className="w-3.5 h-3.5 text-blue-600" />
-                                  <span>Create / Download Full PDF</span>
+                                  <Edit className="w-3.5 h-3.5 text-amber-600" />
+                                  <span>To Builder</span>
                                 </button>
 
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setOpenRowActionId(null);
-                                    onPreviewDoc(q);
-                                  }}
-                                  className="w-full text-left px-3.5 py-2 hover:bg-slate-100 text-[#3d3d3d] transition flex items-center gap-2 cursor-pointer font-semibold"
-                                >
-                                  <Printer className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>Lihat & Cetak PDF (SPH)</span>
-                                </button>
-                                
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setOpenRowActionId(null);
-                                    onSendEmail(q);
-                                  }}
-                                  className="w-full text-left px-3.5 py-2 hover:bg-slate-100 text-[#3d3d3d] transition flex items-center gap-2 cursor-pointer font-semibold"
-                                >
-                                  <Send className="w-3.5 h-3.5 text-purple-600" />
-                                  <span>Kirim Email (Attach Full PDF)</span>
-                                </button>
-                                
+                                {/* 3. VIEW LOG */}
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -1333,28 +1372,31 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                     setSelectedHistoryQuotation(q);
                                     setIsHistoryModalOpen(true);
                                   }}
-                                  className="w-full text-left px-3.5 py-2 hover:bg-slate-100 text-[#3d3d3d] transition flex items-center gap-2 cursor-pointer font-semibold"
+                                  className="w-full text-left px-3.5 py-2 hover:bg-slate-100 text-[#3d3d3d] transition flex items-center gap-2 cursor-pointer font-semibold border-t border-slate-100"
                                 >
-                                  <History className="w-3.5 h-3.5 text-amber-600" />
-                                  <span>View History Log</span>
+                                  <History className="w-3.5 h-3.5 text-purple-600" />
+                                  <span>View Log</span>
                                 </button>
-                                
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setOpenRowActionId(null);
-                                    setSelectedFullDbQuotation(q);
-                                    setIsFullDbModalOpen(true);
-                                  }}
-                                  className="w-full text-left px-3.5 py-2 hover:bg-blue-50 text-blue-700 transition flex items-center gap-2 cursor-pointer font-bold"
-                                >
-                                  <Database className="w-3.5 h-3.5 text-blue-600" />
-                                  <span>View Full Record (DB)</span>
-                                </button>
-                                
+
+                                {/* 4. KIRIM EMAIL — ONLY IF ACC / PDF CREATED */}
+                                {(q.status === 'acc' || q.pdf_created === 1 || activeTab === 'acc') && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenRowActionId(null);
+                                      onSendEmail(q);
+                                    }}
+                                    className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 text-emerald-900 transition flex items-center gap-2 cursor-pointer font-bold border-t border-slate-100"
+                                  >
+                                    <Send className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Kirim Email (Attach PDF)</span>
+                                  </button>
+                                )}
+
                                 <div className="border-t border-slate-100 my-1"></div>
 
+                                {/* 5. HAPUS */}
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -1365,7 +1407,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   className="w-full text-left px-3.5 py-2 hover:bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition flex items-center gap-2 cursor-pointer font-bold"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
-                                  <span>Delete Quotation</span>
+                                  <span>Hapus</span>
                                 </button>
                               </div>
                             )}
@@ -2240,14 +2282,6 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                 
                 {/* Direct Print Buttons toolbar */}
                 <div className="flex gap-1.5">
-                  <button
-                    onClick={() => triggerSPHPrint(activeQuotation, 'pdf')}
-                    className="bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-[#e6e6e6] text-[#3d3d3d] font-bold text-xs p-1.5 rounded border border-[#a0a0a0] transition cursor-pointer flex items-center justify-center gap-1"
-                    title="Print / Save SPH PDF"
-                  >
-                    <Printer className="w-3.5 h-3.5 text-blue-600" />
-                    <span className="hidden sm:inline">PDF</span>
-                  </button>
                   <button
                     onClick={() => triggerSPHPrint(activeQuotation, 'png')}
                     className="bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-[#e6e6e6] text-[#3d3d3d] font-bold text-xs p-1.5 rounded border border-[#a0a0a0] transition cursor-pointer flex items-center justify-center gap-1"
