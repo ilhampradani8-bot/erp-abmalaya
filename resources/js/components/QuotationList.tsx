@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Quotation } from '../types/erp';
-import { Search, Plus, Edit, Send, RefreshCw, Loader2, Trash2, FileType, Check, Sparkles, CheckCircle2, Sliders, Clock, MoreVertical, History, X as CloseIcon, User, AlertTriangle, Printer, Image as ImageIcon, ShieldCheck, ScanLine, Info, Database, Activity, Terminal, Tag, Filter } from 'lucide-react';
+import { Search, Plus, Edit, Send, RefreshCw, Loader2, Trash2, FileType, Check, Sparkles, CheckCircle2, Sliders, Clock, MoreVertical, History, X as CloseIcon, User, AlertTriangle, Printer, Image as ImageIcon, ShieldCheck, ScanLine, Info, Database, Activity, Terminal, Tag, Filter, Eye, ExternalLink } from 'lucide-react';
 
 import { getApiUrl } from '../utils/api';
 
@@ -97,6 +97,8 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   const [selectedInfoQuotation, setSelectedInfoQuotation] = useState<Quotation | null>(null);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState<boolean>(false);
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
+  const [selectedPdfViewerQuotation, setSelectedPdfViewerQuotation] = useState<Quotation | null>(null);
+  const [isPdfViewerModalOpen, setIsPdfViewerModalOpen] = useState<boolean>(false);
 
   const handleCreatePdfBackground = async (q: Quotation) => {
     setGeneratingPdfId(q.id);
@@ -1142,10 +1144,39 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                       )}
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center text-xs font-sans">
                         {q.pdf_created === 1 || q.status === 'acc' ? (
-                          <span className="font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full inline-flex items-center gap-1 text-[10.5px]">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            PDF ✔ (ACC)
-                          </span>
+                          <div className="flex flex-col items-center justify-center text-[10.5px] font-sans">
+                            <span className="font-extrabold text-emerald-700 inline-flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>PDF ✔ (ACC)</span>
+                            </span>
+                            <div className="flex items-center gap-1.5 mt-0.5 font-mono text-[9.5px]">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedPdfViewerQuotation(q);
+                                  setIsPdfViewerModalOpen(true);
+                                }}
+                                className="text-blue-600 hover:text-blue-800 underline font-bold cursor-pointer inline-flex items-center gap-0.5"
+                                title="View PDF in Popup Modal"
+                              >
+                                <Eye className="w-3 h-3 text-blue-600" />
+                                <span>Popup</span>
+                              </button>
+                              <span className="text-slate-300">•</span>
+                              <a
+                                href={getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${q.id}`)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-purple-600 hover:text-purple-800 underline font-bold cursor-pointer inline-flex items-center gap-0.5"
+                                title="Open PDF in New Browser Tab"
+                              >
+                                <ExternalLink className="w-3 h-3 text-purple-600" />
+                                <span>Tab ↗</span>
+                              </a>
+                            </div>
+                          </div>
                         ) : st === 'requisition' ? (
                           <span className="font-extrabold text-amber-700 inline-flex items-center gap-1">
                             <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
@@ -1295,18 +1326,6 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                             <Edit className="w-3.5 h-3.5" />
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onPreviewDoc(q);
-                            }}
-                            className="p-1 text-emerald-600 hover:text-emerald-900 hover:bg-emerald-100 rounded-md transition cursor-pointer"
-                            title="Buka & Cetak SPH / Save PDF"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                          </button>
-
                           {/* Kebab action dropdown */}
                           <div className="relative">
                             <button
@@ -1349,7 +1368,21 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   </span>
                                 </button>
 
-                                {/* 2. TO BUILDER */}
+                                {/* 2. LIHAT & CETAK SPH (HTML) */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenRowActionId(null);
+                                    onPreviewDoc(q);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 text-emerald-900 transition flex items-center gap-2 cursor-pointer font-semibold border-t border-slate-100"
+                                >
+                                  <Printer className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Lihat & Cetak SPH (HTML)</span>
+                                </button>
+
+                                {/* 3. TO BUILDER */}
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -2787,6 +2820,57 @@ onClick={() => {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* PDF VIEWER POPUP MODAL */}
+      {isPdfViewerModalOpen && selectedPdfViewerQuotation && (
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => {
+            setIsPdfViewerModalOpen(false);
+            setSelectedPdfViewerQuotation(null);
+          }}
+        >
+          <div
+            className="bg-white rounded-lg shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden border border-slate-700 font-sans"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-slate-900 text-white px-4 py-2.5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <FileType className="w-4 h-4 text-blue-400" />
+                <h3 className="font-extrabold text-xs">
+                  PDF Preview — {selectedPdfViewerQuotation.quotation_number || selectedPdfViewerQuotation.id}
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={getApiUrl(`/api_pdf.php?action=download&type=quotation&id=${selectedPdfViewerQuotation.id}`)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] rounded transition flex items-center gap-1"
+                >
+                  Download PDF
+                </a>
+                <button
+                  onClick={() => {
+                    setIsPdfViewerModalOpen(false);
+                    setSelectedPdfViewerQuotation(null);
+                  }}
+                  className="p-1 text-slate-300 hover:text-white hover:bg-rose-600 rounded transition cursor-pointer"
+                >
+                  <CloseIcon className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 bg-slate-100 relative">
+              <iframe
+                src={getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${selectedPdfViewerQuotation.id}`)}
+                className="w-full h-full border-0"
+                title={`PDF Preview ${selectedPdfViewerQuotation.id}`}
+              />
+            </div>
           </div>
         </div>
       )}
