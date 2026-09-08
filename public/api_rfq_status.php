@@ -114,6 +114,38 @@ try {
                 $recipient_email = 'sales@abmalaya.com';
             }
 
+            // Check if quotation PDF should be generated and attached
+            $attach_pdf_path = null;
+            $attach_pdf_name = null;
+            
+            $quo_id = isset($input['quotation_id']) ? $input['quotation_id'] : '';
+            $quo_num = null;
+            if (empty($quo_id)) {
+                // Find quotation linked to rfq_id
+                $stmt_q = $db_conn->prepare("SELECT id, quotation_number FROM quotations WHERE rfq_id = ? OR rfq_id = ? ORDER BY id DESC LIMIT 1");
+                if ($stmt_q) {
+                    $stmt_q->bind_param("ss", $clean_id, $rfq_num);
+                    $stmt_q->execute();
+                    $res_q = $stmt_q->get_result();
+                    if ($res_q && $q_row = $res_q->fetch_assoc()) {
+                        $quo_id = $q_row['id'];
+                        $quo_num = $q_row['quotation_number'];
+                    }
+                    $stmt_q->close();
+                }
+            }
+
+            if (!empty($quo_id)) {
+                $tmp_pdf = sys_get_temp_dir() . '/SPH_' . preg_replace('/[^a-zA-Z0-9_-]/', '', $quo_id) . '_' . time() . '.pdf';
+                $node_cmd = 'node ' . escapeshellarg(__DIR__ . '/../scripts/generate_pdf_puppeteer.cjs') . ' ' . escapeshellarg($quo_id) . ' quotation ' . escapeshellarg($tmp_pdf) . ' 2>&1';
+                exec($node_cmd, $node_out, $node_code);
+
+                if ($node_code === 0 && file_exists($tmp_pdf) && filesize($tmp_pdf) > 0) {
+                    $attach_pdf_path = $tmp_pdf;
+                    $attach_pdf_name = 'Surat_Penawaran_Harga_' . ($quo_num ? $quo_num : $quo_id) . '.pdf';
+                }
+            }
+
             // 2. Try sending the real email via Gmail SMTP using sender chosen by user
             $smtp_err = '';
             $smtp_from = !empty($reply_sender) && filter_var($reply_sender, FILTER_VALIDATE_EMAIL) !== false
@@ -122,12 +154,16 @@ try {
             if (!empty($client_email)) {
                 try {
                     $subject = "Re: " . $orig_subject;
-                    send_smtp_email($client_email, $subject, $reply_body, $smtp_from);
+                    send_smtp_email($client_email, $subject, $reply_body, $smtp_from, $attach_pdf_path, $attach_pdf_name);
                 } catch (Exception $ex) {
                     $smtp_err = $ex->getMessage();
                 }
             } else {
                 $smtp_err = "No client email found for this RFQ.";
+            }
+
+            if ($attach_pdf_path && file_exists($attach_pdf_path)) {
+                @unlink($attach_pdf_path);
             }
 
             // 3. Determine final from sender: prefer frontend-submitted reply_sender, else fallback to DB recipient_email
@@ -143,7 +179,7 @@ try {
                 $stmt->execute();
                 $stmt->close();
                 
-                $log_detail = "Email balasan terkirim ke klien dengan kutipan SPH. Pengirim: {$final_reply_sender}.";
+                $log_detail = "Email balasan terkirim ke klien dengan lampiran PDF SPH (" . ($attach_pdf_name ? $attach_pdf_name : "No PDF attachment") . "). Pengirim: {$final_reply_sender}.";
                 if (!empty($smtp_err)) {
                     $log_detail .= " (SMTP Error: {$smtp_err})";
                 }
@@ -197,10 +233,10 @@ try {
 }
 
 /**
- * Sends a real email via Gmail SMTP using fsockopen socket connection.
+ * Sends a real email via Gmail SMTP using fsockopen socket connection with optional PDF attachment.
  * CPanel compatible, zero third-party library dependencies.
  */
-function send_smtp_email(string $to, string $subject, string $body, string $from_email): bool {
+function send_smtp_email(string $to, string $subject, string $body, string $from_email, ?string $attachment_path = null, ?string $attachment_filename = null): bool {
     $host = 'smtp.gmail.com';
     $port = 465; // SSL Port
     $username = 'abmalayaindustry@gmail.com';
@@ -261,17 +297,49 @@ function send_smtp_email(string $to, string $subject, string $body, string $from
         fwrite($socket, "DATA\r\n");
         $read($socket, '354');
 
-        $headers = [
-            "MIME-Version: 1.0",
-            "Content-Type: text/plain; charset=UTF-8",
-            "From: =?UTF-8?B?" . base64_encode($from_name) . "?= <{$from_email}>",
-            "To: <{$to}>",
-            "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=",
-            "Date: " . date('r'),
-            "Message-ID: <" . time() . "-" . md5($to) . "@abmalaya.com>"
-        ];
+        if ($attachment_path && file_exists($attachment_path)) {
+            $boundary = "==Multipart_Boundary_x" . md5(time()) . "x";
 
-        $message = implode("\r\n", $headers) . "\r\n\r\n" . $body;
+            $headers = [
+                "MIME-Version: 1.0",
+                "Content-Type: multipart/mixed; boundary=\"{$boundary}\"",
+                "From: =?UTF-8?B?" . base64_encode($from_name) . "?= <{$from_email}>",
+                "To: <{$to}>",
+                "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=",
+                "Date: " . date('r'),
+                "Message-ID: <" . time() . "-" . md5($to) . "@abmalaya.com>"
+            ];
+
+            $msg_body  = "--{$boundary}\r\n";
+            $msg_body .= "Content-Type: text/plain; charset=UTF-8\r\n";
+            $msg_body .= "Content-Transfer-Encoding: 8bit\r\n\r\n";
+            $msg_body .= $body . "\r\n\r\n";
+
+            $pdf_data = file_get_contents($attachment_path);
+            $base64_pdf = chunk_split(base64_encode($pdf_data));
+
+            $msg_body .= "--{$boundary}\r\n";
+            $msg_body .= "Content-Type: application/pdf; name=\"" . ($attachment_filename ?: 'SPH_Quotation.pdf') . "\"\r\n";
+            $msg_body .= "Content-Transfer-Encoding: base64\r\n";
+            $msg_body .= "Content-Disposition: attachment; filename=\"" . ($attachment_filename ?: 'SPH_Quotation.pdf') . "\"\r\n\r\n";
+            $msg_body .= $base64_pdf . "\r\n";
+            $msg_body .= "--{$boundary}--";
+
+            $message = implode("\r\n", $headers) . "\r\n\r\n" . $msg_body;
+        } else {
+            $headers = [
+                "MIME-Version: 1.0",
+                "Content-Type: text/plain; charset=UTF-8",
+                "From: =?UTF-8?B?" . base64_encode($from_name) . "?= <{$from_email}>",
+                "To: <{$to}>",
+                "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=",
+                "Date: " . date('r'),
+                "Message-ID: <" . time() . "-" . md5($to) . "@abmalaya.com>"
+            ];
+
+            $message = implode("\r\n", $headers) . "\r\n\r\n" . $body;
+        }
+
         $message = str_replace("\n.", "\n..", $message);
 
         fwrite($socket, $message . "\r\n.\r\n");

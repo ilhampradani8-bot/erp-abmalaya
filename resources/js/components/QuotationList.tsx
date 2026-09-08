@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Quotation } from '../types/erp';
-import { Search, Plus, Eye, Edit, Send, RefreshCw, Loader2, Trash2, FileType, Check, Sparkles, CheckCircle2, Sliders, Clock, MoreVertical, History, X as CloseIcon, User, AlertTriangle, Printer, Image as ImageIcon, ShieldCheck, ScanLine, Info, Database, Activity, Terminal, Tag, Filter } from 'lucide-react';
+import { Search, Plus, Edit, Send, RefreshCw, Loader2, Trash2, FileType, Check, Sparkles, CheckCircle2, Sliders, Clock, MoreVertical, History, X as CloseIcon, User, AlertTriangle, Printer, Image as ImageIcon, ShieldCheck, ScanLine, Info, Database, Activity, Terminal, Tag, Filter } from 'lucide-react';
 
 import { getApiUrl } from '../utils/api';
 
@@ -1243,6 +1243,18 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                             <Edit className="w-3.5 h-3.5" />
                           </button>
 
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onPreviewDoc(q);
+                            }}
+                            className="p-1 text-emerald-600 hover:text-emerald-900 hover:bg-emerald-100 rounded-md transition cursor-pointer"
+                            title="Buka & Cetak SPH / Save PDF"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </button>
+
                           {/* Kebab action dropdown */}
                           <div className="relative">
                             <button
@@ -1279,12 +1291,25 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setOpenRowActionId(null);
+                                    window.open(getApiUrl(`/api_pdf.php?action=download&type=quotation&id=${q.id}`), '_blank');
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-blue-50 text-blue-900 transition flex items-center gap-2 cursor-pointer font-bold border-t border-slate-100"
+                                >
+                                  <FileType className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>Create / Download Full PDF</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenRowActionId(null);
                                     onPreviewDoc(q);
                                   }}
                                   className="w-full text-left px-3.5 py-2 hover:bg-slate-100 text-[#3d3d3d] transition flex items-center gap-2 cursor-pointer font-semibold"
                                 >
-                                  <Eye className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>Preview PDF</span>
+                                  <Printer className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Lihat & Cetak PDF (SPH)</span>
                                 </button>
                                 
                                 <button
@@ -1297,7 +1322,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   className="w-full text-left px-3.5 py-2 hover:bg-slate-100 text-[#3d3d3d] transition flex items-center gap-2 cursor-pointer font-semibold"
                                 >
                                   <Send className="w-3.5 h-3.5 text-purple-600" />
-                                  <span>Send SPH Email</span>
+                                  <span>Kirim Email (Attach Full PDF)</span>
                                 </button>
                                 
                                 <button

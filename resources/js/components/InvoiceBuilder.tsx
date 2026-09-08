@@ -528,7 +528,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
 
   const handleDownloadPdfDirect = () => {
     const targetId = invoiceId || invoiceNumber;
-    const downloadUrl = `/api_pdf_doc.php?type=invoice&id=${encodeURIComponent(targetId)}&action=download`;
+    const downloadUrl = `/api_pdf.php?type=invoice&id=${encodeURIComponent(targetId)}&action=download`;
     const link = document.createElement('a');
     link.href = downloadUrl;
     link.download = `${invoiceNumber || 'INV-ABM'}.pdf`;
@@ -539,7 +539,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
 
   const handlePreviewPdfInTab = () => {
     const targetId = invoiceId || invoiceNumber;
-    const previewUrl = `/api_pdf_doc.php?type=invoice&id=${encodeURIComponent(targetId)}&action=stream`;
+    const previewUrl = `/api_pdf.php?type=invoice&id=${encodeURIComponent(targetId)}&action=stream`;
     window.open(previewUrl, '_blank');
   };
 
@@ -687,7 +687,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                   className="w-full flex items-center gap-2 px-3 py-1.5 text-emerald-800 hover:bg-emerald-50 font-bold cursor-pointer text-left border-t border-slate-100 transition"
                 >
                   <Download className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Download PDF (Dompdf Engine)</span>
+                  <span>Download Full PDF (Puppeteer Engine)</span>
                 </button>
 
                 <button
