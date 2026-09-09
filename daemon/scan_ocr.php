@@ -193,8 +193,8 @@ while ($row = $res->fetch_assoc()) {
     if ($new_status === 'error') {
         $log_details .= ". Reason: " . ($scan_result['reason'] ?? 'Unknown error');
     }
-    $actor_name = !empty($row['created_by']) ? $row['created_by'] : 'Sesi Daemon Otomatis';
-    $actor_email = 'daemon@abmalaya.com';
+    $actor_name = 'Sistem Daemon';
+    $actor_email = null;
     appendQuotationHistoryLog($db_conn, $quo_id, 'OCR / Text AI Scan', $actor_name, $actor_email, $log_details);
     
     daemon_log("Finished scan for {$quo_id}. Status: " . strtoupper($new_status) . " ({$item_count} items extracted)");

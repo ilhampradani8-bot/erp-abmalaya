@@ -9,7 +9,7 @@ import { QuotationBuilder } from './components/QuotationBuilder';
 import { InvoiceBuilder } from './components/InvoiceBuilder';
 import { QuotationDoc } from './components/QuotationDoc';
 import { Product } from './components/Product';
-import { EmailReplyModal } from './components/EmailReplyModal';
+import { EmailClient } from './components/EmailClient';
 import { AccountSettings } from './components/AccountSettings';
 import { SystemSettings } from './components/SystemSettings';
 import { NotificationLog } from './components/NotificationLog';
@@ -168,33 +168,24 @@ export const App: React.FC = () => {
   useEffect(() => {
     fetchLiveEmails(false);
 
-    const timeout = setTimeout(() => {
-      fetchLiveEmails(true);
-    }, 3000);
-
     const interval = setInterval(() => {
       if (!isPreviewOpenRef.current) {
         fetchLiveEmails(true);
       }
-    }, 90000);
+    }, 180000); // 3 minutes interval
 
     return () => {
-      clearTimeout(timeout);
       clearInterval(interval);
     };
   }, []);
 
-  const [viewMode, setViewModeState] = useState<'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads'>('inbox');
+  const [viewMode, setViewModeState] = useState<'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads' | 'client_chat'>('inbox');
   const [showEmailModal, setShowEmailModal] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const setViewMode = (mode: 'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads') => {
-    setIsLoading(true);
+  const setViewMode = (mode: 'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads' | 'client_chat') => {
     setViewModeState(mode);
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 300);
   };
 
   const selectedRfq = rfqs.find((r) => r.id === selectedRfqId) || null;
@@ -366,10 +357,10 @@ export const App: React.FC = () => {
     <ErrorBoundary>
       <div className="h-screen bg-slate-100 text-slate-900 flex font-sans overflow-hidden relative">
         
-        {/* Top Loading Progress Bar */}
+        {/* Top Loading Progress Bar (NProgress / GitHub style) */}
         {isLoading && (
-          <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-blue-100 overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 animate-pulse w-full"></div>
+          <div className="fixed top-0 left-0 right-0 z-[9999] h-1 bg-blue-100/70 overflow-hidden pointer-events-none">
+            <div className="h-full bg-gradient-to-r from-blue-600 via-cyan-400 to-indigo-600 w-full animate-pulse shadow-[0_0_12px_rgba(37,99,235,0.9)]"></div>
           </div>
         )}
 
@@ -456,6 +447,10 @@ export const App: React.FC = () => {
                     setCurrentQuotation(quo);
                     setShowEmailModal(true);
                   }}
+                  onOpenEmailClient={(targetQuo) => {
+                    if (targetQuo) setCurrentQuotation(targetQuo);
+                    setViewMode('client_chat');
+                  }}
                   onNewQuotation={handleNewQuotation}
                   cachedQuotations={quotationsCache}
                   setCachedQuotations={(data) => {
@@ -463,6 +458,8 @@ export const App: React.FC = () => {
                     setHasFetchedQuotations(true);
                   }}
                   hasFetched={hasFetchedQuotations}
+                  setIsGlobalLoading={setIsLoading}
+                  currentUser={currentUser}
                 />
               )}
 
@@ -512,6 +509,7 @@ export const App: React.FC = () => {
               {viewMode === 'doc_preview' && (
                 <QuotationDoc
                   quotation={currentQuotation}
+                  currentUser={currentUser}
                   onBackToBuilder={() => setViewMode('builder')}
                   onSendEmail={() => setShowEmailModal(true)}
                 />
@@ -527,6 +525,17 @@ export const App: React.FC = () => {
                 />
               )}
 
+              {viewMode === 'client_chat' && (
+                <EmailClient
+                  isModalMode={false}
+                  rfq={selectedRfq}
+                  quotation={currentQuotation}
+                  quotationsList={quotationsCache}
+                  rfqList={rfqs}
+                  onSuccessSend={handleSuccessEmailSend}
+                />
+              )}
+
               {viewMode === 'system_settings' && (
                 <SystemSettings
                   smtpConfig={smtpConfig}
@@ -538,11 +547,14 @@ export const App: React.FC = () => {
           </main>
         </div>
 
-        {/* Email Reply Modal */}
-        {showEmailModal && selectedRfq && (
-          <EmailReplyModal
-            rfq={selectedRfq}
+        {/* Telegram Client Email Chat Modal */}
+        {showEmailModal && (
+          <EmailClient
+            isModalMode={true}
+            rfq={selectedRfq || undefined}
             quotation={currentQuotation}
+            quotationsList={quotationsCache}
+            rfqList={rfqs}
             onClose={() => setShowEmailModal(false)}
             onSuccessSend={handleSuccessEmailSend}
           />

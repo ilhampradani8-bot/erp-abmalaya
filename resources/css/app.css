@@ -45,16 +45,25 @@ body {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 0mm; /* Zero browser margins to prevent double margin clipping */
+    margin: 0;
   }
   
-  html, body {
+  *, *::before, *::after {
+    overflow: visible !important;
+  }
+
+  html, body, #root, #root > div, main {
     background: #ffffff !important;
-    color: #000000 !important;
+    color: #0f172a !important;
     margin: 0 !important;
     padding: 0 !important;
-    width: 210mm !important;
+    width: 100% !important;
     height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    position: static !important;
+    overflow: visible !important;
+    display: block !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
@@ -65,45 +74,89 @@ body {
   }
 
   /* Clean print paper sheet container fitting exactly within A4 boundaries */
-  #quotation-pdf-document, #official-invoice-document {
+  .a4-page-sheet {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
     border: none !important;
     box-shadow: none !important;
-    padding: 8mm 10mm !important;
+    padding: 6mm 6mm !important;
     margin: 0 auto !important;
     width: 210mm !important;
+    min-width: 210mm !important;
     max-width: 210mm !important;
+    height: 297mm !important;
+    min-height: 297mm !important;
+    max-height: 297mm !important;
     box-sizing: border-box !important;
     background: #ffffff !important;
-    overflow: visible !important;
-  }
-
-  /* Fix letterhead banner negative margins during print so headers never overflow or cut off */
-  #quotation-pdf-document .relative,
-  #official-invoice-document .relative {
-    max-width: 100% !important;
-  }
-
-  #quotation-pdf-document div[class*="-mx-"],
-  #official-invoice-document div[class*="-mx-"] {
-    margin-left: -10mm !important;
-    margin-right: -10mm !important;
-    margin-top: -8mm !important;
-    width: calc(100% + 20mm) !important;
-  }
-
-  /* Table break safety and repeating headers/footers */
-  tr, .avoid-break {
+    overflow: hidden !important;
+    page-break-after: always !important;
+    break-after: page !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
-  thead {
-    display: table-header-group !important;
+  .a4-page-sheet:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 
-  tfoot {
-    display: table-footer-group !important;
+  tr, .items-table tr, .avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .bottom-grid {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: flex-start !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .signatures-grid {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: flex-end !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    width: 100% !important;
+  }
+
+  .sig-client-box {
+    flex: 1 !important;
+    text-align: left !important;
+  }
+
+  .sig-issuer-box {
+    flex: 1 !important;
+    text-align: right !important;
+    margin-left: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    justify-content: flex-end !important;
+  }
+
+  .sig-img-container {
+    height: 50px !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+    margin-left: auto !important;
+    width: 100% !important;
+    text-align: right !important;
+  }
+
+  .sig-img-container img {
+    display: inline-block !important;
+    margin-left: auto !important;
+    max-height: 48px !important;
+    max-width: 120px !important;
+    object-fit: contain !important;
   }
 }
+
 
 

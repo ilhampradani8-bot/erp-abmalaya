@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserAccount } from '../types/erp';
-import { Mail, FileText, FileCheck, Users, Settings, ChevronRight, Check, PanelLeftClose, PanelLeft, FileSpreadsheet, Package, Bell, Trash2, Download, Receipt } from 'lucide-react';
+import { Mail, FileText, FileCheck, Users, Settings, ChevronRight, Check, PanelLeftClose, PanelLeft, FileSpreadsheet, Package, Bell, Trash2, Download, Receipt, MessageSquare } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
 interface SidebarProps {
-  viewMode: 'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads';
+  viewMode: 'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads' | 'client_chat';
   setViewMode: (mode: any) => void;
   onNewQuotation: () => void;
   pendingCount: number;
@@ -90,6 +90,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: Mail,
       badge: pendingCount > 0 ? pendingCount : null,
       badgeColor: 'bg-amber-500 text-white font-bold',
+    },
+    {
+      id: 'client_chat',
+      label: 'Client Email',
+      icon: MessageSquare,
+      badge: null,
+      badgeColor: '',
     },
     {
       id: 'product_catalog',

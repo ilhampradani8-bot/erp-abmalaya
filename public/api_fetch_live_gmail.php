@@ -11,6 +11,13 @@ header('Content-Type: application/json; charset=utf-8');
 // Global API rate-limiter counter (keeps track of calls to stay strictly under 10/min)
 $gemini_api_calls_count = 0;
 
+// Set strict 3s socket timeouts for IMAP connections
+if (function_exists('imap_timeout')) {
+    @imap_timeout(IMAP_OPENTIMEOUT, 3);
+    @imap_timeout(IMAP_READTIMEOUT, 3);
+    @imap_timeout(IMAP_WRITETIMEOUT, 3);
+}
+
 $hostname = '{imap.gmail.com:993/imap/ssl}INBOX';
 $username = 'abmalayaindustry@gmail.com';
 $password = 'tbsq icqa kece qaoz';

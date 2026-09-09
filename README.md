@@ -1,7 +1,7 @@
 # 🚀 ERP ABMALAYA - Executive RFQ & SPH Quotation Portal
 
 Portal ERP Modern & Komprehensif untuk **ABMALAYA.COM (MALAYSIA)** yang menangani seluruh alur operasional maritim & industri:
-**Penerimaan Email RFQ Live IMAP ➔ Master Kategori IMPA (Standardisasi Internasional Maritim) ➔ Pemindaian AI Multimodal Gemini ➔ Quotation Builder (Kalkulasi SPH & Pemilih Multi-Barang) ➔ Pengiriman Penawaran PDF Resmi**.
+**Penerimaan Email RFQ Live IMAP ➔ Master Kategori IMPA (Standardisasi Internasional Maritim) ➔ Pemindaian AI Multimodal Gemini ➔ Quotation Builder (Kalkulasi SPH & Pemilih Multi-Barang) ➔ Mesin PDF Puppeteer Multi-Halaman ➔ Pengiriman Penawaran PDF Resmi**.
 
 ---
 
@@ -20,42 +20,65 @@ Portal ERP Modern & Komprehensif untuk **ABMALAYA.COM (MALAYSIA)** yang menangan
    - Penanganan *Rate Limit (HTTP 429)* pintar dengan status `waiting_ai_limit` yang otomatis re-queue dan retry saat kuota Gemini reset.
    - Penggunaan model AI aktif: `gemini-3.6-flash`, `gemini-3.5-flash`, dan `gemini-flash-latest`.
 
-3. **Database Change Watcher & System Notification Engine**:
+3. **Mesin SPH Commercial Quotation PDF Multi-Halaman (Headless Chrome Puppeteer)**:
+   - Generasi PDF resmi Surat Penawaran Harga (SPH) berbasis Headless Chrome Puppeteer (`scripts/generate_pdf_puppeteer.cjs` & `public/api_pdf.php`).
+   - **Multi-Page Flow A4**: Mendukung penawaran hingga puluhan/ratusan item (`QUO-ABM/MY/2026/0828` dengan 24+ item) secara otomatis terbagi bersih menjadi Halaman 1, 2, 3, dst.
+   - **Repeating Header & Footer**: Letterhead Banner (Logo Perusahaan, Alamat, Gambar Banner Header) dan Footer Perusahaan (Logo, Email, Telepon, Website) terulang **100% konsisten pada setiap halaman A4**.
+   - **DB Layout Offsets**: Mengikuti secara presisi konfigurasi `system_paper_settings` di database (termasuk JSON `layout_offsets` untuk skala/posisi logo & alamat, `header_title`, `table_header_bg`, `stamp_url`, dan `signature_url`).
+   - **Header Tabel Berulang**: Header kolom tabel (`NO.`, `IMG`, `PRODUCT CODE`, `IMPA`, `PRODUCT NAME`, `SPECIFICATION`, `QTY`, `UNIT`, `UNIT PRICE`, `DISC`, `TOTAL`) otomatis terikut di setiap awal halaman baru.
+   - **Signatures & Summary di Halaman Terakhir**: Blok tanda tangan digital, cap perusahaan, serta ringkasan PPN & Syarat Ketentuan diletakkan khusus pada **halaman terakhir**.
+   - **High-Speed PDF Caching**: Endpoint `api_pdf.php` melayani preview PDF secara instant (0.01 detik) dari cache file `/uploads/pdf/` dan hanya menjalankan Puppeteer jika terdapat pembaruan/recreate (`force=1`).
+
+4. **Database Change Watcher & System Notification Engine**:
    - Pemantau perubahan data otomatis (`daemon/watch_db_changes.php`) yang mendeteksi perubahan pada tabel `rfq_requests`, `quotations`, `products`, dan `users`.
    - Menghasilkan notifikasi sistem otomatis berformat bahasa Inggris yang dicatat ke dalam tabel `system_notifications`.
 
-4. **Master Katalog Produk, Kode IMPA 6-Digit & Penawaran Alternatif (Offer)**:
-   - Pemisahan terstruktur antara SKU internal (`product_code`, contoh: `PRD-233886`), Kode IMPA Presisi 6-Digit (`impa_code`, contoh: `233886`), serta Penawaran Alternatif (`offer` / `offered_item`).
-   - Dukungan unggah banyak foto produk (*multiple photo upload*) dan link gambar web.
+5. **Master Katalog Produk, Kode IMPA 6-Digit & Penawaran Alternatif (Offer)**:
+   - Pemisahan terstruktur antara SKU internal (`product_code`), Kode IMPA Presisi 6-Digit (`impa_code`), serta Penawaran Alternatif (`offer` / `offered_item`).
+   - Dukungan unggah banyak foto produk (*multiple photo upload*) dan konversi Base64 Data URI otomatis untuk rendering gambar tanpa celah.
    - Filter otomatis yang menyembunyikan item berstatus trash/deleted dari daftar aktif.
 
-5. **Mesin Daemon Product Text Matching (Tiered & Fast-Path Matching)**:
+6. **Mesin Daemon Product Text Matching (Tiered & Fast-Path Matching)**:
    - Daemon dedicated (`daemon/matching_text_product.php`) yang mencocokkan item permintaan RFQ dengan Master Produk:
      - **Tingkat 1 (Fast-Path Exact IMPA / SKU)**: Pencocokan 100% instan untuk Kode IMPA 6-digit atau SKU.
      - **Tingkat 2 (Fuzzy Token Overlap ≥ 65%)**: Pencocokan kemiripan kata kunci pada nama produk, spesifikasi teknis, dan alternatif penawaran (`offer`).
    - Melampirkan `product_code`, `impa_code`, `unit_price`, `offer`, `specification`, dan `total` secara otomatis ke `quotation_items` tanpa duplikasi data.
 
-6. **Engine Cloud Backup Google Sheets Otomatis 24/7**:
+7. **Engine Cloud Backup Google Sheets Otomatis 24/7**:
    - Skrip daemon latar belakang (`daemon/backup_products_sheets.php`) yang menggunakan Google Service Account JWT OAuth.
    - Otomatis mencadangkan katalog master produk (termasuk kode IMPA, harga modal, harga jual, stok, & link foto) ke private Google Spreadsheet milik `abmalayaindustry@gmail.com`.
 
-7. **Quotation Builder & Tabel Item Rincian (10 Kolom Lengkap)**:
-   - Form pembuatan Surat Penawaran Harga (SPH) interaktif dengan kalkulasi PPN, diskon, dan subtotal otomatis.
-   - Tabel Rincian Item Penawaran (10 Kolom Lengkap: `#`, `Photo Thumbnail`, `Product Code / IMPA`, `Product Name / Offer`, `Detailed Specification`, `Qty`, `Unit`, `Unit Price MYR`, `Disc %`, `Subtotal MYR`).
-   - Pemilik universal Trash Sidebar untuk RFQ, Quotations, dan Produk.
+8. **Quotation Builder & Tabel Item Rincian**:
+   - Form pembuatan Surat Penawaran Harga (SPH) interaktif dengan kalkulasi PPN 11%, diskon, dan subtotal otomatis.
+   - Tabel Rincian Item Penawaran lengkap dengan penyesuaian font profesional Inter/System UI dan penanganan otomatis tanggal dokumen (`pdf_created_at` / `date_issued`).
 
-8. **Tabel Data SPH Quotation (Dropdown Filter, Count Badges & Sticky Header)**:
-   - Fitur **Dropdown Filter** terpadu menggantikan tombol tab dengan live count badges (`All`, `Requisition`, `In Progress`, `Quotation`, `ACC Approved`, `Done`, `Trash`).
-   - Pemetaan status akurat (`in_progress`, `draft`, `siap_kirim`, `approved`, `done_send`, `junk`).
-   - Header tabel melayang permanen (*Sticky Top Header*) saat di-scroll down.
+9. **Tabel Data SPH Quotation & High-Contrast Loading Bar**:
+   - Fitur **Dropdown Filter** terpadu dengan live count badges (`All`, `Requisition`, `In Progress`, `Quotation`, `ACC Approved`, `Done`, `Trash`).
+   - Indikator **Top Progress Bar** paling atas di navbar (`z-[9999]`) beranimasi (NProgress/GitHub style) yang sinkron dengan seluruh pemuatan data dan pembuatan PDF di `QuotationList.tsx`.
+   - Optimasi query batch `api_quotations.php` (menghilangkan N+1 SQL queries menjadi 3 batch map) untuk waktu muat halaman dalam milidetik.
 
-9. **Layanan Server Mandiri 24/7 di UTM Virtual Machine (31GB RAM) (Systemd Services & Cron)**:
-   - Berjalan 24 jam non-stop di UTM VM (31GB RAM) tanpa perlu membuka IDE / terminal SSH:
-     - `mariadb.service` (Port 3306)
-     - `erp-php.service` (Port 8000 Multi-Worker)
-     - `erp-vite.service` (Port 3000 Production Preview)
-     - `erp-daemon.service` (Background Automation Loop per 2 menit)
-     - `crontab` fallback (`*/5 * * * * /usr/bin/php /root/erp-abmalaya/daemon/run_all.php`)
+10. **Layanan Server Mandiri 24/7 di UTM Virtual Machine (31GB RAM)**:
+    - Berjalan 24 jam non-stop di UTM VM (31GB RAM) tanpa perlu membuka IDE / terminal SSH:
+      - `mariadb.service` (Port 3306)
+      - `erp-php.service` (Port 8000 Multi-Worker)
+      - `erp-vite.service` (Port 3000 Production Preview)
+      - `erp-daemon.service` (Background Automation Loop per 2 menit)
+      - `crontab` fallback (`*/5 * * * * /usr/bin/php /root/erp-abmalaya/daemon/run_all.php`)
+
+11. **Modul Client Email Database & Chat per Perusahaan (`ChatEmail.tsx`)**:
+    - **100% Full-Width & Sharp Boxy Theme**: Tampilan antarmuka bertema *clean white* dengan batas sudut tajam (*sharp rectangular borders*) tanpa sisa margin terpotong.
+    - **Penapisan Ketat Klasifikasi AI (`ai_classification`)**: Hanya pesan dengan `ai_classification = 'quotation'` (atau terhubung ke tabel `quotations`) yang masuk ke dalam sistem. Pesan berstatus `iklan`, `waiting`, `newsletter`, atau `no-reply` dieksklusi secara total.
+    - **Auto-Sync Database Client MySQL (`public/api_clients.php`)**: Otomatis mengekstrak data client hasil scan AI (`rfq_requests` & `quotations`) dan menyimpannya ke dalam tabel MySQL `clients` berdasarkan aturan tanggal `INBOX_RULE_START_DATE` (`2026-08-27`).
+    - **Multi-Email per Perusahaan**: Kolom database `clients.email` berformat `TEXT` untuk menampung banyak email perusahaan (misal: *procurement*, *purchasing*, *finance*) lengkap dengan dropdown selector `To:`.
+    - **Menu Dropdown Titik 3 (`⋮` / `MoreVertical`)**: Menyatukan seluruh aksi (*Edit Data DB Client*, *Data/File SPH*, *Download SPH PDF*, *Buat Invoice*, dan *AI Auto-Draft SPH*) ke dalam satu tombol menu ringkas.
+    - **Tampilan Link Ringkas ID Email & Popup Preview**: Pesan masuk ditampilkan sebagai card link ringkas (`[ID Email: RFQ-XXXX] Subject ↗`) dengan indikator lampiran file & popup preview modal lengkap.
+    - **Drawer "Data / File" & Indikator Status**: Menampilkan daftar PDF SPH dengan status pengiriman otomatis (`Ready for Send` vs `Done Send`).
+    - **Floating Non-Cutoff Composer**: Kolom input ketikan balasan diatur melayang (*floating sticky bottom z-30*) sehingga selalu tampil utuh di semua resolusi layar.
+
+12. **Optimasi Performa UI Reaktif & Tunnel Cloudflare HTTP/2**:
+    - **Perpindahan Navigasi Instan (0ms)**: Menghilangkan delay artificial loading spinner saat berpindah tab.
+    - **Optimistic State Updates & Silent Background Sync**: Pengeditan data client langsung memperbarui tampilan lokal dalam 0 milidetik, sementara sinkronisasi data server berjalan halus di latar belakang setiap 10 detik.
+    - **Multi-Worker Server & Tunnel HTTP/2**: Konfigurasi `PHP_CLI_SERVER_WORKERS=8` dan Cloudflare Tunnel `http2` untuk akses cepat tanpa rintangan error 524.
 
 ---
 
@@ -63,10 +86,11 @@ Portal ERP Modern & Komprehensif untuk **ABMALAYA.COM (MALAYSIA)** yang menangan
 
 - **Frontend UI:** React 18 + **TypeScript** (`strict mode`) + Vite 5 + Tailwind CSS.
 - **Backend API:** Native PHP Engine (`/usr/bin/php`) — Multi-worker CLI Server & Router.
+- **PDF Generation Engine:** Headless Chrome via Puppeteer (`scripts/generate_pdf_puppeteer.cjs`).
 - **Database Engine:** MariaDB / MySQL (`127.0.0.1:3306`, Database: `abmalaya_erp`).
 - **Live Email Sync:** PHP IMAP SSL (`imap.gmail.com:993`).
 - **AI Vision Engine:** Google Gemini 3.6 / 3.5 Flash Multimodal Vision API.
-- **Icons & Typography:** Lucide React Icons (0% Emoji) + Font Inter & Roboto.
+- **Icons & Typography:** Lucide React Icons + Font Inter & System UI Stack.
 
 ---
 
@@ -86,25 +110,30 @@ erp-abmalaya/
 ├── public/
 │   ├── api_fetch_live_gmail.php    # Live IMAP Reader & Webhook Sync
 │   ├── api_gmail_webhook.php       # Google Cloud Pub/Sub Webhook Push Listener
-│   ├── api_quotations.php          # Endpoint MySQL CRUD SPH Quotations
+│   ├── api_pdf.php                 # PDF Generator API Endpoint (Stream / Download / Caching)
+│   ├── api_quotations.php          # Endpoint MySQL CRUD SPH Quotations (Batch Query Optimized)
 │   ├── api_products.php            # Endpoint Master Produk & Kategori IMPA
-│   ├── import_products.php         # Sinkronisasi Cetak Biru Kategori Google Sheets
+│   ├── api_clients.php             # Endpoint CRUD & Auto-Sync Client Database MySQL
+│   ├── view_doc.php                # Printable HTML Layout for SPH Multi-Page PDF
 │   └── router.php                  # Custom router untuk PHP Built-in Server
+├── scripts/
+│   └── generate_pdf_puppeteer.cjs  # Headless Chrome Puppeteer PDF Generator Script
 ├── resources/
 │   ├── css/
 │   │   └── app.css                 # Tailwind CSS & Print styles
 │   └── js/
 │       ├── components/
 │       │   ├── RFQInbox.tsx        # Dashboard RFQ Inbox + Lightbox + AI Rule Filters
+│       │   ├── ChatEmail.tsx       # Modul Chat Email Database Full-Width (Multi-Email + AI Filter + Dropdown Menu)
 │       │   ├── Product.tsx         # Master Katalog Produk & IMPA Category Blueprints
 │       │   ├── QuotationBuilder.tsx# Form SPH + Multi-Select Product Picker Modal
-│       │   ├── QuotationList.tsx   # Tabel SPH (Dropdown Filter + Mode 21 Kolom DB)
+│       │   ├── QuotationList.tsx   # Tabel SPH (Dropdown Filter + Live Progress Bar + PDF Modal)
 │       │   ├── SystemSettings.tsx  # Pengaturan Kredensial & Key Rotation Pool
 │       │   ├── Header.tsx          # Topbar Navigasi Ringkas
-│       │   └── Sidebar.tsx         # Sidebar Menu Neumorphic Soft-UI
+│       │   └── Sidebar.tsx         # Sidebar Menu Navigasi ERP
 │       ├── types/
 │       │   └── erp.ts              # Definisi Tipe TypeScript Ketat
-│       ├── App.tsx                 # Entrypoint Utama SPA + React ErrorBoundary
+│       ├── App.tsx                 # Entrypoint Utama SPA + React ErrorBoundary + Instant View Switcher
 │       └── main.tsx                # Mount React DOM
 ├── AGENTS.md                       # Panduan Utama & Aturan Proyek Prosedural
 ├── package.json                    # Konfigurasi dependensi React & Vite
@@ -175,5 +204,3 @@ Setiap kali melakukan pembaruan kode dan diminta melakukan deploy oleh user:
 
 2. **STRICT NO AUTO DEPLOY RULE:**
    - Proses **FTP Upload** dan **GitHub Push** hanya boleh dipicu **apabila diminta secara eksplisit oleh pengguna** melalui obrolan chat. Dilarang memicu deployment otomatis.
-
-

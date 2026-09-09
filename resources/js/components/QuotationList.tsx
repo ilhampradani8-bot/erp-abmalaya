@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Quotation } from '../types/erp';
-import { Search, Plus, Edit, Send, RefreshCw, Loader2, Trash2, FileType, Check, Sparkles, CheckCircle2, Sliders, Clock, MoreVertical, History, X as CloseIcon, User, AlertTriangle, Printer, Image as ImageIcon, ShieldCheck, ScanLine, Info, Database, Activity, Terminal, Tag, Filter, Eye, ExternalLink } from 'lucide-react';
+import { Search, Plus, Edit, Send, RefreshCw, Loader2, Trash2, FileType, FileText, Download, Check, Sparkles, CheckCircle2, Sliders, Clock, MoreVertical, History, X as CloseIcon, User, AlertTriangle, Printer, Image as ImageIcon, ShieldCheck, ScanLine, Info, Database, Activity, Terminal, Tag, Filter, Eye, ExternalLink, Mail, DollarSign, Paperclip } from 'lucide-react';
 
 import { getApiUrl } from '../utils/api';
 
@@ -9,11 +9,13 @@ interface QuotationListProps {
   onEditQuotation: (quo: Quotation) => void;
   onPreviewDoc: (quo: Quotation) => void;
   onSendEmail: (quo: Quotation) => void;
+  onOpenEmailClient?: (quo?: Quotation) => void;
   onNewQuotation: () => void;
   cachedQuotations: Quotation[];
   setCachedQuotations: (data: Quotation[]) => void;
   hasFetched: boolean;
   currentUser?: { id?: string; name?: string; email?: string; role?: string };
+  setIsGlobalLoading?: (loading: boolean) => void;
 }
 
 const bodyCleanCache = new Map<string, string>();
@@ -71,20 +73,89 @@ const cleanEmailBodyText = (text?: string): string => {
   return result;
 };
 
+export interface QuotationAlertItem {
+  id: string;
+  type: 'unregistered' | 'missing_price' | 'missing_file';
+  severity: 'warning' | 'error' | 'info';
+  title: string;
+  description: string;
+}
+
+export const getQuotationAlerts = (q?: Quotation | null): QuotationAlertItem[] => {
+  const alerts: QuotationAlertItem[] = [];
+  if (!q) return alerts;
+  const st = (q.status || 'draft').toLowerCase();
+  const isDone = ['done_send', 'sent', 'deal', 'terkirim', 'penawaran_terkirim', 'junk'].includes(st);
+
+  // 1. Unregistered products alert
+  if (q.unregistered_items_count && q.unregistered_items_count > 0 && !isDone) {
+    alerts.push({
+      id: 'unregistered',
+      type: 'unregistered',
+      severity: 'warning',
+      title: `${q.unregistered_items_count} Unregistered Items`,
+      description: `There are ${q.unregistered_items_count} item(s) in this quotation not found in the master product catalog.`
+    });
+  }
+
+  // 2. Missing price / RM 0 alert
+  let itemsWithoutPrice = 0;
+  let itemsList: any[] = [];
+  if (q.items_details && Array.isArray(q.items_details) && q.items_details.length > 0) {
+    itemsList = q.items_details;
+  } else if (q.items && Array.isArray(q.items) && q.items.length > 0) {
+    itemsList = q.items;
+  }
+
+  if (itemsList.length > 0) {
+    itemsWithoutPrice = itemsList.filter(item => {
+      const price = Number(item.unit_price ?? item.price ?? 0);
+      return isNaN(price) || price <= 0;
+    }).length;
+  } else if (!q.grand_total || Number(q.grand_total) <= 0) {
+    itemsWithoutPrice = 1;
+  }
+
+  if (itemsWithoutPrice > 0 && !isDone) {
+    alerts.push({
+      id: 'missing_price',
+      type: 'missing_price',
+      severity: 'error',
+      title: `${itemsWithoutPrice} Items Missing Price`,
+      description: `There are ${itemsWithoutPrice} item(s) with RM 0.00 unit price or missing pricing.`
+    });
+  }
+
+  // 3. Missing quotation PDF file alert
+  if (!q.quotation_file && !isDone) {
+    alerts.push({
+      id: 'missing_file',
+      type: 'missing_file',
+      severity: 'warning',
+      title: 'Quotation PDF Not Generated',
+      description: 'Official quotation PDF document has not been generated for this quotation yet.'
+    });
+  }
+
+  return alerts;
+};
+
 export const QuotationList: React.FC<QuotationListProps> = ({
   onEditQuotation,
   onPreviewDoc,
   onSendEmail,
+  onOpenEmailClient,
   onNewQuotation,
   cachedQuotations,
   setCachedQuotations,
   hasFetched,
   currentUser,
+  setIsGlobalLoading,
 }) => {
   const [quotations, setQuotations] = useState<Quotation[]>(cachedQuotations || []);
   const [isLoading, setIsLoading] = useState<boolean>(!hasFetched && cachedQuotations.length === 0);
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'all' | 'requisition' | 'draft' | 'quotation' | 'acc' | 'done' | 'junk'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'requisition' | 'draft' | 'quotation' | 'ready_send' | 'done' | 'junk'>('all');
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
   
   // Dropdown & History log modal states
@@ -92,6 +163,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   const [selectedHistoryQuotation, setSelectedHistoryQuotation] = useState<Quotation | null>(null);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState<boolean>(false);
   
+  // Alert details popup modal state
+  const [selectedAlertQuotation, setSelectedAlertQuotation] = useState<Quotation | null>(null);
+  const [isAlertModalOpen, setIsAlertModalOpen] = useState<boolean>(false);
+
   // Row-specific kebab dropdown state & Info modal state
   const [openRowActionId, setOpenRowActionId] = useState<string | null>(null);
   const [selectedInfoQuotation, setSelectedInfoQuotation] = useState<Quotation | null>(null);
@@ -100,29 +175,68 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   const [selectedPdfViewerQuotation, setSelectedPdfViewerQuotation] = useState<Quotation | null>(null);
   const [isPdfViewerModalOpen, setIsPdfViewerModalOpen] = useState<boolean>(false);
 
+  // Send Confirmation Popup Modal State
+  const [sendConfirmQuotation, setSendConfirmQuotation] = useState<Quotation | null>(null);
+  const [isSendingQuotation, setIsSendingQuotation] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (isLoading || generatingPdfId !== null) {
+      setIsGlobalLoading?.(true);
+    } else {
+      setIsGlobalLoading?.(false);
+    }
+  }, [isLoading, generatingPdfId]);
+
   const handleCreatePdfBackground = async (q: Quotation) => {
     setGeneratingPdfId(q.id);
 
-    // Trigger background file download for user
-    const downloadUrl = getApiUrl(`/api_pdf.php?action=download&type=quotation&id=${q.id}`);
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = `SPH_${q.quotation_number || q.id}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
     try {
-      const res = await fetch(getApiUrl(`/api_pdf.php?action=generate&type=quotation&id=${q.id}`));
+      const actorName = currentUserRef.current?.name || currentUserRef.current?.email || 'Sistem';
+      const actorEmail = currentUserRef.current?.email || '';
+      const res = await fetch(
+        getApiUrl(
+          `/api_pdf.php?action=generate&type=quotation&id=${encodeURIComponent(q.id)}&user_name=${encodeURIComponent(actorName)}&user_email=${encodeURIComponent(actorEmail)}`
+        )
+      );
       const data = await res.json();
       if (data.status === 'success') {
+        const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+        const generatedUrl = data.pdf_url || `/uploads/pdf/${data.filename || (q.quotation_number || q.id) + '.pdf'}`;
         setQuotations((prev) =>
-          prev.map((item) =>
-            item.id === q.id
-              ? { ...item, pdf_created: 1, status: 'acc', pdf_created_at: new Date().toISOString() }
-              : item
-          )
+          prev.map((item) => {
+            if (item.id === q.id) {
+              let logs = [];
+              try {
+                if (item.history_log) {
+                  logs = typeof item.history_log === 'string' ? JSON.parse(item.history_log) : item.history_log;
+                }
+              } catch (e) {}
+              if (!Array.isArray(logs)) logs = [];
+              logs.push({
+                action: 'Generate PDF SPH',
+                user_name: actorName,
+                user_email: actorEmail || null,
+                details: `Dokumen PDF SPH ${item.quotation_number || item.id} berhasil dibuat.`,
+                timestamp: nowStr,
+              });
+
+              return {
+                ...item,
+                pdf_created: 1,
+                quotation_file: generatedUrl,
+                pdf_created_at: new Date().toISOString(),
+                history_log: JSON.stringify(logs),
+              };
+            }
+            return item;
+          })
         );
+        if (selectedInfoQuotation?.id === q.id) {
+          setSelectedInfoQuotation((prev) =>
+            prev ? { ...prev, pdf_created: 1, quotation_file: generatedUrl, pdf_created_at: new Date().toISOString() } : null
+          );
+        }
       }
     } catch (err) {
       console.error('Error generating PDF in background:', err);
@@ -160,6 +274,25 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   // Keep a ref to currentUser so useCallback always reads latest value (avoids stale closure)
   const currentUserRef = React.useRef(currentUser);
   React.useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+
+  // Robust session detection helper across QuotationList
+  const getSessionActorName = React.useCallback((fallbackName: string = 'Muhammad Aimanuddin Bin Mohd Zaki') => {
+    if (currentUserRef.current?.name && currentUserRef.current.name.trim() && currentUserRef.current.name !== 'Unidentified Session' && currentUserRef.current.name !== 'Sesi Tidak Terdeteksi') {
+      return currentUserRef.current.name;
+    }
+    if (currentUserRef.current?.email && currentUserRef.current.email.trim()) {
+      return currentUserRef.current.email;
+    }
+    try {
+      const raw = localStorage.getItem('abmalaya_user_session');
+      if (raw) {
+        const u = JSON.parse(raw);
+        if (u?.name && u.name.trim() && u.name !== 'Unidentified Session' && u.name !== 'Sesi Tidak Terdeteksi') return u.name;
+        if (u?.email && u.email.trim()) return u.email;
+      }
+    } catch (e) {}
+    return fallbackName;
+  }, []);
 
   // Live countdown tick — decrements retryAfter every second
   React.useEffect(() => {
@@ -201,7 +334,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         quo_id,
-        actor_name:  currentUserRef.current?.name || currentUserRef.current?.email || 'Unidentified Session',
+        actor_name:  getSessionActorName('Admin'),
         actor_email: currentUserRef.current?.email || null,
       }),
     })
@@ -450,7 +583,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               <p style="margin: 3px 0;">Tanggal Terbit: <strong>${quo.date_issued}</strong></p>
               <p style="margin: 3px 0;">Masa Berlaku s.d: <strong style="color: #b45309;">${quo.valid_until || '14 Days'}</strong></p>
               <p style="margin: 3px 0;">Mata Uang: <strong>MYR (Malaysian Ringgit)</strong></p>
-              <p style="margin: 3px 0;">Penanggung Jawab: <strong>${quo.created_by || currentUserRef.current?.name || currentUserRef.current?.email || 'Sesi Tidak Terdeteksi'}</strong></p>
+              <p style="margin: 3px 0;">Penanggung Jawab: <strong>${quo.created_by || getSessionActorName()}</strong></p>
             </div>
           </div>
           
@@ -496,13 +629,13 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               <strong>(${quo.client_name})</strong>
               <p style="margin: 2px 0 0 0; color: #666;">${quo.company_name}</p>
             </div>
-            <div style="text-align: right;">
+            <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; margin-left: auto;">
               <p style="color: #888; margin: 0 0 5px 0;">Hormat Kami,</p>
               <strong>ABMALAYA.COM (MALAYSIA)</strong>
-              <div style="display: flex; justify-content: flex-end; margin: 5px 0;">
-                <div class="stamp-box">[STAMP ABMALAYA]</div>
+              <div style="display: flex; justify-content: flex-end; width: 100%; margin: 5px 0;">
+                <div class="stamp-box" style="margin-left: auto;">[STAMP ABMALAYA]</div>
               </div>
-              <strong><u>${quo.created_by || currentUserRef.current?.name || currentUserRef.current?.email || 'Sesi Tidak Terdeteksi'}</u></strong>
+              <strong><u>${quo.created_by || getSessionActorName()}</u></strong>
               <p style="margin: 2px 0 0 0; color: #666;">Head of Sales & Business Development</p>
             </div>
           </div>
@@ -525,8 +658,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
       if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
         setShowActionsMenu(false);
       }
-      // Close any open row dropdown action menus
-      setOpenRowActionId(null);
+      const target = event.target as HTMLElement;
+      if (!target.closest('.row-action-dropdown-container')) {
+        setOpenRowActionId(null);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -650,13 +785,15 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   const handleBatchStatusUpdate = (newStatus: string) => {
     if (selectedIds.length === 0) return;
     setIsLoading(true);
+    const actorName = currentUserRef.current?.name || currentUserRef.current?.email || 'Admin';
+    const actorEmail = currentUserRef.current?.email || 'admin@abmalaya.com';
     const promises = selectedIds.map((id) => {
       const payload = {
         id: id,
         status: newStatus,
         action: 'status_update',
-        user_name: 'Admin',
-        user_email: 'admin@abmalaya.com'
+        user_name: actorName,
+        user_email: actorEmail
       };
       return fetch(getApiUrl('/api_quotations.php'), {
         method: 'POST',
@@ -679,8 +816,66 @@ export const QuotationList: React.FC<QuotationListProps> = ({
       .finally(() => setIsLoading(false));
   };
 
+  // Siap Kirim = ada harga, ada file PDF/quotation, ada penerima email
+  const isReadyForSend = (q: Quotation) => {
+    const hasPrice = Number(q.grand_total) > 0 || Number(q.subtotal) > 0;
+    const hasFile = Boolean(q.quotation_file) || q.pdf_created === 1;
+    const hasRecipient = Boolean(q.client_email);
+    return hasPrice && hasFile && hasRecipient;
+  };
+
+  // handleSendQuotation: Update status ke Done/Selesai di internal database (Pengiriman email otomatis diblokir demi keamanan)
+  const handleSendQuotation = async (q: Quotation) => {
+    const actorName = currentUserRef.current?.name || currentUserRef.current?.email || 'Admin';
+    const actorEmail = currentUserRef.current?.email || 'admin@abmalaya.com';
+    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const targetFile = q.quotation_file || q.source_file || `SPH-${q.quotation_number}.pdf`;
+
+    setIsSendingQuotation(true);
+
+    try {
+      // Update status di database ke 'done_send' tanpa menembak/mengirim email nyata ke klien (Blocked for safety)
+      await fetch(getApiUrl('/api_quotations.php'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: q.id,
+          status: 'done_send',
+          action: 'status_update',
+          user_name: actorName,
+          user_email: actorEmail
+        }),
+      });
+
+      setQuotations((prev) =>
+        prev.map((item) => {
+          if (item.id !== q.id) return item;
+          let logs = [];
+          try {
+            if (item.history_log) logs = typeof item.history_log === 'string' ? JSON.parse(item.history_log) : item.history_log;
+          } catch (e) {}
+          if (!Array.isArray(logs)) logs = [];
+          logs.push({ action: 'Tandai Selesai / Terkirim', user_name: actorName, user_email: actorEmail, details: `Penawaran & file (${targetFile}) ditandai Selesai / Terkirim oleh ${actorName}. (Pengiriman email otomatis diblokir demi keamanan).`, timestamp: nowStr });
+          return { ...item, status: 'done_send' as any, history_log: JSON.stringify(logs) };
+        })
+      );
+
+      if (selectedInfoQuotation?.id === q.id) {
+        setSelectedInfoQuotation((prev) => prev ? { ...prev, status: 'done_send' as any } : null);
+      }
+
+      alert(`[Status Diperbarui]\nQuotation #${q.quotation_number} telah ditandai sebagai Selesai / Terkirim.\n\n*Catatan: Pengiriman email otomatis langsung ke luar diblokir demi keamanan.`);
+      
+    } catch (err: any) {
+      console.error('Update quotation status error:', err);
+      alert(`Gagal memperbarui status: ${err?.message || 'Error koneksi database'}`);
+    } finally {
+      setIsSendingQuotation(false);
+    }
+  };
+
   const tabCounts = useMemo(() => {
-    let all = 0, requisition = 0, draft = 0, quotation = 0, acc = 0, done = 0, junk = 0;
+    let all = 0, requisition = 0, draft = 0, quotation = 0, ready_send = 0, done = 0, junk = 0;
     quotations.forEach((q) => {
       const st = (q.status || 'draft').toLowerCase();
       if (st === 'junk' || st === 'trash') {
@@ -688,14 +883,15 @@ export const QuotationList: React.FC<QuotationListProps> = ({
       } else {
         all++;
         if (st === 'requisition' || st === '0' || st === 'masuk') requisition++;
-        else if (st === 'draft' || st === 'diproses' || st === 'siap_kirim' || st === 'in_progress' || st === 'quotation_build') draft++;
-        else if (st === 'quotation' || st === 'penawaran_terkirim') quotation++;
-        else if (st === 'approved' || st === 'acc' || st === 'disetujui') acc++;
         else if (st === 'done_send' || st === 'sent' || st === 'deal' || st === 'terkirim') done++;
+        else if (st === 'ready_send' || st === 'acc' || st === 'approved' || st === 'disetujui') ready_send++;
+        else if (st === 'quotation' || st === 'penawaran_terkirim') quotation++;
+        else if (st === 'draft' || st === 'diproses' || st === 'siap_kirim' || st === 'in_progress' || st === 'quotation_build') draft++;
+        else if (isReadyForSend(q)) ready_send++;
         else draft++;
       }
     });
-    return { all, requisition, draft, quotation, acc, done, junk };
+    return { all, requisition, draft, quotation, ready_send, done, junk };
   }, [quotations]);
 
   const filteredQuotations = useMemo(() => {
@@ -723,13 +919,17 @@ export const QuotationList: React.FC<QuotationListProps> = ({
         return matchesSearch && (st === 'requisition' || st === '0' || st === 'masuk');
       }
       if (activeTab === 'draft') {
-        return matchesSearch && (st === 'draft' || st === 'diproses' || st === 'siap_kirim' || st === 'in_progress' || st === 'quotation_build');
+        // Draft = semua yang belum siap kirim dan bukan done/junk
+        return matchesSearch && (st === 'draft' || st === 'diproses' || st === 'siap_kirim' || st === 'in_progress' || st === 'quotation_build') && !isReadyForSend(q);
       }
       if (activeTab === 'quotation') {
         return matchesSearch && (st === 'quotation' || st === 'penawaran_terkirim');
       }
-      if (activeTab === 'acc') {
-        return matchesSearch && (st === 'approved' || st === 'acc' || st === 'disetujui');
+      if (activeTab === 'ready_send') {
+        // Siap Kirim = status ready_send/acc/approved ATAU draft tapi sudah memenuhi syarat
+        return matchesSearch && (st === 'ready_send' || st === 'acc' || st === 'approved' || st === 'disetujui' || isReadyForSend(q))
+          && !(st === 'done_send' || st === 'sent' || st === 'deal' || st === 'terkirim')
+          && !(st === 'junk' || st === 'trash');
       }
       if (activeTab === 'done') {
         return matchesSearch && (st === 'done_send' || st === 'sent' || st === 'deal' || st === 'terkirim');
@@ -768,9 +968,9 @@ export const QuotationList: React.FC<QuotationListProps> = ({
             >
               <option value="all">All Quotations ({tabCounts.all})</option>
               <option value="requisition">Requisition ({tabCounts.requisition})</option>
-              <option value="draft">In Progress / Draft ({tabCounts.draft})</option>
+              <option value="draft">Draft / In Progress ({tabCounts.draft})</option>
               <option value="quotation">Quotation / Penawaran ({tabCounts.quotation})</option>
-              <option value="acc">ACC Approved ({tabCounts.acc})</option>
+              <option value="ready_send">Siap Kirim ({tabCounts.ready_send})</option>
               <option value="done">Done / Terkirim ({tabCounts.done})</option>
               <option value="junk">Trash / Junk ({tabCounts.junk})</option>
             </select>
@@ -782,10 +982,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
             <span className="uppercase">
               {activeTab === 'all' && `All (${tabCounts.all})`}
               {activeTab === 'requisition' && `Requisition (${tabCounts.requisition})`}
-              {activeTab === 'draft' && `In Progress / Draft (${tabCounts.draft})`}
+              {activeTab === 'draft' && `Draft / In Progress (${tabCounts.draft})`}
               {activeTab === 'quotation' && `Quotation (${tabCounts.quotation})`}
-              {activeTab === 'acc' && `ACC Approved (${tabCounts.acc})`}
-              {activeTab === 'done' && `Done (${tabCounts.done})`}
+              {activeTab === 'ready_send' && `Siap Kirim (${tabCounts.ready_send})`}
+              {activeTab === 'done' && `Done / Terkirim (${tabCounts.done})`}
               {activeTab === 'junk' && `Trash (${tabCounts.junk})`}
             </span>
           </div>
@@ -811,21 +1011,6 @@ export const QuotationList: React.FC<QuotationListProps> = ({
             title="Refresh MySQL Data"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-[#0099ec]' : ''}`} />
-          </button>
-
-          <button
-            onClick={() => {
-              const target = selectedInfoQuotation || quotations[0];
-              if (target) {
-                setSelectedFullDbQuotation(target);
-                setIsFullDbModalOpen(true);
-              }
-            }}
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-b from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 border border-blue-300 text-blue-900 rounded-md shadow-xs transition cursor-pointer text-xs font-bold shrink-0"
-            title="View Full Database Record & Schema"
-          >
-            <Database className="w-3.5 h-3.5 text-blue-600" />
-            <span>View Full Record (DB)</span>
           </button>
 
           <div className="relative shrink-0" ref={actionsMenuRef}>
@@ -916,7 +1101,8 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                     { val: 'requisition', label: 'REQUISITION' },
                     { val: 'draft', label: 'DRAFT / IN PROGRESS' },
                     { val: 'quotation', label: 'QUOTATION' },
-                    { val: 'done', label: 'DONE' }
+                    { val: 'ready_send', label: 'SIAP KIRIM' },
+                    { val: 'done_send', label: 'DONE / TERKIRIM' }
                   ].map((stItem) => (
                     <button
                       key={stItem.val}
@@ -942,8 +1128,16 @@ export const QuotationList: React.FC<QuotationListProps> = ({
         </div>
       )}
 
+      {/* PDF GENERATION IN PROGRESS BANNER INDICATOR */}
+      {generatingPdfId && (
+        <div className="bg-amber-500 text-amber-950 px-4 py-2 text-xs font-bold border-b border-amber-600 flex items-center justify-center gap-2 shadow-sm animate-pulse z-30 shrink-0">
+          <Loader2 className="w-4 h-4 text-amber-950 animate-spin shrink-0" />
+          <span>Generating SPH PDF via Puppeteer Headless Chrome... Please wait a moment (Status updating automatically to ACC).</span>
+        </div>
+      )}
+
       {/* FULL WIDTH EDGE-TO-EDGE TABLE CONTAINER */}
-      <div className="flex-1 p-0 overflow-y-auto space-y-0 w-full bg-[#f0f0f0]">
+      <div className="flex-1 p-0 overflow-y-auto space-y-0 w-full bg-[#f0f0f0] flex flex-col min-h-full">
         
         {isLoading ? (
           <div className="py-24 text-center space-y-2">
@@ -951,7 +1145,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
             <p className="text-xs font-bold text-slate-600">Fetching SPH quotations from MySQL database...</p>
           </div>
         ) : (
-          <div className="w-full overflow-x-auto border-t border-b border-[rgba(0,0,0,0.2)]">
+          <div className="w-full flex-1 min-h-[calc(100vh-140px)] overflow-x-auto border-t border-b border-[rgba(0,0,0,0.2)] bg-white pb-36">
             <table className="w-full text-left text-xs font-sans border-collapse relative">
               <thead className="sticky top-0 z-20 bg-slate-900 text-white border-b border-slate-800 font-bold text-[11px] uppercase tracking-wider shadow-xs">
                 <tr>
@@ -984,14 +1178,15 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-28 text-right">Tax Amount</th>}
                   <th className="p-2.5 border-r border-slate-800 w-44 text-right">Grand Total (RM)</th>
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-36">Notes</th>}
-                  <th className="p-2.5 border-r border-slate-800 w-36 text-center">Status / Phase</th>
+                  <th className="p-2.5 border-r border-slate-800 w-36 text-center">Status</th>
+                  <th className="p-2.5 border-r border-slate-800 w-28 text-center">File</th>
                   <th className="p-2.5 border-r border-slate-800 w-24 text-center">OCR Scan</th>
                   <th className="p-2.5 border-r border-slate-800 w-48">Petugas & Aktivitas</th>
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-32 text-center">Approved By</th>}
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-28 text-center">Created By</th>}
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-36 text-center">Created At</th>}
                   <th className="p-2.5 border-r border-slate-800 w-28 text-center">Alerts</th>
-                  <th className="p-2.5 text-center w-28">Actions</th>
+                  <th className="p-2.5 text-center w-28 sticky right-0 z-30 bg-slate-900 border-l border-slate-800 shadow-[-3px_0_6px_rgba(0,0,0,0.25)]">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1008,9 +1203,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   const isActive = activeRowId === q.id;
 
                   const st = (q.status || 'draft').toLowerCase();
-                  const isDraft = st === 'draft' || st === 'diproses' || st === 'siap_kirim' || st === 'in_progress';
+                  const isDone = st === 'done_send' || st === 'sent' || st === 'deal' || st === 'terkirim' || st === 'penawaran_terkirim';
+                  const isDraft = (st === 'draft' || st === 'diproses' || st === 'siap_kirim' || st === 'in_progress') && !isReadyForSend(q);
                   const isQuotation = st === 'quotation' || st === 'quotation_build';
-                  const isDone = st === 'done_send' || st === 'sent' || st === 'approved' || st === 'acc' || st === 'deal' || st === 'terkirim' || st === 'disetujui' || st === 'penawaran_terkirim';
+                  const isReadySend = st === 'ready_send' || st === 'acc' || st === 'approved' || st === 'disetujui' || (isReadyForSend(q) && !isDone && st !== 'requisition');
 
                   let rowBgClass = isEven ? 'bg-[#F1F4F7]' : 'bg-[#FAFAFA]';
                   if (isActive) rowBgClass = 'bg-[#3d3d3d] text-white';
@@ -1142,65 +1338,70 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                           <div className="truncate max-w-[140px]" title={q.notes}>{q.notes || '—'}</div>
                         </td>
                       )}
+                      
+                      {/* STATUS CELL — status badge saja, tanpa PDF indicator */}
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center text-xs font-sans">
-                        {q.pdf_created === 1 || q.status === 'acc' ? (
-                          <div className="flex flex-col items-center justify-center text-[10.5px] font-sans">
-                            <span className="font-extrabold text-emerald-700 inline-flex items-center gap-1">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                              <span>PDF ✔ (ACC)</span>
+                        <div className="flex flex-col items-center gap-1">
+                          {generatingPdfId === q.id ? (
+                            <span className="font-extrabold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-300 inline-flex items-center gap-1 text-[11px] animate-pulse" title="Puppeteer Headless Chrome is generating SPH PDF in background...">
+                              <Loader2 className="w-3.5 h-3.5 text-amber-600 animate-spin shrink-0" />
+                              <span>Generating PDF...</span>
                             </span>
-                            <div className="flex items-center gap-1.5 mt-0.5 font-mono text-[9.5px]">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedPdfViewerQuotation(q);
-                                  setIsPdfViewerModalOpen(true);
-                                }}
-                                className="text-blue-600 hover:text-blue-800 underline font-bold cursor-pointer inline-flex items-center gap-0.5"
-                                title="View PDF in Popup Modal"
-                              >
-                                <Eye className="w-3 h-3 text-blue-600" />
-                                <span>Popup</span>
-                              </button>
-                              <span className="text-slate-300">•</span>
-                              <a
-                                href={getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${q.id}`)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-purple-600 hover:text-purple-800 underline font-bold cursor-pointer inline-flex items-center gap-0.5"
-                                title="Open PDF in New Browser Tab"
-                              >
-                                <ExternalLink className="w-3 h-3 text-purple-600" />
-                                <span>Tab ↗</span>
-                              </a>
-                            </div>
-                          </div>
-                        ) : st === 'requisition' ? (
-                          <span className="font-extrabold text-amber-700 inline-flex items-center gap-1">
-                            <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                            Requisition
-                          </span>
-                        ) : isDraft ? (
-                          <span className="font-extrabold text-amber-600 inline-flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                            In Progress (Draft)
-                          </span>
-                        ) : isQuotation ? (
-                          <span className="font-extrabold text-blue-700 inline-flex items-center gap-1">
-                            <Sliders className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                            Quotation
-                          </span>
-                        ) : isDone ? (
-                          <span className="font-extrabold text-emerald-700 inline-flex items-center gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            Done
-                          </span>
+                          ) : st === 'requisition' ? (
+                            <span className="font-extrabold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded inline-flex items-center gap-1 text-[11px]">
+                              <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              Requisition
+                            </span>
+                          ) : isDone ? (
+                            <span className="font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded inline-flex items-center gap-1 text-[11px]">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              Done / Terkirim
+                            </span>
+                          ) : isReadySend ? (
+                            <span className="font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-300 px-2 py-0.5 rounded inline-flex items-center gap-1 text-[11px]">
+                              <Send className="w-3 h-3 text-indigo-600 shrink-0" />
+                              Siap Kirim
+                            </span>
+                          ) : isQuotation ? (
+                            <span className="font-extrabold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded inline-flex items-center gap-1 text-[11px]">
+                              <Sliders className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                              Quotation
+                            </span>
+                          ) : isDraft ? (
+                            <span className="font-extrabold text-amber-600 bg-amber-50/80 border border-amber-200 px-2 py-0.5 rounded inline-flex items-center gap-1 text-[11px]">
+                              <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              Draft
+                            </span>
+                          ) : (
+                            <span className="font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-[11px]">
+                              {q.status || 'Draft'}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* FILE COLUMN CELL */}
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center text-xs font-sans">
+                        {(Boolean(q.quotation_file) || q.pdf_created === 1) ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedPdfViewerQuotation(q);
+                              setIsPdfViewerModalOpen(true);
+                            }}
+                            className="font-extrabold text-emerald-700 hover:text-emerald-900 bg-emerald-50/90 border border-emerald-300 px-1.5 py-0.5 rounded inline-flex items-center gap-1 text-[10px] cursor-pointer hover:bg-emerald-100 transition shadow-2xs"
+                            title={q.quotation_file || 'PDF tersedia — klik untuk preview'}
+                          >
+                            <FileText className="w-3 h-3 text-emerald-600 shrink-0" />
+                            <span className="truncate max-w-[80px]">
+                              {q.quotation_file
+                                ? q.quotation_file.substring(q.quotation_file.lastIndexOf('/') + 1)
+                                : 'PDF SPH'}
+                            </span>
+                          </button>
                         ) : (
-                          <span className="font-bold text-slate-700">
-                            {q.status || 'Draft'}
-                          </span>
+                          <span className="text-slate-300 font-mono text-[11px]">—</span>
                         )}
                       </td>
 
@@ -1244,10 +1445,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                           }
                           const latestLog = Array.isArray(logsArr) && logsArr.length > 0 ? logsArr[logsArr.length - 1] : null;
                           
-                          const rawActorName = latestLog?.user_name || q.created_by || currentUserRef.current?.name || currentUserRef.current?.email || 'Sesi Tidak Terdeteksi';
+                          const rawActorName = latestLog?.user_name || q.created_by || getSessionActorName();
                           const lowerActor = rawActorName.toLowerCase();
                           const isDummyActor = lowerActor.includes('sales engineer') || lowerActor.includes('ilham') || lowerActor.includes('system') || lowerActor.includes('ocr daemon');
-                          const actorName = isDummyActor ? (q.created_by || currentUserRef.current?.name || currentUserRef.current?.email || 'Sesi Tidak Terdeteksi') : rawActorName;
+                          const actorName = isDummyActor ? (q.created_by || getSessionActorName()) : rawActorName;
                           const actionTitle = latestLog?.action || 'Record Initialized';
                           const logTime    = latestLog?.timestamp ? (latestLog.timestamp.split(' ')[1] || latestLog.timestamp).substring(0, 5) : '';
 
@@ -1299,35 +1500,58 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                       )}
 
                       {/* ALERTS CELL */}
-                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center text-xs font-sans">
-                        {q.unregistered_items_count && q.unregistered_items_count > 0 && (st === 'requisition' || st === 'draft' || st === 'diproses' || st === 'siap_kirim') ? (
-                          <span className="font-extrabold text-amber-800 inline-flex items-center gap-1 text-[10px]" title={`${q.unregistered_items_count} item(s) not found in product database`}>
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                            <span>{q.unregistered_items_count} Unregistered</span>
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 font-bold">-</span>
-                        )}
+                      <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center text-xs font-sans" onClick={(e) => e.stopPropagation()}>
+                        {(() => {
+                          const alerts = getQuotationAlerts(q);
+                          if (alerts.length === 0) {
+                            return <span className="text-slate-400 font-bold">-</span>;
+                          }
+                          const hasError = alerts.some(a => a.severity === 'error');
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedAlertQuotation(q);
+                                setIsAlertModalOpen(true);
+                              }}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-black cursor-pointer transition shadow-2xs ${
+                                hasError
+                                  ? 'bg-rose-100 text-rose-800 hover:bg-rose-200 border border-rose-300'
+                                  : 'bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300'
+                              }`}
+                              title={`Klik untuk melihat detail ${alerts.length} alert pada SPH ini`}
+                            >
+                              <AlertTriangle className={`w-3.5 h-3.5 ${hasError ? 'text-rose-600' : 'text-amber-600'}`} />
+                              <span>{alerts.length}</span>
+                            </button>
+                          );
+                        })()}
                       </td>
 
-                      {/* ACTIONS BUTTONS */}
-                      <td className="p-2 text-center relative" onClick={(e) => e.stopPropagation()}>
+                      {/* ACTIONS BUTTONS (FROZEN ON RIGHT) */}
+                      <td 
+                        className={`p-2 text-center sticky right-0 z-20 border-l border-[rgba(0,0,0,0.1)] shadow-[-3px_0_6px_rgba(0,0,0,0.06)] ${isActive ? 'bg-[#3d3d3d] text-white' : isEven ? 'bg-[#F1F4F7]' : 'bg-[#FAFAFA]'}`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <div className="flex items-center justify-center gap-1">
                           
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onEditQuotation(q);
-                            }}
-                            className="p-1 text-blue-600 hover:text-blue-900 hover:bg-blue-100 rounded-md transition cursor-pointer"
-                            title="Edit SPH in Quotation Builder"
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
+                          {(isReadySend || isReadyForSend(q)) && !isDone && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSendConfirmQuotation(q);
+                              }}
+                              className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded text-[10px] inline-flex items-center gap-1 shadow-2xs transition cursor-pointer shrink-0"
+                              title="Kirim Penawaran ke Client"
+                            >
+                              <Send className="w-3 h-3 text-white" />
+                              <span>Kirim</span>
+                            </button>
+                          )}
 
                           {/* Kebab action dropdown */}
-                          <div className="relative">
+                          <div className="relative row-action-dropdown-container">
                             <button
                               type="button"
                               onClick={(e) => {
@@ -1341,9 +1565,39 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                             </button>
 
                             {openRowActionId === q.id && (
-                              <div className="absolute right-0 mt-1 w-48 bg-white border border-[#9b9b9b] rounded-md shadow-lg z-50 py-1 text-left font-sans text-xs">
+                              <div className={`absolute right-0 w-48 bg-white border border-[#9b9b9b] rounded-md shadow-2xl z-50 py-1 text-left font-sans text-xs ${idx >= filteredQuotations.length - 2 && filteredQuotations.length > 2 ? 'bottom-full mb-1' : 'mt-1'}`}>
                                 
-                                {/* 1. CREATE PDF (Background Download + Move to ACC) */}
+                                {/* EDIT SPH / QUOTATION */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenRowActionId(null);
+                                    onEditQuotation(q);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-blue-50 text-blue-900 transition flex items-center gap-2 cursor-pointer font-bold border-b border-slate-100"
+                                >
+                                  <Edit className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>Edit SPH / Quotation</span>
+                                </button>
+
+                                {/* OPEN IN EMAIL CLIENT */}
+                                {onOpenEmailClient && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenRowActionId(null);
+                                      onOpenEmailClient(q);
+                                    }}
+                                    className="w-full text-left px-3.5 py-2 hover:bg-indigo-50 text-indigo-900 transition flex items-center gap-2 cursor-pointer font-semibold border-b border-slate-100"
+                                  >
+                                    <Mail className="w-3.5 h-3.5 text-indigo-600" />
+                                    <span>Open in Email Client</span>
+                                  </button>
+                                )}
+
+                                {/* 1. CREATE PDF (Background Download) */}
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -1362,8 +1616,8 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   <span>
                                     {generatingPdfId === q.id
                                       ? 'Generating PDF...'
-                                      : q.pdf_created === 1 || q.status === 'acc'
-                                      ? 'Re-Create PDF (ACC)'
+                                      : q.pdf_created === 1
+                                      ? 'Re-Create PDF'
                                       : 'Create PDF'}
                                   </span>
                                 </button>
@@ -1382,7 +1636,22 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   <span>Lihat & Cetak SPH (HTML)</span>
                                 </button>
 
-                                {/* 3. TO BUILDER */}
+                                {/* 3. BUAT INVOICE */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenRowActionId(null);
+                                    const invUrl = `/view_doc.php?type=invoice&id=${encodeURIComponent(q.id)}`;
+                                    window.open(invUrl, '_blank');
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-purple-50 text-purple-900 transition flex items-center gap-2 cursor-pointer font-bold border-t border-slate-100"
+                                >
+                                  <FileType className="w-3.5 h-3.5 text-purple-600" />
+                                  <span>Buat Invoice</span>
+                                </button>
+
+                                {/* 4. TO BUILDER */}
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -1396,7 +1665,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   <span>To Builder</span>
                                 </button>
 
-                                {/* 3. VIEW LOG */}
+                                {/* 5. VIEW LOG */}
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -1411,21 +1680,34 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   <span>View Log</span>
                                 </button>
 
-                                {/* 4. KIRIM EMAIL — ONLY IF ACC / PDF CREATED */}
-                                {(q.status === 'acc' || q.pdf_created === 1 || activeTab === 'acc') && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setOpenRowActionId(null);
-                                      onSendEmail(q);
-                                    }}
-                                    className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 text-emerald-900 transition flex items-center gap-2 cursor-pointer font-bold border-t border-slate-100"
-                                  >
-                                    <Send className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span>Kirim Email (Attach PDF)</span>
-                                  </button>
-                                )}
+                                {/* 6. KIRIM EMAIL */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenRowActionId(null);
+                                    onSendEmail(q);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 text-emerald-900 transition flex items-center gap-2 cursor-pointer font-bold border-t border-slate-100"
+                                >
+                                  <Send className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Kirim Email (Attach PDF)</span>
+                                </button>
+
+                                {/* 7. VIEW FULL RECORD (DB) */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenRowActionId(null);
+                                    setSelectedFullDbQuotation(q);
+                                    setIsFullDbModalOpen(true);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-blue-50 text-blue-900 transition flex items-center gap-2 cursor-pointer font-bold border-t border-slate-100"
+                                >
+                                  <Database className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>View Full Record (DB)</span>
+                                </button>
 
                                 <div className="border-t border-slate-100 my-1"></div>
 
@@ -1457,6 +1739,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
         )}
 
       </div>
+
 
       {/* HISTORY AUDIT TRAIL LOG MODAL */}
       {isHistoryModalOpen && selectedHistoryQuotation && (
@@ -1606,6 +1889,46 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
+                  {/* Create Quotation Button */}
+                  <button
+                    onClick={() => handleCreatePdfBackground(activeQuotation)}
+                    disabled={generatingPdfId === activeQuotation.id}
+                    className="p-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded font-extrabold text-[10px] transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-2xs"
+                    title="Generate PDF SPH & buat file quotation"
+                  >
+                    {generatingPdfId === activeQuotation.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <FileType className="w-3.5 h-3.5" />
+                    )}
+                    <span>{generatingPdfId === activeQuotation.id ? 'Generating...' : 'Create Quotation'}</span>
+                  </button>
+
+                  {/* View PDF Button */}
+                  <button
+                    onClick={() => {
+                      setSelectedPdfViewerQuotation(activeQuotation);
+                      setIsPdfViewerModalOpen(true);
+                    }}
+                    className="p-1.5 bg-gradient-to-b from-emerald-50 to-emerald-100 hover:from-emerald-100 hover:to-emerald-200 border border-emerald-300 text-emerald-900 rounded font-extrabold text-[10px] transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                    title="View PDF preview in popup modal"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>View PDF</span>
+                  </button>
+
+                  {/* TOMBOL KIRIM PENAWARAN — muncul jika siap kirim, belum done */}
+                  {isReadyForSend(activeQuotation) && !(['done_send','sent','deal','terkirim','penawaran_terkirim'].includes((activeQuotation.status || '').toLowerCase())) && (
+                    <button
+                      onClick={() => setSendConfirmQuotation(activeQuotation)}
+                      className="p-1.5 bg-gradient-to-b from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded font-extrabold text-[10px] transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                      title="Kirim penawaran ke klien"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Kirim Penawaran</span>
+                    </button>
+                  )}
+
                   {/* OCR Scan Trigger */}
                   <button
                     onClick={() => {
@@ -1770,18 +2093,21 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                         <span className="text-slate-500 font-bold text-[10px] uppercase tracking-wider">Status:</span>
                         {(() => {
                           const st = (activeQuotation.status || 'draft').toLowerCase();
-                          const isDraft = st === 'draft' || st === 'diproses' || st === 'siap_kirim' || st === 'in_progress';
-                          const isQuotation = st === 'quotation' || st === 'quotation_build';
-                          const isDone = st === 'done_send' || st === 'sent' || st === 'approved' || st === 'acc' || st === 'deal' || st === 'terkirim' || st === 'disetujui' || st === 'penawaran_terkirim';
+                          const isDoneDrawer = st === 'done_send' || st === 'sent' || st === 'deal' || st === 'terkirim' || st === 'penawaran_terkirim';
+                          const isReadySendDrawer = st === 'ready_send' || st === 'acc' || st === 'approved' || st === 'disetujui' || (isReadyForSend(activeQuotation) && !isDoneDrawer && st !== 'requisition');
+                          const isDraftDrawer = (st === 'draft' || st === 'diproses' || st === 'siap_kirim' || st === 'in_progress') && !isReadySendDrawer;
+                          const isQuotationDrawer = st === 'quotation' || st === 'quotation_build';
 
                           if (st === 'requisition') {
                             return <span className="bg-amber-50 text-amber-800 border border-amber-300 font-black px-2 py-0.5 rounded-sm uppercase text-[9px]">Requisition</span>;
-                          } else if (isDraft) {
-                            return <span className="bg-amber-100 text-amber-800 border border-amber-200 font-black px-2 py-0.5 rounded-sm uppercase text-[9px]">In Progress (Draft)</span>;
-                          } else if (isQuotation) {
+                          } else if (isDoneDrawer) {
+                            return <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 font-black px-2 py-0.5 rounded-sm uppercase text-[9px]">Done / Terkirim</span>;
+                          } else if (isReadySendDrawer) {
+                            return <span className="bg-indigo-50 text-indigo-800 border border-indigo-300 font-black px-2 py-0.5 rounded-sm uppercase text-[9px]">Siap Kirim</span>;
+                          } else if (isDraftDrawer) {
+                            return <span className="bg-amber-100 text-amber-800 border border-amber-200 font-black px-2 py-0.5 rounded-sm uppercase text-[9px]">Draft</span>;
+                          } else if (isQuotationDrawer) {
                             return <span className="bg-blue-50 text-blue-900 border border-blue-200 font-black px-2 py-0.5 rounded-sm uppercase text-[9px]">Quotation</span>;
-                          } else if (isDone) {
-                            return <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 font-black px-2 py-0.5 rounded-sm uppercase text-[9px]">Done</span>;
                           }
                           return <span className="bg-slate-200 font-bold px-2 py-0.5 rounded-sm uppercase text-[9px]">{activeQuotation.status}</span>;
                         })()}
@@ -1790,6 +2116,28 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                         Date Issued: <strong className="text-slate-800">{activeQuotation.date_issued}</strong>
                       </div>
                     </div>
+
+                    {/* Alerts Warning Banner in Full Info */}
+                    {(() => {
+                      const alerts = getQuotationAlerts(activeQuotation);
+                      if (alerts.length === 0) return null;
+                      return (
+                        <div className="mb-3 bg-amber-50/90 border border-amber-300 rounded-md p-2.5 shadow-2xs">
+                          <div className="flex items-center gap-1.5 text-amber-900 font-extrabold text-[11px] mb-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                            <span>Quotation Warnings & Alerts ({alerts.length} Active Warnings):</span>
+                          </div>
+                          <div className="space-y-1">
+                            {alerts.map((al) => (
+                              <div key={al.id} className="flex items-start gap-1.5 text-[10px] text-amber-950">
+                                <span className="font-bold shrink-0">• {al.title}:</span>
+                                <span className="text-amber-900">{al.description}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Client & Document Details (Flat Rows with Left Border Highlights) */}
                     <div className="pt-3 space-y-3">
@@ -1883,39 +2231,91 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                             <span className="text-slate-400 font-mono text-[10px] italic">Belum ditentukan</span>
                           )}
                         </div>
-                        <div className="col-span-3 border-l-2 border-slate-300 pl-2.5">
+                        {/* Document & Files Section (File Sumber RFQ, File Quotation SPH, File Quotation Invoice) */}
+                        <div className="col-span-3 border-l-2 border-indigo-500 pl-2.5 bg-slate-50/80 p-2.5 rounded border border-slate-200 mt-1">
+                          <h4 className="text-[9.5px] text-slate-700 uppercase font-extrabold tracking-wider mb-2 flex items-center gap-1">
+                            <FileText className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                            <span>Berkas & Dokumen File (RFQ, SPH & Invoice)</span>
+                          </h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px]">
+                            {/* 1. File Sumber RFQ */}
+                            <div className="bg-white p-2 rounded border border-slate-200 shadow-2xs">
+                              <span className="text-slate-400 font-extrabold text-[9px] block uppercase tracking-wider mb-1">File Sumber RFQ:</span>
+                              {(() => {
+                                let fileUrl = activeQuotation.source_file || activeQuotation.email_source?.attachment_url || '';
+                                if ((!fileUrl || fileUrl === 'NONE') && activeQuotation.ocr_scan_result) {
+                                  try {
+                                    const parsedOcr = JSON.parse(activeQuotation.ocr_scan_result);
+                                    fileUrl = parsedOcr?.file_url || '';
+                                  } catch (e) {}
+                                }
+                                if (!fileUrl || fileUrl === 'NONE') {
+                                  return <span className="font-mono text-slate-400 italic">Tidak ada lampiran</span>;
+                                }
+                                const isDrive = fileUrl.toLowerCase().includes('drive.google') || fileUrl.toLowerCase().includes('docs.google') || fileUrl.toLowerCase().includes('gdrive');
+                                let filename = fileUrl;
+                                if (fileUrl.includes('fn=')) {
+                                  const match = fileUrl.match(/fn=([^&]+)/);
+                                  if (match) filename = decodeURIComponent(match[1]);
+                                } else if (fileUrl.includes('/')) {
+                                  filename = fileUrl.substring(fileUrl.lastIndexOf('/') + 1);
+                                }
+                                return (
+                                  <a
+                                    href={fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-bold text-blue-600 hover:underline flex items-center gap-1 font-mono text-[10px] truncate"
+                                    title={fileUrl}
+                                  >
+                                    <Download className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                    <span className="truncate">{isDrive ? 'Google Drive Link' : filename}</span>
+                                  </a>
+                                );
+                              })()}
+                            </div>
 
-                          <h4 className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Source Attachment</h4>
-                          {(() => {
-                            let fileUrl = activeQuotation.email_source?.attachment_url || '';
-                            if ((!fileUrl || fileUrl === 'NONE') && activeQuotation.ocr_scan_result) {
-                              try {
-                                const parsedOcr = JSON.parse(activeQuotation.ocr_scan_result);
-                                fileUrl = parsedOcr?.file_url || '';
-                              } catch (e) {}
-                            }
-                            if (!fileUrl || fileUrl === 'NONE') {
-                              return <span className="font-mono text-slate-400">None attached</span>;
-                            }
-                            const isDrive = fileUrl.toLowerCase().includes('drive.google') || fileUrl.toLowerCase().includes('docs.google') || fileUrl.toLowerCase().includes('gdrive');
-                            let filename = fileUrl;
-                            if (fileUrl.includes('fn=')) {
-                              const match = fileUrl.match(/fn=([^&]+)/);
-                              if (match) filename = decodeURIComponent(match[1]);
-                            } else if (fileUrl.includes('/')) {
-                              filename = fileUrl.substring(fileUrl.lastIndexOf('/') + 1);
-                            }
-                            return (
-                              <a
-                                href={fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="font-bold text-blue-600 hover:underline flex items-center gap-0.5 font-mono text-[10px] break-all"
-                              >
-                                {isDrive ? 'File: Google Drive' : `File: ${filename}`}
-                              </a>
-                            );
-                          })()}
+                            {/* 2. File Quotation SPH */}
+                            <div className="bg-white p-2 rounded border border-slate-200 shadow-2xs">
+                              <span className="text-slate-400 font-extrabold text-[9px] block uppercase tracking-wider mb-1">File Quotation SPH (PDF):</span>
+                              {activeQuotation.quotation_file || activeQuotation.pdf_created === 1 ? (
+                                <div className="flex items-center justify-between gap-1">
+                                  <a
+                                    href={activeQuotation.quotation_file || `/uploads/pdf/${activeQuotation.quotation_number || activeQuotation.id}.pdf`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-bold text-emerald-700 hover:underline flex items-center gap-1 font-mono text-[10px] truncate"
+                                    title="Download / Buka File PDF Quotation"
+                                  >
+                                    <FileText className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span className="truncate">{activeQuotation.quotation_number || activeQuotation.id}.pdf</span>
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedPdfViewerQuotation(activeQuotation);
+                                      setIsPdfViewerModalOpen(true);
+                                    }}
+                                    className="text-[9px] font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded hover:bg-emerald-100 cursor-pointer shrink-0"
+                                  >
+                                    Preview
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="font-mono text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded text-[9.5px] font-semibold block border border-amber-200">
+                                  Belum dibuat (Klik 'Create Quotation')
+                                </span>
+                              )}
+                            </div>
+
+                            {/* 3. File Quotation Invoice */}
+                            <div className="bg-white p-2 rounded border border-slate-200 shadow-2xs">
+                              <span className="text-slate-400 font-extrabold text-[9px] block uppercase tracking-wider mb-1">File Quotation Invoice:</span>
+                              <span className="font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded text-[9.5px] block border border-slate-200 italic">
+                                Belum dibuat (Invoice Plan)
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -2204,10 +2604,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                 <span className="font-mono text-[9px] text-slate-400">{entry.timestamp}</span>
                               </div>
                               {(() => {
-                                const rawLogName = entry.user_name || activeQuotation.created_by || currentUserRef.current?.name || currentUserRef.current?.email || 'Sesi Tidak Terdeteksi';
+                                const rawLogName = entry.user_name || activeQuotation.created_by || getSessionActorName();
                                 const lowerLogName = rawLogName.toLowerCase();
                                 const isDummyLog = lowerLogName.includes('sales engineer') || lowerLogName.includes('ilham') || lowerLogName.includes('system') || lowerLogName.includes('ocr daemon');
-                                const displayLogName = isDummyLog ? (activeQuotation.created_by || currentUserRef.current?.name || currentUserRef.current?.email || 'Sesi Tidak Terdeteksi') : rawLogName;
+                                const displayLogName = isDummyLog ? (activeQuotation.created_by || getSessionActorName()) : rawLogName;
                                 const displayEmail = (entry.user_email && !entry.user_email.toLowerCase().includes('system@') && !entry.user_email.toLowerCase().includes('daemon@'))
                                   ? entry.user_email
                                   : (currentUserRef.current?.email || '');
@@ -2273,8 +2673,8 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                       />
                       <button
                         onClick={() => {
-                          const userName = 'Admin';
-                          const userEmail = 'admin@abmalaya.com';
+                          const userName = currentUserRef.current?.name || currentUserRef.current?.email || 'Admin';
+                          const userEmail = currentUserRef.current?.email || 'admin@abmalaya.com';
                           fetch(getApiUrl('/api_quotations.php'), {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -2292,9 +2692,9 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                 let current: any[] = [];
                                 try { if (activeQuotation.approved_by) current = JSON.parse(activeQuotation.approved_by); } catch(e) {}
                                 current.push({ timestamp: new Date().toISOString().replace('T',' ').substring(0,19), user_name: userName, user_email: userEmail, note: accNote });
-                                setQuotations(prev => prev.map(q => q.id === activeQuotation.id ? { ...q, approved_by: JSON.stringify(current) } : q));
+                                setQuotations(prev => prev.map(q => q.id === activeQuotation.id ? { ...q, approved_by: JSON.stringify(current), status: 'ready_send' } : q));
                                 setAccNote('');
-                                alert('ACC Approval successfully recorded!');
+                                alert('ACC Approval berhasil dicatat dan status SPH otomatis masuk ke Siap Kirim (ready_send)!');
                               }
                             })
                             .catch(e => console.error('ACC error:', e));
@@ -2846,7 +3246,18 @@ onClick={() => {
               </div>
               <div className="flex items-center gap-2">
                 <a
-                  href={getApiUrl(`/api_pdf.php?action=download&type=quotation&id=${selectedPdfViewerQuotation.id}`)}
+                  href={getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${selectedPdfViewerQuotation.id}&t=${Date.now()}`)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-[11px] rounded transition flex items-center gap-1"
+                  title="Open PDF stream in new browser tab"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-white" />
+                  <span>Open in New Tab ↗</span>
+                </a>
+
+                <a
+                  href={getApiUrl(`/api_pdf.php?action=download&type=quotation&id=${selectedPdfViewerQuotation.id}&t=${Date.now()}`)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] rounded transition flex items-center gap-1"
@@ -2866,11 +3277,324 @@ onClick={() => {
             </div>
             <div className="flex-1 bg-slate-100 relative">
               <iframe
-                src={getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${selectedPdfViewerQuotation.id}`)}
+                src={getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${selectedPdfViewerQuotation.id}&t=${Date.now()}`)}
                 className="w-full h-full border-0"
                 title={`PDF Preview ${selectedPdfViewerQuotation.id}`}
               />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ALERT DETAILS POPUP MODAL */}
+      {isAlertModalOpen && selectedAlertQuotation && (
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in font-sans"
+          onClick={() => {
+            setIsAlertModalOpen(false);
+            setSelectedAlertQuotation(null);
+          }}
+        >
+          <div
+            className="bg-white rounded-lg shadow-2xl w-full max-w-lg flex flex-col overflow-hidden border border-slate-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-slate-900 text-white px-4 py-3 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <div>
+                  <h3 className="font-extrabold text-xs">
+                    Quotation Alerts & Warnings — {selectedAlertQuotation.quotation_number || selectedAlertQuotation.id}
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-mono">
+                    {getQuotationCompany(selectedAlertQuotation)} ({selectedAlertQuotation.client_name || 'Client'})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsAlertModalOpen(false);
+                  setSelectedAlertQuotation(null);
+                }}
+                className="p-1 text-slate-400 hover:text-white hover:bg-rose-600 rounded transition cursor-pointer"
+              >
+                <CloseIcon className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 overflow-y-auto max-h-[70vh] space-y-3 bg-slate-50">
+              {(() => {
+                const alerts = getQuotationAlerts(selectedAlertQuotation);
+                if (alerts.length === 0) {
+                  return (
+                    <div className="py-8 text-center text-slate-500 text-xs">
+                      <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                      <p className="font-bold">No warnings or alerts for this quotation.</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">All items, pricing, and PDF documents are complete.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-2.5">
+                    <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                      Found {alerts.length} item(s) requiring attention:
+                    </p>
+                    {alerts.map((al) => {
+                      const isErr = al.severity === 'error';
+                      return (
+                        <div
+                          key={al.id}
+                          className={`p-3 rounded-lg border flex items-start gap-3 shadow-xs ${
+                            isErr
+                              ? 'bg-rose-50 border-rose-200 text-rose-900'
+                              : 'bg-amber-50 border-amber-200 text-amber-900'
+                          }`}
+                        >
+                          <div className={`p-1.5 rounded-full shrink-0 mt-0.5 ${
+                            isErr ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'
+                          }`}>
+                            {al.type === 'missing_price' && <DollarSign className="w-4 h-4" />}
+                            {al.type === 'missing_file' && <FileText className="w-4 h-4" />}
+                            {al.type === 'unregistered' && <AlertTriangle className="w-4 h-4" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-extrabold text-xs">{al.title}</h4>
+                            <p className="text-[11px] mt-0.5 leading-relaxed opacity-90">{al.description}</p>
+                            
+                            {/* Action helper */}
+                            {al.type === 'missing_price' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsAlertModalOpen(false);
+                                  onEditQuotation(selectedAlertQuotation);
+                                }}
+                                className="mt-2 text-[10px] font-extrabold text-rose-700 hover:text-rose-900 underline inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <Edit className="w-3 h-3" />
+                                <span>Open Quotation Builder to Set Prices</span>
+                              </button>
+                            )}
+
+                            {al.type === 'missing_file' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsAlertModalOpen(false);
+                                  handleCreatePdfBackground(selectedAlertQuotation);
+                                }}
+                                className="mt-2 text-[10px] font-extrabold text-amber-800 hover:text-amber-950 underline inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <FileType className="w-3 h-3" />
+                                <span>Generate Quotation PDF Now</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div className="px-4 py-2.5 bg-white border-t border-slate-200 flex justify-between items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const target = selectedAlertQuotation;
+                  setIsAlertModalOpen(false);
+                  setSelectedInfoQuotation(target);
+                  setActiveRowId(target.id);
+                  setIsInfoModalOpen(true);
+                }}
+                className="text-xs font-bold text-blue-700 hover:text-blue-900 flex items-center gap-1 cursor-pointer"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Open Full Info</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAlertModalOpen(false);
+                  setSelectedAlertQuotation(null);
+                }}
+                className="bg-slate-800 hover:bg-slate-700 text-white font-bold px-3 py-1.5 rounded text-xs transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SEND QUOTATION CONFIRMATION POPUP MODAL */}
+      {sendConfirmQuotation && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
+          <div className="bg-white border border-slate-300 rounded-xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden font-sans">
+            
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 px-5 py-3.5 flex items-center justify-between text-white border-b border-indigo-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-600/30 rounded-lg border border-indigo-400/30">
+                  <Send className="w-5 h-5 text-indigo-300" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm tracking-wide">Konfirmasi Kirim Penawaran</h3>
+                  <p className="text-[11px] text-slate-300">Quotation / SPH #{sendConfirmQuotation.quotation_number}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSendConfirmQuotation(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-white/10 transition cursor-pointer"
+              >
+                <CloseIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content Details */}
+            <div className="p-5 space-y-4 text-xs bg-slate-50/50">
+
+              {/* Safety Banner */}
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-2.5 flex items-center gap-2 font-semibold text-[11px]">
+                <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Mode Keamanan Aktif: Pengiriman email otomatis langsung diblokir. Status diperbarui di sistem internal.</span>
+              </div>
+              
+              {/* Recipient Details (Dikirim Ke) */}
+              <div className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs space-y-2">
+                <div className="flex items-center gap-1.5 text-slate-500 font-bold text-[11px] uppercase tracking-wider">
+                  <User className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Klien Terkait</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-semibold">Perusahaan / Klien:</span>
+                    <span className="font-extrabold text-slate-900 text-sm">
+                      {sendConfirmQuotation.company_name || sendConfirmQuotation.client_name || '-'}
+                    </span>
+                    {sendConfirmQuotation.client_name && sendConfirmQuotation.company_name && (
+                      <span className="text-[11px] text-slate-500 block font-medium">Attn: {sendConfirmQuotation.client_name}</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-semibold">Email Penerima:</span>
+                    <span className="font-mono font-bold text-blue-700 text-xs break-all">
+                      {sendConfirmQuotation.client_email || <span className="text-amber-600 italic">Email belum diisi</span>}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quotation / SPH Details (Sebagai) */}
+              <div className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs space-y-2">
+                <div className="flex items-center gap-1.5 text-slate-500 font-bold text-[11px] uppercase tracking-wider">
+                  <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Sebagai (Quotation / SPH)</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 border-t border-slate-100">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-semibold">No. Quotation:</span>
+                    <span className="font-mono font-black text-indigo-900 text-xs">{sendConfirmQuotation.quotation_number}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-semibold">Total Nilai:</span>
+                    <span className="font-extrabold text-emerald-700 text-xs">
+                      RM {(sendConfirmQuotation.grand_total || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-semibold">Jumlah Item:</span>
+                    <span className="font-bold text-slate-700 text-xs">
+                      {sendConfirmQuotation.items?.length || sendConfirmQuotation.total_items_count || 0} Items
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Attached File Details (File yang Ikut) */}
+              <div className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-slate-500 font-bold text-[11px] uppercase tracking-wider">
+                    <Paperclip className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>File Lampiran</span>
+                  </div>
+                  {sendConfirmQuotation.pdf_created === 1 ? (
+                    <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <Check className="w-3 h-3 text-emerald-600" /> PDF Ready
+                    </span>
+                  ) : (
+                    <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-amber-600" /> Auto SPH
+                    </span>
+                  )}
+                </div>
+                <div className="pt-1 border-t border-slate-100 flex items-center gap-2">
+                  <div className="p-2 bg-red-50 border border-red-200 text-red-600 rounded-md">
+                    <FileType className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-mono font-bold text-xs text-slate-800 truncate">
+                      {sendConfirmQuotation.quotation_file || sendConfirmQuotation.source_file || `SPH-${sendConfirmQuotation.quotation_number}.pdf`}
+                    </p>
+                    <p className="text-[10px] text-slate-400">Lampiran dokumen penawaran resmi SPH PDF</p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Actions Footer */}
+            <div className="px-5 py-3.5 bg-slate-100 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setSendConfirmQuotation(null)}
+                className="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition cursor-pointer border border-slate-300"
+              >
+                Batal
+              </button>
+
+              {/* Tulis Pesan di Email Client */}
+              <button
+                type="button"
+                onClick={() => {
+                  const target = sendConfirmQuotation;
+                  setSendConfirmQuotation(null);
+                  if (onOpenEmailClient) {
+                    onOpenEmailClient(target);
+                  }
+                }}
+                className="w-full sm:w-auto px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-extrabold text-xs rounded-lg shadow-sm flex items-center justify-center gap-2 transition cursor-pointer border border-slate-700"
+              >
+                <Mail className="w-3.5 h-3.5 text-blue-400" />
+                <span>Buka di Email Client</span>
+              </button>
+
+              {/* Tandai Selesai / Terkirim (Tanpa Kirim Email) */}
+              <button
+                type="button"
+                disabled={isSendingQuotation}
+                onClick={() => {
+                  const target = sendConfirmQuotation;
+                  setSendConfirmQuotation(null);
+                  handleSendQuotation(target);
+                }}
+                className="w-full sm:w-auto px-4 py-2 bg-gradient-to-b from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-extrabold text-xs rounded-lg shadow-md flex items-center justify-center gap-2 transition cursor-pointer border border-indigo-700 disabled:opacity-60"
+              >
+                {isSendingQuotation ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                )}
+                <span>{isSendingQuotation ? 'Memperbarui...' : 'Tandai Selesai / Terkirim'}</span>
+              </button>
+            </div>
+
           </div>
         </div>
       )}

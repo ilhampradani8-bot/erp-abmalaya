@@ -73,16 +73,48 @@ try {
         const page = await browser.newPage();
         
         if (htmlContent && htmlContent.includes('<html')) {
-            await page.setContent(htmlContent, { waitUntil: 'domcontentloaded' });
+            await page.setContent(htmlContent, { waitUntil: ['domcontentloaded', 'networkidle0'] });
         } else {
             await page.goto(targetUrl, { waitUntil: 'networkidle0', timeout: 30000 });
         }
+
+        // Extract branding info for native Puppeteer header and footer templates
+        const branding = await page.evaluate(() => {
+            const logoImg = document.querySelector('.logo-box img') || document.querySelector('.footer-logo-row img');
+            const logoUrl = logoImg ? logoImg.src : '';
+            return {
+                logoUrl: logoUrl,
+                companyName: 'AB MALAYA SDN. BHD.',
+                companyAddress: '2-2-40, 2nd Floor Wisma Rampai, Jalan 34/26, Taman Sri Rampai, 53300 Kuala Lumpur.',
+                email: 'sales@abmalaya.com',
+                phone: '+60 3-8000 1234',
+                website: 'abmalaya.com'
+            };
+        });
+
+        const headerTemplate = `<div></div>`;
+
+        const footerTemplate = `
+            <div style="font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; font-size: 8px; font-weight: 700; width: 100%; margin: 0 8mm; display: flex; justify-content: flex-end; align-items: center; color: #475569; -webkit-print-color-adjust: exact;">
+                <div>
+                    Halaman <span class="pageNumber"></span> dari <span class="totalPages"></span>
+                </div>
+            </div>
+        `;
 
         await page.pdf({
             path: outputPath,
             format: 'A4',
             printBackground: true,
-            preferCSSPageSize: true
+            displayHeaderFooter: true,
+            headerTemplate: headerTemplate,
+            footerTemplate: footerTemplate,
+            margin: {
+                top: '6mm',
+                bottom: '10mm',
+                left: '6mm',
+                right: '6mm'
+            }
         });
 
         await browser.close();

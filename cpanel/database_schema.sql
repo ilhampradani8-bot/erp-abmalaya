@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS `quotations` (
   `tax_amount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
   `grand_total` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
   `notes` TEXT DEFAULT NULL,
+  `source_file` TEXT DEFAULT NULL,
+  `quotation_file` TEXT DEFAULT NULL,
   `status` VARCHAR(50) NOT NULL DEFAULT 'draft',
   `ocr_scan_status` VARCHAR(20) DEFAULT 'pending',
   `ocr_scan_result` LONGTEXT DEFAULT NULL,

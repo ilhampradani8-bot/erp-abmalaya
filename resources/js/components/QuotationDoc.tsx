@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Quotation, QuotationItem } from '../types/erp';
 import { 
-  Printer, Send, ArrowLeft, Package, ChevronDown, Settings, Loader2, 
-  Move, Save, CheckCircle2, Edit3, Plus, Trash2, X, SlidersHorizontal, MoreVertical, FileType
+  Printer, Send, ArrowLeft, ChevronDown, Settings, Loader2, 
+  Move, Save, CheckCircle2, Edit3, Plus, Trash2, X, SlidersHorizontal, MoreVertical, FileType, ExternalLink, FileText
 } from 'lucide-react';
 
 interface QuotationDocProps {
@@ -12,6 +12,7 @@ interface QuotationDocProps {
   onSendEmail?: () => void;
   onNavigateView?: (mode: any) => void;
   paperSettings?: any;
+  currentUser?: { id?: string; name?: string; email?: string; role?: string };
 }
 
 interface OffsetData {
@@ -32,6 +33,16 @@ interface DraggableElementProps {
   label?: string;
   inline?: boolean;
   resizable?: boolean;
+  style?: React.CSSProperties;
+}
+
+interface PageChunk {
+  pageNumber: number;
+  totalPages: number;
+  items: QuotationItem[];
+  startIndex: number;
+  isFirstPage: boolean;
+  isLastPage: boolean;
 }
 
 const DraggableElement: React.FC<DraggableElementProps> = ({
@@ -44,6 +55,7 @@ const DraggableElement: React.FC<DraggableElementProps> = ({
   label,
   inline = false,
   resizable = false,
+  style = {},
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -110,12 +122,15 @@ const DraggableElement: React.FC<DraggableElementProps> = ({
     onOffsetChange(id, { ...currentOffset, scale: newScale });
   };
 
+  const isRightAligned = id === 'signature_issuer' || className.includes('sig-issuer-box') || className.includes('summary-box');
+
   const transformStyle: React.CSSProperties = {
     transform: `translate(${currentOffset.x || 0}px, ${currentOffset.y || 0}px) scale(${currentScale})`,
-    transformOrigin: 'left bottom',
+    transformOrigin: isRightAligned ? 'right bottom' : 'left bottom',
     transition: isDragging || isResizing ? 'none' : 'transform 0.05s ease-out',
     position: 'relative',
     zIndex: isDragging || isResizing ? 50 : isDragMode ? 10 : 'auto',
+    ...style,
   };
 
   const Component = inline ? 'span' : 'div';
@@ -150,7 +165,7 @@ const DraggableElement: React.FC<DraggableElementProps> = ({
             type="button"
             onClick={(e) => handleQuickScale(-0.1, e)}
             className="hover:bg-slate-700 px-1 rounded font-bold cursor-pointer"
-            title="Perkecil Logo"
+            title="Scale Down Logo"
           >
             -
           </button>
@@ -159,7 +174,7 @@ const DraggableElement: React.FC<DraggableElementProps> = ({
             type="button"
             onClick={(e) => handleQuickScale(0.1, e)}
             className="hover:bg-slate-700 px-1 rounded font-bold cursor-pointer"
-            title="Perbesar Logo"
+            title="Scale Up Logo"
           >
             +
           </button>
@@ -193,6 +208,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
   onSendEmail,
   onNavigateView,
   paperSettings: propPaperSettings,
+  currentUser,
 }) => {
   const [quotation, setQuotation] = useState<Quotation>(initialQuotation || {});
   const [paperSettings, setPaperSettings] = useState<any>(propPaperSettings || memoizedPaperSettingsDoc || null);
@@ -203,6 +219,40 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
   const [isLoadingQuotations, setIsLoadingQuotations] = useState<boolean>(memoizedSavedQuotationsDoc.length === 0);
   const [isLeftQuoDropdownOpen, setIsLeftQuoDropdownOpen] = useState<boolean>(false);
 
+  // Helper to reliably resolve current active user session
+  const resolveActiveUser = () => {
+    if (currentUser?.name && currentUser.name.trim() && currentUser.name !== 'Unidentified Session' && currentUser.name !== 'Sesi Tidak Terdeteksi') {
+      return currentUser.name;
+    }
+    if (currentUser?.email && currentUser.email.trim()) {
+      return currentUser.email;
+    }
+    try {
+      const raw = localStorage.getItem('abmalaya_user_session');
+      if (raw) {
+        const u = JSON.parse(raw);
+        if (u?.name && u.name.trim() && u.name !== 'Unidentified Session' && u.name !== 'Sesi Tidak Terdeteksi') return u.name;
+        if (u?.email && u.email.trim()) return u.email;
+      }
+    } catch (e) {}
+    return 'Muhammad Aimanuddin Bin Mohd Zaki';
+  };
+
+  const getSessionUserParams = () => {
+    try {
+      const raw = localStorage.getItem('abmalaya_user_session');
+      if (raw) {
+        const u = JSON.parse(raw);
+        const name = u?.name || currentUser?.name || 'Muhammad Aimanuddin Bin Mohd Zaki';
+        const email = u?.email || currentUser?.email || 'admin@abmalaya.com';
+        return `&user_name=${encodeURIComponent(name)}&user_email=${encodeURIComponent(email)}`;
+      }
+    } catch (e) {}
+    const fallbackName = currentUser?.name || 'Muhammad Aimanuddin Bin Mohd Zaki';
+    const fallbackEmail = currentUser?.email || 'admin@abmalaya.com';
+    return `&user_name=${encodeURIComponent(fallbackName)}&user_email=${encodeURIComponent(fallbackEmail)}`;
+  };
+
   // Drag Mode & Element Offsets State
   const [isDragMode, setIsDragMode] = useState<boolean>(false);
   const [offsets, setOffsets] = useState<Record<string, { x: number; y: number }>>({});
@@ -212,12 +262,12 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
   // Quick Paper Setup Modal State
   const [isPaperSetupModalOpen, setIsPaperSetupModalOpen] = useState<boolean>(false);
 
-  // Paper Setup Modal Form Fields
+  // Paper Setup Modal Form Fields (Default 6mm margin matching daemon engine)
   const [modalPaperSize, setModalPaperSize] = useState<string>('A4');
-  const [modalMarginTop, setModalMarginTop] = useState<number>(18);
-  const [modalMarginBottom, setModalMarginBottom] = useState<number>(18);
-  const [modalMarginLeft, setModalMarginLeft] = useState<number>(14);
-  const [modalMarginRight, setModalMarginRight] = useState<number>(14);
+  const [modalMarginTop, setModalMarginTop] = useState<number>(6);
+  const [modalMarginBottom, setModalMarginBottom] = useState<number>(6);
+  const [modalMarginLeft, setModalMarginLeft] = useState<number>(6);
+  const [modalMarginRight, setModalMarginRight] = useState<number>(6);
   const [modalFontSize, setModalFontSize] = useState<number>(9);
   const [modalTableHeaderBg, setModalTableHeaderBg] = useState<string>('#0070c0');
   const [isSavingPaperSetup, setIsSavingPaperSetup] = useState<boolean>(false);
@@ -227,9 +277,9 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
   const [isSavingQuotation, setIsSavingQuotation] = useState<boolean>(false);
   const [quotationSaveNotice, setQuotationSaveNotice] = useState<string | null>(null);
 
-  // Editable Form Fields State
+  // Editable Form Fields State - Default date to today automatically
   const [docRefNo, setDocRefNo] = useState<string>('');
-  const [docDateIssued, setDocDateIssued] = useState<string>('');
+  const [docDateIssued, setDocDateIssued] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [docValidUntil, setDocValidUntil] = useState<string>('14 Days');
   const [docProjectReference, setDocProjectReference] = useState<string>('');
   const [docClientName, setDocClientName] = useState<string>('');
@@ -245,42 +295,48 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
   useEffect(() => {
     if (!paperSettings) return;
     setModalPaperSize(paperSettings.paper_size || paperSettings.paperSize || 'A4');
-    setModalMarginTop(Number(paperSettings.margin_top || paperSettings.marginTop) || 18);
-    setModalMarginBottom(Number(paperSettings.margin_bottom || paperSettings.marginBottom) || 18);
-    setModalMarginLeft(Number(paperSettings.margin_left || paperSettings.marginLeft) || 14);
-    setModalMarginRight(Number(paperSettings.margin_right || paperSettings.marginRight) || 14);
+    setModalMarginTop(Number(paperSettings.margin_top || paperSettings.marginTop) || 6);
+    setModalMarginBottom(Number(paperSettings.margin_bottom || paperSettings.marginBottom) || 6);
+    setModalMarginLeft(Number(paperSettings.margin_left || paperSettings.marginLeft) || 6);
+    setModalMarginRight(Number(paperSettings.margin_right || paperSettings.marginRight) || 6);
     setModalFontSize(Number(paperSettings.font_size || paperSettings.fontSize) || 9);
     setModalTableHeaderBg(paperSettings.table_header_bg || paperSettings.tableHeaderBg || '#0070c0');
   }, [paperSettings]);
+
+  // Clean email helper
+  const cleanEmailStr = (emailRaw: any): string => {
+    if (!emailRaw) return '';
+    if (typeof emailRaw === 'string' && emailRaw.includes('{')) {
+      try {
+        const parsed = JSON.parse(emailRaw);
+        if (parsed.selected) return parsed.selected;
+        if (parsed.email) return parsed.email;
+        if (Array.isArray(parsed.options) && parsed.options.length > 0) {
+          return parsed.options[0].email || '';
+        }
+      } catch (e) {}
+    }
+    return typeof emailRaw === 'string' ? emailRaw.trim() : '';
+  };
 
   // Initialize editable fields whenever `quotation` changes
   useEffect(() => {
     if (!quotation) return;
     
-    setDocRefNo(quotation.quotation_number || (quotation as any).ref_number || (quotation.id ? `ABM/QUO/${quotation.id}` : 'ABM/QUO/2026-001'));
-    setDocDateIssued(quotation.date_issued || (quotation as any).created_at?.split(' ')[0] || new Date().toISOString().split('T')[0]);
+    setDocRefNo(quotation.quotation_number || (quotation as any).ref_number || (quotation.id ? `QUO-ABM/MY/2026/${quotation.id}` : 'ABM/QUO/2026-001'));
+    setDocDateIssued(quotation.date_issued && quotation.date_issued.trim() ? quotation.date_issued : new Date().toISOString().split('T')[0]);
     setDocValidUntil(quotation.valid_until || '14 Days');
     setDocProjectReference((quotation as any).project_reference || quotation.notes || (quotation as any).category_name || 'INDUSTRIAL & MARITIME EQUIPMENT SUPPLY');
     setDocClientName(quotation.client_name || (quotation as any).contact_person || 'Valued Client');
     setDocCompanyName(quotation.company_name || (quotation as any).client_company || '');
     setDocClientPhone(quotation.client_phone || (quotation as any).phone || '');
-    
-    let emailStr = '';
-    if (typeof quotation.client_email === 'string') {
-      if (quotation.client_email.startsWith('{') || quotation.client_email.startsWith('[')) {
-        try {
-          const parsed = JSON.parse(quotation.client_email);
-          emailStr = parsed.selected || parsed[0]?.email || quotation.client_email;
-        } catch {
-          emailStr = quotation.client_email;
-        }
-      } else {
-        emailStr = quotation.client_email;
-      }
-    }
-    setDocClientEmail(emailStr || (quotation as any).email || 'client@company.com');
-    setDocNotes(quotation.notes || paperSettings?.default_notes || paperSettings?.footer_terms || '1. Prices stated in Malaysian Ringgit (MYR) and valid for 14 days.\n2. Goods remain property of AB Malaya Sdn. Bhd. until fully paid.\n3. Standard 1-year official manufacturer warranty applicable.');
-    setDocCreatedBy(quotation.created_by || 'Muhammad Aimanuddin Bin Mohd Zaki');
+    setDocClientEmail(cleanEmailStr(quotation.client_email) || 'sales@abmalaya.com');
+    setDocNotes(quotation.notes || paperSettings?.footer_terms || paperSettings?.default_notes || '1. Prices stated in Malaysian Ringgit (MYR) and valid for 14 days.\n2. Goods remain property of AB Malaya Sdn. Bhd. until fully paid.\n3. Standard 1-year official manufacturer warranty applicable.');
+    setDocCreatedBy(
+      (quotation.created_by && quotation.created_by.trim() && quotation.created_by !== 'Sesi Tidak Terdeteksi' && quotation.created_by !== 'Unidentified Session')
+        ? quotation.created_by
+        : resolveActiveUser()
+    );
     setDocTaxPercent(Number(quotation.tax_percent) || 11);
 
     const raw = quotation.items && quotation.items.length > 0
@@ -343,6 +399,111 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
     };
   }, [docItems, docTaxPercent]);
 
+  // Smart Pagination Algorithm (Splits items cleanly into separate A4 Sheets)
+  const pageChunks: PageChunk[] = useMemo(() => {
+    const totalItems = docItems.length;
+    if (totalItems <= 4) {
+      return [{
+        pageNumber: 1,
+        totalPages: 1,
+        items: docItems,
+        startIndex: 0,
+        isFirstPage: true,
+        isLastPage: true,
+      }];
+    }
+
+    if (totalItems <= 8) {
+      const page1Count = Math.ceil(totalItems / 2);
+      return [
+        {
+          pageNumber: 1,
+          totalPages: 2,
+          items: docItems.slice(0, page1Count),
+          startIndex: 0,
+          isFirstPage: true,
+          isLastPage: false,
+        },
+        {
+          pageNumber: 2,
+          totalPages: 2,
+          items: docItems.slice(page1Count),
+          startIndex: page1Count,
+          isFirstPage: false,
+          isLastPage: true,
+        }
+      ];
+    }
+
+    // For larger catalogs (> 8 items)
+    const pages: PageChunk[] = [];
+    const page1Items = docItems.slice(0, 6);
+    pages.push({
+      pageNumber: 1,
+      totalPages: 0,
+      items: page1Items,
+      startIndex: 0,
+      isFirstPage: true,
+      isLastPage: false,
+    });
+
+    let remaining = docItems.slice(6);
+    let currentIndex = 6;
+    let pNum = 2;
+
+    while (remaining.length > 0) {
+      if (remaining.length <= 4) {
+        pages.push({
+          pageNumber: pNum,
+          totalPages: 0,
+          items: remaining,
+          startIndex: currentIndex,
+          isFirstPage: false,
+          isLastPage: true,
+        });
+        break;
+      } else if (remaining.length <= 8) {
+        const count = Math.ceil(remaining.length / 2);
+        const chunk1 = remaining.slice(0, count);
+        const chunk2 = remaining.slice(count);
+        pages.push({
+          pageNumber: pNum,
+          totalPages: 0,
+          items: chunk1,
+          startIndex: currentIndex,
+          isFirstPage: false,
+          isLastPage: false,
+        });
+        pages.push({
+          pageNumber: pNum + 1,
+          totalPages: 0,
+          items: chunk2,
+          startIndex: currentIndex + count,
+          isFirstPage: false,
+          isLastPage: true,
+        });
+        break;
+      } else {
+        const chunk = remaining.slice(0, 7);
+        remaining = remaining.slice(7);
+        pages.push({
+          pageNumber: pNum,
+          totalPages: 0,
+          items: chunk,
+          startIndex: currentIndex,
+          isFirstPage: false,
+          isLastPage: remaining.length === 0,
+        });
+        currentIndex += chunk.length;
+        pNum++;
+      }
+    }
+
+    const total = pages.length;
+    pages.forEach(p => p.totalPages = total);
+    return pages;
+  }, [docItems]);
+
   const handleItemFieldChange = (index: number, field: keyof QuotationItem | string, value: any) => {
     setDocItems((prev) => {
       const updated = [...prev];
@@ -364,7 +525,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
       product_code: '',
       impa_code: '',
       description: 'New Supply Item / Service',
-      specification: 'Standard industrial grade',
+      specification: 'Standard manufacturer specification',
       quantity: 1,
       unit: 'Unit',
       unit_price: 0,
@@ -422,7 +583,6 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
           };
           setQuotation(updatedQuotation);
           
-          // Update in-memory cached quotations list
           setSavedQuotations((prev) => {
             const next = prev.map((q) => q.id === quotation.id ? updatedQuotation : q);
             memoizedSavedQuotationsDoc = next;
@@ -436,16 +596,16 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
       })
       .catch((err) => {
         setIsSavingQuotation(false);
-        console.error('Save quotation error:', err);
-        alert('Save quotation error: ' + err.message);
+        console.error('Error saving quotation:', err);
+        alert('Error communicating with server while saving quotation.');
       });
   };
 
-  // Save Quick Paper Setup Modal settings to MySQL
+  // Quick Paper Setup Modal Save Handler
   const handleSaveQuickPaperSetup = () => {
     setIsSavingPaperSetup(true);
     const payload = {
-      ...(paperSettings || {}),
+      action: 'save',
       paper_size: modalPaperSize,
       margin_top: modalMarginTop,
       margin_bottom: modalMarginBottom,
@@ -461,28 +621,39 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
       body: JSON.stringify(payload),
     })
       .then((res) => res.json())
-      .then((resData) => {
+      .then((data) => {
         setIsSavingPaperSetup(false);
-        if (resData.status === 'success') {
-          setPaperSettings(payload);
-          memoizedPaperSettingsDoc = payload;
+        if (data.status === 'success') {
+          const updated = {
+            ...(paperSettings || {}),
+            paper_size: modalPaperSize,
+            margin_top: modalMarginTop,
+            margin_bottom: modalMarginBottom,
+            margin_left: modalMarginLeft,
+            margin_right: modalMarginRight,
+            font_size: modalFontSize,
+            table_header_bg: modalTableHeaderBg,
+          };
+          setPaperSettings(updated);
+          memoizedPaperSettingsDoc = updated;
           setIsPaperSetupModalOpen(false);
-          setLayoutSaveNotice('Paper & Margin settings saved to database!');
+          setLayoutSaveNotice('Paper & Margins setup saved successfully!');
           setTimeout(() => setLayoutSaveNotice(null), 3000);
         } else {
-          alert('Failed to save paper settings: ' + (resData.message || 'Error'));
+          alert('Failed to save paper setup: ' + (data.message || 'Error'));
         }
       })
       .catch((err) => {
         setIsSavingPaperSetup(false);
         console.error('Error saving paper setup:', err);
-        alert('Error saving paper setup: ' + err.message);
       });
   };
 
-  // Layout drag & drop saving
-  const handleOffsetChange = (id: string, newOffset: { x: number; y: number }) => {
-    setOffsets((prev) => ({ ...prev, [id]: newOffset }));
+  const handleOffsetChange = (id: string, newOffset: OffsetData) => {
+    setOffsets((prev) => ({
+      ...prev,
+      [id]: newOffset,
+    }));
   };
 
   const handleSaveLayout = (targetOffsets?: Record<string, { x: number; y: number }>) => {
@@ -627,13 +798,22 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
 
   const formatCurrency = (val: number) => {
     const num = Number(val) || 0;
-    const hasDec = num % 1 !== 0;
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'MYR',
-      minimumFractionDigits: hasDec ? 2 : 0,
-      maximumFractionDigits: 2,
-    }).format(num);
+    return `MYR ${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const formatDocDate = (rawDate: string) => {
+    if (!rawDate) return '';
+    if (rawDate.includes('/')) return rawDate;
+    try {
+      const d = new Date(rawDate);
+      if (!isNaN(d.getTime())) {
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
+      }
+    } catch (e) {}
+    return rawDate;
   };
 
   const handlePrint = () => {
@@ -641,7 +821,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
   };
 
   // Dynamic extractors from system_paper_settings database
-  const logoUrl = paperSettings?.logo_url || paperSettings?.logoUrl;
+  const logoUrl = paperSettings?.logo_url || paperSettings?.logoUrl || '/favicon.png';
   const stampUrl = paperSettings?.stamp_url || paperSettings?.stampUrl;
   const signatureUrl = paperSettings?.signature_url || paperSettings?.signatureUrl;
   const headerImageUrl = paperSettings?.header_image_url || paperSettings?.headerImageUrl;
@@ -651,35 +831,36 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
   const companyPhone = paperSettings?.phone || paperSettings?.companyPhone || '+60 3-8000 1234';
   const companyWebsite = paperSettings?.website || paperSettings?.companyWebsite || 'abmalaya.com';
   const tableHeaderBgColor = paperSettings?.table_header_bg || paperSettings?.tableHeaderBg || '#0070c0';
+  const headerTitle = paperSettings?.header_title || paperSettings?.headerTitle || 'SURAT PENAWARAN HARGA (SPH) / COMMERCIAL QUOTATION';
 
   const renderDynamicAddress = (addrRaw?: string) => {
     const defaultAddress = '2-2-40, 2nd Floor Wisma Rampai, Jalan 34/26, Taman Sri Rampai, 53300 Kuala Lumpur.';
-    const addr = (addrRaw && addrRaw.trim()) ? addrRaw.trim() : defaultAddress;
+    const clean = (addrRaw && addrRaw.trim()) ? addrRaw.trim() : defaultAddress;
 
-    if (addr.includes('\n')) {
-      const lines = addr.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (clean.includes('\n')) {
+      const lines = clean.split('\n').map((l) => l.trim()).filter(Boolean);
       return lines.map((line, idx) => (
-        <p key={idx} className={idx === 0 ? 'font-bold text-slate-900 text-xs' : idx === lines.length - 1 ? 'font-semibold text-slate-900' : 'text-slate-800'}>
+        <p key={idx} style={{ margin: 0, fontWeight: idx === 0 ? 700 : 400, color: idx === 0 ? '#0f172a' : '#1e293b', fontSize: idx === 0 ? '8.5pt' : '8pt' }}>
           {line}
         </p>
       ));
     }
 
-    const parts = addr.split(',').map((s) => s.trim()).filter(Boolean);
+    const parts = clean.split(',').map((s) => s.trim()).filter(Boolean);
     if (parts.length >= 3) {
       const line1 = parts.slice(0, 2).join(', ') + ',';
       const line2 = parts.slice(2, parts.length - 1).join(', ') + ',';
       const line3 = parts[parts.length - 1];
       return (
         <>
-          <p className="font-bold text-slate-900 text-xs">{line1}</p>
-          <p className="text-slate-800">{line2}</p>
-          <p className="font-semibold text-slate-900">{line3}</p>
+          <p style={{ margin: 0, fontWeight: 700, color: '#0f172a', fontSize: '8.5pt' }}>{line1}</p>
+          <p style={{ margin: 0, color: '#1e293b', fontSize: '8pt' }}>{line2}</p>
+          <p style={{ margin: 0, fontWeight: 600, color: '#0f172a', fontSize: '8pt' }}>{line3}</p>
         </>
       );
     }
 
-    return <p className="font-semibold text-slate-900">{addr}</p>;
+    return <p style={{ margin: 0, fontWeight: 600, color: '#0f172a', fontSize: '8pt' }}>{clean}</p>;
   };
 
   // Match item description against products catalog database for photos and IMPA codes
@@ -697,8 +878,309 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
   };
 
   return (
-    <div className="w-full max-w-full bg-slate-200 min-h-[calc(100vh-53px)] space-y-0 font-sans overflow-y-auto h-full relative">
+    <div id="quotation-screen-container" className="w-full max-w-full bg-slate-300 min-h-[calc(100vh-53px)] space-y-0 font-sans overflow-y-auto h-full relative pb-24">
       
+      {/* ── EXACT A4 PRINT STYLES (MATCHES ALL PAGES WITHOUT VIEWPORT CLIPPING) ── */}
+      <style>{`
+        @page {
+          size: A4 portrait;
+          margin: 0;
+        }
+        @media print {
+          *, *::before, *::after {
+            overflow: visible !important;
+          }
+          html, body, #root, #root > div, main {
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: auto !important;
+            max-height: none !important;
+            min-height: 0 !important;
+            position: static !important;
+            overflow: visible !important;
+            display: block !important;
+            background: #ffffff !important;
+            color: #0f172a !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          #quotation-screen-container, #quotation-paper-wrapper {
+            background: #ffffff !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            min-height: auto !important;
+            height: auto !important;
+            overflow: visible !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            display: block !important;
+          }
+          .a4-page-sheet {
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+            width: 210mm !important;
+            min-width: 210mm !important;
+            max-width: 210mm !important;
+            height: 297mm !important;
+            min-height: 297mm !important;
+            max-height: 297mm !important;
+            page-break-after: always !important;
+            break-after: page !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            margin: 0 auto !important;
+            padding: 6mm 6mm !important;
+            border: none !important;
+            box-shadow: none !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+            background: #ffffff !important;
+          }
+          .a4-page-sheet:last-child {
+            page-break-after: auto !important;
+            break-after: auto !important;
+          }
+          .items-table tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          .bottom-grid {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: flex-start !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          .signatures-grid {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: flex-end !important;
+            width: 100% !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          .sig-client-box {
+            flex: 1 !important;
+            text-align: left !important;
+          }
+          .sig-issuer-box {
+            flex: 1 !important;
+            text-align: right !important;
+            margin-left: auto !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: flex-end !important;
+            justify-content: flex-end !important;
+          }
+          .sig-img-container {
+            height: 50px !important;
+            display: flex !important;
+            justify-content: flex-end !important;
+            align-items: center !important;
+            margin-left: auto !important;
+            width: 100% !important;
+            text-align: right !important;
+          }
+          .sig-img-container img {
+            display: inline-block !important;
+            margin-left: auto !important;
+            max-height: 48px !important;
+            max-width: 120px !important;
+            object-fit: contain !important;
+          }
+        }
+
+        /* METADATA SECTION */
+        .meta-table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        .meta-table td {
+          padding: 2px 0;
+          font-size: 8.5pt;
+          vertical-align: top;
+        }
+        .meta-label {
+          width: 140px;
+          font-weight: 700;
+          color: #334155;
+          text-transform: uppercase;
+        }
+        .meta-colon {
+          width: 12px;
+          font-weight: 700;
+          color: #0f172a;
+        }
+        .meta-val {
+          font-weight: 600;
+          color: #0f172a;
+        }
+        .meta-val-bold {
+          font-weight: 800;
+          color: #0f172a;
+        }
+
+        /* ITEMS TABLE */
+        .items-table-box {
+          border: 1px solid #0f172a;
+          margin-bottom: 8px;
+          background: #ffffff;
+          width: 100%;
+          box-sizing: border-box;
+        }
+        .items-table {
+          width: 100%;
+          table-layout: fixed;
+          border-collapse: collapse;
+          font-size: 7.5pt;
+          box-sizing: border-box;
+        }
+        .items-table th {
+          background-color: ${tableHeaderBgColor};
+          color: #ffffff;
+          font-weight: 800;
+          font-size: 7.5pt;
+          text-transform: uppercase;
+          padding: 4px 3px;
+          border-right: 1px solid #0f172a;
+          border-bottom: 1px solid #0f172a;
+          text-align: left;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+        }
+        .items-table th:last-child {
+          border-right: none;
+        }
+        .items-table td {
+          padding: 4px 4px;
+          border-right: 1px solid #0f172a;
+          border-bottom: 1px solid #0f172a;
+          vertical-align: top;
+        }
+        .items-table td:last-child {
+          border-right: none;
+        }
+        .items-table tr:last-child td {
+          border-bottom: none;
+        }
+        .items-table tr:nth-child(even) td {
+          background-color: #f8fafc;
+        }
+        .product-photo {
+          width: 26px;
+          height: 26px;
+          object-fit: cover;
+          border: 1px solid #cbd5e1;
+          display: block;
+          margin: 0 auto;
+        }
+        .no-photo-box {
+          width: 26px;
+          height: 26px;
+          background: #f1f5f9;
+          border: 1px solid #cbd5e1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #94a3b8;
+          font-size: 7pt;
+          margin: 0 auto;
+        }
+
+        /* BOTTOM TERMS & FINANCIAL SUMMARY */
+        .bottom-grid {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 12px;
+          margin-bottom: 10px;
+        }
+        .terms-container {
+          flex: 1;
+          font-size: 7.5pt;
+        }
+        .terms-header {
+          font-size: 7.5pt;
+          font-weight: 900;
+          color: #0f172a;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          border-bottom: 1px solid #0f172a;
+          padding-bottom: 2px;
+          margin-bottom: 3px;
+        }
+        .terms-content {
+          color: #334155;
+          white-space: pre-line;
+          line-height: 1.3;
+        }
+        .summary-box {
+          width: 260px;
+          border: 2px solid #0f172a;
+          padding: 8px;
+          background: #ffffff;
+          font-size: 7.5pt;
+        }
+        .summary-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 3px;
+          color: #334155;
+        }
+        .summary-row.grand-total {
+          border-top: 2px solid #0f172a;
+          padding-top: 4px;
+          margin-bottom: 0;
+          font-weight: 900;
+          font-size: 9.5pt;
+          color: #0f172a;
+        }
+
+        /* SIGNATURES GRID */
+        .signatures-grid {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-end;
+          border-top: 1px solid #cbd5e1;
+          padding-top: 8px;
+          margin-top: 10px;
+          font-size: 7.5pt;
+          gap: 12px;
+        }
+        .sig-client-box {
+          flex: 1;
+        }
+        .sig-client-line {
+          height: 45px;
+          border-bottom: 1px solid #94a3b8;
+          width: 170px;
+          margin-bottom: 3px;
+        }
+        .sig-issuer-box {
+          flex: 1;
+          text-align: right;
+        }
+        .sig-img-container {
+          height: 50px;
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 6px;
+          margin: 2px 0;
+        }
+        .sig-img-container img {
+          max-height: 48px;
+          max-width: 120px;
+          object-fit: contain;
+        }
+      `}</style>
+
       {/* FROZEN / STICKY TOP NAVBAR HEADER (Hidden during Print) */}
       <div className="sticky top-0 z-40 no-print flex flex-wrap items-center justify-between gap-3 bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] px-4 py-2 border-b border-[#7b7b7b] w-full shadow-md">
         
@@ -732,7 +1214,18 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                 </button>
 
                 <a
-                  href={`/api_pdf.php?action=download&type=quotation&id=${quotation.id}`}
+                  href={`/view_doc.php?type=quotation&id=${quotation.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setIsLeftQuoDropdownOpen(false)}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-emerald-900 hover:bg-emerald-50 font-bold cursor-pointer text-left border-t border-slate-100 transition"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Open Live Template (view_doc.php)</span>
+                </a>
+
+                <a
+                  href={`/api_pdf.php?action=download&type=quotation&id=${quotation.id}${getSessionUserParams()}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => setIsLeftQuoDropdownOpen(false)}
@@ -750,7 +1243,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                   className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-slate-50 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
                 >
                   <Printer className="w-3.5 h-3.5 text-slate-600" />
-                  <span>Print / Save as PDF (Browser)</span>
+                  <span>Direct Print (Browser PDF)</span>
                 </button>
 
                 <button
@@ -801,7 +1294,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
             className="bg-gradient-to-b from-[#fafafa] to-[#eaeaea] border border-[#a0a0a0] px-3 py-1 text-xs text-[#3d3d3d] font-bold rounded shadow-inner cursor-pointer max-w-xs focus:outline-none disabled:opacity-60 transition"
           >
             <option value="">
-              {isLoadingQuotations ? '-- Loading Quotations... --' : '-- Select Saved Quotation / RFQ --'}
+              {isLoadingQuotations ? '-- Loading Quotations... --' : '-- Select Saved SPH / Quotation --'}
             </option>
             {savedQuotations.map((q) => {
               const itemCnt = (q.items || q.items_details || []).length;
@@ -843,7 +1336,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
             title="Toggle Live Document Editor to edit text, items, prices, and terms directly on the sheet"
           >
             <Edit3 className={`w-3.5 h-3.5 ${isEditDocMode ? 'text-white' : 'text-amber-600'}`} />
-            <span>{isEditDocMode ? 'Editing Mode ON' : 'Edit Document'}</span>
+            <span>{isEditDocMode ? 'Editing Mode Active' : 'Edit Document'}</span>
           </button>
 
           {/* SAVE QUOTATION EDITS BUTTON */}
@@ -906,26 +1399,26 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
           )}
 
           <a
-            href={`/api_pdf.php?action=download&type=quotation&id=${quotation.id}`}
+            href={`/api_pdf.php?action=download&type=quotation&id=${quotation.id}${getSessionUserParams()}`}
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => {
-              fetch(`/api_pdf.php?action=generate&type=quotation&id=${quotation.id}`).catch(() => {});
+              fetch(`/api_pdf.php?action=generate&type=quotation&id=${quotation.id}${getSessionUserParams()}`).catch(() => {});
             }}
             className="flex items-center gap-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-extrabold text-xs px-3.5 py-1.5 transition cursor-pointer shadow-md rounded border border-blue-900"
-            title="Download Full PDF generated by Puppeteer engine and promote to ACC"
+            title="Download Full PDF generated by Puppeteer daemon engine"
           >
             <FileType className="w-4 h-4 text-white" />
-            <span>Create Full PDF</span>
+            <span>Download PDF</span>
           </a>
 
           <button
             onClick={handlePrint}
             className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-4 py-1.5 transition cursor-pointer shadow-md rounded border border-emerald-800"
-            title="Open browser print & PDF dialog"
+            title="Print entire document to printer / browser PDF dialog"
           >
             <Printer className="w-4 h-4 text-white" />
-            <span>Cetak / Save PDF</span>
+            <span>Direct Print (PDF)</span>
           </button>
         </div>
 
@@ -938,7 +1431,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
           <span>EDITING MODE ACTIVE: Click on any text, item, code, quantity, price, discount, or terms below to edit directly. Click "Save Changes" when done.</span>
           <button
             onClick={() => setIsEditDocMode(false)}
-            className="ml-3 bg-white text-amber-900 px-2 py-0.5 rounded text-[11px] font-black uppercase hover:bg-amber-50 transition"
+            className="ml-3 bg-white text-amber-900 px-2 py-0.5 rounded text-[11px] font-black uppercase hover:bg-amber-50 transition cursor-pointer"
           >
             Finish Editing
           </button>
@@ -952,608 +1445,639 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
           <span>DRAG MODE ACTIVE: Click & drag any logo, text, table, photo, signature, or stamp on the paper to reposition freely!</span>
           <button
             onClick={() => setIsDragMode(false)}
-            className="ml-3 bg-white text-blue-800 px-2 py-0.5 rounded text-[11px] font-black uppercase hover:bg-blue-50 transition"
+            className="ml-3 bg-white text-blue-800 px-2 py-0.5 rounded text-[11px] font-black uppercase hover:bg-blue-50 transition cursor-pointer"
           >
             Done
           </button>
         </div>
       )}
 
-      {/* OFFICIAL AB MALAYA INTERNATIONAL STANDARD PAPER SHEET */}
-      <div className="p-4 sm:p-6 w-full max-w-full flex justify-center">
-        <div
-          id="quotation-pdf-document"
-          className="bg-white text-slate-900 p-8 sm:p-12 font-sans border border-slate-400 shadow-xl w-full max-w-[850px] min-h-[1100px] rounded-none relative overflow-hidden"
-          style={{
-            paddingTop: `${modalMarginTop}mm`,
-            paddingBottom: `${modalMarginBottom}mm`,
-            paddingLeft: `${modalMarginLeft}mm`,
-            paddingRight: `${modalMarginRight}mm`,
-            fontSize: `${modalFontSize}pt`,
-          }}
-        >
-          <table className="w-full border-collapse">
-            {/* 1. REPEATING LETTERHEAD HEADER FOR PRINT / MULTI-PAGE */}
-            <thead className="table-header-group">
-              <tr>
-                <td className="p-0 border-none pb-4">
-                  <div className="relative -mx-8 -mt-8 sm:-mx-12 sm:-mt-12 mb-2 w-[calc(100%+4rem)] sm:w-[calc(100%+6rem)] overflow-hidden border-b-2 border-[#004f8b] min-h-[120px] sm:min-h-[140px] flex items-stretch">
-                    {/* HEADER IMAGE BACKGROUND */}
-                    {headerImageUrl ? (
+      {/* ── PAGINATED A4 SHEETS CANVAS (PAGE 1, PAGE 2, ETC.) ──────────────────── */}
+      <div id="quotation-paper-wrapper" className="p-4 sm:p-8 w-full max-w-full flex flex-col items-center justify-start space-y-8 overflow-x-auto">
+        
+        {pageChunks.map((chunk) => (
+          <div key={`sheet-${chunk.pageNumber}`} className="flex flex-col items-center">
+            
+            {/* Sheet Page Label on Screen */}
+            <div className="no-print mb-2 flex items-center justify-between text-[11px] font-mono font-bold text-slate-700 w-[210mm] max-w-[210mm] px-2 bg-slate-200 py-1 rounded shadow-xs">
+              <span className="flex items-center gap-1.5 text-slate-800">
+                <FileText className="w-3.5 h-3.5 text-blue-600" />
+                <span>A4 SHEET (PAGE {chunk.pageNumber} OF {chunk.totalPages})</span>
+              </span>
+              <span className="text-slate-500 text-[10px]">
+                {chunk.isFirstPage && chunk.isLastPage ? 'Single Page' : chunk.isFirstPage ? 'Opening Page' : chunk.isLastPage ? 'Closing & Signatures' : 'Continuation Page'} • Margin: {modalMarginLeft}mm
+              </span>
+            </div>
+
+            {/* Exact A4 Sheet Container (210mm x 297mm) */}
+            <div
+              className="a4-page-sheet bg-white text-slate-900 font-sans border border-slate-400 shadow-2xl rounded-none relative flex flex-col justify-between"
+              style={{
+                width: '210mm',
+                minWidth: '210mm',
+                maxWidth: '210mm',
+                height: '297mm',
+                minHeight: '297mm',
+                maxHeight: '297mm',
+                boxSizing: 'border-box',
+                paddingTop: `${modalMarginTop}mm`,
+                paddingBottom: `${modalMarginBottom}mm`,
+                paddingLeft: `${modalMarginLeft}mm`,
+                paddingRight: `${modalMarginRight}mm`,
+                fontSize: `${modalFontSize}pt`,
+                overflow: 'hidden',
+              }}
+            >
+              {/* TOP HEADER BLOCK (Synchronized across all sheets) */}
+              <div style={{ width: '100%' }}>
+                <div style={{ width: '100%', borderBottom: '2px solid #004f8b', paddingBottom: '3px', marginBottom: '4px', background: '#ffffff' }}>
+                  {headerImageUrl ? (
+                    <div style={{ width: '100%', marginBottom: '3px' }}>
                       <img
                         src={headerImageUrl}
-                        alt="Header Background"
-                        className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none z-0 brightness-[1.02] contrast-[1.05]"
+                        alt="Header Banner"
+                        style={{ width: '100%', maxHeight: '60px', objectFit: 'cover', display: 'block' }}
                       />
-                    ) : (
-                      <div className="absolute top-0 inset-x-0 h-3 bg-gradient-to-r from-[#004f8b] via-[#0070c0] to-[#0080d0] z-0"></div>
-                    )}
+                    </div>
+                  ) : (
+                    <div style={{ width: '100%', height: '4px', background: 'linear-gradient(to right, #004f8b, #0070c0, #0080d0)', marginBottom: '3px' }}></div>
+                  )}
 
-                    {/* LETTERHEAD CONTENT */}
-                    <div className="relative z-10 px-8 pt-6 sm:px-12 sm:pt-8 pb-2 sm:pb-3 flex flex-col sm:flex-row items-end justify-between gap-6 w-full">
-                      {/* Logo & Company Name Left */}
-                      <DraggableElement id="header_logo" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Logo" resizable={true} className="self-end pb-0.5">
-                        <div className="flex items-end gap-4">
-                          {isLoadingPaperSettings ? (
-                            <div className="h-16 w-36 bg-white/90 border border-slate-300 rounded-none flex items-center justify-center gap-2 text-xs text-blue-700 font-mono font-bold animate-pulse shrink-0">
-                              <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                              <span>Loading Logo...</span>
-                            </div>
-                          ) : logoUrl ? (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', margin: 0, padding: 0 }}>
+                    <tbody>
+                      <tr>
+                        {/* Logo Left */}
+                        <td style={{ width: '55%', verticalAlign: 'bottom', textAlign: 'left', padding: 0, border: 'none' }}>
+                          <DraggableElement id="header_logo" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Logo" resizable={true}>
+                            {isLoadingPaperSettings ? (
+                              <div className="h-10 w-28 bg-white/90 border border-slate-300 flex items-center justify-center gap-2 text-xs text-blue-700 font-mono font-bold animate-pulse">
+                                <Loader2 className="w-3 animate-spin text-blue-600" />
+                                <span>Loading...</span>
+                              </div>
+                            ) : logoUrl ? (
+                              <img
+                                src={logoUrl}
+                                alt={companyName}
+                                style={{ height: '44px', maxWidth: '220px', objectFit: 'contain', display: 'block' }}
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = '/favicon.png';
+                                }}
+                              />
+                            ) : (
+                              <div style={{ fontWeight: 900, fontSize: '15pt', color: '#004f8b', textTransform: 'uppercase' }}>
+                                {companyName}
+                              </div>
+                            )}
+                          </DraggableElement>
+                        </td>
+
+                        {/* Company Address Right */}
+                        <td style={{ width: '45%', verticalAlign: 'bottom', textAlign: 'right', padding: 0, border: 'none', fontSize: '7.5pt', lineHeight: 1.25, color: '#1e293b' }}>
+                          <DraggableElement id="header_address" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Company Address">
+                            {renderDynamicAddress(companyAddress)}
+                          </DraggableElement>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* METADATA & TITLE STRIP BANNER (Page 1 Only) */}
+                {chunk.isFirstPage && (
+                  <>
+                    <DraggableElement id="metadata_section" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Metadata Section">
+                      <div style={{ borderBottom: '1px solid #cbd5e1', paddingBottom: '4px', marginBottom: '6px' }}>
+                        <table className="meta-table">
+                          <tbody>
+                            <tr>
+                              <td className="meta-label">Ref No.</td>
+                              <td className="meta-colon">:</td>
+                              <td className="meta-val-bold font-mono">
+                                {isEditDocMode ? (
+                                  <input
+                                    type="text"
+                                    value={docRefNo}
+                                    onChange={(e) => setDocRefNo(e.target.value)}
+                                    className="font-mono font-bold text-slate-900 bg-amber-50/70 border border-amber-300 px-1.5 py-0.5 rounded text-xs w-full max-w-sm focus:outline-blue-500"
+                                  />
+                                ) : (
+                                  docRefNo
+                                )}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="meta-label">Date</td>
+                              <td className="meta-colon">:</td>
+                              <td className="meta-val font-mono">
+                                {isEditDocMode ? (
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="date"
+                                      value={docDateIssued}
+                                      onChange={(e) => setDocDateIssued(e.target.value)}
+                                      className="font-mono font-bold text-slate-900 bg-amber-50/70 border border-amber-300 px-1.5 py-0.5 rounded text-xs focus:outline-blue-500"
+                                    />
+                                    <span className="text-slate-600 font-semibold">(Valid:</span>
+                                    <input
+                                      type="text"
+                                      value={docValidUntil}
+                                      onChange={(e) => setDocValidUntil(e.target.value)}
+                                      className="font-mono font-bold text-slate-900 bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs w-20 focus:outline-blue-500"
+                                      placeholder="14 Days"
+                                    />
+                                    <span className="text-slate-600 font-semibold">)</span>
+                                  </div>
+                                ) : (
+                                  `${formatDocDate(docDateIssued)} (Valid: ${docValidUntil})`
+                                )}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="meta-label">Project Reference</td>
+                              <td className="meta-colon">:</td>
+                              <td className="meta-val">
+                                {isEditDocMode ? (
+                                  <input
+                                    type="text"
+                                    value={docProjectReference}
+                                    onChange={(e) => setDocProjectReference(e.target.value)}
+                                    className="font-semibold text-slate-900 bg-amber-50/70 border border-amber-300 px-1.5 py-0.5 rounded text-xs w-full focus:outline-blue-500"
+                                    placeholder="Project reference name or specification"
+                                  />
+                                ) : (
+                                  docProjectReference
+                                )}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="meta-label">Attention</td>
+                              <td className="meta-colon">:</td>
+                              <td className="meta-val-bold">
+                                {isEditDocMode ? (
+                                  <div className="flex items-center gap-2 w-full">
+                                    <input
+                                      type="text"
+                                      value={docClientName}
+                                      onChange={(e) => setDocClientName(e.target.value)}
+                                      className="font-bold text-slate-900 bg-amber-50/70 border border-amber-300 px-1.5 py-0.5 rounded text-xs flex-1 focus:outline-blue-500"
+                                      placeholder="Client Contact Name"
+                                    />
+                                    <span className="text-slate-500 font-bold">(</span>
+                                    <input
+                                      type="text"
+                                      value={docCompanyName}
+                                      onChange={(e) => setDocCompanyName(e.target.value)}
+                                      className="font-bold text-slate-900 bg-amber-50/70 border border-amber-300 px-1.5 py-0.5 rounded text-xs flex-1 focus:outline-blue-500"
+                                      placeholder="Company Name"
+                                    />
+                                    <span className="text-slate-500 font-bold">)</span>
+                                  </div>
+                                ) : (
+                                  `${docClientName} ${docCompanyName ? `(${docCompanyName})` : ''}`
+                                )}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="meta-label">Tel No.</td>
+                              <td className="meta-colon">:</td>
+                              <td className="meta-val font-mono">
+                                {isEditDocMode ? (
+                                  <input
+                                    type="text"
+                                    value={docClientPhone}
+                                    onChange={(e) => setDocClientPhone(e.target.value)}
+                                    className="font-mono text-slate-900 bg-amber-50/70 border border-amber-300 px-1.5 py-0.5 rounded text-xs w-full max-w-sm focus:outline-blue-500"
+                                    placeholder="+60 12-345 6789"
+                                  />
+                                ) : (
+                                  docClientPhone || '—'
+                                )}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="meta-label">Email</td>
+                              <td className="meta-colon">:</td>
+                              <td className="meta-val font-mono">
+                                {isEditDocMode ? (
+                                  <input
+                                    type="email"
+                                    value={docClientEmail}
+                                    onChange={(e) => setDocClientEmail(e.target.value)}
+                                    className="font-mono text-slate-900 bg-amber-50/70 border border-amber-300 px-1.5 py-0.5 rounded text-xs w-full max-w-sm focus:outline-blue-500"
+                                    placeholder="client@company.com"
+                                  />
+                                ) : (
+                                  docClientEmail || 'sales@abmalaya.com'
+                                )}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </DraggableElement>
+
+                    {/* Title Strip Banner */}
+                    <DraggableElement id="title_banner" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Title Banner">
+                      <div 
+                        style={{
+                          backgroundColor: tableHeaderBgColor,
+                          color: '#ffffff',
+                          fontWeight: 800,
+                          fontSize: '9pt',
+                          padding: '4px 10px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          textAlign: 'center',
+                          marginBottom: '6px',
+                        }}
+                      >
+                        {headerTitle}
+                      </div>
+                    </DraggableElement>
+
+                    <p style={{ fontSize: '7.5pt', color: '#334155', fontWeight: 500, marginBottom: '6px' }}>
+                      We would like to submit the following commercial quotation and specification list for your review and pricing:
+                    </p>
+                  </>
+                )}
+
+                {/* PRODUCT LINE ITEMS TABLE FOR THIS SHEET CHUNK */}
+                <div className="items-table-box">
+                  <table className="items-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: '3.5%', textAlign: 'center' }}>NO.</th>
+                        <th style={{ width: '4.5%', textAlign: 'center' }}>IMG</th>
+                        <th style={{ width: '11%' }} className="font-mono">PRODUCT CODE</th>
+                        <th style={{ width: '7.5%' }} className="font-mono">IMPA</th>
+                        <th style={{ width: '15.5%' }}>PRODUCT NAME</th>
+                        <th style={{ width: '21%' }}>SPECIFICATION</th>
+                        <th style={{ width: '4%', textAlign: 'center' }}>QTY</th>
+                        <th style={{ width: '5%', textAlign: 'center' }}>UNIT</th>
+                        <th style={{ width: '11%', textAlign: 'right' }}>UNIT PRICE (MYR)</th>
+                        <th style={{ width: '5%', textAlign: 'center' }}>DISC (%)</th>
+                        <th style={{ width: isEditDocMode ? '10%' : '12%', textAlign: 'right' }}>TOTAL (MYR)</th>
+                        {isEditDocMode && <th style={{ width: '4%', textAlign: 'center', background: '#be123c', color: '#ffffff' }}>DEL</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {chunk.items.map((item, localIdx) => {
+                        const globalIdx = chunk.startIndex + localIdx;
+                        const matchedCatalogProduct = findCatalogMatch(item.description);
+                        const displayPhotoUrl = (item as any).image_url || matchedCatalogProduct?.image_url;
+                        const productCode = item.product_code || item.item_code || matchedCatalogProduct?.product_code || '—';
+                        const impaCode = (item as any).impa_code || item.category_code || matchedCatalogProduct?.impa_code || '—';
+                        const specText = (item as any).specification || (item as any).offer || matchedCatalogProduct?.specification || matchedCatalogProduct?.description || 'Standard manufacturer specification';
+
+                        return (
+                          <tr key={item.id || globalIdx}>
+                            <td style={{ textAlign: 'center' }} className="font-mono">{globalIdx + 1}</td>
+
+                            {/* Photo Cell */}
+                            <td style={{ textAlign: 'center' }}>
+                              {displayPhotoUrl && !displayPhotoUrl.includes('unsplash') ? (
+                                <DraggableElement id={`photo_${item.id || globalIdx}`} isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label={`Photo #${globalIdx + 1}`} inline>
+                                  <img
+                                    src={displayPhotoUrl}
+                                    alt={item.description}
+                                    className="product-photo"
+                                  />
+                                </DraggableElement>
+                              ) : (
+                                <div className="no-photo-box">📦</div>
+                              )}
+                            </td>
+
+                            {/* Product Code */}
+                            <td className="font-mono" style={{ color: '#0f172a' }}>
+                              {isEditDocMode ? (
+                                <input
+                                  type="text"
+                                  value={item.product_code || ''}
+                                  onChange={(e) => handleItemFieldChange(globalIdx, 'product_code', e.target.value)}
+                                  className="w-full font-mono font-normal bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
+                                  placeholder="Code / SKU"
+                                />
+                              ) : (
+                                productCode
+                              )}
+                            </td>
+
+                            {/* IMPA Code */}
+                            <td className="font-mono" style={{ color: '#581c87' }}>
+                              {isEditDocMode ? (
+                                <input
+                                  type="text"
+                                  value={(item as any).impa_code || ''}
+                                  onChange={(e) => handleItemFieldChange(globalIdx, 'impa_code', e.target.value)}
+                                  className="w-full font-mono font-normal text-purple-900 bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
+                                  placeholder="IMPA"
+                                />
+                              ) : (
+                                impaCode
+                              )}
+                            </td>
+
+                            {/* Product Name */}
+                            <td style={{ fontWeight: 'normal', color: '#0f172a' }}>
+                              {isEditDocMode ? (
+                                <input
+                                  type="text"
+                                  value={item.description}
+                                  onChange={(e) => handleItemFieldChange(globalIdx, 'description', e.target.value)}
+                                  className="w-full font-normal bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
+                                  placeholder="Product description"
+                                />
+                              ) : (
+                                item.description
+                              )}
+                            </td>
+
+                            {/* Specification */}
+                            <td style={{ color: '#334155', fontSize: '7.5pt', lineHeight: 1.25 }}>
+                              {isEditDocMode ? (
+                                <textarea
+                                  rows={2}
+                                  value={(item as any).specification || specText}
+                                  onChange={(e) => handleItemFieldChange(globalIdx, 'specification', e.target.value)}
+                                  className="w-full text-slate-800 bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
+                                  placeholder="Detailed specifications"
+                                />
+                              ) : (
+                                specText
+                              )}
+                            </td>
+
+                            {/* Quantity */}
+                            <td style={{ textAlign: 'center' }} className="font-mono">
+                              {isEditDocMode ? (
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={item.quantity}
+                                  onChange={(e) => handleItemFieldChange(globalIdx, 'quantity', Number(e.target.value))}
+                                  className="w-10 text-center font-mono font-normal bg-amber-50/70 border border-amber-300 px-0.5 py-0.5 rounded text-xs focus:outline-blue-500"
+                                />
+                              ) : (
+                                item.quantity
+                              )}
+                            </td>
+
+                            {/* Unit */}
+                            <td style={{ textAlign: 'center' }}>
+                              {isEditDocMode ? (
+                                <input
+                                  type="text"
+                                  value={item.unit || 'Unit'}
+                                  onChange={(e) => handleItemFieldChange(globalIdx, 'unit', e.target.value)}
+                                  className="w-12 text-center bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
+                                />
+                              ) : (
+                                item.unit || 'Unit'
+                              )}
+                            </td>
+
+                            {/* Unit Price */}
+                            <td style={{ textAlign: 'right' }} className="font-mono">
+                              {isEditDocMode ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={item.unit_price}
+                                  onChange={(e) => handleItemFieldChange(globalIdx, 'unit_price', Number(e.target.value))}
+                                  className="w-20 text-right font-mono font-bold bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
+                                />
+                              ) : (
+                                (Number(item.unit_price) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                              )}
+                            </td>
+
+                            {/* Discount % */}
+                            <td style={{ textAlign: 'center' }} className="font-mono">
+                              {isEditDocMode ? (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  value={item.discount_percent || 0}
+                                  onChange={(e) => handleItemFieldChange(globalIdx, 'discount_percent', Number(e.target.value))}
+                                  className="w-10 text-center font-mono bg-amber-50/70 border border-amber-300 px-0.5 py-0.5 rounded text-xs focus:outline-blue-500"
+                                />
+                              ) : (
+                                (item.discount_percent || 0) > 0 ? `${item.discount_percent}%` : '-'
+                              )}
+                            </td>
+
+                            {/* Total Price */}
+                            <td style={{ textAlign: 'right' }} className="font-mono font-bold">
+                              {(Number(item.total) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+
+                            {/* Action Delete Row button in Edit Mode */}
+                            {isEditDocMode && (
+                              <td style={{ textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteItemRow(globalIdx)}
+                                  className="text-rose-600 hover:text-rose-800 p-1 hover:bg-rose-50 rounded transition cursor-pointer"
+                                  title="Delete Item"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 mx-auto" />
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+
+                  {/* ADD ROW BUTTON IN EDIT MODE (Last Sheet Only) */}
+                  {isEditDocMode && chunk.isLastPage && (
+                    <div className="p-2 bg-slate-100 border-t border-slate-300 flex justify-start">
+                      <button
+                        type="button"
+                        onClick={handleAddItemRow}
+                        className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3 py-1 rounded shadow-xs cursor-pointer transition"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Product Row</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* TERMS & CONDITIONS + FINANCIAL SUMMARY (Last Sheet Only) */}
+                {chunk.isLastPage && (
+                  <div className="bottom-grid">
+                    {/* Terms & Conditions */}
+                    <DraggableElement id="terms_box" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Terms & Conditions" className="terms-container">
+                      <div className="terms-header">TERMS & CONDITIONS:</div>
+                      <div className="terms-content">
+                        {isEditDocMode ? (
+                          <textarea
+                            rows={3}
+                            value={docNotes}
+                            onChange={(e) => setDocNotes(e.target.value)}
+                            className="w-full font-sans text-xs bg-amber-50/70 border border-amber-300 p-1.5 rounded focus:outline-blue-500 leading-relaxed"
+                            placeholder="1. Prices stated in MYR..."
+                          />
+                        ) : (
+                          docNotes
+                        )}
+                      </div>
+                    </DraggableElement>
+
+                    {/* Financial Summary Box */}
+                    <DraggableElement id="summary_box" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Financial Summary" className="summary-box">
+                      <div className="summary-row">
+                        <span style={{ fontWeight: 600 }}>GROSS SUBTOTAL:</span>
+                        <span className="font-mono font-bold">{formatCurrency(financialTotals.subtotal)}</span>
+                      </div>
+
+                      {financialTotals.discountTotal > 0 && (
+                        <div className="summary-row" style={{ color: '#b45309' }}>
+                          <span style={{ fontWeight: 600 }}>TOTAL DISCOUNT:</span>
+                          <span className="font-mono font-bold">-{formatCurrency(financialTotals.discountTotal)}</span>
+                        </div>
+                      )}
+
+                      <div className="summary-row">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 600 }}>
+                          <span>VAT TAX (</span>
+                          {isEditDocMode ? (
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={docTaxPercent}
+                              onChange={(e) => setDocTaxPercent(Number(e.target.value))}
+                              className="w-8 text-center font-mono bg-amber-50/70 border border-amber-300 px-0.5 py-0.2 rounded text-xs"
+                            />
+                          ) : (
+                            <span>{docTaxPercent}</span>
+                          )}
+                          <span>%):</span>
+                        </div>
+                        <span className="font-mono font-bold">{formatCurrency(financialTotals.taxAmount)}</span>
+                      </div>
+
+                      <div className="summary-row grand-total">
+                        <span>GRAND TOTAL:</span>
+                        <span className="font-mono" style={{ color: '#0070c0' }}>{formatCurrency(financialTotals.grandTotal)}</span>
+                      </div>
+                    </DraggableElement>
+                  </div>
+                )}
+
+                {/* DUAL AUTHORIZATION SIGNATURES BLOCK (Last Sheet Only) */}
+                {chunk.isLastPage && (
+                  <div className="signatures-grid" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', width: '100%' }}>
+                    {/* Client Acceptance */}
+                    <DraggableElement id="signature_client" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Client Acceptance" className="sig-client-box" style={{ textAlign: 'left' }}>
+                      <p style={{ color: '#475569', fontWeight: 700, textTransform: 'uppercase', fontSize: '7pt', letterSpacing: '0.5px' }}>
+                        CONFIRMED & ACCEPTED BY (CLIENT):
+                      </p>
+                      <div className="sig-client-line"></div>
+                      <p style={{ fontWeight: 700, color: '#0f172a', marginTop: '2px', fontSize: '7.5pt' }}>
+                        NAME: ({docClientName || 'Client Contact'})
+                      </p>
+                      <p className="font-mono" style={{ color: '#475569', fontSize: '7pt' }}>
+                        COMPANY: {docCompanyName || 'Client Company'}
+                      </p>
+                      <p className="font-mono" style={{ color: '#64748b', fontSize: '7pt' }}>
+                        DATE: ____ / ____ / ________
+                      </p>
+                    </DraggableElement>
+
+                    {/* Issuer Signatory */}
+                    <DraggableElement id="signature_issuer" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Issuer Signatory" className="sig-issuer-box" style={{ textAlign: 'right', marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
+                      <p style={{ color: '#475569', fontWeight: 700, textTransform: 'uppercase', fontSize: '7pt', letterSpacing: '0.5px', textAlign: 'right' }}>
+                        Yours faithfully,
+                      </p>
+                      <p style={{ fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', fontSize: '8pt', marginTop: '1px', textAlign: 'right' }}>
+                        {companyName}
+                      </p>
+
+                      <div className="sig-img-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginLeft: 'auto', textAlign: 'right', width: '100%' }}>
+                        {signatureUrl && (
+                          <img
+                            src={signatureUrl}
+                            alt="Digital Signature"
+                            style={{ display: 'inline-block', maxHeight: '48px', maxWidth: '120px', objectFit: 'contain' }}
+                          />
+                        )}
+                        {stampUrl && (
+                          <img
+                            src={stampUrl}
+                            alt="Company Stamp"
+                            style={{ display: 'inline-block', maxHeight: '48px', maxWidth: '120px', objectFit: 'contain' }}
+                          />
+                        )}
+                        {!signatureUrl && !stampUrl && (
+                          <div style={{ width: '100px', height: '35px', border: '2px dashed #0070c0', color: '#0070c0', fontSize: '7pt', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase', marginLeft: 'auto' }}>
+                            [STAMP]
+                          </div>
+                        )}
+                      </div>
+
+                      {isEditDocMode ? (
+                        <input
+                          type="text"
+                          value={docCreatedBy}
+                          onChange={(e) => setDocCreatedBy(e.target.value)}
+                          className="font-bold text-slate-900 bg-amber-50/70 border border-amber-300 px-1.5 py-0.5 rounded text-xs text-right w-48 focus:outline-blue-500"
+                          placeholder="Signatory Name"
+                        />
+                      ) : (
+                        <p style={{ fontWeight: 800, color: '#0f172a', marginTop: '1px', fontSize: '7.5pt', textAlign: 'right' }}>
+                          <u>{docCreatedBy || 'Muhammad Aimanuddin Bin Mohd Zaki'}</u>
+                        </p>
+                      )}
+                      <p className="font-mono" style={{ color: '#64748b', fontSize: '7pt', textTransform: 'uppercase', textAlign: 'right' }}>
+                        HEAD OF SALES & LOGISTICS
+                      </p>
+                    </DraggableElement>
+                  </div>
+                )}
+              </div>
+
+              {/* BOTTOM FOOTER (Repeats on every sheet at bottom) */}
+              <DraggableElement id="footer" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Footer">
+                <footer style={{ borderTop: '1px solid #cbd5e1', paddingTop: '4px', marginTop: '4px', textAlign: 'center', fontSize: '7pt', color: '#64748b', background: '#ffffff', width: '100%' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1px', tableLayout: 'fixed' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ textAlign: 'left', width: '70%', verticalAlign: 'middle', padding: 0, border: 'none' }}>
+                          {logoUrl && (
                             <img
                               src={logoUrl}
-                              alt={companyName}
-                              className="h-16 max-w-[240px] object-contain shrink-0 pointer-events-none"
+                              alt="Logo"
+                              style={{ height: '14px', maxHeight: '14px', verticalAlign: 'middle', marginRight: '4px', display: 'inline-block' }}
                               onError={(e) => {
                                 (e.target as HTMLImageElement).src = '/favicon.png';
                               }}
                             />
-                          ) : (
-                            <div className="flex items-center gap-3 shrink-0">
-                              <div className="w-14 h-14 bg-[#004f8b] text-white font-black text-2xl flex items-center justify-center tracking-wider rounded-none shadow-xs">
-                                Ab
-                              </div>
-                              <div>
-                                <h2 className="text-xl font-black text-[#004f8b] tracking-wide uppercase leading-none">
-                                  {companyName}
-                                </h2>
-                                <span className="text-xs font-bold text-[#0070c0] font-mono block">(1601411-W)</span>
-                                <span className="text-[10px] text-slate-500 italic font-semibold">Serve To Solve</span>
-                              </div>
-                            </div>
                           )}
-                        </div>
-                      </DraggableElement>
+                          <span style={{ fontWeight: 700, color: '#004f8b', textTransform: 'uppercase', verticalAlign: 'middle' }}>
+                            {companyName}
+                          </span>
+                          <span style={{ marginLeft: '6px', fontFamily: 'ui-monospace, monospace', color: '#64748b' }}>
+                            ({companyEmail}, {companyPhone}, {companyWebsite})
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right', width: '30%', verticalAlign: 'middle', padding: 0, border: 'none', fontWeight: 700, color: '#475569' }}>
+                          Page {chunk.pageNumber} of {chunk.totalPages}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </footer>
+              </DraggableElement>
 
-                      {/* Official Registered Office Address Right */}
-                      <DraggableElement id="header_address" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Company Address" className="self-end pb-0.5">
-                        <div className="text-left sm:text-right text-xs text-slate-800 leading-snug font-sans shrink-0 font-medium">
-                          {renderDynamicAddress(companyAddress)}
-                        </div>
-                      </DraggableElement>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            </thead>
-
-            {/* MAIN DOCUMENT CONTENT BODY */}
-            <tbody>
-              <tr>
-                <td className="p-0 border-none space-y-6">
-                  {/* 3. METADATA SECTION */}
-                  <DraggableElement id="metadata_section" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Metadata Info">
-                    <div className="py-2 text-xs text-slate-800 font-sans space-y-1.5 w-full border-b border-slate-300 pb-4">
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-y-1.5 gap-x-2 items-center">
-                        <span className="md:col-span-3 font-bold text-slate-700 uppercase">Ref No.</span>
-                        <div className="md:col-span-9 flex items-center gap-1">
-                          <span className="font-bold text-slate-900">:</span>
-                          {isEditDocMode ? (
-                            <input
-                              type="text"
-                              value={docRefNo}
-                              onChange={(e) => setDocRefNo(e.target.value)}
-                              className="font-mono font-bold text-slate-900 bg-amber-50/70 border border-amber-300 px-2 py-0.5 rounded text-xs w-full max-w-sm focus:outline-blue-500"
-                            />
-                          ) : (
-                            <span className="font-mono font-bold text-slate-900">{docRefNo}</span>
-                          )}
-                        </div>
-
-                        <span className="md:col-span-3 font-bold text-slate-700 uppercase">Date</span>
-                        <div className="md:col-span-9 flex items-center gap-1">
-                          <span className="font-bold text-slate-900">:</span>
-                          {isEditDocMode ? (
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="date"
-                                value={docDateIssued}
-                                onChange={(e) => setDocDateIssued(e.target.value)}
-                                className="font-mono font-bold text-slate-900 bg-amber-50/70 border border-amber-300 px-2 py-0.5 rounded text-xs focus:outline-blue-500"
-                              />
-                              <span className="text-slate-600 font-semibold">(Valid:</span>
-                              <input
-                                type="text"
-                                value={docValidUntil}
-                                onChange={(e) => setDocValidUntil(e.target.value)}
-                                className="font-mono font-bold text-slate-900 bg-amber-50/70 border border-amber-300 px-1.5 py-0.5 rounded text-xs w-24 focus:outline-blue-500"
-                                placeholder="14 Days"
-                              />
-                              <span className="text-slate-600 font-semibold">)</span>
-                            </div>
-                          ) : (
-                            <span className="font-mono font-bold text-slate-900">{docDateIssued} (Valid: {docValidUntil})</span>
-                          )}
-                        </div>
-
-                        <span className="md:col-span-3 font-bold text-slate-700 uppercase">Project Reference</span>
-                        <div className="md:col-span-9 flex items-center gap-1">
-                          <span className="font-bold text-slate-900">:</span>
-                          {isEditDocMode ? (
-                            <input
-                              type="text"
-                              value={docProjectReference}
-                              onChange={(e) => setDocProjectReference(e.target.value)}
-                              className="font-semibold text-slate-900 bg-amber-50/70 border border-amber-300 px-2 py-0.5 rounded text-xs w-full focus:outline-blue-500"
-                              placeholder="Project reference name or specification"
-                            />
-                          ) : (
-                            <span className="font-semibold text-slate-900 leading-normal">{docProjectReference}</span>
-                          )}
-                        </div>
-
-                        <span className="md:col-span-3 font-bold text-slate-700 uppercase">Attention</span>
-                        <div className="md:col-span-9 flex items-center gap-1">
-                          <span className="font-bold text-slate-900">:</span>
-                          {isEditDocMode ? (
-                            <div className="flex items-center gap-2 w-full">
-                              <input
-                                type="text"
-                                value={docClientName}
-                                onChange={(e) => setDocClientName(e.target.value)}
-                                className="font-bold text-slate-900 bg-amber-50/70 border border-amber-300 px-2 py-0.5 rounded text-xs flex-1 focus:outline-blue-500"
-                                placeholder="Client Contact Name"
-                              />
-                              <span className="text-slate-500 font-bold">(</span>
-                              <input
-                                type="text"
-                                value={docCompanyName}
-                                onChange={(e) => setDocCompanyName(e.target.value)}
-                                className="font-bold text-slate-900 bg-amber-50/70 border border-amber-300 px-2 py-0.5 rounded text-xs flex-1 focus:outline-blue-500"
-                                placeholder="Company Name"
-                              />
-                              <span className="text-slate-500 font-bold">)</span>
-                            </div>
-                          ) : (
-                            <span className="font-bold text-slate-900">
-                              {docClientName} {docCompanyName ? `(${docCompanyName})` : ''}
-                            </span>
-                          )}
-                        </div>
-
-                        <span className="md:col-span-3 font-bold text-slate-700 uppercase">Tel No.</span>
-                        <div className="md:col-span-9 flex items-center gap-1">
-                          <span className="font-bold text-slate-900">:</span>
-                          {isEditDocMode ? (
-                            <input
-                              type="text"
-                              value={docClientPhone}
-                              onChange={(e) => setDocClientPhone(e.target.value)}
-                              className="font-mono text-slate-900 bg-amber-50/70 border border-amber-300 px-2 py-0.5 rounded text-xs w-full max-w-sm focus:outline-blue-500"
-                              placeholder="+60 12-345 6789"
-                            />
-                          ) : (
-                            <span className="font-mono text-slate-900">{docClientPhone || '—'}</span>
-                          )}
-                        </div>
-
-                        <span className="md:col-span-3 font-bold text-slate-700 uppercase">Email</span>
-                        <div className="md:col-span-9 flex items-center gap-1">
-                          <span className="font-bold text-slate-900">:</span>
-                          {isEditDocMode ? (
-                            <input
-                              type="email"
-                              value={docClientEmail}
-                              onChange={(e) => setDocClientEmail(e.target.value)}
-                              className="font-mono text-slate-900 bg-amber-50/70 border border-amber-300 px-2 py-0.5 rounded text-xs w-full max-w-sm focus:outline-blue-500"
-                              placeholder="client@company.com"
-                            />
-                          ) : (
-                            <span className="font-mono text-slate-900">{docClientEmail}</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </DraggableElement>
-
-                  {/* 4. TITLE STRIP BANNER */}
-                  <DraggableElement id="title_banner" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Title Banner">
-                    <div 
-                      className="text-white font-extrabold text-xs sm:text-sm px-4 py-2 uppercase tracking-wider text-center shadow-2xs rounded-none"
-                      style={{ backgroundColor: tableHeaderBgColor }}
-                    >
-                      COMMERCIAL QUOTATION - {docRefNo}
-                    </div>
-                  </DraggableElement>
-
-                  <DraggableElement id="intro_text" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Intro Message">
-                    <p className="text-xs text-slate-700 font-medium leading-relaxed">
-                      We would like to submit the following commercial quotation and specification list for your review and pricing:
-                    </p>
-                  </DraggableElement>
-
-                  {/* 5. LINE ITEMS SPECIFICATIONS TABLE */}
-                  <DraggableElement id="items_table" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Product Table">
-                    <div className="border border-slate-900 rounded-none overflow-x-auto w-full bg-white">
-                      <table className="w-full text-left text-xs font-sans border-collapse">
-                        <thead 
-                          className="text-white font-bold text-[10px] uppercase tracking-wide border-b border-slate-900"
-                          style={{ backgroundColor: tableHeaderBgColor }}
-                        >
-                          <tr>
-                            <th className="p-1.5 w-7 text-center border-r border-slate-900">NO.</th>
-                            <th className="p-1.5 w-10 text-center border-r border-slate-900">PHOTO</th>
-                            <th className="p-1.5 w-24 border-r border-slate-900 font-mono">PRODUCT CODE</th>
-                            <th className="p-1.5 w-16 border-r border-slate-900 font-mono">IMPA</th>
-                            <th className="p-1.5 w-36 border-r border-slate-900">PRODUCT NAME</th>
-                            <th className="p-1.5 border-r border-slate-900">SPECIFICATION / DETAILS</th>
-                            <th className="p-1.5 w-14 text-center border-r border-slate-900">QTY</th>
-                            <th className="p-1.5 w-14 text-center border-r border-slate-900">UNIT</th>
-                            <th className="p-1.5 w-24 text-right border-r border-slate-900">UNIT PRICE (MYR)</th>
-                            <th className="p-1.5 w-14 text-center border-r border-slate-900">DISC (%)</th>
-                            <th className="p-1.5 w-24 text-right border-r border-slate-900">TOTAL (MYR)</th>
-                            {isEditDocMode && <th className="p-1.5 w-8 text-center bg-rose-700 text-white">DEL</th>}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-900">
-                          {docItems.map((item, idx) => {
-                            const isEven = idx % 2 === 1;
-                            const matchedCatalogProduct = findCatalogMatch(item.description);
-                            const displayPhotoUrl = (item as any).image_url || matchedCatalogProduct?.image_url;
-                            const productCode = item.product_code || item.item_code || matchedCatalogProduct?.product_code || '';
-                            const impaCode = (item as any).impa_code || item.category_code || matchedCatalogProduct?.impa_code || '';
-                            const specText = (item as any).specification || (item as any).offer || matchedCatalogProduct?.specification || matchedCatalogProduct?.description || '';
-
-                            return (
-                              <tr key={item.id || idx} className={`${isEven ? 'bg-slate-50/90' : 'bg-white'} print:break-inside-avoid`}>
-                                <td className="p-2 text-center font-mono font-bold text-slate-800 border-r border-slate-900">
-                                  {idx + 1}
-                                </td>
-
-                                {/* Product Photo Column */}
-                                <td className="p-1 text-center border-r border-slate-900">
-                                  {displayPhotoUrl && !displayPhotoUrl.includes('unsplash') ? (
-                                    <DraggableElement id={`photo_${item.id || idx}`} isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label={`Photo #${idx + 1}`} inline>
-                                      <img
-                                        src={displayPhotoUrl}
-                                        alt={item.description}
-                                        className="w-8 h-8 object-cover border border-slate-400 rounded-none mx-auto pointer-events-none"
-                                      />
-                                    </DraggableElement>
-                                  ) : (
-                                    <div className="w-8 h-8 bg-slate-100 border border-slate-300 rounded-none mx-auto flex items-center justify-center text-slate-400" title="No photo">
-                                      <Package className="w-3.5 h-3.5 opacity-40" />
-                                    </div>
-                                  )}
-                                </td>
-
-                                {/* Product Code */}
-                                <td className="p-1.5 font-mono font-bold text-slate-900 border-r border-slate-900 text-xs">
-                                  {isEditDocMode ? (
-                                    <input
-                                      type="text"
-                                      value={item.product_code || ''}
-                                      onChange={(e) => handleItemFieldChange(idx, 'product_code', e.target.value)}
-                                      className="w-full font-mono font-bold bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
-                                      placeholder="Code / SKU"
-                                    />
-                                  ) : (
-                                    productCode || '—'
-                                  )}
-                                </td>
-
-                                {/* IMPA Code */}
-                                <td className="p-1.5 font-mono font-bold text-purple-900 border-r border-slate-900 text-xs">
-                                  {isEditDocMode ? (
-                                    <input
-                                      type="text"
-                                      value={(item as any).impa_code || ''}
-                                      onChange={(e) => handleItemFieldChange(idx, 'impa_code', e.target.value)}
-                                      className="w-full font-mono font-bold text-purple-900 bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
-                                      placeholder="IMPA"
-                                    />
-                                  ) : (
-                                    impaCode || '—'
-                                  )}
-                                </td>
-
-                                {/* Product Name */}
-                                <td className="p-1.5 font-bold text-slate-900 border-r border-slate-900 text-xs">
-                                  {isEditDocMode ? (
-                                    <input
-                                      type="text"
-                                      value={item.description}
-                                      onChange={(e) => handleItemFieldChange(idx, 'description', e.target.value)}
-                                      className="w-full font-bold bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
-                                      placeholder="Product description"
-                                    />
-                                  ) : (
-                                    item.description
-                                  )}
-                                </td>
-
-                                {/* Specification */}
-                                <td className="p-1.5 text-slate-700 border-r border-slate-900 text-[11px] leading-snug">
-                                  {isEditDocMode ? (
-                                    <textarea
-                                      rows={2}
-                                      value={(item as any).specification || specText}
-                                      onChange={(e) => handleItemFieldChange(idx, 'specification', e.target.value)}
-                                      className="w-full text-slate-800 bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
-                                      placeholder="Detailed specifications"
-                                    />
-                                  ) : (
-                                    specText || 'Standard specification'
-                                  )}
-                                </td>
-
-                                {/* Quantity */}
-                                <td className="p-1.5 text-center font-mono font-bold text-slate-900 border-r border-slate-900">
-                                  {isEditDocMode ? (
-                                    <input
-                                      type="number"
-                                      min="1"
-                                      value={item.quantity}
-                                      onChange={(e) => handleItemFieldChange(idx, 'quantity', Number(e.target.value))}
-                                      className="w-12 text-center font-mono font-bold bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
-                                    />
-                                  ) : (
-                                    item.quantity
-                                  )}
-                                </td>
-
-                                {/* Unit */}
-                                <td className="p-1.5 text-center text-slate-800 border-r border-slate-900">
-                                  {isEditDocMode ? (
-                                    <input
-                                      type="text"
-                                      value={item.unit || 'Unit'}
-                                      onChange={(e) => handleItemFieldChange(idx, 'unit', e.target.value)}
-                                      className="w-12 text-center bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
-                                    />
-                                  ) : (
-                                    item.unit || 'Unit'
-                                  )}
-                                </td>
-
-                                {/* Unit Price */}
-                                <td className="p-1.5 text-right font-mono text-slate-900 border-r border-slate-900">
-                                  {isEditDocMode ? (
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      value={item.unit_price}
-                                      onChange={(e) => handleItemFieldChange(idx, 'unit_price', Number(e.target.value))}
-                                      className="w-20 text-right font-mono font-bold bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
-                                    />
-                                  ) : (
-                                    formatCurrency(item.unit_price)
-                                  )}
-                                </td>
-
-                                {/* Discount % */}
-                                <td className="p-1.5 text-center font-mono text-slate-900 border-r border-slate-900 font-bold">
-                                  {isEditDocMode ? (
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max="100"
-                                      value={item.discount_percent || 0}
-                                      onChange={(e) => handleItemFieldChange(idx, 'discount_percent', Number(e.target.value))}
-                                      className="w-10 text-center font-mono bg-amber-50/70 border border-amber-300 px-0.5 py-0.5 rounded text-xs focus:outline-blue-500"
-                                    />
-                                  ) : (
-                                    item.discount_percent > 0 ? `${item.discount_percent}%` : '-'
-                                  )}
-                                </td>
-
-                                {/* Total */}
-                                <td className="p-2 text-right font-mono font-bold text-slate-900 text-xs border-r border-slate-900">
-                                  {formatCurrency(item.total)}
-                                </td>
-
-                                {/* Action Delete row button in Edit Mode */}
-                                {isEditDocMode && (
-                                  <td className="p-1 text-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteItemRow(idx)}
-                                      className="text-rose-600 hover:text-rose-800 p-1 hover:bg-rose-50 rounded transition"
-                                      title="Delete Item"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5 mx-auto" />
-                                    </button>
-                                  </td>
-                                )}
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-
-                      {/* ADD ROW BUTTON IN EDIT MODE */}
-                      {isEditDocMode && (
-                        <div className="p-2 bg-slate-100 border-t border-slate-300 flex justify-start">
-                          <button
-                            type="button"
-                            onClick={handleAddItemRow}
-                            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3 py-1 rounded shadow-xs cursor-pointer transition"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Add Product Row</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </DraggableElement>
-
-                  {/* 6. TERMS & CONDITIONS + FINANCIAL SUMMARY GRID */}
-                  <div className="flex flex-col md:flex-row justify-between items-start gap-8 pt-2 w-full print:break-inside-avoid">
-                    
-                    {/* TERMS & CONDITIONS */}
-                    <DraggableElement id="terms_box" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Terms & Conditions" className="w-full md:w-1/2">
-                      <div className="space-y-2 text-xs">
-                        <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest block border-b border-slate-900 pb-1">
-                          TERMS & CONDITIONS:
-                        </span>
-                        <div className="text-slate-700 whitespace-pre-line leading-relaxed font-sans pt-1 space-y-1 text-xs">
-                          {isEditDocMode ? (
-                            <textarea
-                              rows={4}
-                              value={docNotes}
-                              onChange={(e) => setDocNotes(e.target.value)}
-                              className="w-full font-sans text-xs bg-amber-50/70 border border-amber-300 p-2 rounded focus:outline-blue-500 leading-relaxed"
-                              placeholder="1. Prices stated in MYR..."
-                            />
-                          ) : (
-                            <p>{docNotes}</p>
-                          )}
-                        </div>
-                      </div>
-                    </DraggableElement>
-
-                    {/* FINANCIAL SUMMARY BOX */}
-                    <DraggableElement id="summary_box" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Financial Summary" className="w-full md:w-80">
-                      <div className="border-2 border-slate-900 rounded-none p-4 space-y-2 text-xs bg-white">
-                        <div className="flex justify-between items-center text-slate-700">
-                          <span className="font-semibold">GROSS SUBTOTAL:</span>
-                          <span className="font-mono font-bold text-slate-900">{formatCurrency(financialTotals.subtotal)}</span>
-                        </div>
-
-                        {financialTotals.discountTotal > 0 && (
-                          <div className="flex justify-between items-center text-amber-800">
-                            <span className="font-semibold">TOTAL DISCOUNT:</span>
-                            <span className="font-mono font-bold">-{formatCurrency(financialTotals.discountTotal)}</span>
-                          </div>
-                        )}
-
-                        <div className="flex justify-between items-center text-slate-700">
-                          <div className="flex items-center gap-1 font-semibold">
-                            <span>VAT TAX (</span>
-                            {isEditDocMode ? (
-                              <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={docTaxPercent}
-                                onChange={(e) => setDocTaxPercent(Number(e.target.value))}
-                                className="w-10 text-center font-mono bg-amber-50/70 border border-amber-300 px-0.5 py-0.2 rounded text-xs"
-                              />
-                            ) : (
-                              <span>{docTaxPercent}</span>
-                            )}
-                            <span>%):</span>
-                          </div>
-                          <span className="font-mono font-bold text-slate-900">{formatCurrency(financialTotals.taxAmount)}</span>
-                        </div>
-
-                        <div className="border-t-2 border-slate-900 pt-2 flex justify-between items-center text-slate-900 font-black text-base">
-                          <span>GRAND TOTAL:</span>
-                          <span className="font-mono text-[#0070c0]">{formatCurrency(financialTotals.grandTotal)}</span>
-                        </div>
-                      </div>
-                    </DraggableElement>
-
-                  </div>
-
-                  {/* 7. DUAL AUTHORIZATION SIGNATURE BLOCK */}
-                  <div className="flex flex-col sm:flex-row justify-between items-end pt-8 border-t border-slate-300 text-xs w-full gap-8 print:break-inside-avoid">
-                    {/* CLIENT ACCEPTANCE */}
-                    <DraggableElement id="signature_client" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Client Acceptance">
-                      <div className="space-y-1">
-                        <p className="text-slate-600 font-bold uppercase tracking-wide">CONFIRMED & ACCEPTED BY (CLIENT):</p>
-                        <div className="h-16 border-b border-slate-400 w-48"></div>
-                        <p className="font-bold text-slate-900 pt-1">NAME: ({docClientName || 'Client Contact'})</p>
-                        <p className="text-slate-600 font-mono text-[11px]">COMPANY: {docCompanyName || 'Client Company'}</p>
-                        <p className="text-slate-500 font-mono text-[11px]">DATE: ____ / ____ / ________</p>
-                      </div>
-                    </DraggableElement>
-
-                    {/* ISSUER SIGNATORY */}
-                    <DraggableElement id="signature_issuer" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Issuer Signature">
-                      <div className="text-left sm:text-right space-y-1">
-                        <p className="text-slate-600 font-bold uppercase tracking-wide">Yours faithfully,</p>
-                        <strong className="block text-slate-900 font-extrabold uppercase">{companyName}</strong>
-                        
-                        <div className="h-20 flex items-center justify-start sm:justify-end my-1 gap-2">
-                          {signatureUrl && (
-                            <img
-                              src={signatureUrl}
-                              alt="Digital Signature"
-                              className="h-20 object-contain max-w-[140px] pointer-events-none"
-                            />
-                          )}
-                          {stampUrl && (
-                            <img
-                              src={stampUrl}
-                              alt="Company Stamp"
-                              className="h-20 object-contain max-w-[140px] pointer-events-none"
-                            />
-                          )}
-                          {!signatureUrl && !stampUrl && (
-                            <div className="w-36 h-12 border-2 border-[#0070c0] border-dashed flex items-center justify-center text-[#0070c0] text-[10px] font-black uppercase tracking-wider transform -rotate-2">
-                              [STAMP]
-                            </div>
-                          )}
-                        </div>
-
-                        {isEditDocMode ? (
-                          <input
-                            type="text"
-                            value={docCreatedBy}
-                            onChange={(e) => setDocCreatedBy(e.target.value)}
-                            className="font-bold text-slate-900 bg-amber-50/70 border border-amber-300 px-2 py-0.5 rounded text-xs text-right w-56 focus:outline-blue-500"
-                            placeholder="Signatory Name"
-                          />
-                        ) : (
-                          <p className="font-bold text-slate-900"><u>{docCreatedBy || 'Muhammad Aimanuddin Bin Mohd Zaki'}</u></p>
-                        )}
-                        <p className="text-slate-600 font-mono text-[11px]">HEAD OF SALES & LOGISTICS</p>
-                      </div>
-                    </DraggableElement>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-
-            {/* REPEATING FOOTER FOR PRINT / MULTI-PAGE */}
-            <tfoot className="table-footer-group">
-              <tr>
-                <td className="p-0 border-none pt-4">
-                  {/* 8. OFFICIAL AB MALAYA FOOTER */}
-                  <DraggableElement id="footer" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Footer">
-                    <div className="border-t border-slate-300 pt-5 mt-6 text-center space-y-2 w-full">
-                      <div className="flex items-center justify-center gap-2">
-                        <img
-                          src={logoUrl || '/favicon.png'}
-                          alt="Company Logo / Favicon"
-                          className="h-6 max-h-6 object-contain block pointer-events-none"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/favicon.png';
-                          }}
-                        />
-                        <span className="font-bold text-xs text-[#004f8b] uppercase tracking-wide">{companyName}</span>
-                      </div>
-                      <p className="text-[10px] text-slate-600 font-mono">
-                        {(quotation as any).created_by_email || (quotation as any).sender_email || (quotation as any).user_email || companyEmail}, {companyPhone}, {companyWebsite}
-                      </p>
-                    </div>
-                  </DraggableElement>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* ── QUICK PAPER & MARGINS SETUP MODAL ──────────────────────────────── */}
@@ -1678,6 +2202,49 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
           </div>
         </div>
       )}
+
+      {/* ── STICKY / FLOATING QUICK ACTION BAR (ALWAYS VISIBLE DURING SCROLLING) ── */}
+      <div className="no-print fixed bottom-5 right-6 z-50 flex items-center gap-2.5 bg-slate-900/95 backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-2xl border border-slate-700 text-white animate-in fade-in slide-in-from-bottom-2">
+        <div className="text-[11px] font-mono text-slate-300 pr-2 border-r border-slate-700 hidden sm:block">
+          <span>SPH: </span>
+          <strong className="text-white">{docRefNo || 'QUO'}</strong>
+        </div>
+
+        <button
+          type="button"
+          onClick={handlePrint}
+          className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-3.5 py-1.5 rounded-xl shadow-lg transition cursor-pointer hover:scale-105 active:scale-95"
+          title="Print entire document to printer or save as PDF"
+        >
+          <Printer className="w-4 h-4 text-white" />
+          <span>Direct Print (PDF)</span>
+        </button>
+
+        <a
+          href={`/api_pdf.php?action=download&type=quotation&id=${quotation.id}${getSessionUserParams()}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => {
+            fetch(`/api_pdf.php?action=generate&type=quotation&id=${quotation.id}${getSessionUserParams()}`).catch(() => {});
+          }}
+          className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs px-3.5 py-1.5 rounded-xl shadow-lg transition cursor-pointer hover:scale-105 active:scale-95"
+          title="Download full PDF generated by Puppeteer engine"
+        >
+          <FileType className="w-4 h-4 text-white" />
+          <span>Download Full PDF</span>
+        </a>
+
+        <a
+          href={`/view_doc.php?type=quotation&id=${quotation.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs px-2.5 py-1.5 rounded-xl border border-slate-600 transition cursor-pointer"
+          title="Open original view_doc.php template in new tab"
+        >
+          <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
+          <span className="hidden md:inline">Live Template</span>
+        </a>
+      </div>
 
     </div>
   );

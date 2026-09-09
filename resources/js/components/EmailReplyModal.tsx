@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Quotation, RFQ } from '../types/erp';
-import { Mail, Send, Paperclip, CheckCircle2, X, Loader2, Sparkles } from 'lucide-react';
+import { Mail, Send, Paperclip, CheckCircle2, X, Loader2, Sparkles, FileText } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
 interface EmailReplyModalProps {
@@ -319,24 +319,39 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
             Cancel / Go Back
           </button>
 
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={sending}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-5 py-2 rounded-md shadow-xs transition cursor-pointer disabled:opacity-50 text-xs"
-          >
-            {sending ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Sending Email...</span>
-              </>
-            ) : (
-              <>
-                <Send className="w-4 h-4" />
-                <span>Send Email to Client</span>
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const invUrl = `/view_doc.php?type=invoice&id=${encodeURIComponent(quotation.id)}`;
+                window.open(invUrl, '_blank');
+              }}
+              className="flex items-center gap-2 bg-purple-700 hover:bg-purple-800 text-white font-extrabold px-4 py-2 rounded-md shadow-xs transition cursor-pointer text-xs"
+              title="Generate and view Official Invoice for this quotation"
+            >
+              <FileText className="w-4 h-4 text-purple-200" />
+              <span>Buat Invoice / Generate Invoice</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={sending}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-5 py-2 rounded-md shadow-xs transition cursor-pointer disabled:opacity-50 text-xs"
+            >
+              {sending ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Sending Email...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  <span>Send Email to Client</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       )}
 

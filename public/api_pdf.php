@@ -15,6 +15,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/db_connect.php';
 $connection = isset($conn) ? $conn : $db_conn;
 
+if (php_sapi_name() === 'cli' && isset($argv) && is_array($argv)) {
+    foreach ($argv as $arg) {
+        if (strpos($arg, '=') !== false) {
+            list($k, $v) = explode('=', $arg, 2);
+            $_GET[$k] = $v;
+        }
+    }
+}
+
 $type = isset($_GET['type']) ? trim($_GET['type']) : (isset($_POST['type']) ? trim($_POST['type']) : 'quotation');
 $id = isset($_GET['id']) ? trim($_GET['id']) : (isset($_POST['id']) ? trim($_POST['id']) : '');
 $action = isset($_GET['action']) ? trim($_GET['action']) : (isset($_POST['action']) ? trim($_POST['action']) : 'download');
@@ -67,35 +76,41 @@ $host = $_SERVER['HTTP_HOST'] ?? '127.0.0.1:8000';
 // If running locally or on server port 8000
 $targetViewUrl = "http://127.0.0.1:8000/view_doc.php?type=" . urlencode($type) . "&id=" . urlencode($id);
 
-// Execute Puppeteer Headless Chrome script
-$nodeScript = __DIR__ . '/../scripts/generate_pdf_puppeteer.cjs';
-if (!file_exists($nodeScript)) {
-    $nodeScript = __DIR__ . '/scripts/generate_pdf_puppeteer.cjs';
-}
+$force = (isset($_GET['force']) && $_GET['force'] === '1') || (isset($_POST['force']) && $_POST['force'] === '1') || $action === 'recreate';
+$fileAge = file_exists($pdfPath) ? (time() - filemtime($pdfPath)) : 9999;
+$shouldGenerate = $force || !file_exists($pdfPath) || filesize($pdfPath) < 500 || $fileAge > 5;
 
-$cmd = "node " . escapeshellarg($nodeScript) . " " . escapeshellarg($type) . " " . escapeshellarg($id) . " " . escapeshellarg($pdfPath) . " " . escapeshellarg($targetViewUrl) . " 2>&1";
-exec($cmd, $outputArray, $returnCode);
+if ($shouldGenerate) {
+    // Execute Puppeteer Headless Chrome script
+    $nodeScript = __DIR__ . '/../scripts/generate_pdf_puppeteer.cjs';
+    if (!file_exists($nodeScript)) {
+        $nodeScript = __DIR__ . '/scripts/generate_pdf_puppeteer.cjs';
+    }
 
-if (!file_exists($pdfPath) || filesize($pdfPath) < 100) {
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Failed to generate PDF via Headless Chrome: ' . implode(" ", $outputArray)
-    ]);
-    exit;
+    $cmd = "node " . escapeshellarg($nodeScript) . " " . escapeshellarg($type) . " " . escapeshellarg($id) . " " . escapeshellarg($pdfPath) . " " . escapeshellarg($targetViewUrl) . " 2>&1";
+    exec($cmd, $outputArray, $returnCode);
+
+    if (!file_exists($pdfPath) || filesize($pdfPath) < 100) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Failed to generate PDF via Headless Chrome: ' . implode(" ", $outputArray)
+        ]);
+        exit;
+    }
 }
 
 // Update quotation status in database upon successful generation
 if ($type === 'quotation') {
-    $stmt_upd = $connection->prepare("UPDATE quotations SET pdf_created = 1, pdf_created_at = NOW(), status = 'acc' WHERE id = ? OR quotation_number = ?");
+    $stmt_upd = $connection->prepare("UPDATE quotations SET pdf_created = 1, pdf_created_at = NOW(), quotation_file = ? WHERE id = ? OR quotation_number = ?");
     if ($stmt_upd) {
-        $stmt_upd->bind_param("ss", $id, $id);
+        $stmt_upd->bind_param("sss", $pdfRelativeUrl, $id, $id);
         $stmt_upd->execute();
         $stmt_upd->close();
     }
     
-    // Fetch rfq_id to log history
-    $stmt_rfq = $connection->prepare("SELECT rfq_id, quotation_number FROM quotations WHERE id = ? OR quotation_number = ? LIMIT 1");
+    // Fetch rfq_id and created_by to log history
+    $stmt_rfq = $connection->prepare("SELECT rfq_id, quotation_number, created_by FROM quotations WHERE id = ? OR quotation_number = ? LIMIT 1");
     if ($stmt_rfq) {
         $stmt_rfq->bind_param("ss", $id, $id);
         $stmt_rfq->execute();
@@ -103,7 +118,15 @@ if ($type === 'quotation') {
         if ($res_rfq && $row_q = $res_rfq->fetch_assoc()) {
             if (!empty($row_q['rfq_id'])) {
                 $clean_rfq_id = (int)str_replace(['GMAIL-LIVE-', 'RFQ-'], '', $row_q['rfq_id']);
-                appendRfqHistoryLog($connection, $clean_rfq_id, 'Generate PDF SPH', 'System Generator', 'system@abmalaya.com', "Dokumen PDF SPH {$row_q['quotation_number']} berhasil digenerate dan dikonfirmasi. Status penawaran otomatis masuk ke tab ACC / Approve.");
+                
+                $actor_name = isset($_REQUEST['user_name']) && trim($_REQUEST['user_name']) !== '' 
+                    ? trim($_REQUEST['user_name']) 
+                    : (!empty($row_q['created_by']) ? $row_q['created_by'] : 'Sistem');
+                $actor_email = isset($_REQUEST['user_email']) && trim($_REQUEST['user_email']) !== '' 
+                    ? trim($_REQUEST['user_email']) 
+                    : null;
+                
+                appendRfqHistoryLog($connection, $clean_rfq_id, 'Generate PDF SPH', $actor_name, $actor_email, "Dokumen PDF SPH {$row_q['quotation_number']} berhasil digenerate.");
             }
         }
         $stmt_rfq->close();

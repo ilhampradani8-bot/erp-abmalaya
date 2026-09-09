@@ -129,6 +129,28 @@ foreach ($quo_cols as $col => $sql) {
     }
 }
 
+// 4. clients table for client companies database (TEXT for multi-email support)
+$connection->query("CREATE TABLE IF NOT EXISTS clients (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_name VARCHAR(255) NOT NULL,
+    client_name VARCHAR(255) DEFAULT NULL,
+    email TEXT DEFAULT NULL,
+    phone VARCHAR(100) DEFAULT NULL,
+    address_line1 TEXT DEFAULT NULL,
+    address_line2 TEXT DEFAULT NULL,
+    city VARCHAR(100) DEFAULT NULL,
+    state VARCHAR(100) DEFAULT NULL,
+    postal_code VARCHAR(50) DEFAULT NULL,
+    country VARCHAR(100) DEFAULT 'Malaysia',
+    tax_id VARCHAR(100) DEFAULT NULL,
+    notes TEXT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+$connection->query("ALTER TABLE clients MODIFY email TEXT DEFAULT NULL");
+$results['clients'][] = "Ensured clients table exists with multi-email TEXT column";
+
 ob_end_clean();
 echo json_encode([
     'status' => 'success',

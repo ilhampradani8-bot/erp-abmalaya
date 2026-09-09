@@ -305,7 +305,7 @@ function autoGenerateQuotation($db_conn, $rfq_row, $items, $item_requested) {
         $stmt_upd->execute();
         $stmt_upd->close();
         daemon_log("  -> SUCCESS: Created SPH #{$quo_num} with status 'requisition'.");
-        appendQuotationHistoryLog($db_conn, $quo_id, 'Create SPH (AI)', 'Sesi Daemon Otomatis', 'daemon@abmalaya.com', "Klasifikasi RFQ selesai dan draft SPH berhasil dibuat (Grand Total: RM {$grand_total}).");
+        appendQuotationHistoryLog($db_conn, $quo_id, 'Create SPH (AI)', 'Sistem Daemon', null, "Klasifikasi RFQ selesai dan draft SPH berhasil dibuat (Grand Total: RM {$grand_total}).");
     }
 }
 
@@ -411,9 +411,9 @@ while ($row = $res->fetch_assoc()) {
         
         if ($verified) {
             if ($classification === 'client_rfq') {
-                appendRfqHistoryLog($db_conn, $rfq_num, 'Lolos Verification', 'Sesi Daemon Otomatis', 'daemon@abmalaya.com', 'Email berhasil diklasifikasikan sebagai Permintaan SPH (client_rfq) dan draf Quotation dibuat.');
+                appendRfqHistoryLog($db_conn, $rfq_num, 'Lolos Verification', 'Sistem Daemon', null, 'Email berhasil diklasifikasikan sebagai Permintaan SPH (client_rfq) dan draf Quotation dibuat.');
             } else {
-                appendRfqHistoryLog($db_conn, $rfq_num, 'Klasifikasi (AI)', 'Sesi Daemon Otomatis', 'daemon@abmalaya.com', 'Email diklasifikasikan sebagai Spam (junk).');
+                appendRfqHistoryLog($db_conn, $rfq_num, 'Klasifikasi (AI)', 'Sesi Daemon Otomatis', null, 'Email diklasifikasikan sebagai Spam (junk).');
             }
         }
     }
