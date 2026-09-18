@@ -82,11 +82,23 @@ try {
     }
 
 
-    // 3. Ensure `quotations` table has impa_code
+    // 3. Ensure `quotations` table has impa_code, source_file, quotation_file
     $chk_qic = $db_conn->query("SHOW COLUMNS FROM `quotations` LIKE 'impa_code'");
     if ($chk_qic && $chk_qic->num_rows === 0) {
         $db_conn->query("ALTER TABLE `quotations` ADD COLUMN `impa_code` VARCHAR(50) DEFAULT NULL AFTER `category_name`");
         $log[] = "Added column `impa_code` to `quotations`.";
+    }
+
+    $chk_sf = $db_conn->query("SHOW COLUMNS FROM `quotations` LIKE 'source_file'");
+    if ($chk_sf && $chk_sf->num_rows === 0) {
+        $db_conn->query("ALTER TABLE `quotations` ADD COLUMN `source_file` TEXT DEFAULT NULL AFTER `notes`");
+        $log[] = "Added column `source_file` to `quotations`.";
+    }
+
+    $chk_qf = $db_conn->query("SHOW COLUMNS FROM `quotations` LIKE 'quotation_file'");
+    if ($chk_qf && $chk_qf->num_rows === 0) {
+        $db_conn->query("ALTER TABLE `quotations` ADD COLUMN `quotation_file` TEXT DEFAULT NULL AFTER `source_file`");
+        $log[] = "Added column `quotation_file` to `quotations`.";
     }
 
     // 4. Ensure `rfq_requests` has ai_verified, ai_classification, ai_error

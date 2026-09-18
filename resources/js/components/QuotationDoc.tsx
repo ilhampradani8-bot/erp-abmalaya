@@ -399,10 +399,14 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
     };
   }, [docItems, docTaxPercent]);
 
-  // Smart Pagination Algorithm (Splits items cleanly into separate A4 Sheets)
+  // Smart Pagination Algorithm (Fills A4 Sheets densely before moving to next page)
   const pageChunks: PageChunk[] = useMemo(() => {
     const totalItems = docItems.length;
-    if (totalItems <= 4) {
+    
+    // Page 1 capacity: 6 items if single-page (fits terms & signature), 8 items if multi-page
+    // Subsequent page capacity: 10 items if middle page, 8 items if last page with terms/signature
+    
+    if (totalItems <= 6) {
       return [{
         pageNumber: 1,
         totalPages: 1,
@@ -413,46 +417,25 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
       }];
     }
 
-    if (totalItems <= 8) {
-      const page1Count = Math.ceil(totalItems / 2);
-      return [
-        {
-          pageNumber: 1,
-          totalPages: 2,
-          items: docItems.slice(0, page1Count),
-          startIndex: 0,
-          isFirstPage: true,
-          isLastPage: false,
-        },
-        {
-          pageNumber: 2,
-          totalPages: 2,
-          items: docItems.slice(page1Count),
-          startIndex: page1Count,
-          isFirstPage: false,
-          isLastPage: true,
-        }
-      ];
-    }
-
-    // For larger catalogs (> 8 items)
     const pages: PageChunk[] = [];
-    const page1Items = docItems.slice(0, 6);
+    // Page 1: Take up to 7 items max if multi-page
+    const page1Count = Math.min(7, totalItems);
     pages.push({
       pageNumber: 1,
       totalPages: 0,
-      items: page1Items,
+      items: docItems.slice(0, page1Count),
       startIndex: 0,
       isFirstPage: true,
-      isLastPage: false,
+      isLastPage: page1Count === totalItems,
     });
 
-    let remaining = docItems.slice(6);
-    let currentIndex = 6;
+    let remaining = docItems.slice(page1Count);
+    let currentIndex = page1Count;
     let pNum = 2;
 
     while (remaining.length > 0) {
-      if (remaining.length <= 4) {
+      // If remaining items fit on last page with terms & signature (up to 8 items)
+      if (remaining.length <= 8) {
         pages.push({
           pageNumber: pNum,
           totalPages: 0,
@@ -462,30 +445,10 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
           isLastPage: true,
         });
         break;
-      } else if (remaining.length <= 8) {
-        const count = Math.ceil(remaining.length / 2);
-        const chunk1 = remaining.slice(0, count);
-        const chunk2 = remaining.slice(count);
-        pages.push({
-          pageNumber: pNum,
-          totalPages: 0,
-          items: chunk1,
-          startIndex: currentIndex,
-          isFirstPage: false,
-          isLastPage: false,
-        });
-        pages.push({
-          pageNumber: pNum + 1,
-          totalPages: 0,
-          items: chunk2,
-          startIndex: currentIndex + count,
-          isFirstPage: false,
-          isLastPage: true,
-        });
-        break;
       } else {
-        const chunk = remaining.slice(0, 7);
-        remaining = remaining.slice(7);
+        // Middle page capacity: 10 items
+        const chunk = remaining.slice(0, 10);
+        remaining = remaining.slice(10);
         pages.push({
           pageNumber: pNum,
           totalPages: 0,
@@ -1071,6 +1034,17 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
         .items-table tr:nth-child(even) td {
           background-color: #f8fafc;
         }
+        .product-photo-full {
+          width: 100% !important;
+          max-height: 140px !important;
+          object-fit: contain !important;
+          border: 1px solid #cbd5e1 !important;
+          border-radius: 3px !important;
+          background-color: #ffffff !important;
+          padding: 2px !important;
+          margin-top: 4px !important;
+          display: block !important;
+        }
         .product-photo {
           width: 26px;
           height: 26px;
@@ -1492,11 +1466,11 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
               <div style={{ width: '100%' }}>
                 <div style={{ width: '100%', borderBottom: '2px solid #004f8b', paddingBottom: '3px', marginBottom: '4px', background: '#ffffff' }}>
                   {headerImageUrl ? (
-                    <div style={{ width: '100%', marginBottom: '3px' }}>
+                    <div style={{ width: '100%', marginBottom: '4px', marginTop: '-2px' }}>
                       <img
                         src={headerImageUrl}
                         alt="Header Banner"
-                        style={{ width: '100%', maxHeight: '60px', objectFit: 'cover', display: 'block' }}
+                        style={{ width: '100%', height: 'auto', maxHeight: '90px', objectFit: 'cover', objectPosition: 'top center', display: 'block' }}
                       />
                     </div>
                   ) : (
@@ -1706,17 +1680,13 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                   <table className="items-table">
                     <thead>
                       <tr>
-                        <th style={{ width: '3.5%', textAlign: 'center' }}>NO.</th>
-                        <th style={{ width: '4.5%', textAlign: 'center' }}>IMG</th>
-                        <th style={{ width: '11%' }} className="font-mono">PRODUCT CODE</th>
-                        <th style={{ width: '7.5%' }} className="font-mono">IMPA</th>
-                        <th style={{ width: '15.5%' }}>PRODUCT NAME</th>
-                        <th style={{ width: '21%' }}>SPECIFICATION</th>
-                        <th style={{ width: '4%', textAlign: 'center' }}>QTY</th>
-                        <th style={{ width: '5%', textAlign: 'center' }}>UNIT</th>
+                        <th style={{ width: '4%', textAlign: 'center' }}>NO.</th>
+                        <th style={{ width: '38%' }}>ITEM</th>
+                        <th style={{ width: '6%', textAlign: 'center' }}>QTY</th>
+                        <th style={{ width: '7%', textAlign: 'center' }}>UNIT</th>
+                        <th style={{ width: '20%' }}>OFFERED ITEM</th>
                         <th style={{ width: '11%', textAlign: 'right' }}>UNIT PRICE (MYR)</th>
-                        <th style={{ width: '5%', textAlign: 'center' }}>DISC (%)</th>
-                        <th style={{ width: isEditDocMode ? '10%' : '12%', textAlign: 'right' }}>TOTAL (MYR)</th>
+                        <th style={{ width: isEditDocMode ? '10%' : '14%', textAlign: 'right' }}>TOTAL PRICE (MYR)</th>
                         {isEditDocMode && <th style={{ width: '4%', textAlign: 'center', background: '#be123c', color: '#ffffff' }}>DEL</th>}
                       </tr>
                     </thead>
@@ -1725,87 +1695,54 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                         const globalIdx = chunk.startIndex + localIdx;
                         const matchedCatalogProduct = findCatalogMatch(item.description);
                         const displayPhotoUrl = (item as any).image_url || matchedCatalogProduct?.image_url;
-                        const productCode = item.product_code || item.item_code || matchedCatalogProduct?.product_code || '—';
-                        const impaCode = (item as any).impa_code || item.category_code || matchedCatalogProduct?.impa_code || '—';
-                        const specText = (item as any).specification || (item as any).offer || matchedCatalogProduct?.specification || matchedCatalogProduct?.description || 'Standard manufacturer specification';
+                        const specText = (item as any).specification || matchedCatalogProduct?.specification || matchedCatalogProduct?.description || 'Standard manufacturer specification';
+                        const offeredItemText = (item as any).offer || (item as any).offered_item || (item as any).offer_name || '—';
 
                         return (
                           <tr key={item.id || globalIdx}>
                             <td style={{ textAlign: 'center' }} className="font-mono">{globalIdx + 1}</td>
 
-                            {/* Photo Cell */}
-                            <td style={{ textAlign: 'center' }}>
-                              {displayPhotoUrl && !displayPhotoUrl.includes('unsplash') ? (
-                                <DraggableElement id={`photo_${item.id || globalIdx}`} isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label={`Photo #${globalIdx + 1}`} inline>
-                                  <img
-                                    src={displayPhotoUrl}
-                                    alt={item.description}
-                                    className="product-photo"
+                            {/* ITEM Column: Stacked Product Name, Specification, and Full-Width Photo */}
+                            <td style={{ color: '#0f172a', verticalAlign: 'top' }}>
+                              <div className="font-bold text-slate-900 leading-tight text-[8pt] mb-0.5">
+                                {isEditDocMode ? (
+                                  <input
+                                    type="text"
+                                    value={item.description}
+                                    onChange={(e) => handleItemFieldChange(globalIdx, 'description', e.target.value)}
+                                    className="w-full font-bold bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
+                                    placeholder="Product description / name"
                                   />
-                                </DraggableElement>
-                              ) : (
-                                <div className="no-photo-box">📦</div>
-                              )}
-                            </td>
+                                ) : (
+                                  item.description
+                                )}
+                              </div>
 
-                            {/* Product Code */}
-                            <td className="font-mono" style={{ color: '#0f172a' }}>
-                              {isEditDocMode ? (
-                                <input
-                                  type="text"
-                                  value={item.product_code || ''}
-                                  onChange={(e) => handleItemFieldChange(globalIdx, 'product_code', e.target.value)}
-                                  className="w-full font-mono font-normal bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
-                                  placeholder="Code / SKU"
-                                />
-                              ) : (
-                                productCode
-                              )}
-                            </td>
+                              <div className="text-slate-600 text-[7.5pt] leading-tight mb-1 font-sans">
+                                {isEditDocMode ? (
+                                  <textarea
+                                    rows={2}
+                                    value={(item as any).specification || specText}
+                                    onChange={(e) => handleItemFieldChange(globalIdx, 'specification', e.target.value)}
+                                    className="w-full text-slate-800 bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
+                                    placeholder="Detailed specifications"
+                                  />
+                                ) : (
+                                  specText
+                                )}
+                              </div>
 
-                            {/* IMPA Code */}
-                            <td className="font-mono" style={{ color: '#581c87' }}>
-                              {isEditDocMode ? (
-                                <input
-                                  type="text"
-                                  value={(item as any).impa_code || ''}
-                                  onChange={(e) => handleItemFieldChange(globalIdx, 'impa_code', e.target.value)}
-                                  className="w-full font-mono font-normal text-purple-900 bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
-                                  placeholder="IMPA"
-                                />
-                              ) : (
-                                impaCode
-                              )}
-                            </td>
-
-                            {/* Product Name */}
-                            <td style={{ fontWeight: 'normal', color: '#0f172a' }}>
-                              {isEditDocMode ? (
-                                <input
-                                  type="text"
-                                  value={item.description}
-                                  onChange={(e) => handleItemFieldChange(globalIdx, 'description', e.target.value)}
-                                  className="w-full font-normal bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
-                                  placeholder="Product description"
-                                />
-                              ) : (
-                                item.description
-                              )}
-                            </td>
-
-                            {/* Specification */}
-                            <td style={{ color: '#334155', fontSize: '7.5pt', lineHeight: 1.25 }}>
-                              {isEditDocMode ? (
-                                <textarea
-                                  rows={2}
-                                  value={(item as any).specification || specText}
-                                  onChange={(e) => handleItemFieldChange(globalIdx, 'specification', e.target.value)}
-                                  className="w-full text-slate-800 bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
-                                  placeholder="Detailed specifications"
-                                />
-                              ) : (
-                                specText
-                              )}
+                              {displayPhotoUrl && !displayPhotoUrl.includes('unsplash') ? (
+                                <div className="w-full mt-1">
+                                  <DraggableElement id={`photo_${item.id || globalIdx}`} isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label={`Photo #${globalIdx + 1}`}>
+                                    <img
+                                      src={displayPhotoUrl}
+                                      alt={item.description}
+                                      className="product-photo-full"
+                                    />
+                                  </DraggableElement>
+                                </div>
+                              ) : null}
                             </td>
 
                             {/* Quantity */}
@@ -1837,6 +1774,21 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                               )}
                             </td>
 
+                            {/* Offered Item / Name Offered */}
+                            <td style={{ color: '#0f172a', verticalAlign: 'top' }}>
+                              {isEditDocMode ? (
+                                <textarea
+                                  rows={2}
+                                  value={(item as any).offer || (item as any).offered_item || ''}
+                                  onChange={(e) => handleItemFieldChange(globalIdx, 'offer', e.target.value)}
+                                  className="w-full text-slate-800 bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
+                                  placeholder="Name offered / penawaran alternatif"
+                                />
+                              ) : (
+                                offeredItemText
+                              )}
+                            </td>
+
                             {/* Unit Price */}
                             <td style={{ textAlign: 'right' }} className="font-mono">
                               {isEditDocMode ? (
@@ -1849,22 +1801,6 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                                 />
                               ) : (
                                 (Number(item.unit_price) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                              )}
-                            </td>
-
-                            {/* Discount % */}
-                            <td style={{ textAlign: 'center' }} className="font-mono">
-                              {isEditDocMode ? (
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max="100"
-                                  value={item.discount_percent || 0}
-                                  onChange={(e) => handleItemFieldChange(globalIdx, 'discount_percent', Number(e.target.value))}
-                                  className="w-10 text-center font-mono bg-amber-50/70 border border-amber-300 px-0.5 py-0.5 rounded text-xs focus:outline-blue-500"
-                                />
-                              ) : (
-                                (item.discount_percent || 0) > 0 ? `${item.discount_percent}%` : '-'
                               )}
                             </td>
 
@@ -1970,26 +1906,9 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                   </div>
                 )}
 
-                {/* DUAL AUTHORIZATION SIGNATURES BLOCK (Last Sheet Only) */}
+                {/* ISSUER AUTHORIZATION SIGNATURE BLOCK (Last Sheet Only) */}
                 {chunk.isLastPage && (
-                  <div className="signatures-grid" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', width: '100%' }}>
-                    {/* Client Acceptance */}
-                    <DraggableElement id="signature_client" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Client Acceptance" className="sig-client-box" style={{ textAlign: 'left' }}>
-                      <p style={{ color: '#475569', fontWeight: 700, textTransform: 'uppercase', fontSize: '7pt', letterSpacing: '0.5px' }}>
-                        CONFIRMED & ACCEPTED BY (CLIENT):
-                      </p>
-                      <div className="sig-client-line"></div>
-                      <p style={{ fontWeight: 700, color: '#0f172a', marginTop: '2px', fontSize: '7.5pt' }}>
-                        NAME: ({docClientName || 'Client Contact'})
-                      </p>
-                      <p className="font-mono" style={{ color: '#475569', fontSize: '7pt' }}>
-                        COMPANY: {docCompanyName || 'Client Company'}
-                      </p>
-                      <p className="font-mono" style={{ color: '#64748b', fontSize: '7pt' }}>
-                        DATE: ____ / ____ / ________
-                      </p>
-                    </DraggableElement>
-
+                  <div className="signatures-grid" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', width: '100%' }}>
                     {/* Issuer Signatory */}
                     <DraggableElement id="signature_issuer" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Issuer Signatory" className="sig-issuer-box" style={{ textAlign: 'right', marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
                       <p style={{ color: '#475569', fontWeight: 700, textTransform: 'uppercase', fontSize: '7pt', letterSpacing: '0.5px', textAlign: 'right' }}>
@@ -1999,24 +1918,24 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                         {companyName}
                       </p>
 
-                      <div className="sig-img-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginLeft: 'auto', textAlign: 'right', width: '100%' }}>
-                        {signatureUrl && (
-                          <img
-                            src={signatureUrl}
-                            alt="Digital Signature"
-                            style={{ display: 'inline-block', maxHeight: '48px', maxWidth: '120px', objectFit: 'contain' }}
-                          />
-                        )}
+                      <div className="sig-img-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', marginLeft: 'auto', textAlign: 'right', width: 'auto', margin: '4px 0 4px auto' }}>
                         {stampUrl && (
                           <img
                             src={stampUrl}
                             alt="Company Stamp"
-                            style={{ display: 'inline-block', maxHeight: '48px', maxWidth: '120px', objectFit: 'contain' }}
+                            style={{ display: 'inline-block', maxHeight: '52px', maxWidth: '130px', objectFit: 'contain' }}
+                          />
+                        )}
+                        {signatureUrl && (
+                          <img
+                            src={signatureUrl}
+                            alt="Digital Signature"
+                            style={{ display: 'inline-block', maxHeight: '52px', maxWidth: '130px', objectFit: 'contain' }}
                           />
                         )}
                         {!signatureUrl && !stampUrl && (
                           <div style={{ width: '100px', height: '35px', border: '2px dashed #0070c0', color: '#0070c0', fontSize: '7pt', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase', marginLeft: 'auto' }}>
-                            [STAMP]
+                            [STAMP & SIGNATURE]
                           </div>
                         )}
                       </div>

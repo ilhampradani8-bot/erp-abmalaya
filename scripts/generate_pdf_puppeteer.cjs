@@ -13,20 +13,20 @@ if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
 }
 
-let puppeteer;
-try {
-    puppeteer = require('puppeteer');
-} catch (e) {
-    try {
-        puppeteer = require('puppeteer-core');
-    } catch (e2) {
-        console.error(JSON.stringify({ status: 'error', message: 'Puppeteer module not found.' }));
-        process.exit(1);
-    }
-}
-
 (async () => {
     try {
+        let puppeteer;
+        try {
+            puppeteer = (await import('puppeteer')).default || (await import('puppeteer'));
+        } catch (e) {
+            try {
+                puppeteer = (await import('puppeteer-core')).default || (await import('puppeteer-core'));
+            } catch (e2) {
+                console.error(JSON.stringify({ status: 'error', message: 'Puppeteer module not found: ' + e2.message }));
+                process.exit(1);
+            }
+        }
+
         const launchOptions = {
             headless: 'new',
             args: [
@@ -41,20 +41,19 @@ try {
             ]
         };
 
-        // If puppeteer-core, attempt to find system chrome
-        if (puppeteer.executablePath) {
-            const possiblePaths = [
-                '/usr/bin/google-chrome-stable',
-                '/usr/bin/google-chrome',
-                '/usr/bin/chromium',
-                '/usr/bin/chromium-browser',
-                '/snap/bin/chromium'
-            ];
-            for (const p of possiblePaths) {
-                if (fs.existsSync(p)) {
-                    launchOptions.executablePath = p;
-                    break;
-                }
+        // Find executable Chrome / Chromium binary if available
+        const possiblePaths = [
+            '/usr/bin/google-chrome-stable',
+            '/usr/bin/google-chrome',
+            '/usr/bin/chromium',
+            '/usr/bin/chromium-browser',
+            '/snap/bin/chromium',
+            '/usr/bin/google-chrome'
+        ];
+        for (const p of possiblePaths) {
+            if (fs.existsSync(p)) {
+                launchOptions.executablePath = p;
+                break;
             }
         }
 

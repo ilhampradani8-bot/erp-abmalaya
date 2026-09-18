@@ -117,6 +117,8 @@ $connection->query("ALTER TABLE quotations MODIFY valid_until VARCHAR(50) DEFAUL
 $results['quotations'][] = "Modified valid_until to VARCHAR(50)";
 
 $quo_cols = [
+    'source_file' => "ALTER TABLE quotations ADD COLUMN source_file TEXT DEFAULT NULL AFTER notes",
+    'quotation_file' => "ALTER TABLE quotations ADD COLUMN quotation_file TEXT DEFAULT NULL AFTER source_file",
     'pdf_created' => "ALTER TABLE quotations ADD COLUMN pdf_created TINYINT(1) DEFAULT 0",
     'pdf_created_at' => "ALTER TABLE quotations ADD COLUMN pdf_created_at DATETIME DEFAULT NULL"
 ];

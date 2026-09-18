@@ -510,6 +510,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
       status: (quo.status && (quo.status === 'terkirim' || quo.status === 'penawaran_terkirim' || quo.status === 'deal')) ? quo.status : 'siap_kirim',
       user_name: currentUser?.name || 'Admin',
       user_email: currentUser?.email || 'admin@abmalaya.com',
+      created_by: quo.created_by || currentUser?.name || currentUser?.email || 'Muhammad Aimanuddin Bin Mohd Zaki',
     };
     fetch(getApiUrl('/api_quotations.php'), {
       method: 'POST',

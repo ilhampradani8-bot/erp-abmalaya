@@ -88,7 +88,7 @@ try {
 
         // Batch fetch all quotation items and RFQs to eliminate N+1 queries for instant loading
         $all_quotation_items = [];
-        $item_q = $db_conn->query("SELECT id, quotation_id, product_code, category_code, impa_code, description, specification, quantity, unit, unit_price, discount_percent, total FROM quotation_items ORDER BY id ASC");
+        $item_q = $db_conn->query("SELECT id, quotation_id, product_code, category_code, impa_code, description, specification, offer, quantity, unit, unit_price, discount_percent, total FROM quotation_items ORDER BY id ASC");
         if ($item_q) {
             while ($item = $item_q->fetch_assoc()) {
                 $q_id = $item['quotation_id'];
@@ -330,10 +330,12 @@ try {
             }
         }
 
-        $stmt = $db_conn->prepare("INSERT INTO quotations (id, rfq_id, quotation_number, client_name, client_email, client_phone, company_name, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, source_file, quotation_file, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?) ON DUPLICATE KEY UPDATE quotation_number=VALUES(quotation_number), client_name=VALUES(client_name), client_email=VALUES(client_email), client_phone=VALUES(client_phone), company_name=VALUES(company_name), date_issued=VALUES(date_issued), valid_until=VALUES(valid_until), subtotal=VALUES(subtotal), discount_total=VALUES(discount_total), tax_percent=VALUES(tax_percent), tax_amount=VALUES(tax_amount), grand_total=VALUES(grand_total), notes=VALUES(notes), source_file=COALESCE(VALUES(source_file), source_file), quotation_file=COALESCE(VALUES(quotation_file), quotation_file), created_by=VALUES(created_by)");
+        $status = isset($input['status']) && !empty($input['status']) ? $input['status'] : 'draft';
+
+        $stmt = $db_conn->prepare("INSERT INTO quotations (id, rfq_id, quotation_number, client_name, client_email, client_phone, company_name, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, source_file, quotation_file, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE quotation_number=VALUES(quotation_number), client_name=VALUES(client_name), client_email=VALUES(client_email), client_phone=VALUES(client_phone), company_name=VALUES(company_name), date_issued=VALUES(date_issued), valid_until=VALUES(valid_until), subtotal=VALUES(subtotal), discount_total=VALUES(discount_total), tax_percent=VALUES(tax_percent), tax_amount=VALUES(tax_amount), grand_total=VALUES(grand_total), notes=VALUES(notes), source_file=COALESCE(VALUES(source_file), source_file), quotation_file=COALESCE(VALUES(quotation_file), quotation_file), status=VALUES(status), created_by=VALUES(created_by)");
         
         if ($stmt) {
-            $stmt->bind_param("sissssssdddddsssss", $id, $rfq_id_val, $quo_num, $client_name, $client_email, $client_phone, $company_name, $date_issued, $valid_until, $subtotal, $discount_total, $tax_percent, $tax_amount, $grand_total, $notes, $source_file, $quotation_file, $created_by);
+            $stmt->bind_param("sissssssdddddssssss", $id, $rfq_id_val, $quo_num, $client_name, $client_email, $client_phone, $company_name, $date_issued, $valid_until, $subtotal, $discount_total, $tax_percent, $tax_amount, $grand_total, $notes, $source_file, $quotation_file, $status, $created_by);
             $stmt->execute();
             $stmt->close();
         } else {
@@ -350,19 +352,20 @@ try {
 
         if (isset($input['items']) && is_array($input['items'])) {
             $db_conn->query("DELETE FROM quotation_items WHERE quotation_id = '" . $db_conn->real_escape_string($id) . "'");
-            $item_stmt = $db_conn->prepare("INSERT INTO quotation_items (quotation_id, product_code, description, specification, quantity, unit, unit_price, discount_percent, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $item_stmt = $db_conn->prepare("INSERT INTO quotation_items (quotation_id, product_code, description, specification, offer, quantity, unit, unit_price, discount_percent, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             if ($item_stmt) {
                 foreach ($input['items'] as $it) {
                     $p_code = isset($it['product_code']) ? trim($it['product_code']) : (isset($it['item_code']) ? trim($it['item_code']) : '');
                     $p_desc = isset($it['description']) ? trim($it['description']) : '';
                     $p_spec = isset($it['specification']) ? trim($it['specification']) : '';
+                    $p_offer= isset($it['offer']) ? trim($it['offer']) : (isset($it['offered_item']) ? trim($it['offered_item']) : '');
                     $p_qty  = isset($it['quantity']) ? (float)$it['quantity'] : (isset($it['qty']) ? (float)$it['qty'] : 1.0);
                     $p_unit = isset($it['unit']) ? trim($it['unit']) : 'Unit';
                     $p_price= isset($it['unit_price']) ? (float)$it['unit_price'] : 0.0;
                     $p_disc = isset($it['discount_percent']) ? (float)$it['discount_percent'] : 0.0;
                     $p_tot  = isset($it['total']) ? (float)$it['total'] : ($p_qty * $p_price);
 
-                    $item_stmt->bind_param("ssssdsddd", $id, $p_code, $p_desc, $p_spec, $p_qty, $p_unit, $p_price, $p_disc, $p_tot);
+                    $item_stmt->bind_param("sssssdsddd", $id, $p_code, $p_desc, $p_spec, $p_offer, $p_qty, $p_unit, $p_price, $p_disc, $p_tot);
                     $item_stmt->execute();
                 }
                 $item_stmt->close();

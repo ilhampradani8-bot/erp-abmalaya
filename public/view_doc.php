@@ -574,6 +574,17 @@ ob_end_clean();
         .items-table tr:nth-child(even) td {
             background-color: #f8fafc;
         }
+        .product-photo-full {
+            width: 100% !important;
+            max-height: 140px !important;
+            object-fit: contain !important;
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 3px !important;
+            background-color: #ffffff !important;
+            padding: 2px !important;
+            margin-top: 4px !important;
+            display: block !important;
+        }
         .product-photo {
             width: 28px;
             height: 28px;
@@ -729,8 +740,8 @@ ob_end_clean();
             <td style="padding: 0; border: none; background: #ffffff;">
                 <div style="width: 100%; border-bottom: 2px solid #004f8b; padding-bottom: 4px; margin-bottom: 6px; background: #ffffff;">
                     <?php if (!empty($hdrImgUrl)): ?>
-                        <div style="width: 100%; margin-bottom: 4px;">
-                            <img src="<?= $hdrImgUrl ?>" alt="Header Banner" style="width: 100%; max-height: 70px; object-fit: cover; display: block;">
+                        <div style="width: 100%; margin-bottom: 4px; margin-top: -2px;">
+                            <img src="<?= $hdrImgUrl ?>" alt="Header Banner" style="width: 100%; height: auto; max-height: 90px; object-fit: cover; object-position: top center; display: block;">
                         </div>
                     <?php else: ?>
                         <div style="width: 100%; height: 4px; background: linear-gradient(to right, #004f8b, #0070c0, #0080d0); margin-bottom: 4px;"></div>
@@ -843,17 +854,13 @@ ob_end_clean();
                     <table class="items-table">
                         <thead class="items-table-header">
                             <tr>
-                                <th style="width: 3.5%;" class="text-center">NO.</th>
-                                <th style="width: 4.5%;" class="text-center">IMG</th>
-                                <th style="width: 11%;" class="font-mono">PRODUCT CODE</th>
-                                <th style="width: 7.5%;" class="font-mono">IMPA</th>
-                                <th style="width: 15.5%;">PRODUCT NAME</th>
-                                <th style="width: 21%;">SPECIFICATION</th>
-                                <th style="width: 4%;" class="text-center">QTY</th>
-                                <th style="width: 5%;" class="text-center">UNIT</th>
+                                <th style="width: 4%;" class="text-center">NO.</th>
+                                <th style="width: 38%;">ITEM</th>
+                                <th style="width: 6%;" class="text-center">QTY</th>
+                                <th style="width: 7%;" class="text-center">UNIT</th>
+                                <th style="width: 20%;">OFFERED ITEM</th>
                                 <th style="width: 11%;" class="text-right">UNIT PRICE (MYR)</th>
-                                <th style="width: 5%;" class="text-center">DISC (%)</th>
-                                <th style="width: 12%;" class="text-right">TOTAL (MYR)</th>
+                                <th style="width: 14%;" class="text-right">TOTAL PRICE (MYR)</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -869,9 +876,8 @@ ob_end_clean();
                                 $desc = $item['description'] ?? $item['product_name'] ?? $item['name'] ?? 'Industrial Equipment Supply';
                                 $catMatch = find_catalog_product($desc, $productsCatalog);
                                 
-                                $pCode = $item['product_code'] ?? $item['item_code'] ?? ($catMatch['product_code'] ?? '—');
-                                $impaCode = $item['impa_code'] ?? ($catMatch['impa_code'] ?? '—');
-                                $specText = $item['specification'] ?? $item['offer'] ?? ($catMatch['specification'] ?? $catMatch['description'] ?? 'Standard Manufacturer Specification');
+                                $specText = $item['specification'] ?? ($catMatch['specification'] ?? $catMatch['description'] ?? 'Standard Manufacturer Specification');
+                                $offeredItemText = $item['offer'] ?? $item['offered_item'] ?? $item['offer_name'] ?? '—';
                                 
                                 $rawPhotoUrl = $item['image_url'] ?? ($catMatch['image_url'] ?? '');
                                 $photoUrl = !empty($rawPhotoUrl) ? get_image_data_uri($rawPhotoUrl) : '';
@@ -879,26 +885,18 @@ ob_end_clean();
                             <tr>
                                 <td class="text-center font-mono"><?= $no++ ?></td>
                                 
-                                <!-- Photo Cell -->
-                                <td class="text-center">
+                                <!-- ITEM Column: Stacked Product Name, Specification, and Full-Width Photo -->
+                                <td style="color:#0f172a; vertical-align: top;">
+                                    <div style="font-weight: bold; color: #0f172a; font-size: 8pt; margin-bottom: 2px; line-height: 1.2;">
+                                        <?= htmlspecialchars($desc) ?>
+                                    </div>
+                                    <div style="color: #475569; font-size: 7.5pt; line-height: 1.2; margin-bottom: 4px;">
+                                        <?= htmlspecialchars($specText) ?>
+                                    </div>
                                     <?php if (!empty($photoUrl) && strpos($photoUrl, 'unsplash') === false): ?>
-                                        <img src="<?= $photoUrl ?>" alt="<?= htmlspecialchars($desc) ?>" class="product-photo">
-                                    <?php else: ?>
-                                        <div class="no-photo-box">📦</div>
+                                        <img src="<?= $photoUrl ?>" alt="<?= htmlspecialchars($desc) ?>" class="product-photo-full">
                                     <?php endif; ?>
                                 </td>
-
-                                <!-- Product Code -->
-                                <td class="font-mono" style="color:#0f172a;"><?= htmlspecialchars($pCode) ?></td>
-
-                                <!-- IMPA Code -->
-                                <td class="font-mono" style="color:#581c87;"><?= htmlspecialchars($impaCode) ?></td>
-
-                                <!-- Product Name -->
-                                <td style="font-weight: normal; color:#0f172a;"><?= htmlspecialchars($desc) ?></td>
-
-                                <!-- Specification -->
-                                <td style="color:#334155; font-size:7.5pt; line-height:1.25;"><?= htmlspecialchars($specText) ?></td>
 
                                 <!-- Quantity -->
                                 <td class="text-center font-mono"><?= $qty ?></td>
@@ -906,11 +904,11 @@ ob_end_clean();
                                 <!-- Unit -->
                                 <td class="text-center"><?= $unit ?></td>
 
+                                <!-- Offered Item / Name Offered -->
+                                <td style="color:#0f172a; vertical-align: top;"><?= htmlspecialchars($offeredItemText) ?></td>
+
                                 <!-- Unit Price -->
                                 <td class="text-right font-mono"><?= number_format($price, 2) ?></td>
-
-                                <!-- Discount % -->
-                                <td class="text-center font-mono"><?= $disc > 0 ? $disc . '%' : '-' ?></td>
 
                                 <!-- Total Price -->
                                 <td class="text-right font-mono font-bold"><?= number_format($rowTotal, 2) ?></td>
@@ -954,32 +952,23 @@ ob_end_clean();
                     </div>
                 </div>
 
-                <!-- 6. DUAL AUTHORIZATION SIGNATURE BLOCK (Last Page Only) -->
-                <div class="signatures-grid">
-                    <!-- Client Acceptance -->
-                    <div class="sig-client-box">
-                        <p style="color:#475569; font-weight:700; text-transform:uppercase; font-size:7.5pt; letter-spacing:0.5px;">CONFIRMED & ACCEPTED BY (CLIENT):</p>
-                        <div class="sig-client-line"></div>
-                        <p style="font-weight:700; color:#0f172a; margin-top:3px;">NAME: (<?= htmlspecialchars($clientName) ?>)</p>
-                        <p class="font-mono" style="color:#475569; font-size:7.5pt;">COMPANY: <?= htmlspecialchars(!empty($clientCompany) ? $clientCompany : 'Client Company') ?></p>
-                        <p class="font-mono" style="color:#64748b; font-size:7.5pt;">DATE: ____ / ____ / ________</p>
-                    </div>
-
+                <!-- 6. AUTHORIZATION SIGNATURE BLOCK (Last Page Only) -->
+                <div class="signatures-grid" style="justify-content: flex-end;">
                     <!-- Issuer Signatory -->
                     <div class="sig-issuer-box">
                         <p style="color:#475569; font-weight:700; text-transform:uppercase; font-size:7.5pt; letter-spacing:0.5px;">Yours faithfully,</p>
                         <p style="font-weight:800; color:#0f172a; text-transform:uppercase; font-size:8.5pt; margin-top:1px;"><?= htmlspecialchars($companyName) ?></p>
 
-                        <div class="sig-img-container">
-                            <?php if (!empty($sigUrl)): ?>
-                                <img src="<?php echo $sigUrl; ?>" alt="Digital Signature">
-                            <?php endif; ?>
+                        <div class="sig-img-container" style="display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-left: auto; text-align: right;">
                             <?php if (!empty($stampUrl)): ?>
-                                <img src="<?php echo $stampUrl; ?>" alt="Company Stamp">
+                                <img src="<?php echo $stampUrl; ?>" alt="Company Stamp" style="max-height: 52px; max-width: 130px; object-fit: contain;">
+                            <?php endif; ?>
+                            <?php if (!empty($sigUrl)): ?>
+                                <img src="<?php echo $sigUrl; ?>" alt="Digital Signature" style="max-height: 52px; max-width: 130px; object-fit: contain;">
                             <?php endif; ?>
                             <?php if (empty($sigUrl) && empty($stampUrl)): ?>
                                 <div style="width:120px; height:40px; border:2px dashed #0070c0; color:#0070c0; font-size:7.5pt; font-weight:900; display:flex; align-items:center; justify-content:center; text-transform:uppercase;">
-                                    [STAMP]
+                                    [STAMP & SIGNATURE]
                                 </div>
                             <?php endif; ?>
                         </div>
