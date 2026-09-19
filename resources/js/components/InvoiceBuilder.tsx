@@ -1050,7 +1050,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
         </div>
       )}
 
-      {/* ── EXACT A4 PRINT STYLES (MATCHES ALL PAGES WITHOUT VIEWPORT CLIPPING) ── */}
+      {/* ── EXACT A4 PRINT & PAPER SHEET STYLES ── */}
       <style>{`
         @page {
           size: A4 portrait;
@@ -1115,6 +1115,70 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
             page-break-after: auto !important;
             break-after: auto !important;
           }
+        }
+
+        /* ITEMS TABLE STYLING */
+        .items-table-box {
+          border: 1px solid #0f172a;
+          margin-bottom: 6px;
+          background: #ffffff;
+          width: 100%;
+          box-sizing: border-box;
+          overflow: hidden;
+        }
+        .items-table {
+          width: 100%;
+          table-layout: fixed;
+          border-collapse: collapse;
+          font-size: 7.5pt;
+          box-sizing: border-box;
+        }
+        .items-table th {
+          background-color: ${tableHeaderBg};
+          color: ${tableHeaderTextColor};
+          font-weight: 800;
+          font-size: 7.5pt;
+          text-transform: uppercase;
+          padding: 4px 3px;
+          border-right: 1px solid #0f172a;
+          border-bottom: 1px solid #0f172a;
+          text-align: left;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+          word-break: break-word;
+        }
+        .items-table th:last-child {
+          border-right: none;
+        }
+        .items-table td {
+          padding: 3px 4px;
+          border-right: 1px solid #0f172a;
+          border-bottom: 1px solid #0f172a;
+          vertical-align: top;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+          word-break: break-word;
+          font-size: 7.5pt;
+        }
+        .items-table td:last-child {
+          border-right: none;
+        }
+        .items-table tr:last-child td {
+          border-bottom: none;
+        }
+        .items-table tr:nth-child(even) td {
+          background-color: #f8fafc;
+        }
+        .product-photo-full {
+          width: 100% !important;
+          max-height: 100px !important;
+          object-fit: contain !important;
+          border: 1px solid #cbd5e1 !important;
+          border-radius: 2px !important;
+          background-color: #ffffff !important;
+          padding: 2px !important;
+          margin-top: 3px !important;
+          display: block !important;
         }
       `}</style>
 
@@ -1367,23 +1431,20 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
 
                 {/* LINE ITEMS TABLE (Per Sheet Chunk) */}
                 <DraggableElement id="invoice_table" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Invoice Items Table">
-                  <div className="border border-slate-900 rounded-none overflow-x-auto w-full bg-white">
-                    <table className="w-full text-left text-xs font-sans border-collapse items-table">
-                      <thead 
-                        className="font-bold text-[10px] uppercase tracking-wide border-b border-slate-900"
-                        style={{ backgroundColor: tableHeaderBg, color: tableHeaderTextColor }}
-                      >
+                  <div className="items-table-box">
+                    <table className="items-table">
+                      <thead>
                         <tr>
-                          <th className="p-2 w-8 text-center border-r border-slate-900">NO.</th>
-                          <th className="p-2 border-r border-slate-900 min-w-[180px]">ITEM</th>
-                          <th className="p-2 w-12 text-center border-r border-slate-900">QTY</th>
-                          <th className="p-2 w-14 text-center border-r border-slate-900">UNIT</th>
-                          <th className="p-2 w-32 border-r border-slate-900">OFFERED ITEM</th>
-                          <th className="p-2 w-24 text-right border-r border-slate-900">UNIT PRICE (RM)</th>
-                          <th className="p-2 w-28 text-right">TOTAL PRICE (RM)</th>
+                          <th style={{ width: '4%', textAlign: 'center' }}>NO.</th>
+                          <th style={{ width: '38%' }}>ITEM</th>
+                          <th style={{ width: '6%', textAlign: 'center' }}>QTY</th>
+                          <th style={{ width: '7%', textAlign: 'center' }}>UNIT</th>
+                          <th style={{ width: '20%' }}>OFFERED ITEM</th>
+                          <th style={{ width: '12%', textAlign: 'right' }}>UNIT PRICE (MYR)</th>
+                          <th style={{ width: '13%', textAlign: 'right' }}>TOTAL PRICE (MYR)</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-900">
+                      <tbody>
                         {chunk.items.length === 0 ? (
                           <tr>
                             <td colSpan={7} className="p-6 text-center text-slate-400 italic font-medium">
@@ -1394,13 +1455,11 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                           chunk.items.map((item: any, localIdx: number) => {
                             const globalIdx = chunk.startIndex + localIdx;
                             return (
-                              <tr key={globalIdx} className={globalIdx % 2 === 1 ? 'bg-slate-50/90' : 'bg-white'}>
-                                <td className="p-2 text-center font-mono font-bold text-slate-800 border-r border-slate-900">
-                                  {globalIdx + 1}
-                                </td>
+                              <tr key={globalIdx}>
+                                <td style={{ textAlign: 'center' }} className="font-mono">{globalIdx + 1}</td>
 
                                 {/* ITEM Column */}
-                                <td className="p-2 border-r border-slate-900 align-top">
+                                <td style={{ color: '#0f172a', verticalAlign: 'top' }}>
                                   <p className="font-bold text-slate-900 text-xs leading-tight mb-0.5">{item.description}</p>
                                   {item.specification && (
                                     <p className="text-[10px] text-slate-600 leading-snug font-sans mb-1">{item.specification}</p>
@@ -1416,7 +1475,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                                         <img
                                           src={item.image_url}
                                           alt={item.description}
-                                          className="w-full max-h-28 object-contain border border-slate-300 rounded-none bg-white p-0.5 block pointer-events-none"
+                                          className="product-photo-full"
                                         />
                                       </DraggableElement>
                                     </div>
@@ -1424,29 +1483,19 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                                 </td>
 
                                 {/* QTY */}
-                                <td className="p-2 text-center font-mono font-bold text-slate-900 border-r border-slate-900 align-top">
-                                  {item.quantity}
-                                </td>
+                                <td style={{ textAlign: 'center' }} className="font-mono">{item.quantity}</td>
 
                                 {/* UNIT */}
-                                <td className="p-2 text-center font-sans font-semibold text-slate-800 border-r border-slate-900 align-top">
-                                  {item.unit || 'Unit'}
-                                </td>
+                                <td style={{ textAlign: 'center' }}>{item.unit || 'Unit'}</td>
 
                                 {/* OFFERED ITEM */}
-                                <td className="p-2 font-sans text-xs text-slate-800 border-r border-slate-900 align-top">
-                                  {item.offer || item.offered_item || '—'}
-                                </td>
+                                <td style={{ color: '#0f172a', verticalAlign: 'top' }}>{item.offer || item.offered_item || '—'}</td>
 
-                                {/* UNIT PRICE (RM) */}
-                                <td className="p-2 text-right font-mono text-slate-900 border-r border-slate-900 align-top">
-                                  {formatCurrency(item.unit_price)}
-                                </td>
+                                {/* UNIT PRICE (MYR) */}
+                                <td style={{ textAlign: 'right' }} className="font-mono">{formatCurrency(item.unit_price)}</td>
 
-                                {/* TOTAL PRICE (RM) */}
-                                <td className="p-2 text-right font-mono font-bold text-slate-900 text-xs align-top">
-                                  {formatCurrency(item.total)}
-                                </td>
+                                {/* TOTAL PRICE (MYR) */}
+                                <td style={{ textAlign: 'right' }} className="font-mono font-bold">{formatCurrency(item.total)}</td>
                               </tr>
                             );
                           })
