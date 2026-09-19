@@ -1696,7 +1696,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
 
             <div className="flex-1 bg-slate-950 p-0 overflow-hidden relative">
               <iframe
-                src={`/api_pdf_doc.php?type=invoice&id=${encodeURIComponent(invoiceId || invoiceNumber)}&action=stream#toolbar=1`}
+                src={`/api_pdf.php?type=invoice&id=${encodeURIComponent(invoiceId || invoiceNumber)}&action=stream#toolbar=1`}
                 className="w-full h-full border-none"
                 title="Live Invoice PDF Preview"
               />
