@@ -25,6 +25,7 @@ $create_sql = "CREATE TABLE IF NOT EXISTS system_invoice_settings (
     email VARCHAR(100) DEFAULT 'abmalayaindustry@gmail.com',
     logo_url LONGTEXT,
     stamp_url LONGTEXT,
+    signature_url LONGTEXT DEFAULT NULL,
     header_image_url LONGTEXT DEFAULT NULL,
     invoice_title VARCHAR(255) DEFAULT 'OFFICIAL INVOICE',
     bank_name VARCHAR(100) DEFAULT 'PUBLIC BANK',
@@ -38,6 +39,12 @@ $create_sql = "CREATE TABLE IF NOT EXISTS system_invoice_settings (
     table_header_bg VARCHAR(50) DEFAULT '#0070c0',
     table_header_text_color VARCHAR(50) DEFAULT '#ffffff',
     layout_offsets LONGTEXT DEFAULT NULL,
+    paper_size VARCHAR(50) DEFAULT 'A4',
+    margin_top INT DEFAULT 18,
+    margin_bottom INT DEFAULT 18,
+    margin_left INT DEFAULT 14,
+    margin_right INT DEFAULT 14,
+    font_size INT DEFAULT 9,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
@@ -53,7 +60,15 @@ $chk_cols = [
     'authorised_by_name' => "ALTER TABLE system_invoice_settings ADD COLUMN authorised_by_name VARCHAR(255) DEFAULT 'Muhammad Aimanuddin Bin Mohd Zaki' AFTER remarks_text",
     'authorised_by_title' => "ALTER TABLE system_invoice_settings ADD COLUMN authorised_by_title VARCHAR(255) DEFAULT 'Procurement Manager / Head of Sales' AFTER authorised_by_name",
     'received_by_label' => "ALTER TABLE system_invoice_settings ADD COLUMN received_by_label VARCHAR(255) DEFAULT 'Received by,' AFTER authorised_by_title",
-    'layout_offsets' => "ALTER TABLE system_invoice_settings ADD COLUMN layout_offsets LONGTEXT DEFAULT NULL AFTER table_header_text_color"
+    'table_header_bg' => "ALTER TABLE system_invoice_settings ADD COLUMN table_header_bg VARCHAR(50) DEFAULT '#0070c0'",
+    'table_header_text_color' => "ALTER TABLE system_invoice_settings ADD COLUMN table_header_text_color VARCHAR(50) DEFAULT '#ffffff'",
+    'layout_offsets' => "ALTER TABLE system_invoice_settings ADD COLUMN layout_offsets LONGTEXT DEFAULT NULL AFTER table_header_text_color",
+    'paper_size' => "ALTER TABLE system_invoice_settings ADD COLUMN paper_size VARCHAR(50) DEFAULT 'A4'",
+    'margin_top' => "ALTER TABLE system_invoice_settings ADD COLUMN margin_top INT DEFAULT 18",
+    'margin_bottom' => "ALTER TABLE system_invoice_settings ADD COLUMN margin_bottom INT DEFAULT 18",
+    'margin_left' => "ALTER TABLE system_invoice_settings ADD COLUMN margin_left INT DEFAULT 14",
+    'margin_right' => "ALTER TABLE system_invoice_settings ADD COLUMN margin_right INT DEFAULT 14",
+    'font_size' => "ALTER TABLE system_invoice_settings ADD COLUMN font_size INT DEFAULT 9"
 ];
 
 foreach ($chk_cols as $col => $alter_sql) {
@@ -285,11 +300,11 @@ if ($method === 'POST') {
 
     if (!$stmt) {
         ob_end_clean();
-        echo json_encode(['status' => 'error', 'message' => 'Database error: ' . $connection->error]);
+        echo json_encode(['status' => 'error', 'message' => 'Database prepare error: ' . $connection->error]);
         exit;
     }
 
-    $stmt->bind_param("ssssssssssssssssssssiiiii", 
+    $stmt->bind_param("sssssssssssssssssssssiiiii", 
         $c_name, $c_reg, $c_addr, $phone, $email, 
         $logo_url, $stamp_url, $sig_url, $hdr_img_url, $inv_title,
         $b_name, $b_acc, $b_holder, $b_email,
