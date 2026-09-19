@@ -802,179 +802,224 @@ ob_end_clean();
     <tbody class="page-layout-body">
         <tr>
             <td>
-                <!-- 2. METADATA SECTION -->
-                <section class="metadata-section">
-                    <table class="meta-table">
-                        <tr>
-                            <td class="meta-label">Ref No.</td>
-                            <td class="meta-colon">:</td>
-                            <td class="meta-val-bold font-mono"><?= htmlspecialchars($docRefNo) ?></td>
-                        </tr>
-                        <tr>
-                            <td class="meta-label">Date</td>
-                            <td class="meta-colon">:</td>
-                            <td class="meta-val font-mono"><?= htmlspecialchars($docDate) ?> (Valid: <?= htmlspecialchars($validUntil) ?>)</td>
-                        </tr>
-                        <tr>
-                            <td class="meta-label">Project Reference</td>
-                            <td class="meta-colon">:</td>
-                            <td class="meta-val"><?= htmlspecialchars($projectRef) ?></td>
-                        </tr>
-                        <tr>
-                            <td class="meta-label">Attention</td>
-                            <td class="meta-colon">:</td>
-                            <td class="meta-val-bold">
-                                <?= htmlspecialchars($clientName) ?> <?= !empty($clientCompany) ? '(' . htmlspecialchars($clientCompany) . ')' : '' ?>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td class="meta-label">Tel No.</td>
-                            <td class="meta-colon">:</td>
-                            <td class="meta-val font-mono"><?= htmlspecialchars(!empty($clientPhone) ? $clientPhone : '—') ?></td>
-                        </tr>
-                        <tr>
-                            <td class="meta-label">Email</td>
-                            <td class="meta-colon">:</td>
-                            <td class="meta-val font-mono"><?= htmlspecialchars(!empty($clientEmail) ? $clientEmail : 'sales@abmalaya.com') ?></td>
-                        </tr>
-                    </table>
-                </section>
-
-                <!-- 3. TITLE STRIP BANNER -->
-                <div class="title-strip-banner">
-                    <?= htmlspecialchars($headerTitle) ?>
-                </div>
-
-                <p class="intro-text">
-                    We would like to submit the following commercial quotation and specification list for your review and pricing:
-                </p>
-
-                <!-- 4. PRODUCT LINE ITEMS TABLE -->
-                <div class="items-table-box">
-                    <table class="items-table">
-                        <thead class="items-table-header">
-                            <tr>
-                                <th style="width: 4%;" class="text-center">NO.</th>
-                                <th style="width: 38%;">ITEM</th>
-                                <th style="width: 6%;" class="text-center">QTY</th>
-                                <th style="width: 7%;" class="text-center">UNIT</th>
-                                <th style="width: 20%;">OFFERED ITEM</th>
-                                <th style="width: 11%;" class="text-right">UNIT PRICE (MYR)</th>
-                                <th style="width: 14%;" class="text-right">TOTAL PRICE (MYR)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php 
-                            $no = 1;
-                            foreach ($items as $idx => $item):
-                                $qty = floatval($item['quantity'] ?? $item['qty'] ?? 1);
-                                $unit = htmlspecialchars($item['unit'] ?? $item['uom'] ?? 'Unit');
-                                $price = floatval($item['unit_price'] ?? $item['price'] ?? 0);
-                                $disc = floatval($item['discount_percent'] ?? 0);
-                                $rowTotal = $qty * $price * (1 - $disc / 100);
-                                
-                                $desc = $item['description'] ?? $item['product_name'] ?? $item['name'] ?? 'Industrial Equipment Supply';
-                                $catMatch = find_catalog_product($desc, $productsCatalog);
-                                
-                                $specText = $item['specification'] ?? ($catMatch['specification'] ?? $catMatch['description'] ?? 'Standard Manufacturer Specification');
-                                $offeredItemText = $item['offer'] ?? $item['offered_item'] ?? $item['offer_name'] ?? '—';
-                                
-                                $rawPhotoUrl = $item['image_url'] ?? ($catMatch['image_url'] ?? '');
-                                $photoUrl = !empty($rawPhotoUrl) ? get_image_data_uri($rawPhotoUrl) : '';
-                            ?>
-                            <tr>
-                                <td class="text-center font-mono"><?= $no++ ?></td>
-                                
-                                <!-- ITEM Column: Stacked Product Name, Specification, and Full-Width Photo -->
-                                <td style="color:#0f172a; vertical-align: top;">
-                                    <div style="font-weight: bold; color: #0f172a; font-size: 8pt; margin-bottom: 2px; line-height: 1.2;">
-                                        <?= htmlspecialchars($desc) ?>
+                <div style="box-sizing: border-box;">
+                    <div>
+                        <?php if ($type === 'invoice'): ?>
+                            <!-- 2-COLUMN BILLING & DELIVERY ADDRESS LAYOUT (INVOICE ONLY) -->
+                            <div style="display: flex; gap: 12px; font-size: 8pt; margin-bottom: 8px;">
+                                <!-- TO (BILLING ADDRESS) -->
+                                <div style="flex: 1; background: #f8fafc; padding: 6px; border: 1px solid #cbd5e1;">
+                                    <div style="font-weight: 900; color: #0070c0; text-transform: uppercase; font-size: 7.5pt; border-bottom: 1px solid #cbd5e1; padding-bottom: 2px; margin-bottom: 4px;">
+                                        TO (BILLING ADDRESS):
                                     </div>
-                                    <div style="color: #475569; font-size: 7.5pt; line-height: 1.2; margin-bottom: 4px;">
-                                        <?= htmlspecialchars($specText) ?>
+                                    <p style="font-weight: 800; color: #0f172a; margin: 0 0 2px 0; font-size: 8.5pt;"><?= htmlspecialchars($doc['company_name'] ?? $clientCompany ?? '—') ?></p>
+                                    <p style="color: #334155; margin: 0 0 4px 0; white-space: pre-line; line-height: 1.25;"><?= htmlspecialchars($doc['billing_address'] ?? '—') ?></p>
+                                    <p style="margin: 0; font-size: 7.5pt; color: #475569;">
+                                        <strong>Attention:</strong> <?= htmlspecialchars($doc['client_name'] ?? $clientName ?? '—') ?> | <strong>Email:</strong> <?= htmlspecialchars($clientEmail ?: '—') ?>
+                                    </p>
+                                </div>
+
+                                <!-- DELIVERY (SHIPPING ADDRESS) -->
+                                <div style="flex: 1; background: #f8fafc; padding: 6px; border: 1px solid #cbd5e1;">
+                                    <div style="font-weight: 900; color: #0070c0; text-transform: uppercase; font-size: 7.5pt; border-bottom: 1px solid #cbd5e1; padding-bottom: 2px; margin-bottom: 4px;">
+                                        DELIVERY (SHIPPING ADDRESS):
                                     </div>
-                                    <?php if (!empty($photoUrl) && strpos($photoUrl, 'unsplash') === false): ?>
-                                        <img src="<?= $photoUrl ?>" alt="<?= htmlspecialchars($desc) ?>" class="product-photo-full">
-                                    <?php endif; ?>
-                                </td>
+                                    <p style="font-weight: 800; color: #0f172a; margin: 0 0 2px 0; font-size: 8.5pt;"><?= htmlspecialchars($doc['delivery_company'] ?? $doc['company_name'] ?? '—') ?></p>
+                                    <p style="color: #334155; margin: 0 0 4px 0; white-space: pre-line; line-height: 1.25;"><?= htmlspecialchars($doc['delivery_address'] ?? $doc['billing_address'] ?? '—') ?></p>
+                                    <p style="margin: 0; font-size: 7.5pt; color: #475569;">
+                                        <strong>Delivery PIC:</strong> <?= htmlspecialchars($doc['delivery_pic'] ?? $clientName ?? '—') ?> | <strong>Contact:</strong> <?= htmlspecialchars($doc['delivery_phone'] ?? $clientPhone ?? '—') ?>
+                                    </p>
+                                </div>
+                            </div>
 
-                                <!-- Quantity -->
-                                <td class="text-center font-mono"><?= $qty ?></td>
-
-                                <!-- Unit -->
-                                <td class="text-center"><?= $unit ?></td>
-
-                                <!-- Offered Item / Name Offered -->
-                                <td style="color:#0f172a; vertical-align: top;"><?= htmlspecialchars($offeredItemText) ?></td>
-
-                                <!-- Unit Price -->
-                                <td class="text-right font-mono"><?= number_format($price, 2) ?></td>
-
-                                <!-- Total Price -->
-                                <td class="text-right font-mono font-bold"><?= number_format($rowTotal, 2) ?></td>
-                            </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- 5. TERMS & FINANCIAL SUMMARY GRID (Last Page Only) -->
-                <div class="bottom-grid">
-                    <!-- Terms & Conditions -->
-                    <div class="terms-container">
-                        <div class="terms-header">TERMS & CONDITIONS:</div>
-                        <div class="terms-content"><?= htmlspecialchars($docNotes) ?></div>
-                    </div>
-
-                    <!-- Financial Summary Box -->
-                    <div class="summary-box">
-                        <div class="summary-row">
-                            <span style="font-weight:600;">GROSS SUBTOTAL:</span>
-                            <span class="font-mono font-bold"><?= format_currency($grossSubtotal) ?></span>
-                        </div>
-
-                        <?php if ($discountTotal > 0): ?>
-                        <div class="summary-row" style="color:#b45309;">
-                            <span style="font-weight:600;">TOTAL DISCOUNT:</span>
-                            <span class="font-mono font-bold">-<?= format_currency($discountTotal) ?></span>
-                        </div>
+                            <!-- INVOICE METADATA STRIP -->
+                            <div style="display: flex; justify-content: space-between; background: #f1f5f9; padding: 6px 10px; border: 1px solid #cbd5e1; margin-bottom: 8px; font-family: monospace; font-size: 8pt;">
+                                <div><strong>Invoice No. :</strong> <span style="font-weight: 800; color: #0f172a;"><?= htmlspecialchars($docRefNo) ?></span></div>
+                                <div><strong>Invoice Date :</strong> <?= htmlspecialchars($docDate) ?></div>
+                                <div><strong>PO Numb (Client PO) :</strong> <span style="font-weight: 800; color: #004f8b;"><?= htmlspecialchars($doc['po_number'] ?? '—') ?></span></div>
+                            </div>
+                        <?php else: ?>
+                            <!-- 2. METADATA SECTION (QUOTATION) -->
+                            <section class="metadata-section">
+                                <table class="meta-table">
+                                    <tr>
+                                        <td class="meta-label">Ref No.</td>
+                                        <td class="meta-colon">:</td>
+                                        <td class="meta-val-bold font-mono"><?= htmlspecialchars($docRefNo) ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="meta-label">Date</td>
+                                        <td class="meta-colon">:</td>
+                                        <td class="meta-val font-mono"><?= htmlspecialchars($docDate) ?> (Valid: <?= htmlspecialchars($validUntil) ?>)</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="meta-label">Project Reference</td>
+                                        <td class="meta-colon">:</td>
+                                        <td class="meta-val"><?= htmlspecialchars($projectRef) ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="meta-label">Attention</td>
+                                        <td class="meta-colon">:</td>
+                                        <td class="meta-val-bold">
+                                            <?= htmlspecialchars($clientName) ?> <?= !empty($clientCompany) ? '(' . htmlspecialchars($clientCompany) . ')' : '' ?>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="meta-label">Tel No.</td>
+                                        <td class="meta-colon">:</td>
+                                        <td class="meta-val font-mono"><?= htmlspecialchars(!empty($clientPhone) ? $clientPhone : '—') ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="meta-label">Email</td>
+                                        <td class="meta-colon">:</td>
+                                        <td class="meta-val font-mono"><?= htmlspecialchars(!empty($clientEmail) ? $clientEmail : 'sales@abmalaya.com') ?></td>
+                                    </tr>
+                                </table>
+                            </section>
                         <?php endif; ?>
 
-                        <div class="summary-row">
-                            <span style="font-weight:600;">VAT TAX (<?= $taxPercent ?>%):</span>
-                            <span class="font-mono font-bold"><?= format_currency($taxAmount) ?></span>
+                        <!-- 3. TITLE STRIP BANNER -->
+                        <div class="title-strip-banner">
+                            <?= htmlspecialchars($headerTitle) ?>
                         </div>
 
-                        <div class="summary-row grand-total">
-                            <span>GRAND TOTAL:</span>
-                            <span class="font-mono" style="color:#0070c0;"><?= format_currency($grandTotal) ?></span>
+                        <?php if ($type !== 'invoice'): ?>
+                            <p class="intro-text">
+                                We would like to submit the following commercial quotation and specification list for your review and pricing:
+                            </p>
+                        <?php endif; ?>
+
+                        <!-- 4. PRODUCT LINE ITEMS TABLE -->
+                        <div class="items-table-box">
+                            <table class="items-table">
+                                <thead class="items-table-header">
+                                    <tr>
+                                        <th style="width: 4%;" class="text-center">NO.</th>
+                                        <th style="width: 38%;">ITEM</th>
+                                        <th style="width: 6%;" class="text-center">QTY</th>
+                                        <th style="width: 7%;" class="text-center">UNIT</th>
+                                        <th style="width: 20%;">OFFERED ITEM</th>
+                                        <th style="width: 11%;" class="text-right">UNIT PRICE (MYR)</th>
+                                        <th style="width: 14%;" class="text-right">TOTAL PRICE (MYR)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php 
+                                    $no = 1;
+                                    foreach ($items as $idx => $item):
+                                        $qty = floatval($item['quantity'] ?? $item['qty'] ?? 1);
+                                        $unit = htmlspecialchars($item['unit'] ?? $item['uom'] ?? 'Unit');
+                                        $price = floatval($item['unit_price'] ?? $item['price'] ?? 0);
+                                        $disc = floatval($item['discount_percent'] ?? 0);
+                                        $rowTotal = $qty * $price * (1 - $disc / 100);
+                                        
+                                        $desc = $item['description'] ?? $item['product_name'] ?? $item['name'] ?? 'Industrial Equipment Supply';
+                                        $catMatch = find_catalog_product($desc, $productsCatalog);
+                                        
+                                        $specText = $item['specification'] ?? ($catMatch['specification'] ?? $catMatch['description'] ?? 'Standard Manufacturer Specification');
+                                        $offeredItemText = $item['offer'] ?? $item['offered_item'] ?? $item['offer_name'] ?? '—';
+                                        
+                                        $rawPhotoUrl = $item['image_url'] ?? ($catMatch['image_url'] ?? '');
+                                        $photoUrl = !empty($rawPhotoUrl) ? get_image_data_uri($rawPhotoUrl) : '';
+                                    ?>
+                                    <tr>
+                                        <td class="text-center font-mono"><?= $no++ ?></td>
+                                        
+                                        <!-- ITEM Column: Stacked Product Name, Specification, and Full-Width Photo -->
+                                        <td style="color:#0f172a; vertical-align: top;">
+                                            <div style="font-weight: bold; color: #0f172a; font-size: 8pt; margin-bottom: 2px; line-height: 1.2;">
+                                                <?= htmlspecialchars($desc) ?>
+                                            </div>
+                                            <div style="color: #475569; font-size: 7.5pt; line-height: 1.2; margin-bottom: 4px;">
+                                                <?= htmlspecialchars($specText) ?>
+                                            </div>
+                                            <?php if (!empty($photoUrl) && strpos($photoUrl, 'unsplash') === false): ?>
+                                                <img src="<?= $photoUrl ?>" alt="<?= htmlspecialchars($desc) ?>" class="product-photo-full">
+                                            <?php endif; ?>
+                                        </td>
+
+                                        <!-- Quantity -->
+                                        <td class="text-center font-mono"><?= $qty ?></td>
+
+                                        <!-- Unit -->
+                                        <td class="text-center"><?= $unit ?></td>
+
+                                        <!-- Offered Item / Name Offered -->
+                                        <td style="color:#0f172a; vertical-align: top;"><?= htmlspecialchars($offeredItemText) ?></td>
+
+                                        <!-- Unit Price -->
+                                        <td class="text-right font-mono"><?= number_format($price, 2) ?></td>
+
+                                        <!-- Total Price -->
+                                        <td class="text-right font-mono font-bold"><?= number_format($rowTotal, 2) ?></td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                </div>
 
-                <!-- 6. AUTHORIZATION SIGNATURE BLOCK (Last Page Only) -->
-                <div class="signatures-grid" style="justify-content: flex-end;">
-                    <!-- Issuer Signatory -->
-                    <div class="sig-issuer-box">
-                        <p style="color:#475569; font-weight:700; text-transform:uppercase; font-size:7.5pt; letter-spacing:0.5px;">Yours faithfully,</p>
-                        <p style="font-weight:800; color:#0f172a; text-transform:uppercase; font-size:8.5pt; margin-top:1px;"><?= htmlspecialchars($companyName) ?></p>
+                    <!-- 5 & 6. CLOSING SECTION (TERMS, FINANCIAL SUMMARY & SIGNATURES ANCHORED AT BOTTOM OF PAGE) -->
+                    <div style="margin-top: 12px; padding-top: 6px;">
+                        <!-- TERMS & FINANCIAL SUMMARY GRID -->
+                        <div class="bottom-grid">
+                            <!-- Terms & Conditions / Remarks -->
+                            <div class="terms-container">
+                                <div class="terms-header"><?= ($type === 'invoice') ? 'REMARKS & BANK PAYMENT INSTRUCTIONS:' : 'TERMS & CONDITIONS:' ?></div>
+                                <div class="terms-content"><?= htmlspecialchars($docNotes) ?></div>
+                            </div>
 
-                        <div class="sig-img-container" style="display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-left: auto; text-align: right;">
-                            <?php if (!empty($stampUrl)): ?>
-                                <img src="<?php echo $stampUrl; ?>" alt="Company Stamp" style="max-height: 52px; max-width: 130px; object-fit: contain;">
-                            <?php endif; ?>
-                            <?php if (!empty($sigUrl)): ?>
-                                <img src="<?php echo $sigUrl; ?>" alt="Digital Signature" style="max-height: 52px; max-width: 130px; object-fit: contain;">
-                            <?php endif; ?>
-                            <?php if (empty($sigUrl) && empty($stampUrl)): ?>
-                                <div style="width:120px; height:40px; border:2px dashed #0070c0; color:#0070c0; font-size:7.5pt; font-weight:900; display:flex; align-items:center; justify-content:center; text-transform:uppercase;">
-                                    [STAMP & SIGNATURE]
+                            <!-- Financial Summary Box -->
+                            <div class="summary-box">
+                                <div class="summary-row">
+                                    <span style="font-weight:600;">GROSS SUBTOTAL:</span>
+                                    <span class="font-mono font-bold"><?= format_currency($grossSubtotal) ?></span>
                                 </div>
-                            <?php endif; ?>
+
+                                <?php if ($discountTotal > 0): ?>
+                                <div class="summary-row" style="color:#b45309;">
+                                    <span style="font-weight:600;">TOTAL DISCOUNT:</span>
+                                    <span class="font-mono font-bold">-<?= format_currency($discountTotal) ?></span>
+                                </div>
+                                <?php endif; ?>
+
+                                <div class="summary-row">
+                                    <span style="font-weight:600;">VAT TAX (<?= $taxPercent ?>%):</span>
+                                    <span class="font-mono font-bold"><?= format_currency($taxAmount) ?></span>
+                                </div>
+
+                                <div class="summary-row grand-total">
+                                    <span>GRAND TOTAL:</span>
+                                    <span class="font-mono" style="color:#0070c0;"><?= format_currency($grandTotal) ?></span>
+                                </div>
+                            </div>
                         </div>
 
-                        <p style="font-weight:800; color:#0f172a; margin-top:2px;"><u><?php echo htmlspecialchars($createdBy); ?></u></p>
-                        <p class="font-mono" style="color:#64748b; font-size:7.5pt; text-transform:uppercase;">HEAD OF SALES & LOGISTICS</p>
+                        <!-- AUTHORIZATION SIGNATURE BLOCK -->
+                        <div class="signatures-grid" style="justify-content: flex-end;">
+                            <!-- Issuer Signatory -->
+                            <div class="sig-issuer-box">
+                                <p style="color:#475569; font-weight:700; text-transform:uppercase; font-size:7.5pt; letter-spacing:0.5px;">Yours faithfully,</p>
+                                <p style="font-weight:800; color:#0f172a; text-transform:uppercase; font-size:8.5pt; margin-top:1px;"><?= htmlspecialchars($companyName) ?></p>
+
+                                <div class="sig-img-container" style="display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-left: auto; text-align: right;">
+                                    <?php if (!empty($stampUrl)): ?>
+                                        <img src="<?php echo $stampUrl; ?>" alt="Company Stamp" style="max-height: 52px; max-width: 130px; object-fit: contain;">
+                                    <?php endif; ?>
+                                    <?php if (!empty($sigUrl)): ?>
+                                        <img src="<?php echo $sigUrl; ?>" alt="Digital Signature" style="max-height: 52px; max-width: 130px; object-fit: contain;">
+                                    <?php endif; ?>
+                                    <?php if (empty($sigUrl) && empty($stampUrl)): ?>
+                                        <div style="width:120px; height:40px; border:2px dashed #0070c0; color:#0070c0; font-size:7.5pt; font-weight:900; display:flex; align-items:center; justify-content:center; text-transform:uppercase;">
+                                            [STAMP & SIGNATURE]
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+
+                                <p style="font-weight:800; color:#0f172a; margin-top:2px;"><u><?php echo htmlspecialchars($createdBy); ?></u></p>
+                                <p class="font-mono" style="color:#64748b; font-size:7.5pt; text-transform:uppercase;">HEAD OF SALES & LOGISTICS</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </td>

@@ -33,6 +33,47 @@ interface DraggableElementProps {
   resizable?: boolean;
 }
 
+interface EmailOption {
+  email: string;
+  source?: string;
+}
+
+const parseClientEmail = (raw: any): { selected: string; options: EmailOption[] } => {
+  if (!raw) return { selected: '', options: [] };
+
+  if (typeof raw === 'object' && raw !== null) {
+    const selected = raw.selected || raw.email || '';
+    let optionsList: EmailOption[] = [];
+    if (Array.isArray(raw.options)) {
+      optionsList = raw.options.map((o: any) => ({
+        email: typeof o === 'string' ? o : o.email || '',
+        source: typeof o === 'object' ? o.source || 'Email Option' : 'Email Option',
+      })).filter((o: EmailOption) => o.email);
+    }
+    if (selected && !optionsList.some((o) => o.email === selected)) {
+      optionsList.unshift({ email: selected, source: 'Selected Email' });
+    }
+    return { selected, options: optionsList.length > 0 ? optionsList : (selected ? [{ email: selected, source: 'Primary Email' }] : []) };
+  }
+
+  if (typeof raw === 'string' && raw.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        return parseClientEmail(parsed);
+      }
+    } catch (e) {
+      // Ignore JSON parse error
+    }
+  }
+
+  const clean = typeof raw === 'string' ? raw.trim() : String(raw);
+  return {
+    selected: clean,
+    options: clean ? [{ email: clean, source: 'Primary Email' }] : [],
+  };
+};
+
 interface PageChunk {
   pageNumber: number;
   totalPages: number;
@@ -214,6 +255,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   const [isLeftQuoDropdownOpen, setIsLeftQuoDropdownOpen] = useState<boolean>(false);
+  const [isDocPreviewMode, setIsDocPreviewMode] = useState<boolean>(false);
 
   // Drag Mode & Element Offsets State
   const [isDragMode, setIsDragMode] = useState<boolean>(false);
@@ -297,8 +339,11 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
   const [dueDate, setDueDate] = useState<string>(initialInvoice?.due_date || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
   
   // Billing Address State (TO:)
+  const initialEmailParsed = useMemo(() => parseClientEmail(initialInvoice?.client_email), [initialInvoice]);
   const [clientName, setClientName] = useState<string>(initialInvoice?.client_name || '');
-  const [clientEmail, setClientEmail] = useState<string>(initialInvoice?.client_email || '');
+  const [clientEmail, setClientEmail] = useState<string>(initialEmailParsed.selected);
+  const [clientEmailOptions, setClientEmailOptions] = useState<EmailOption[]>(initialEmailParsed.options);
+  const [isCustomEmailMode, setIsCustomEmailMode] = useState<boolean>(false);
   const [clientPhone, setClientPhone] = useState<string>(initialInvoice?.client_phone || '');
   const [companyName, setCompanyName] = useState<string>(initialInvoice?.company_name || '');
   const [billingAddress, setBillingAddress] = useState<string>(initialInvoice?.billing_address || '');
@@ -475,7 +520,12 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
     setInvoiceDate(inv.invoice_date || new Date().toISOString().split('T')[0]);
     setDueDate(inv.due_date || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
     setClientName(inv.client_name || '');
-    setClientEmail(inv.client_email || '');
+    
+    const invEmailParsed = parseClientEmail(inv.client_email);
+    setClientEmail(invEmailParsed.selected);
+    setClientEmailOptions(invEmailParsed.options);
+    setIsCustomEmailMode(false);
+
     setClientPhone(inv.client_phone || '');
     setCompanyName(inv.company_name || '');
     setBillingAddress(inv.billing_address || '');
@@ -515,6 +565,8 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
     setDueDate(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
     setClientName('');
     setClientEmail('');
+    setClientEmailOptions([]);
+    setIsCustomEmailMode(false);
     setClientPhone('');
     setCompanyName('');
     setBillingAddress('');
@@ -553,7 +605,12 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
   const populateFromQuotation = (quo: Quotation) => {
     setQuotationId(quo.id || '');
     setClientName(quo.client_name || '');
-    setClientEmail(quo.client_email || '');
+    
+    const quoEmailParsed = parseClientEmail(quo.client_email);
+    setClientEmail(quoEmailParsed.selected);
+    setClientEmailOptions(quoEmailParsed.options);
+    setIsCustomEmailMode(false);
+
     setClientPhone(quo.client_phone || '');
     setCompanyName(quo.company_name || '');
     setBillingAddress(quo.company_address || '');
@@ -910,6 +967,21 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
             </div>
           )}
 
+          {/* INLINE DOC PREVIEW MODE TOGGLE BUTTON */}
+          <button
+            type="button"
+            onClick={() => setIsDocPreviewMode(!isDocPreviewMode)}
+            className={`flex items-center gap-1.5 font-bold text-xs px-3 py-1 shadow-xs transition cursor-pointer rounded border ${
+              isDocPreviewMode
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700 ring-2 ring-emerald-400'
+                : 'bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-white text-slate-800 border-[#a0a0a0] shadow-inner'
+            }`}
+            title="Toggle Read-Only Document Preview mode without input borders/boxes"
+          >
+            <Eye className={`w-3.5 h-3.5 ${isDocPreviewMode ? 'text-white' : 'text-emerald-600'}`} />
+            <span>{isDocPreviewMode ? 'Exit Doc Preview' : 'Doc Preview (Read-Only)'}</span>
+          </button>
+
           {/* PRIMARY QUICK CTA: SAVE INVOICE */}
           <button
             onClick={handleSaveInvoice}
@@ -939,9 +1011,20 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                 <button
                   onClick={() => {
                     setIsLeftQuoDropdownOpen(false);
+                    setIsDocPreviewMode(!isDocPreviewMode);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-emerald-800 hover:bg-emerald-50 font-bold cursor-pointer text-left transition"
+                >
+                  <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{isDocPreviewMode ? 'Exit Doc Preview Mode' : 'Doc Preview Mode (Read-Only)'}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsLeftQuoDropdownOpen(false);
                     handleSaveInvoice();
                   }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-blue-800 hover:bg-blue-50 font-bold cursor-pointer text-left transition"
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-blue-800 hover:bg-blue-50 font-bold cursor-pointer text-left border-t border-slate-100 transition"
                 >
                   <Save className="w-3.5 h-3.5 text-blue-600" />
                   <span>Save Invoice to MySQL</span>
@@ -955,7 +1038,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                   className="w-full flex items-center gap-2 px-3 py-1.5 text-indigo-800 hover:bg-indigo-50 font-bold cursor-pointer text-left border-t border-slate-100 transition"
                 >
                   <Eye className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>PDF Preview (Live)</span>
+                  <span>PDF Preview (Live Modal)</span>
                 </button>
 
                 <button
@@ -1036,6 +1119,20 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
 
       </div>
 
+      {/* DOC PREVIEW MODE ACTIVE BANNER NOTICE */}
+      {isDocPreviewMode && (
+        <div className="no-print bg-emerald-800 text-white text-xs font-bold px-4 py-2 text-center shadow-md flex items-center justify-center gap-2 sticky top-[49px] z-30 animate-in fade-in">
+          <Eye className="w-4 h-4 text-emerald-300 animate-pulse" />
+          <span>DOC PREVIEW MODE (Read-Only): Viewing clean document version without edit input boxes.</span>
+          <button
+            onClick={() => setIsDocPreviewMode(false)}
+            className="ml-3 bg-white text-emerald-900 px-2.5 py-0.5 rounded text-[11px] font-black uppercase hover:bg-emerald-50 transition"
+          >
+            Edit Form Fields
+          </button>
+        </div>
+      )}
+
       {/* DRAG MODE ACTIVE BANNER NOTICE (Shown when in Drag Mode) */}
       {isDragMode && (
         <div className="no-print bg-blue-600 text-white text-xs font-bold px-4 py-2 text-center shadow-md flex items-center justify-center gap-2 sticky top-[49px] z-30 animate-in fade-in">
@@ -1092,7 +1189,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
           .a4-page-sheet {
             display: flex !important;
             flex-direction: column !important;
-            justify-content: space-between !important;
+            justify-content: flex-start !important;
             width: 210mm !important;
             min-width: 210mm !important;
             max-width: 210mm !important;
@@ -1300,44 +1397,93 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                             <Building2 className="w-3 h-3 text-[#0070c0]" />
                             <span>TO (BILLING ADDRESS):</span>
                           </div>
-                          <div className="space-y-1 font-sans">
-                            <input
-                              type="text"
-                              value={companyName}
-                              onChange={(e) => setCompanyName(e.target.value)}
-                              placeholder="Client Company Name"
-                              className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-bold text-slate-900 rounded-none text-[11px] focus:outline-none"
-                            />
-                            <textarea
-                              rows={2}
-                              value={billingAddress}
-                              onChange={(e) => setBillingAddress(e.target.value)}
-                              placeholder="Billing Street Address & Location"
-                              className="w-full bg-white border border-slate-300 px-1.5 py-0.5 text-slate-700 rounded-none text-[11px] focus:outline-none"
-                            />
-                            <div className="grid grid-cols-2 gap-1.5 pt-0.5">
-                              <div>
-                                <span className="text-[9px] font-bold text-slate-500 block uppercase">Attention:</span>
-                                <input
-                                  type="text"
-                                  value={clientName}
-                                  onChange={(e) => setClientName(e.target.value)}
-                                  placeholder="Contact Person"
-                                  className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-semibold text-slate-900 rounded-none text-[10px]"
-                                />
-                              </div>
-                              <div>
-                                <span className="text-[9px] font-bold text-slate-500 block uppercase">Email:</span>
-                                <input
-                                  type="text"
-                                  value={clientEmail}
-                                  onChange={(e) => setClientEmail(e.target.value)}
-                                  placeholder="client@company.com"
-                                  className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-mono text-slate-800 rounded-none text-[10px]"
-                                />
+                          {isDocPreviewMode ? (
+                            <div className="space-y-1 font-sans text-slate-900 min-h-[78px] text-[11px]">
+                              <p className="font-extrabold text-xs text-slate-900 uppercase leading-snug">{companyName || '—'}</p>
+                              <p className="text-[11px] text-slate-700 leading-normal whitespace-pre-line font-medium">{billingAddress || '—'}</p>
+                              {(clientName || clientEmail) && (
+                                <div className="grid grid-cols-2 gap-1 pt-1 border-t border-slate-200 mt-1 text-[10.5px]">
+                                  {clientName && <p><span className="font-bold text-slate-500 text-[9px] uppercase block">Attention:</span> <span className="font-semibold text-slate-900">{clientName}</span></p>}
+                                  {clientEmail && <p><span className="font-bold text-slate-500 text-[9px] uppercase block">Email:</span> <span className="font-mono text-slate-800">{clientEmail}</span></p>}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="space-y-1 font-sans">
+                              <input
+                                type="text"
+                                value={companyName}
+                                onChange={(e) => setCompanyName(e.target.value)}
+                                placeholder="Client Company Name"
+                                className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-bold text-slate-900 rounded-none text-[11px] focus:outline-none"
+                              />
+                              <textarea
+                                rows={2}
+                                value={billingAddress}
+                                onChange={(e) => setBillingAddress(e.target.value)}
+                                placeholder="Billing Street Address & Location"
+                                className="w-full bg-white border border-slate-300 px-1.5 py-0.5 text-slate-700 rounded-none text-[11px] focus:outline-none"
+                              />
+                              <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                                <div>
+                                  <span className="text-[9px] font-bold text-slate-500 block uppercase">Attention:</span>
+                                  <input
+                                    type="text"
+                                    value={clientName}
+                                    onChange={(e) => setClientName(e.target.value)}
+                                    placeholder="Contact Person"
+                                    className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-semibold text-slate-900 rounded-none text-[10px]"
+                                  />
+                                </div>
+                                <div>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[9px] font-bold text-slate-500 uppercase">Email:</span>
+                                    {clientEmailOptions.length > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setIsCustomEmailMode(!isCustomEmailMode)}
+                                        className="text-[8.5px] text-blue-600 hover:text-blue-800 font-bold underline transition cursor-pointer"
+                                        title="Toggle between email dropdown list and custom text input"
+                                      >
+                                        {isCustomEmailMode ? 'Select Dropdown' : '+ Custom Email'}
+                                      </button>
+                                    )}
+                                  </div>
+                                  {!isCustomEmailMode && clientEmailOptions.length > 0 ? (
+                                    <select
+                                      value={clientEmail}
+                                      onChange={(e) => {
+                                        if (e.target.value === '__custom__') {
+                                          setIsCustomEmailMode(true);
+                                        } else {
+                                          setClientEmail(e.target.value);
+                                        }
+                                      }}
+                                      className="w-full bg-white border border-slate-300 px-1 py-0.5 font-mono text-slate-800 rounded-none text-[10px] focus:outline-none cursor-pointer font-semibold"
+                                    >
+                                      {clientEmailOptions.map((opt, idx) => (
+                                        <option key={idx} value={opt.email}>
+                                          {opt.email} {opt.source ? `(${opt.source})` : ''}
+                                        </option>
+                                      ))}
+                                      {clientEmail && !clientEmailOptions.some((o) => o.email === clientEmail) && (
+                                        <option value={clientEmail}>{clientEmail}</option>
+                                      )}
+                                      <option value="__custom__">+ Enter Custom Email...</option>
+                                    </select>
+                                  ) : (
+                                    <input
+                                      type="text"
+                                      value={clientEmail}
+                                      onChange={(e) => setClientEmail(e.target.value)}
+                                      placeholder="client@company.com"
+                                      className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-mono text-slate-800 rounded-none text-[10px]"
+                                    />
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          )}
                         </div>
                       </DraggableElement>
 
@@ -1348,81 +1494,111 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                             <Truck className="w-3 h-3 text-[#0070c0]" />
                             <span>DELIVERY (SHIPPING ADDRESS):</span>
                           </div>
-                          <div className="space-y-1 font-sans">
-                            <input
-                              type="text"
-                              value={deliveryCompany}
-                              onChange={(e) => setDeliveryCompany(e.target.value)}
-                              placeholder="Delivery Ship / Project Name"
-                              className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-bold text-slate-900 rounded-none text-[11px] focus:outline-none"
-                            />
-                            <textarea
-                              rows={2}
-                              value={deliveryAddress}
-                              onChange={(e) => setDeliveryAddress(e.target.value)}
-                              placeholder="Delivery Destination / Yard Address"
-                              className="w-full bg-white border border-slate-300 px-1.5 py-0.5 text-slate-700 rounded-none text-[11px] focus:outline-none"
-                            />
-                            <div className="grid grid-cols-2 gap-1.5 pt-0.5">
-                              <div>
-                                <span className="text-[9px] font-bold text-slate-500 block uppercase">Delivery PIC:</span>
-                                <input
-                                  type="text"
-                                  value={deliveryPic}
-                                  onChange={(e) => setDeliveryPic(e.target.value)}
-                                  placeholder="Delivery Contact Person"
-                                  className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-semibold text-slate-900 rounded-none text-[10px]"
-                                />
-                              </div>
-                              <div>
-                                <span className="text-[9px] font-bold text-slate-500 block uppercase">Contact No:</span>
-                                <input
-                                  type="text"
-                                  value={deliveryPhone}
-                                  onChange={(e) => setDeliveryPhone(e.target.value)}
-                                  placeholder="+6012-3456789"
-                                  className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-mono text-slate-800 rounded-none text-[10px]"
-                                />
+                          {isDocPreviewMode ? (
+                            <div className="space-y-1 font-sans text-slate-900 min-h-[78px] text-[11px]">
+                              <p className="font-extrabold text-xs text-slate-900 uppercase leading-snug">{deliveryCompany || companyName || '—'}</p>
+                              <p className="text-[11px] text-slate-700 leading-normal whitespace-pre-line font-medium">{deliveryAddress || billingAddress || '—'}</p>
+                              {(deliveryPic || deliveryPhone) && (
+                                <div className="grid grid-cols-2 gap-1 pt-1 border-t border-slate-200 mt-1 text-[10.5px]">
+                                  {deliveryPic && <p><span className="font-bold text-slate-500 text-[9px] uppercase block">Delivery PIC:</span> <span className="font-semibold text-slate-900">{deliveryPic}</span></p>}
+                                  {deliveryPhone && <p><span className="font-bold text-slate-500 text-[9px] uppercase block">Contact No:</span> <span className="font-mono text-slate-800">{deliveryPhone}</span></p>}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="space-y-1 font-sans">
+                              <input
+                                type="text"
+                                value={deliveryCompany}
+                                onChange={(e) => setDeliveryCompany(e.target.value)}
+                                placeholder="Delivery Ship / Project Name"
+                                className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-bold text-slate-900 rounded-none text-[11px] focus:outline-none"
+                              />
+                              <textarea
+                                rows={2}
+                                value={deliveryAddress}
+                                onChange={(e) => setDeliveryAddress(e.target.value)}
+                                placeholder="Delivery Destination / Yard Address"
+                                className="w-full bg-white border border-slate-300 px-1.5 py-0.5 text-slate-700 rounded-none text-[11px] focus:outline-none"
+                              />
+                              <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                                <div>
+                                  <span className="text-[9px] font-bold text-slate-500 block uppercase">Delivery PIC:</span>
+                                  <input
+                                    type="text"
+                                    value={deliveryPic}
+                                    onChange={(e) => setDeliveryPic(e.target.value)}
+                                    placeholder="Delivery Contact Person"
+                                    className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-semibold text-slate-900 rounded-none text-[10px]"
+                                  />
+                                </div>
+                                <div>
+                                  <span className="text-[9px] font-bold text-slate-500 block uppercase">Contact No:</span>
+                                  <input
+                                    type="text"
+                                    value={deliveryPhone}
+                                    onChange={(e) => setDeliveryPhone(e.target.value)}
+                                    placeholder="+6012-3456789"
+                                    className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-mono text-slate-800 rounded-none text-[10px]"
+                                  />
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          )}
                         </div>
                       </DraggableElement>
 
                       {/* INVOICE METADATA ROW */}
                       <DraggableElement id="invoice_meta" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Invoice Numbers & Date" className="md:col-span-12">
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-2 border border-slate-300 font-mono">
-                          <div>
-                            <span className="text-[9px] font-bold text-slate-500 block uppercase">Invoice No. :</span>
-                            <input
-                              type="text"
-                              value={invoiceNumber}
-                              onChange={(e) => setInvoiceNumber(e.target.value)}
-                              className="w-full bg-slate-50 border border-slate-300 px-1.5 py-0.5 font-extrabold text-slate-900 text-xs"
-                            />
+                        {isDocPreviewMode ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50/90 p-2 border border-slate-300 font-mono text-xs">
+                            <div>
+                              <span className="text-[9px] font-bold text-slate-500 block uppercase">Invoice No. :</span>
+                              <span className="font-extrabold text-slate-900 text-xs block py-0.5">{invoiceNumber || '—'}</span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-bold text-slate-500 block uppercase">Invoice Date :</span>
+                              <span className="font-bold text-slate-900 text-xs block py-0.5">{invoiceDate || '—'}</span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-bold text-slate-500 block uppercase">PO Numb (Client PO) :</span>
+                              <span className="font-black text-blue-900 text-xs block py-0.5">{poNumber || '—'}</span>
+                            </div>
                           </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-2 border border-slate-300 font-mono">
+                            <div>
+                              <span className="text-[9px] font-bold text-slate-500 block uppercase">Invoice No. :</span>
+                              <input
+                                type="text"
+                                value={invoiceNumber}
+                                onChange={(e) => setInvoiceNumber(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-300 px-1.5 py-0.5 font-extrabold text-slate-900 text-xs"
+                              />
+                            </div>
 
-                          <div>
-                            <span className="text-[9px] font-bold text-slate-500 block uppercase">Invoice Date :</span>
-                            <input
-                              type="date"
-                              value={invoiceDate}
-                              onChange={(e) => setInvoiceDate(e.target.value)}
-                              className="w-full bg-slate-50 border border-slate-300 px-1.5 py-0.5 font-bold text-slate-900 text-xs"
-                            />
-                          </div>
+                            <div>
+                              <span className="text-[9px] font-bold text-slate-500 block uppercase">Invoice Date :</span>
+                              <input
+                                type="date"
+                                value={invoiceDate}
+                                onChange={(e) => setInvoiceDate(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-300 px-1.5 py-0.5 font-bold text-slate-900 text-xs"
+                              />
+                            </div>
 
-                          <div>
-                            <span className="text-[9px] font-bold text-slate-500 block uppercase">PO Numb (Client PO) :</span>
-                            <input
-                              type="text"
-                              value={poNumber}
-                              onChange={(e) => setPoNumber(e.target.value)}
-                              placeholder="e.g. DM/AGA/ABMI/PO/279/24"
-                              className="w-full bg-blue-50 border border-blue-300 px-1.5 py-0.5 font-black text-blue-900 text-xs"
-                            />
+                            <div>
+                              <span className="text-[9px] font-bold text-slate-500 block uppercase">PO Numb (Client PO) :</span>
+                              <input
+                                type="text"
+                                value={poNumber}
+                                onChange={(e) => setPoNumber(e.target.value)}
+                                placeholder="e.g. DM/AGA/ABMI/PO/279/24"
+                                className="w-full bg-blue-50 border border-blue-300 px-1.5 py-0.5 font-black text-blue-900 text-xs"
+                              />
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </DraggableElement>
 
                     </div>
@@ -1504,125 +1680,125 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                     </table>
                   </div>
                 </DraggableElement>
-              </div>
 
-              {/* CLOSING BLOCK (Last Sheet Only) */}
-              {chunk.isLastPage && (
-                <div style={{ width: '100%', marginTop: 'auto', paddingTop: '6px' }}>
-                  {/* REMARKS / BANK PAYMENT INSTRUCTIONS & FINANCIAL TOTALS */}
-                  <div className="flex flex-col md:flex-row justify-between items-start gap-4 pt-1 w-full mb-4">
-                    
-                    {/* BANK PAYMENT INSTRUCTIONS (REMARKS BOX) */}
-                    <DraggableElement id="invoice_bank_box" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Bank Payment Box" className="w-full md:w-1/2">
-                      <div className="space-y-1 text-[11px] bg-slate-50 p-3 border border-slate-300">
-                        <span className="text-[10px] font-black text-slate-900 uppercase tracking-wide block border-b border-slate-300 pb-0.5">
-                          Remarks & Bank Payment Instructions:
-                        </span>
-                        <div className="text-slate-800 leading-relaxed font-sans pt-0.5 space-y-1 text-[10.5px] whitespace-pre-line">
-                          {remarksText ? (
-                            <p>{remarksText}</p>
-                          ) : (
-                            <>
-                              <p className="font-bold text-slate-900">
-                                1. Please make all payment crossed & payable to: <u className="font-mono text-blue-900">{bankHolder}; {bankAccount} ({bankName})</u>
-                              </p>
-                              <p>
-                                2. PLEASE EMAIL ALL RELEVANT DOCUMENTS TO: <u className="font-mono font-bold text-blue-900">{bankEmail}</u>.
-                              </p>
-                              <p className="italic text-slate-600">
-                                3. Do not forget to keep a copy of any document as a prove of any transaction.
-                              </p>
-                              <p className="text-[10px] text-slate-500 font-semibold pt-0.5">
-                                Kindly contact us should you have further enquiries.
-                              </p>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </DraggableElement>
-
-                    {/* FINANCIAL TOTALS BOX */}
-                    <DraggableElement id="invoice_summary" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Financial Summary" className="w-full md:w-72">
-                      <div className="border-2 border-slate-900 rounded-none p-3 space-y-1.5 text-xs bg-white">
-                        <div className="flex justify-between items-center text-slate-700">
-                          <span className="font-semibold">GROSS SUBTOTAL:</span>
-                          <span className="font-mono font-bold text-slate-900">{formatCurrency(subtotal)}</span>
-                        </div>
-
-                        {discountTotal > 0 && (
-                          <div className="flex justify-between items-center text-amber-800">
-                            <span className="font-semibold">TOTAL DISCOUNT:</span>
-                            <span className="font-mono font-bold">-{formatCurrency(discountTotal)}</span>
+                {/* CLOSING BLOCK (Last Sheet Only) — Directly follows table in natural flow */}
+                {chunk.isLastPage && (
+                  <div style={{ width: '100%', paddingTop: '8px' }}>
+                    {/* REMARKS / BANK PAYMENT INSTRUCTIONS & FINANCIAL TOTALS */}
+                    <div className="flex flex-col md:flex-row justify-between items-start gap-4 pt-1 w-full mb-4">
+                      
+                      {/* BANK PAYMENT INSTRUCTIONS (REMARKS BOX) */}
+                      <DraggableElement id="invoice_bank_box" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Bank Payment Box" className="w-full md:w-1/2">
+                        <div className="space-y-1 text-[11px] bg-slate-50 p-3 border border-slate-300">
+                          <span className="text-[10px] font-black text-slate-900 uppercase tracking-wide block border-b border-slate-300 pb-0.5">
+                            Remarks & Bank Payment Instructions:
+                          </span>
+                          <div className="text-slate-800 leading-relaxed font-sans pt-0.5 space-y-1 text-[10.5px] whitespace-pre-line">
+                            {remarksText ? (
+                              <p>{remarksText}</p>
+                            ) : (
+                              <>
+                                <p className="font-bold text-slate-900">
+                                  1. Please make all payment crossed & payable to: <u className="font-mono text-blue-900">{bankHolder}; {bankAccount} ({bankName})</u>
+                                </p>
+                                <p>
+                                  2. PLEASE EMAIL ALL RELEVANT DOCUMENTS TO: <u className="font-mono font-bold text-blue-900">{bankEmail}</u>.
+                                </p>
+                                <p className="italic text-slate-600">
+                                  3. Do not forget to keep a copy of any document as a prove of any transaction.
+                                </p>
+                                <p className="text-[10px] text-slate-500 font-semibold pt-0.5">
+                                  Kindly contact us should you have further enquiries.
+                                </p>
+                              </>
+                            )}
                           </div>
-                        )}
+                        </div>
+                      </DraggableElement>
 
-                        {taxAmount > 0 && (
+                      {/* FINANCIAL TOTALS BOX */}
+                      <DraggableElement id="invoice_summary" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Financial Summary" className="w-full md:w-72">
+                        <div className="border-2 border-slate-900 rounded-none p-3 space-y-1.5 text-xs bg-white">
                           <div className="flex justify-between items-center text-slate-700">
-                            <span className="font-semibold">VAT TAX ({taxPercent}%):</span>
-                            <span className="font-mono font-bold text-slate-900">{formatCurrency(taxAmount)}</span>
+                            <span className="font-semibold">GROSS SUBTOTAL:</span>
+                            <span className="font-mono font-bold text-slate-900">{formatCurrency(subtotal)}</span>
                           </div>
-                        )}
 
-                        <div className="border-t-2 border-slate-900 pt-1.5 flex justify-between items-center text-slate-900 font-black text-sm">
-                          <span>PRICE TOTAL (RM):</span>
-                          <span className="font-mono text-[#0070c0]">{formatCurrency(grandTotal || subtotal)}</span>
-                        </div>
-                      </div>
-                    </DraggableElement>
-
-                  </div>
-
-                  {/* DUAL AUTHORIZATION SIGNATURE BLOCK (AUTHORISED BY & RECEIVED BY) */}
-                  <div className="flex flex-col sm:flex-row justify-between items-end pt-4 border-t border-slate-300 text-xs w-full gap-6">
-                    {/* AUTHORISED BY (ISSUER SIGNATORY) */}
-                    <DraggableElement id="invoice_sig_auth" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Authorised By Signatory">
-                      <div className="space-y-0.5 text-left">
-                        <p className="text-slate-700 font-bold uppercase tracking-wide text-[10px]">Authorised by,</p>
-                        
-                        <div className="h-14 flex items-center justify-start my-0.5 gap-2">
-                          {signatureUrl && (
-                            <img
-                              src={signatureUrl}
-                              alt="Digital Signature"
-                              className="h-14 object-contain max-w-[120px] pointer-events-none"
-                            />
-                          )}
-                          {stampUrl && (
-                            <img
-                              src={stampUrl}
-                              alt="Company Stamp"
-                              className="h-14 object-contain max-w-[120px] pointer-events-none"
-                            />
-                          )}
-                          {!signatureUrl && !stampUrl && (
-                            <div className="w-32 h-10 border-2 border-[#0070c0] border-dashed flex items-center justify-center text-[#0070c0] text-[9px] font-black uppercase tracking-wider transform -rotate-2">
-                              [STAMP]
+                          {discountTotal > 0 && (
+                            <div className="flex justify-between items-center text-amber-800">
+                              <span className="font-semibold">TOTAL DISCOUNT:</span>
+                              <span className="font-mono font-bold">-{formatCurrency(discountTotal)}</span>
                             </div>
                           )}
+
+                          {taxAmount > 0 && (
+                            <div className="flex justify-between items-center text-slate-700">
+                              <span className="font-semibold">VAT TAX ({taxPercent}%):</span>
+                              <span className="font-mono font-bold text-slate-900">{formatCurrency(taxAmount)}</span>
+                            </div>
+                          )}
+
+                          <div className="border-t-2 border-slate-900 pt-1.5 flex justify-between items-center text-slate-900 font-black text-sm">
+                            <span>PRICE TOTAL (RM):</span>
+                            <span className="font-mono text-[#0070c0]">{formatCurrency(grandTotal || subtotal)}</span>
+                          </div>
                         </div>
+                      </DraggableElement>
 
-                        <p className="font-bold text-slate-900 text-xs"><u>{authSignatoryName}</u></p>
-                        <p className="text-slate-600 font-mono text-[10px]">{authSignatoryTitle}</p>
-                      </div>
-                    </DraggableElement>
+                    </div>
 
-                    {/* RECEIVED BY (CLIENT RECEIVER SIGNATURE LINE) */}
-                    <DraggableElement id="invoice_sig_recv" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Received By Line">
-                      <div className="text-left sm:text-right space-y-0.5">
-                        <p className="text-slate-700 font-bold uppercase tracking-wide text-[10px]">{receivedByLabel}</p>
-                        
-                        <div className="h-12 border-b-2 border-slate-900 w-48 my-0.5 ml-auto"></div>
+                    {/* DUAL AUTHORIZATION SIGNATURE BLOCK (AUTHORISED BY & RECEIVED BY) */}
+                    <div className="flex flex-col sm:flex-row justify-between items-end pt-4 border-t border-slate-300 text-xs w-full gap-6">
+                      {/* AUTHORISED BY (ISSUER SIGNATORY) */}
+                      <DraggableElement id="invoice_sig_auth" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Authorised By Signatory">
+                        <div className="space-y-0.5 text-left">
+                          <p className="text-slate-700 font-bold uppercase tracking-wide text-[10px]">Authorised by,</p>
+                          
+                          <div className="h-14 flex items-center justify-start my-0.5 gap-2">
+                            {signatureUrl && (
+                              <img
+                                src={signatureUrl}
+                                alt="Digital Signature"
+                                className="h-14 object-contain max-w-[120px] pointer-events-none"
+                              />
+                            )}
+                            {stampUrl && (
+                              <img
+                                src={stampUrl}
+                                alt="Company Stamp"
+                                className="h-14 object-contain max-w-[120px] pointer-events-none"
+                              />
+                            )}
+                            {!signatureUrl && !stampUrl && (
+                              <div className="w-32 h-10 border-2 border-[#0070c0] border-dashed flex items-center justify-center text-[#0070c0] text-[9px] font-black uppercase tracking-wider transform -rotate-2">
+                                [STAMP]
+                              </div>
+                            )}
+                          </div>
 
-                        <p className="font-bold text-slate-900 text-[10px]">Name / Designation: ______________________</p>
-                        <p className="text-slate-500 font-mono text-[10px]">Date: ____ / ____ / ________</p>
-                      </div>
-                    </DraggableElement>
+                          <p className="font-bold text-slate-900 text-xs"><u>{authSignatoryName}</u></p>
+                          <p className="text-slate-600 font-mono text-[10px]">{authSignatoryTitle}</p>
+                        </div>
+                      </DraggableElement>
+
+                      {/* RECEIVED BY (CLIENT RECEIVER SIGNATURE LINE) */}
+                      <DraggableElement id="invoice_sig_recv" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Received By Line">
+                        <div className="text-left sm:text-right space-y-0.5">
+                          <p className="text-slate-700 font-bold uppercase tracking-wide text-[10px]">{receivedByLabel}</p>
+                          
+                          <div className="h-12 border-b-2 border-slate-900 w-48 my-0.5 ml-auto"></div>
+
+                          <p className="font-bold text-slate-900 text-[10px]">Name / Designation: ______________________</p>
+                          <p className="text-slate-500 font-mono text-[10px]">Date: ____ / ____ / ________</p>
+                        </div>
+                      </DraggableElement>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* BOTTOM FOOTER (Repeats on every sheet at bottom) */}
-              <DraggableElement id="invoice_footer" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Footer">
+              <DraggableElement id="invoice_footer" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Footer" className="mt-auto w-full">
                 <footer style={{ borderTop: '1px solid #cbd5e1', paddingTop: '4px', marginTop: '4px', textAlign: 'center', fontSize: '7pt', color: '#64748b', background: '#ffffff', width: '100%' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1px', tableLayout: 'fixed' }}>
                     <tbody>

@@ -116,7 +116,7 @@ function callGeminiMultimodalPdfOcr($pdfFilePath, $apiKey) {
                 . $extractedText . "\n\n"
                 . "Extract all requested equipment specifications, part numbers, quantities, and units. Note: RFQ documents sent by clients do not contain unit prices. Set 'unit_price' to 0 so user can fill the price. Return a JSON array where each object has keys: 'description' (full complete detailed technical spec), 'quantity' (number), 'unit' (e.g. Package/Unit/Set/Meter/Pcs), 'unit_price' (0), 'discount_percent' (0). Return ONLY the raw JSON array.";
 
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey;
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" . $apiKey;
         $payload = json_encode([
             'contents' => [
                 [
@@ -137,7 +137,7 @@ function callGeminiMultimodalPdfOcr($pdfFilePath, $apiKey) {
 
         $prompt = "You are an AI ERP OCR assistant for ABM Malaya. Analyze this authentic RFQ PDF specification document ('" . basename($pdfFilePath) . "'). Extract all requested equipment specifications, part numbers, quantities, and units across all pages. Note: RFQ documents sent by clients do not contain unit prices. Set 'unit_price' to 0 so user can fill the price. Return a JSON array where each object has keys: 'description' (full complete detailed technical spec), 'quantity' (number), 'unit' (e.g. Package/Unit/Set/Meter/Pcs), 'unit_price' (0), 'discount_percent' (0). Return ONLY the raw JSON array.";
 
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey;
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" . $apiKey;
         $payload = json_encode([
             'contents' => [
                 [

@@ -885,7 +885,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
           .a4-page-sheet {
             display: flex !important;
             flex-direction: column !important;
-            justify-content: space-between !important;
+            justify-content: flex-start !important;
             width: 210mm !important;
             min-width: 210mm !important;
             max-width: 210mm !important;
@@ -1579,7 +1579,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                                     placeholder="Project reference name or specification"
                                   />
                                 ) : (
-                                  docProjectReference
+                                  docProjectReference || '—'
                                 )}
                               </td>
                             </tr>
@@ -1718,23 +1718,23 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                                 )}
                               </div>
 
-                              <div className="text-slate-600 text-[7.5pt] leading-tight mb-1 font-sans">
+                              <div className="text-[7.5pt] text-slate-600 leading-snug font-sans mb-1">
                                 {isEditDocMode ? (
                                   <textarea
                                     rows={2}
-                                    value={(item as any).specification || specText}
+                                    value={(item as any).specification || ''}
                                     onChange={(e) => handleItemFieldChange(globalIdx, 'specification', e.target.value)}
-                                    className="w-full text-slate-800 bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
-                                    placeholder="Detailed specifications"
+                                    className="w-full text-slate-700 bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
+                                    placeholder="Product specification text"
                                   />
                                 ) : (
                                   specText
                                 )}
                               </div>
 
-                              {displayPhotoUrl && !displayPhotoUrl.includes('unsplash') ? (
+                              {displayPhotoUrl && (
                                 <div className="w-full mt-1">
-                                  <DraggableElement id={`photo_${item.id || globalIdx}`} isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label={`Photo #${globalIdx + 1}`}>
+                                  <DraggableElement id={`photo_${globalIdx}`} isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label={`Photo #${globalIdx + 1}`}>
                                     <img
                                       src={displayPhotoUrl}
                                       alt={item.description}
@@ -1742,7 +1742,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                                     />
                                   </DraggableElement>
                                 </div>
-                              ) : null}
+                              )}
                             </td>
 
                             {/* Quantity */}
@@ -1843,126 +1843,126 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                   )}
                 </div>
 
-                {/* TERMS & CONDITIONS + FINANCIAL SUMMARY (Last Sheet Only) */}
+                {/* CLOSING BLOCK (Last Sheet Only) — Directly follows table in natural flow */}
                 {chunk.isLastPage && (
-                  <div className="bottom-grid">
-                    {/* Terms & Conditions */}
-                    <DraggableElement id="terms_box" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Terms & Conditions" className="terms-container">
-                      <div className="terms-header">TERMS & CONDITIONS:</div>
-                      <div className="terms-content">
-                        {isEditDocMode ? (
-                          <textarea
-                            rows={3}
-                            value={docNotes}
-                            onChange={(e) => setDocNotes(e.target.value)}
-                            className="w-full font-sans text-xs bg-amber-50/70 border border-amber-300 p-1.5 rounded focus:outline-blue-500 leading-relaxed"
-                            placeholder="1. Prices stated in MYR..."
-                          />
-                        ) : (
-                          docNotes
-                        )}
-                      </div>
-                    </DraggableElement>
-
-                    {/* Financial Summary Box */}
-                    <DraggableElement id="summary_box" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Financial Summary" className="summary-box">
-                      <div className="summary-row">
-                        <span style={{ fontWeight: 600 }}>GROSS SUBTOTAL:</span>
-                        <span className="font-mono font-bold">{formatCurrency(financialTotals.subtotal)}</span>
-                      </div>
-
-                      {financialTotals.discountTotal > 0 && (
-                        <div className="summary-row" style={{ color: '#b45309' }}>
-                          <span style={{ fontWeight: 600 }}>TOTAL DISCOUNT:</span>
-                          <span className="font-mono font-bold">-{formatCurrency(financialTotals.discountTotal)}</span>
-                        </div>
-                      )}
-
-                      <div className="summary-row">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 600 }}>
-                          <span>VAT TAX (</span>
+                  <div style={{ width: '100%', paddingTop: '8px' }}>
+                    {/* TERMS & CONDITIONS + FINANCIAL SUMMARY */}
+                    <div className="bottom-grid">
+                      {/* Terms & Conditions */}
+                      <DraggableElement id="terms_box" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Terms & Conditions" className="terms-container">
+                        <div className="terms-header">TERMS & CONDITIONS:</div>
+                        <div className="terms-content">
                           {isEditDocMode ? (
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              value={docTaxPercent}
-                              onChange={(e) => setDocTaxPercent(Number(e.target.value))}
-                              className="w-8 text-center font-mono bg-amber-50/70 border border-amber-300 px-0.5 py-0.2 rounded text-xs"
+                            <textarea
+                              rows={3}
+                              value={docNotes}
+                              onChange={(e) => setDocNotes(e.target.value)}
+                              className="w-full font-sans text-xs bg-amber-50/70 border border-amber-300 p-1.5 rounded focus:outline-blue-500 leading-relaxed"
+                              placeholder="1. Prices stated in MYR..."
                             />
                           ) : (
-                            <span>{docTaxPercent}</span>
+                            docNotes
                           )}
-                          <span>%):</span>
                         </div>
-                        <span className="font-mono font-bold">{formatCurrency(financialTotals.taxAmount)}</span>
-                      </div>
+                      </DraggableElement>
 
-                      <div className="summary-row grand-total">
-                        <span>GRAND TOTAL:</span>
-                        <span className="font-mono" style={{ color: '#0070c0' }}>{formatCurrency(financialTotals.grandTotal)}</span>
-                      </div>
-                    </DraggableElement>
-                  </div>
-                )}
+                      {/* Financial Summary Box */}
+                      <DraggableElement id="summary_box" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Financial Summary" className="summary-box">
+                        <div className="summary-row">
+                          <span style={{ fontWeight: 600 }}>GROSS SUBTOTAL:</span>
+                          <span className="font-mono font-bold">{formatCurrency(financialTotals.subtotal)}</span>
+                        </div>
 
-                {/* ISSUER AUTHORIZATION SIGNATURE BLOCK (Last Sheet Only) */}
-                {chunk.isLastPage && (
-                  <div className="signatures-grid" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', width: '100%' }}>
-                    {/* Issuer Signatory */}
-                    <DraggableElement id="signature_issuer" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Issuer Signatory" className="sig-issuer-box" style={{ textAlign: 'right', marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
-                      <p style={{ color: '#475569', fontWeight: 700, textTransform: 'uppercase', fontSize: '7pt', letterSpacing: '0.5px', textAlign: 'right' }}>
-                        Yours faithfully,
-                      </p>
-                      <p style={{ fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', fontSize: '8pt', marginTop: '1px', textAlign: 'right' }}>
-                        {companyName}
-                      </p>
-
-                      <div className="sig-img-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', marginLeft: 'auto', textAlign: 'right', width: 'auto', margin: '4px 0 4px auto' }}>
-                        {stampUrl && (
-                          <img
-                            src={stampUrl}
-                            alt="Company Stamp"
-                            style={{ display: 'inline-block', maxHeight: '52px', maxWidth: '130px', objectFit: 'contain' }}
-                          />
-                        )}
-                        {signatureUrl && (
-                          <img
-                            src={signatureUrl}
-                            alt="Digital Signature"
-                            style={{ display: 'inline-block', maxHeight: '52px', maxWidth: '130px', objectFit: 'contain' }}
-                          />
-                        )}
-                        {!signatureUrl && !stampUrl && (
-                          <div style={{ width: '100px', height: '35px', border: '2px dashed #0070c0', color: '#0070c0', fontSize: '7pt', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase', marginLeft: 'auto' }}>
-                            [STAMP & SIGNATURE]
+                        {financialTotals.discountTotal > 0 && (
+                          <div className="summary-row" style={{ color: '#b45309' }}>
+                            <span style={{ fontWeight: 600 }}>TOTAL DISCOUNT:</span>
+                            <span className="font-mono font-bold">-{formatCurrency(financialTotals.discountTotal)}</span>
                           </div>
                         )}
-                      </div>
 
-                      {isEditDocMode ? (
-                        <input
-                          type="text"
-                          value={docCreatedBy}
-                          onChange={(e) => setDocCreatedBy(e.target.value)}
-                          className="font-bold text-slate-900 bg-amber-50/70 border border-amber-300 px-1.5 py-0.5 rounded text-xs text-right w-48 focus:outline-blue-500"
-                          placeholder="Signatory Name"
-                        />
-                      ) : (
-                        <p style={{ fontWeight: 800, color: '#0f172a', marginTop: '1px', fontSize: '7.5pt', textAlign: 'right' }}>
-                          <u>{docCreatedBy || 'Muhammad Aimanuddin Bin Mohd Zaki'}</u>
+                        <div className="summary-row">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 600 }}>
+                            <span>VAT TAX (</span>
+                            {isEditDocMode ? (
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={docTaxPercent}
+                                onChange={(e) => setDocTaxPercent(Number(e.target.value))}
+                                className="w-8 text-center font-mono bg-amber-50/70 border border-amber-300 px-0.5 py-0.2 rounded text-xs"
+                              />
+                            ) : (
+                              <span>{docTaxPercent}</span>
+                            )}
+                            <span>%):</span>
+                          </div>
+                          <span className="font-mono font-bold">{formatCurrency(financialTotals.taxAmount)}</span>
+                        </div>
+
+                        <div className="summary-row grand-total">
+                          <span>GRAND TOTAL:</span>
+                          <span className="font-mono" style={{ color: '#0070c0' }}>{formatCurrency(financialTotals.grandTotal)}</span>
+                        </div>
+                      </DraggableElement>
+                    </div>
+
+                    {/* ISSUER AUTHORIZATION SIGNATURE BLOCK */}
+                    <div className="signatures-grid" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', width: '100%', marginTop: '8px' }}>
+                      <DraggableElement id="signature_issuer" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Issuer Signatory" className="sig-issuer-box" style={{ textAlign: 'right', marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
+                        <p style={{ color: '#475569', fontWeight: 700, textTransform: 'uppercase', fontSize: '7pt', letterSpacing: '0.5px', textAlign: 'right' }}>
+                          Yours faithfully,
                         </p>
-                      )}
-                      <p className="font-mono" style={{ color: '#64748b', fontSize: '7pt', textTransform: 'uppercase', textAlign: 'right' }}>
-                        HEAD OF SALES & LOGISTICS
-                      </p>
-                    </DraggableElement>
+                        <p style={{ fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', fontSize: '8pt', marginTop: '1px', textAlign: 'right' }}>
+                          {companyName}
+                        </p>
+
+                        <div className="sig-img-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', marginLeft: 'auto', textAlign: 'right', width: 'auto', margin: '4px 0 4px auto' }}>
+                          {stampUrl && (
+                            <img
+                              src={stampUrl}
+                              alt="Company Stamp"
+                              style={{ display: 'inline-block', maxHeight: '52px', maxWidth: '130px', objectFit: 'contain' }}
+                            />
+                          )}
+                          {signatureUrl && (
+                            <img
+                              src={signatureUrl}
+                              alt="Digital Signature"
+                              style={{ display: 'inline-block', maxHeight: '52px', maxWidth: '130px', objectFit: 'contain' }}
+                            />
+                          )}
+                          {!signatureUrl && !stampUrl && (
+                            <div style={{ width: '100px', height: '35px', border: '2px dashed #0070c0', color: '#0070c0', fontSize: '7pt', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase', marginLeft: 'auto' }}>
+                              [STAMP & SIGNATURE]
+                            </div>
+                          )}
+                        </div>
+
+                        {isEditDocMode ? (
+                          <input
+                            type="text"
+                            value={docCreatedBy}
+                            onChange={(e) => setDocCreatedBy(e.target.value)}
+                            className="font-bold text-slate-900 bg-amber-50/70 border border-amber-300 px-1.5 py-0.5 rounded text-xs text-right w-48 focus:outline-blue-500"
+                            placeholder="Signatory Name"
+                          />
+                        ) : (
+                          <p style={{ fontWeight: 800, color: '#0f172a', marginTop: '1px', fontSize: '7.5pt', textAlign: 'right' }}>
+                            <u>{docCreatedBy || 'Muhammad Aimanuddin Bin Mohd Zaki'}</u>
+                          </p>
+                        )}
+                        <p className="font-mono" style={{ color: '#64748b', fontSize: '7pt', textTransform: 'uppercase', textAlign: 'right' }}>
+                          HEAD OF SALES & LOGISTICS
+                        </p>
+                      </DraggableElement>
+                    </div>
                   </div>
                 )}
               </div>
 
               {/* BOTTOM FOOTER (Repeats on every sheet at bottom) */}
-              <DraggableElement id="footer" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Footer">
+              <DraggableElement id="footer" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Footer" className="mt-auto w-full">
                 <footer style={{ borderTop: '1px solid #cbd5e1', paddingTop: '4px', marginTop: '4px', textAlign: 'center', fontSize: '7pt', color: '#64748b', background: '#ffffff', width: '100%' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1px', tableLayout: 'fixed' }}>
                     <tbody>

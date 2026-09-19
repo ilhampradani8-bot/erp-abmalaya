@@ -98,10 +98,18 @@ try {
         }
 
         $all_rfqs = [];
-        $rfq_q = $db_conn->query("SELECT id, rfq_number, client_name AS sender_name, client_email AS sender_email, subject, message_body, attachment_url, created_at FROM rfq_requests");
+        $all_rfqs_by_email = [];
+        // Omit large message_body in summary list view to keep JSON payload lightweight (< 50KB vs > 5MB)
+        $rfq_q = $db_conn->query("SELECT id, rfq_number, client_name AS sender_name, client_email AS sender_email, subject, attachment_url, created_at FROM rfq_requests");
         if ($rfq_q) {
             while ($rfq = $rfq_q->fetch_assoc()) {
                 $all_rfqs[$rfq['id']] = $rfq;
+                if (!empty($rfq['sender_email'])) {
+                    $em = strtolower(trim($rfq['sender_email']));
+                    if (!isset($all_rfqs_by_email[$em])) {
+                        $all_rfqs_by_email[$em] = $rfq;
+                    }
+                }
             }
         }
 
@@ -118,13 +126,16 @@ try {
 
                 foreach ($items_arr as $item) {
                     $desc = strtolower(trim($item['description'] ?? ''));
+                    $pcode = strtolower(trim($item['product_code'] ?? ''));
                     $matched = false;
-                    if (!empty($desc)) {
+                    if (!empty($pcode) && isset($master_products[$pcode])) {
+                        $matched = true;
+                    } else if (!empty($desc)) {
                         if (isset($master_products[$desc])) {
                             $matched = true;
-                        } else {
+                        } else if (strlen($desc) >= 4) {
                             foreach ($master_products as $prod_name => $val) {
-                                if (strpos($desc, $prod_name) !== false || strpos($prod_name, $desc) !== false) {
+                                if (strlen($prod_name) >= 4 && (strpos($desc, $prod_name) !== false || strpos($prod_name, $desc) !== false)) {
                                     $matched = true;
                                     break;
                                 }
@@ -141,16 +152,14 @@ try {
                 $row['items_details'] = $items_arr;
                 $row['items'] = $items_arr;
                 
-                // Set email source from batch map
-                $row['email_source'] = (!empty($row['rfq_id']) && isset($all_rfqs[$row['rfq_id']])) ? $all_rfqs[$row['rfq_id']] : null;
-                
-                // Fallback: match by client_email address if no explicit rfq_id link is found
-                if (empty($row['email_source']) && !empty($row['client_email'])) {
-                    $email_esc = $db_conn->real_escape_string($row['client_email']);
-                    $rfq_res = $db_conn->query("SELECT id, rfq_number, client_name AS sender_name, client_email AS sender_email, subject, message_body, attachment_url, created_at FROM rfq_requests WHERE client_email = '{$email_esc}' ORDER BY created_at DESC LIMIT 1");
-                    if ($rfq_res && $rfq_res->num_rows > 0) {
-                        $row['email_source'] = $rfq_res->fetch_assoc();
-                    }
+                // Set email source from batch map (or email map fallback) without N+1 SQL queries
+                if (!empty($row['rfq_id']) && isset($all_rfqs[$row['rfq_id']])) {
+                    $row['email_source'] = $all_rfqs[$row['rfq_id']];
+                } else if (!empty($row['client_email'])) {
+                    $c_email = strtolower(trim($row['client_email']));
+                    $row['email_source'] = isset($all_rfqs_by_email[$c_email]) ? $all_rfqs_by_email[$c_email] : null;
+                } else {
+                    $row['email_source'] = null;
                 }
                 
                 $data[] = $row;

@@ -86,7 +86,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
       dailyRequests: 14,
       dailyLimit: '20 RPM / 1,500 RPD',
       tokensUsed: 42800,
-      modelName: 'gemini-1.5-flash',
+      modelName: 'gemini-2.5-flash',
       engineName: 'Email Inbox Classification AI Engine'
     }
   ]);
@@ -100,7 +100,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
       dailyRequests: 8,
       dailyLimit: '20 RPM / 1,500 RPD',
       tokensUsed: 21500,
-      modelName: 'gemini-1.5-flash',
+      modelName: 'gemini-2.5-flash',
       engineName: 'OCR Vision Document Scan Engine'
     }
   ]);
@@ -274,7 +274,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 dailyRequests: Math.floor(Math.random() * 15) + 2,
                 dailyLimit: '20 RPM / 1,500 RPD',
                 tokensUsed: Math.round(138127 + ((Number(item.id) * 317) % 3000) - 1500),
-                modelName: 'gemini-1.5-flash',
+                modelName: 'gemini-2.5-flash',
                 engineName: item.pool_type === 'ocr' ? 'OCR Vision Document Scan Engine' : 'Email Inbox Classification AI Engine'
               };
               if (item.pool_type === 'ocr') ocr.push(parsed);
@@ -307,7 +307,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               dailyRequests: Math.floor(Math.random() * 15) + 2,
               dailyLimit: '20 RPM / 1,500 RPD',
               tokensUsed: Math.round(138127 + ((Number(item.id) * 317) % 3000) - 1500),
-              modelName: 'gemini-1.5-flash',
+              modelName: 'gemini-2.5-flash',
               engineName: item.pool_type === 'ocr' ? 'OCR Vision Document Scan Engine' : 'Email Inbox Classification AI Engine'
             };
             if (item.pool_type === 'ocr') {
@@ -625,7 +625,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
           dailyRequests: 0,
           dailyLimit: '20 RPM / 1,500 RPD',
           tokensUsed: 0,
-          modelName: 'gemini-1.5-flash',
+          modelName: 'gemini-2.5-flash',
           engineName: 'Email Inbox Classification AI Engine'
         });
       }
@@ -648,7 +648,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
           dailyRequests: 0,
           dailyLimit: '20 RPM / 1,500 RPD',
           tokensUsed: 0,
-          modelName: 'gemini-1.5-flash',
+          modelName: 'gemini-2.5-flash',
           engineName: 'OCR Vision Document Scan Engine'
         });
       }
@@ -1822,7 +1822,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                       <Cpu className="w-4 h-4 text-slate-700" />
                     </div>
                     <div className="flex items-baseline justify-between">
-                      <span className="text-xl font-black text-slate-800 font-mono tracking-tight">gemini-1.5-flash</span>
+                      <span className="text-xl font-black text-slate-800 font-mono tracking-tight">gemini-2.5-flash</span>
                     </div>
                     <div className="mt-2 text-[9px] font-bold text-slate-600 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 inline-block">
                       Quota: 20 RPM / 1,500 RPD

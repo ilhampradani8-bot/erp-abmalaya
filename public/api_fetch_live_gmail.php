@@ -480,8 +480,8 @@ function classifyEmailWithGeminiWithRetry($subject, $body, $attachments, $key_li
     $errors = [];
 
     for ($attempt = 0; $attempt < $max_attempts; $attempt++) {
-        $api_key = $key_list[$attempt];
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . urlencode($api_key);
+        $model_name = 'gemini-2.5-flash';
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $model_name . ":generateContent?key=" . urlencode($api_key);
         $payload = [
             'contents' => [
                 [
