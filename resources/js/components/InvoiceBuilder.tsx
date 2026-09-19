@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Quotation, InvoiceItem } from '../types/erp';
 import { 
   Printer, Send, ArrowLeft, ChevronDown, FileText, Settings, Loader2, Save, CheckCircle2, Building2, Truck, Move, RotateCcw, Plus, Download, ExternalLink, Eye, SlidersHorizontal, X, MoreVertical
@@ -31,6 +31,15 @@ interface DraggableElementProps {
   label?: string;
   inline?: boolean;
   resizable?: boolean;
+}
+
+interface PageChunk {
+  pageNumber: number;
+  totalPages: number;
+  items: InvoiceItem[];
+  startIndex: number;
+  isFirstPage: boolean;
+  isLastPage: boolean;
 }
 
 const DraggableElement: React.FC<DraggableElementProps> = ({
@@ -309,6 +318,71 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
   const [grandTotal, setGrandTotal] = useState<number>(initialInvoice?.grand_total || 0);
   const [notes] = useState<string>(initialInvoice?.notes || '');
   const [status] = useState<string>(initialInvoice?.status || 'unpaid');
+
+  // Smart Pagination Algorithm (Fills A4 Sheets densely before moving to next page)
+  const pageChunks: PageChunk[] = useMemo(() => {
+    const totalItems = items.length;
+    
+    // Page 1 capacity: 6 items if single-page, 7 items if multi-page
+    // Subsequent page capacity: 10 items if middle page, 8 items if last page with bank/signatures
+    
+    if (totalItems <= 6) {
+      return [{
+        pageNumber: 1,
+        totalPages: 1,
+        items: items,
+        startIndex: 0,
+        isFirstPage: true,
+        isLastPage: true,
+      }];
+    }
+
+    const pages: PageChunk[] = [];
+    const page1Count = Math.min(7, totalItems);
+    pages.push({
+      pageNumber: 1,
+      totalPages: 0,
+      items: items.slice(0, page1Count),
+      startIndex: 0,
+      isFirstPage: true,
+      isLastPage: page1Count === totalItems,
+    });
+
+    let remaining = items.slice(page1Count);
+    let currentIndex = page1Count;
+    let pNum = 2;
+
+    while (remaining.length > 0) {
+      if (remaining.length <= 8) {
+        pages.push({
+          pageNumber: pNum,
+          totalPages: 0,
+          items: remaining,
+          startIndex: currentIndex,
+          isFirstPage: false,
+          isLastPage: true,
+        });
+        break;
+      } else {
+        const chunk = remaining.slice(0, 10);
+        remaining = remaining.slice(10);
+        pages.push({
+          pageNumber: pNum,
+          totalPages: 0,
+          items: chunk,
+          startIndex: currentIndex,
+          isFirstPage: false,
+          isLastPage: remaining.length === 0,
+        });
+        currentIndex += chunk.length;
+        pNum++;
+      }
+    }
+
+    const total = pages.length;
+    pages.forEach(p => p.totalPages = total);
+    return pages;
+  }, [items]);
 
   // Fetch invoice settings from dedicated MySQL table (system_invoice_settings) (cached)
   useEffect(() => {
@@ -976,273 +1050,373 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
         </div>
       )}
 
-      {/* OFFICIAL INVOICE PAPER SHEET CONTAINER */}
-      <div className="p-4 sm:p-6 w-full max-w-full">
-        <div
-          id="official-invoice-document"
-          className="bg-white text-slate-900 p-8 sm:p-12 font-sans border border-slate-400 shadow-xl w-full max-w-full rounded-none relative overflow-hidden"
-        >
-          <table className="w-full border-collapse">
-            {/* 1. REPEATING HEADER BANNER & LOGO FOR PRINT / MULTI-PAGE */}
-            <thead className="table-header-group">
-              <tr>
-                <td className="p-0 border-none pb-4">
-                  <div className="relative -mx-8 -mt-8 sm:-mx-12 sm:-mt-12 mb-4 w-[calc(100%+4rem)] sm:w-[calc(100%+6rem)] overflow-hidden border-b-2 border-[#004f8b] min-h-[120px] sm:min-h-[140px] flex items-stretch">
-                    {headerImageUrl ? (
+      {/* ── EXACT A4 PRINT STYLES (MATCHES ALL PAGES WITHOUT VIEWPORT CLIPPING) ── */}
+      <style>{`
+        @page {
+          size: A4 portrait;
+          margin: 0;
+        }
+        @media print {
+          *, *::before, *::after {
+            overflow: visible !important;
+          }
+          html, body, #root, #root > div, main {
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: auto !important;
+            max-height: none !important;
+            min-height: 0 !important;
+            position: static !important;
+            overflow: visible !important;
+            display: block !important;
+            background: #ffffff !important;
+            color: #0f172a !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          #invoice-screen-container, #invoice-paper-wrapper {
+            background: #ffffff !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            min-height: auto !important;
+            height: auto !important;
+            overflow: visible !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            display: block !important;
+          }
+          .a4-page-sheet {
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+            width: 210mm !important;
+            min-width: 210mm !important;
+            max-width: 210mm !important;
+            height: 297mm !important;
+            min-height: 297mm !important;
+            max-height: 297mm !important;
+            page-break-after: always !important;
+            break-after: page !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            margin: 0 auto !important;
+            padding: 6mm 6mm !important;
+            border: none !important;
+            box-shadow: none !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+            background: #ffffff !important;
+          }
+          .a4-page-sheet:last-child {
+            page-break-after: auto !important;
+            break-after: auto !important;
+          }
+        }
+      `}</style>
+
+      {/* OFFICIAL INVOICE PAPER SHEETS CONTAINER */}
+      <div id="invoice-paper-wrapper" className="p-4 sm:p-8 w-full max-w-full flex flex-col items-center justify-start space-y-8 overflow-x-auto">
+        {pageChunks.map((chunk) => (
+          <div key={`sheet-${chunk.pageNumber}`} className="flex flex-col items-center">
+            
+            {/* Sheet Page Label on Screen */}
+            <div className="no-print mb-2 flex items-center justify-between text-[11px] font-mono font-bold text-slate-700 w-[210mm] max-w-[210mm] px-2 bg-slate-200 py-1 rounded shadow-xs">
+              <span className="flex items-center gap-1.5 text-slate-800">
+                <FileText className="w-3.5 h-3.5 text-blue-600" />
+                <span>A4 SHEET (PAGE {chunk.pageNumber} OF {chunk.totalPages})</span>
+              </span>
+              <span className="text-slate-500 text-[10px]">
+                {chunk.isFirstPage && chunk.isLastPage ? 'Single Page' : chunk.isFirstPage ? 'Opening Page' : chunk.isLastPage ? 'Closing & Signatures' : 'Continuation Page'} • Margin: {modalMarginLeft}mm
+              </span>
+            </div>
+
+            {/* Exact A4 Sheet Container (210mm x 297mm) */}
+            <div
+              className="a4-page-sheet bg-white text-slate-900 font-sans border border-slate-400 shadow-2xl rounded-none relative flex flex-col justify-between"
+              style={{
+                width: '210mm',
+                minWidth: '210mm',
+                maxWidth: '210mm',
+                height: '297mm',
+                minHeight: '297mm',
+                maxHeight: '297mm',
+                boxSizing: 'border-box',
+                paddingTop: `${modalMarginTop}mm`,
+                paddingBottom: `${modalMarginBottom}mm`,
+                paddingLeft: `${modalMarginLeft}mm`,
+                paddingRight: `${modalMarginRight}mm`,
+                fontSize: `${modalFontSize}pt`,
+                overflow: 'hidden',
+              }}
+            >
+              {/* TOP HEADER BLOCK (Synchronized across all sheets) */}
+              <div style={{ width: '100%' }}>
+                <div style={{ width: '100%', borderBottom: '2px solid #004f8b', paddingBottom: '3px', marginBottom: '4px', background: '#ffffff' }}>
+                  {headerImageUrl ? (
+                    <div style={{ width: '100%', marginBottom: '4px', marginTop: '-2px' }}>
                       <img
                         src={headerImageUrl}
-                        alt="Header Background"
-                        className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none z-0 brightness-[1.02] contrast-[1.05]"
+                        alt="Header Banner"
+                        style={{ width: '100%', height: 'auto', maxHeight: '90px', objectFit: 'cover', objectPosition: 'top center', display: 'block' }}
                       />
-                    ) : (
-                      <div className="absolute top-0 inset-x-0 h-3 bg-gradient-to-r from-[#004f8b] via-[#0070c0] to-[#0080d0] z-0"></div>
-                    )}
+                    </div>
+                  ) : (
+                    <div style={{ width: '100%', height: '4px', background: 'linear-gradient(to right, #004f8b, #0070c0, #0080d0)', marginBottom: '3px' }}></div>
+                  )}
 
-                    <div className="relative z-10 px-8 pt-6 sm:px-12 sm:pt-8 pb-2 sm:pb-3 flex flex-col sm:flex-row items-end justify-between gap-6 w-full">
-                      <DraggableElement id="invoice_logo" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Logo" resizable={true} className="self-end pb-0.5">
-                        <div className="flex items-end gap-4">
-                          {isLoadingInvoiceSettings ? (
-                            <div className="h-16 w-36 bg-white/90 border border-slate-300 rounded-none flex items-center justify-center gap-2 text-xs text-blue-700 font-mono font-bold animate-pulse shrink-0">
-                              <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                              <span>Loading...</span>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', margin: 0, padding: 0 }}>
+                    <tbody>
+                      <tr>
+                        {/* Logo Left */}
+                        <td style={{ width: '55%', verticalAlign: 'bottom', textAlign: 'left', padding: 0, border: 'none' }}>
+                          <DraggableElement id="invoice_logo" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Logo" resizable={true}>
+                            {isLoadingInvoiceSettings ? (
+                              <div className="h-10 w-28 bg-white/90 border border-slate-300 flex items-center justify-center gap-2 text-xs text-blue-700 font-mono font-bold animate-pulse">
+                                <Loader2 className="w-3 animate-spin text-blue-600" />
+                                <span>Loading...</span>
+                              </div>
+                            ) : logoUrl ? (
+                              <img
+                                src={logoUrl}
+                                alt={companyNameSetting}
+                                style={{ height: '44px', maxWidth: '220px', objectFit: 'contain', display: 'block' }}
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = '/favicon.png';
+                                }}
+                              />
+                            ) : (
+                              <div>
+                                <div style={{ fontWeight: 900, fontSize: '15pt', color: '#004f8b', textTransform: 'uppercase' }}>
+                                  {companyNameSetting}
+                                </div>
+                                <span className="text-[10px] font-bold text-[#0070c0] font-mono block">({companyRegNoSetting})</span>
+                              </div>
+                            )}
+                          </DraggableElement>
+                        </td>
+
+                        {/* Company Address Right */}
+                        <td style={{ width: '45%', verticalAlign: 'bottom', textAlign: 'right', padding: 0, border: 'none', fontSize: '7.5pt', lineHeight: 1.25, color: '#1e293b' }}>
+                          <DraggableElement id="invoice_address" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Company Address">
+                            <div className="text-right text-xs text-slate-800 leading-snug font-sans shrink-0 font-medium">
+                              <p className="font-bold text-slate-900 text-xs">{companyNameSetting}</p>
+                              <p className="max-w-xs ml-auto">{companyAddressSetting}</p>
+                              <p className="font-semibold text-slate-900 font-mono">{companyPhoneSetting} | {companyEmailSetting}</p>
                             </div>
-                          ) : logoUrl ? (
-                            <img
-                              src={logoUrl}
-                              alt={companyNameSetting}
-                              className="h-16 max-w-[240px] object-contain shrink-0 pointer-events-none"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = '/favicon.png';
-                              }}
+                          </DraggableElement>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* METADATA & TITLE STRIP BANNER (Page 1 Only) */}
+                {chunk.isFirstPage && (
+                  <>
+                    <DraggableElement id="invoice_title" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Title Banner">
+                      <div 
+                        className="font-black text-center py-1.5 uppercase tracking-widest text-xs rounded-none mb-3"
+                        style={{ backgroundColor: tableHeaderBg, color: tableHeaderTextColor }}
+                      >
+                        {invoiceTitleSetting}
+                      </div>
+                    </DraggableElement>
+
+                    {/* 2-COLUMN ADDRESS LAYOUT & METADATA SECTION */}
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 text-xs text-slate-800 border-b border-slate-300 pb-3 mb-3">
+                      
+                      {/* LEFT COLUMN: TO / BILLING ADDRESS */}
+                      <DraggableElement id="invoice_to_address" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="TO Address Box" className="md:col-span-6">
+                        <div className="space-y-1.5 bg-slate-50/70 p-2.5 border border-slate-300">
+                          <div className="flex items-center gap-1.5 font-black text-slate-900 uppercase tracking-wide text-[10px] border-b border-slate-300 pb-0.5">
+                            <Building2 className="w-3 h-3 text-[#0070c0]" />
+                            <span>TO (BILLING ADDRESS):</span>
+                          </div>
+                          <div className="space-y-1 font-sans">
+                            <input
+                              type="text"
+                              value={companyName}
+                              onChange={(e) => setCompanyName(e.target.value)}
+                              placeholder="Client Company Name"
+                              className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-bold text-slate-900 rounded-none text-[11px] focus:outline-none"
                             />
-                          ) : (
-                            <div className="flex items-center gap-3 shrink-0">
-                              <div className="w-14 h-14 bg-[#004f8b] text-white font-black text-2xl flex items-center justify-center tracking-wider rounded-none shadow-xs">
-                                Ab
+                            <textarea
+                              rows={2}
+                              value={billingAddress}
+                              onChange={(e) => setBillingAddress(e.target.value)}
+                              placeholder="Billing Street Address & Location"
+                              className="w-full bg-white border border-slate-300 px-1.5 py-0.5 text-slate-700 rounded-none text-[11px] focus:outline-none"
+                            />
+                            <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                              <div>
+                                <span className="text-[9px] font-bold text-slate-500 block uppercase">Attention:</span>
+                                <input
+                                  type="text"
+                                  value={clientName}
+                                  onChange={(e) => setClientName(e.target.value)}
+                                  placeholder="Contact Person"
+                                  className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-semibold text-slate-900 rounded-none text-[10px]"
+                                />
                               </div>
                               <div>
-                                <h2 className="text-xl font-black text-[#004f8b] tracking-wide uppercase leading-none">{companyNameSetting}</h2>
-                                <span className="text-xs font-bold text-[#0070c0] font-mono block">({companyRegNoSetting})</span>
+                                <span className="text-[9px] font-bold text-slate-500 block uppercase">Email:</span>
+                                <input
+                                  type="text"
+                                  value={clientEmail}
+                                  onChange={(e) => setClientEmail(e.target.value)}
+                                  placeholder="client@company.com"
+                                  className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-mono text-slate-800 rounded-none text-[10px]"
+                                />
                               </div>
                             </div>
-                          )}
+                          </div>
                         </div>
                       </DraggableElement>
 
-                      <DraggableElement id="invoice_address" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Company Address" className="self-end pb-0.5">
-                        <div className="text-left sm:text-right text-xs text-slate-800 leading-snug font-sans shrink-0 font-medium">
-                          <p className="font-bold text-slate-900 text-xs">{companyNameSetting}</p>
-                          <p className="max-w-xs">{companyAddressSetting}</p>
-                          <p className="font-semibold text-slate-900 font-mono">{companyPhoneSetting} | {companyEmailSetting}</p>
+                      {/* RIGHT COLUMN: DELIVERY / SHIPPING ADDRESS */}
+                      <DraggableElement id="invoice_del_address" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="DELIVERY Address Box" className="md:col-span-6">
+                        <div className="space-y-1.5 bg-slate-50/70 p-2.5 border border-slate-300">
+                          <div className="flex items-center gap-1.5 font-black text-slate-900 uppercase tracking-wide text-[10px] border-b border-slate-300 pb-0.5">
+                            <Truck className="w-3 h-3 text-[#0070c0]" />
+                            <span>DELIVERY (SHIPPING ADDRESS):</span>
+                          </div>
+                          <div className="space-y-1 font-sans">
+                            <input
+                              type="text"
+                              value={deliveryCompany}
+                              onChange={(e) => setDeliveryCompany(e.target.value)}
+                              placeholder="Delivery Ship / Project Name"
+                              className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-bold text-slate-900 rounded-none text-[11px] focus:outline-none"
+                            />
+                            <textarea
+                              rows={2}
+                              value={deliveryAddress}
+                              onChange={(e) => setDeliveryAddress(e.target.value)}
+                              placeholder="Delivery Destination / Yard Address"
+                              className="w-full bg-white border border-slate-300 px-1.5 py-0.5 text-slate-700 rounded-none text-[11px] focus:outline-none"
+                            />
+                            <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                              <div>
+                                <span className="text-[9px] font-bold text-slate-500 block uppercase">Delivery PIC:</span>
+                                <input
+                                  type="text"
+                                  value={deliveryPic}
+                                  onChange={(e) => setDeliveryPic(e.target.value)}
+                                  placeholder="Delivery Contact Person"
+                                  className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-semibold text-slate-900 rounded-none text-[10px]"
+                                />
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-bold text-slate-500 block uppercase">Contact No:</span>
+                                <input
+                                  type="text"
+                                  value={deliveryPhone}
+                                  onChange={(e) => setDeliveryPhone(e.target.value)}
+                                  placeholder="+6012-3456789"
+                                  className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-mono text-slate-800 rounded-none text-[10px]"
+                                />
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </DraggableElement>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            </thead>
 
-            {/* MAIN DOCUMENT BODY */}
-            <tbody>
-              <tr>
-                <td className="p-0 border-none space-y-6">
-                  {/* 2. SOLID TITLE STRIP BANNER: OFFICIAL INVOICE */}
-                  <DraggableElement id="invoice_title" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Title Banner">
-                    <div 
-                      className="font-black text-center py-2 uppercase tracking-widest text-sm shadow-2xs rounded-none"
-                      style={{ backgroundColor: tableHeaderBg, color: tableHeaderTextColor }}
-                    >
-                      {invoiceTitleSetting}
-                    </div>
-                  </DraggableElement>
+                      {/* INVOICE METADATA ROW */}
+                      <DraggableElement id="invoice_meta" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Invoice Numbers & Date" className="md:col-span-12">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-2 border border-slate-300 font-mono">
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-500 block uppercase">Invoice No. :</span>
+                            <input
+                              type="text"
+                              value={invoiceNumber}
+                              onChange={(e) => setInvoiceNumber(e.target.value)}
+                              className="w-full bg-slate-50 border border-slate-300 px-1.5 py-0.5 font-extrabold text-slate-900 text-xs"
+                            />
+                          </div>
 
-                  {/* 3. METADATA SECTION & 2-COLUMN ADDRESS LAYOUT */}
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 text-xs text-slate-800 border-b border-slate-300 pb-5">
-                    
-                    {/* LEFT COLUMN: TO / BILLING ADDRESS */}
-                    <DraggableElement id="invoice_to_address" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="TO Address Box" className="md:col-span-6">
-                      <div className="space-y-2 bg-slate-50/70 p-3.5 border border-slate-300">
-                        <div className="flex items-center gap-1.5 font-black text-slate-900 uppercase tracking-wide text-[11px] border-b border-slate-300 pb-1">
-                          <Building2 className="w-3.5 h-3.5 text-[#0070c0]" />
-                          <span>TO (BILLING ADDRESS):</span>
-                        </div>
-                        <div className="space-y-1 font-sans">
-                          <input
-                            type="text"
-                            value={companyName}
-                            onChange={(e) => setCompanyName(e.target.value)}
-                            placeholder="Client Company Name (e.g. Duta Marine Sdn Bhd)"
-                            className="w-full bg-white border border-slate-300 px-2 py-1 font-bold text-slate-900 rounded-none text-xs focus:outline-none"
-                          />
-                          <textarea
-                            rows={2}
-                            value={billingAddress}
-                            onChange={(e) => setBillingAddress(e.target.value)}
-                            placeholder="Billing Street Address & Location"
-                            className="w-full bg-white border border-slate-300 px-2 py-1 text-slate-700 rounded-none text-xs focus:outline-none"
-                          />
-                          <div className="grid grid-cols-2 gap-2 pt-1">
-                            <div>
-                              <span className="text-[10px] font-bold text-slate-500 block uppercase">Attention (PIC):</span>
-                              <input
-                                type="text"
-                                value={clientName}
-                                onChange={(e) => setClientName(e.target.value)}
-                                placeholder="Attention / Contact Person"
-                                className="w-full bg-white border border-slate-300 px-2 py-0.5 font-semibold text-slate-900 rounded-none text-[11px]"
-                              />
-                            </div>
-                            <div>
-                              <span className="text-[10px] font-bold text-slate-500 block uppercase">Email:</span>
-                              <input
-                                type="text"
-                                value={clientEmail}
-                                onChange={(e) => setClientEmail(e.target.value)}
-                                placeholder="client@company.com"
-                                className="w-full bg-white border border-slate-300 px-2 py-0.5 font-mono text-slate-800 rounded-none text-[11px]"
-                              />
-                            </div>
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-500 block uppercase">Invoice Date :</span>
+                            <input
+                              type="date"
+                              value={invoiceDate}
+                              onChange={(e) => setInvoiceDate(e.target.value)}
+                              className="w-full bg-slate-50 border border-slate-300 px-1.5 py-0.5 font-bold text-slate-900 text-xs"
+                            />
+                          </div>
+
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-500 block uppercase">PO Numb (Client PO) :</span>
+                            <input
+                              type="text"
+                              value={poNumber}
+                              onChange={(e) => setPoNumber(e.target.value)}
+                              placeholder="e.g. DM/AGA/ABMI/PO/279/24"
+                              className="w-full bg-blue-50 border border-blue-300 px-1.5 py-0.5 font-black text-blue-900 text-xs"
+                            />
                           </div>
                         </div>
-                      </div>
-                    </DraggableElement>
+                      </DraggableElement>
 
-                    {/* RIGHT COLUMN: DELIVERY / SHIPPING ADDRESS */}
-                    <DraggableElement id="invoice_del_address" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="DELIVERY Address Box" className="md:col-span-6">
-                      <div className="space-y-2 bg-slate-50/70 p-3.5 border border-slate-300">
-                        <div className="flex items-center gap-1.5 font-black text-slate-900 uppercase tracking-wide text-[11px] border-b border-slate-300 pb-1">
-                          <Truck className="w-3.5 h-3.5 text-[#0070c0]" />
-                          <span>DELIVERY (SHIPPING ADDRESS):</span>
-                        </div>
-                        <div className="space-y-1 font-sans">
-                          <input
-                            type="text"
-                            value={deliveryCompany}
-                            onChange={(e) => setDeliveryCompany(e.target.value)}
-                            placeholder="Delivery Ship / Project Name (e.g. C/O Masters of AG Azzam)"
-                            className="w-full bg-white border border-slate-300 px-2 py-1 font-bold text-slate-900 rounded-none text-xs focus:outline-none"
-                          />
-                          <textarea
-                            rows={2}
-                            value={deliveryAddress}
-                            onChange={(e) => setDeliveryAddress(e.target.value)}
-                            placeholder="Delivery Destination / Yard Address"
-                            className="w-full bg-white border border-slate-300 px-2 py-1 text-slate-700 rounded-none text-xs focus:outline-none"
-                          />
-                          <div className="grid grid-cols-2 gap-2 pt-1">
-                            <div>
-                              <span className="text-[10px] font-bold text-slate-500 block uppercase">Delivery PIC:</span>
-                              <input
-                                type="text"
-                                value={deliveryPic}
-                                onChange={(e) => setDeliveryPic(e.target.value)}
-                                placeholder="Delivery Contact Person"
-                                className="w-full bg-white border border-slate-300 px-2 py-0.5 font-semibold text-slate-900 rounded-none text-[11px]"
-                              />
-                            </div>
-                            <div>
-                              <span className="text-[10px] font-bold text-slate-500 block uppercase">Contact No:</span>
-                              <input
-                                type="text"
-                                value={deliveryPhone}
-                                onChange={(e) => setDeliveryPhone(e.target.value)}
-                                placeholder="+6012-3456789"
-                                className="w-full bg-white border border-slate-300 px-2 py-0.5 font-mono text-slate-800 rounded-none text-[11px]"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </DraggableElement>
+                    </div>
+                  </>
+                )}
 
-                    {/* INVOICE METADATA ROW */}
-                    <DraggableElement id="invoice_meta" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Invoice Numbers & Date" className="md:col-span-12">
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-white p-3 border border-slate-300 font-mono">
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-500 block uppercase">Invoice No. :</span>
-                          <input
-                            type="text"
-                            value={invoiceNumber}
-                            onChange={(e) => setInvoiceNumber(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-300 px-2 py-1 font-extrabold text-slate-900 text-xs"
-                          />
-                        </div>
-
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-500 block uppercase">Invoice Date :</span>
-                          <input
-                            type="date"
-                            value={invoiceDate}
-                            onChange={(e) => setInvoiceDate(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-300 px-2 py-1 font-bold text-slate-900 text-xs"
-                          />
-                        </div>
-
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-500 block uppercase">PO Numb (Client PO) :</span>
-                          <input
-                            type="text"
-                            value={poNumber}
-                            onChange={(e) => setPoNumber(e.target.value)}
-                            placeholder="e.g. DM/AGA/ABMI/PO/279/24"
-                            className="w-full bg-blue-50 border border-blue-300 px-2 py-1 font-black text-blue-900 text-xs"
-                          />
-                        </div>
-                      </div>
-                    </DraggableElement>
-
-                  </div>
-
-                  {/* 4. LINE ITEMS TABLE WITH PHOTO THUMBNAIL (SHARP BLACK GRID) */}
-                  <DraggableElement id="invoice_table" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Invoice Items Table">
-                    <div className="border border-slate-900 rounded-none overflow-x-auto w-full bg-white">
-                      <table className="w-full text-left text-xs font-sans border-collapse">
-                        <thead 
-                          className="font-bold text-[11px] uppercase tracking-wide border-b border-slate-900"
-                          style={{ backgroundColor: tableHeaderBg, color: tableHeaderTextColor }}
-                        >
+                {/* LINE ITEMS TABLE (Per Sheet Chunk) */}
+                <DraggableElement id="invoice_table" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Invoice Items Table">
+                  <div className="border border-slate-900 rounded-none overflow-x-auto w-full bg-white">
+                    <table className="w-full text-left text-xs font-sans border-collapse items-table">
+                      <thead 
+                        className="font-bold text-[10px] uppercase tracking-wide border-b border-slate-900"
+                        style={{ backgroundColor: tableHeaderBg, color: tableHeaderTextColor }}
+                      >
+                        <tr>
+                          <th className="p-2 w-8 text-center border-r border-slate-900">NO.</th>
+                          <th className="p-2 border-r border-slate-900 min-w-[180px]">ITEM</th>
+                          <th className="p-2 w-12 text-center border-r border-slate-900">QTY</th>
+                          <th className="p-2 w-14 text-center border-r border-slate-900">UNIT</th>
+                          <th className="p-2 w-32 border-r border-slate-900">OFFERED ITEM</th>
+                          <th className="p-2 w-24 text-right border-r border-slate-900">UNIT PRICE (RM)</th>
+                          <th className="p-2 w-28 text-right">TOTAL PRICE (RM)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-900">
+                        {chunk.items.length === 0 ? (
                           <tr>
-                            <th className="p-2.5 w-10 text-center border-r border-slate-900">NO.</th>
-                            <th className="p-2.5 border-r border-slate-900 min-w-[200px]">ITEM</th>
-                            <th className="p-2.5 w-14 text-center border-r border-slate-900">QTY</th>
-                            <th className="p-2.5 w-16 text-center border-r border-slate-900">UNIT</th>
-                            <th className="p-2.5 w-36 border-r border-slate-900">OFFERED ITEM</th>
-                            <th className="p-2.5 w-28 text-right border-r border-slate-900">UNIT PRICE (RM)</th>
-                            <th className="p-2.5 w-32 text-right">TOTAL PRICE (RM)</th>
+                            <td colSpan={7} className="p-6 text-center text-slate-400 italic font-medium">
+                              No items listed. Please select a completed Quotation above to populate items.
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-900">
-                          {items.length === 0 ? (
-                            <tr>
-                              <td colSpan={7} className="p-8 text-center text-slate-400 italic font-medium">
-                                No items listed. Please select a completed Quotation above to populate items.
-                              </td>
-                            </tr>
-                          ) : (
-                            items.map((item: any, idx: number) => (
-                              <tr key={idx} className={idx % 2 === 1 ? 'bg-slate-50/90' : 'bg-white'}>
-                                <td className="p-2.5 text-center font-mono font-bold text-slate-800 border-r border-slate-900">
-                                  {idx + 1}
+                        ) : (
+                          chunk.items.map((item: any, localIdx: number) => {
+                            const globalIdx = chunk.startIndex + localIdx;
+                            return (
+                              <tr key={globalIdx} className={globalIdx % 2 === 1 ? 'bg-slate-50/90' : 'bg-white'}>
+                                <td className="p-2 text-center font-mono font-bold text-slate-800 border-r border-slate-900">
+                                  {globalIdx + 1}
                                 </td>
 
-                                {/* ITEM Column: Stacked Product Name, Specifications, Code & Full-Width Photo */}
-                                <td className="p-2.5 border-r border-slate-900 align-top">
+                                {/* ITEM Column */}
+                                <td className="p-2 border-r border-slate-900 align-top">
                                   <p className="font-bold text-slate-900 text-xs leading-tight mb-0.5">{item.description}</p>
                                   {item.specification && (
-                                    <p className="text-[11px] text-slate-600 leading-snug font-sans mb-1">{item.specification}</p>
+                                    <p className="text-[10px] text-slate-600 leading-snug font-sans mb-1">{item.specification}</p>
                                   )}
                                   {item.product_code && (
-                                    <span className="inline-block font-mono text-[10px] text-purple-900 font-bold bg-purple-50 px-1 rounded border border-purple-200 mb-1">
+                                    <span className="inline-block font-mono text-[9px] text-purple-900 font-bold bg-purple-50 px-1 rounded border border-purple-200 mb-1">
                                       Code: {item.product_code}
                                     </span>
                                   )}
                                   {item.image_url ? (
                                     <div className="w-full mt-1">
-                                      <DraggableElement id={`inv_photo_${idx}`} isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label={`Photo #${idx + 1}`}>
+                                      <DraggableElement id={`inv_photo_${globalIdx}`} isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label={`Photo #${globalIdx + 1}`}>
                                         <img
                                           src={item.image_url}
                                           alt={item.description}
-                                          className="w-full max-h-36 object-contain border border-slate-300 rounded-none bg-white p-0.5 block pointer-events-none"
+                                          className="w-full max-h-28 object-contain border border-slate-300 rounded-none bg-white p-0.5 block pointer-events-none"
                                         />
                                       </DraggableElement>
                                     </div>
@@ -1250,47 +1424,52 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                                 </td>
 
                                 {/* QTY */}
-                                <td className="p-2.5 text-center font-mono font-bold text-slate-900 border-r border-slate-900 align-top">
+                                <td className="p-2 text-center font-mono font-bold text-slate-900 border-r border-slate-900 align-top">
                                   {item.quantity}
                                 </td>
 
                                 {/* UNIT */}
-                                <td className="p-2.5 text-center font-sans font-semibold text-slate-800 border-r border-slate-900 align-top">
+                                <td className="p-2 text-center font-sans font-semibold text-slate-800 border-r border-slate-900 align-top">
                                   {item.unit || 'Unit'}
                                 </td>
 
                                 {/* OFFERED ITEM */}
-                                <td className="p-2.5 font-sans text-xs text-slate-800 border-r border-slate-900 align-top">
+                                <td className="p-2 font-sans text-xs text-slate-800 border-r border-slate-900 align-top">
                                   {item.offer || item.offered_item || '—'}
                                 </td>
 
                                 {/* UNIT PRICE (RM) */}
-                                <td className="p-2.5 text-right font-mono text-slate-900 border-r border-slate-900 align-top">
+                                <td className="p-2 text-right font-mono text-slate-900 border-r border-slate-900 align-top">
                                   {formatCurrency(item.unit_price)}
                                 </td>
 
                                 {/* TOTAL PRICE (RM) */}
-                                <td className="p-2.5 text-right font-mono font-bold text-slate-900 text-xs align-top">
+                                <td className="p-2 text-right font-mono font-bold text-slate-900 text-xs align-top">
                                   {formatCurrency(item.total)}
                                 </td>
                               </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </DraggableElement>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </DraggableElement>
+              </div>
 
-                  {/* 5. REMARKS / BANK PAYMENT INSTRUCTIONS & FINANCIAL TOTALS */}
-                  <div className="flex flex-col md:flex-row justify-between items-start gap-8 pt-2 w-full">
+              {/* CLOSING BLOCK (Last Sheet Only) */}
+              {chunk.isLastPage && (
+                <div style={{ width: '100%', marginTop: 'auto', paddingTop: '6px' }}>
+                  {/* REMARKS / BANK PAYMENT INSTRUCTIONS & FINANCIAL TOTALS */}
+                  <div className="flex flex-col md:flex-row justify-between items-start gap-4 pt-1 w-full mb-4">
                     
                     {/* BANK PAYMENT INSTRUCTIONS (REMARKS BOX) */}
                     <DraggableElement id="invoice_bank_box" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Bank Payment Box" className="w-full md:w-1/2">
-                      <div className="space-y-2 text-xs bg-slate-50 p-4 border border-slate-300">
-                        <span className="text-[11px] font-black text-slate-900 uppercase tracking-wide block border-b border-slate-300 pb-1">
+                      <div className="space-y-1 text-[11px] bg-slate-50 p-3 border border-slate-300">
+                        <span className="text-[10px] font-black text-slate-900 uppercase tracking-wide block border-b border-slate-300 pb-0.5">
                           Remarks & Bank Payment Instructions:
                         </span>
-                        <div className="text-slate-800 leading-relaxed font-sans pt-1 space-y-1.5 text-xs whitespace-pre-line">
+                        <div className="text-slate-800 leading-relaxed font-sans pt-0.5 space-y-1 text-[10.5px] whitespace-pre-line">
                           {remarksText ? (
                             <p>{remarksText}</p>
                           ) : (
@@ -1304,7 +1483,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                               <p className="italic text-slate-600">
                                 3. Do not forget to keep a copy of any document as a prove of any transaction.
                               </p>
-                              <p className="text-[11px] text-slate-500 font-semibold pt-1">
+                              <p className="text-[10px] text-slate-500 font-semibold pt-0.5">
                                 Kindly contact us should you have further enquiries.
                               </p>
                             </>
@@ -1314,8 +1493,8 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                     </DraggableElement>
 
                     {/* FINANCIAL TOTALS BOX */}
-                    <DraggableElement id="invoice_summary" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Financial Summary" className="w-full md:w-80">
-                      <div className="border-2 border-slate-900 rounded-none p-4 space-y-2 text-xs bg-white">
+                    <DraggableElement id="invoice_summary" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Financial Summary" className="w-full md:w-72">
+                      <div className="border-2 border-slate-900 rounded-none p-3 space-y-1.5 text-xs bg-white">
                         <div className="flex justify-between items-center text-slate-700">
                           <span className="font-semibold">GROSS SUBTOTAL:</span>
                           <span className="font-mono font-bold text-slate-900">{formatCurrency(subtotal)}</span>
@@ -1335,7 +1514,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                           </div>
                         )}
 
-                        <div className="border-t-2 border-slate-900 pt-2 flex justify-between items-center text-slate-900 font-black text-base">
+                        <div className="border-t-2 border-slate-900 pt-1.5 flex justify-between items-center text-slate-900 font-black text-sm">
                           <span>PRICE TOTAL (RM):</span>
                           <span className="font-mono text-[#0070c0]">{formatCurrency(grandTotal || subtotal)}</span>
                         </div>
@@ -1344,74 +1523,91 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
 
                   </div>
 
-                  {/* 6. DUAL AUTHORIZATION SIGNATURE BLOCK (AUTHORISED BY & RECEIVED BY) */}
-                  <div className="flex flex-col sm:flex-row justify-between items-end pt-8 border-t border-slate-300 text-xs w-full gap-8">
+                  {/* DUAL AUTHORIZATION SIGNATURE BLOCK (AUTHORISED BY & RECEIVED BY) */}
+                  <div className="flex flex-col sm:flex-row justify-between items-end pt-4 border-t border-slate-300 text-xs w-full gap-6">
                     {/* AUTHORISED BY (ISSUER SIGNATORY) */}
                     <DraggableElement id="invoice_sig_auth" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Authorised By Signatory">
-                      <div className="space-y-1 text-left">
-                        <p className="text-slate-700 font-bold uppercase tracking-wide">Authorised by,</p>
+                      <div className="space-y-0.5 text-left">
+                        <p className="text-slate-700 font-bold uppercase tracking-wide text-[10px]">Authorised by,</p>
                         
-                        <div className="h-20 flex items-center justify-start my-1 gap-2">
+                        <div className="h-14 flex items-center justify-start my-0.5 gap-2">
                           {signatureUrl && (
                             <img
                               src={signatureUrl}
                               alt="Digital Signature"
-                              className="h-20 object-contain max-w-[140px] pointer-events-none"
+                              className="h-14 object-contain max-w-[120px] pointer-events-none"
                             />
                           )}
                           {stampUrl && (
                             <img
                               src={stampUrl}
                               alt="Company Stamp"
-                              className="h-20 object-contain max-w-[140px] pointer-events-none"
+                              className="h-14 object-contain max-w-[120px] pointer-events-none"
                             />
                           )}
                           {!signatureUrl && !stampUrl && (
-                            <div className="w-36 h-12 border-2 border-[#0070c0] border-dashed flex items-center justify-center text-[#0070c0] text-[10px] font-black uppercase tracking-wider transform -rotate-2">
+                            <div className="w-32 h-10 border-2 border-[#0070c0] border-dashed flex items-center justify-center text-[#0070c0] text-[9px] font-black uppercase tracking-wider transform -rotate-2">
                               [STAMP]
                             </div>
                           )}
                         </div>
 
-                        <p className="font-bold text-slate-900 text-sm"><u>{authSignatoryName}</u></p>
-                        <p className="text-slate-600 font-mono text-[11px]">{authSignatoryTitle}</p>
+                        <p className="font-bold text-slate-900 text-xs"><u>{authSignatoryName}</u></p>
+                        <p className="text-slate-600 font-mono text-[10px]">{authSignatoryTitle}</p>
                       </div>
                     </DraggableElement>
 
                     {/* RECEIVED BY (CLIENT RECEIVER SIGNATURE LINE) */}
                     <DraggableElement id="invoice_sig_recv" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Received By Line">
-                      <div className="text-left sm:text-right space-y-1">
-                        <p className="text-slate-700 font-bold uppercase tracking-wide">{receivedByLabel}</p>
+                      <div className="text-left sm:text-right space-y-0.5">
+                        <p className="text-slate-700 font-bold uppercase tracking-wide text-[10px]">{receivedByLabel}</p>
                         
-                        <div className="h-16 border-b-2 border-slate-900 w-56 my-1"></div>
+                        <div className="h-12 border-b-2 border-slate-900 w-48 my-0.5 ml-auto"></div>
 
-                        <p className="font-bold text-slate-900">Name / Designation: ______________________</p>
-                        <p className="text-slate-500 font-mono text-[11px]">Date: ____ / ____ / ________</p>
+                        <p className="font-bold text-slate-900 text-[10px]">Name / Designation: ______________________</p>
+                        <p className="text-slate-500 font-mono text-[10px]">Date: ____ / ____ / ________</p>
                       </div>
                     </DraggableElement>
                   </div>
-                </td>
-              </tr>
-            </tbody>
+                </div>
+              )}
 
-            {/* REPEATING FOOTER FOR PRINT / MULTI-PAGE */}
-            <tfoot className="table-footer-group">
-              <tr>
-                <td className="p-0 border-none pt-4">
-                  {/* 7. OFFICIAL FOOTER BADGE */}
-                  <DraggableElement id="invoice_footer" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Footer">
-                    <div className="border-t border-slate-300 pt-5 mt-6 text-center space-y-1 w-full">
-                      <h4 className="font-extrabold text-xs text-[#004f8b] uppercase tracking-wide">{companyNameSetting}</h4>
-                      <p className="text-[10px] text-slate-600 font-mono">
-                        {companyAddressSetting} | Email: {companyEmailSetting} | Tel: {companyPhoneSetting}
-                      </p>
-                    </div>
-                  </DraggableElement>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+              {/* BOTTOM FOOTER (Repeats on every sheet at bottom) */}
+              <DraggableElement id="invoice_footer" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Footer">
+                <footer style={{ borderTop: '1px solid #cbd5e1', paddingTop: '4px', marginTop: '4px', textAlign: 'center', fontSize: '7pt', color: '#64748b', background: '#ffffff', width: '100%' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1px', tableLayout: 'fixed' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ textAlign: 'left', width: '70%', verticalAlign: 'middle', padding: 0, border: 'none' }}>
+                          {logoUrl && (
+                            <img
+                              src={logoUrl}
+                              alt="Logo"
+                              style={{ height: '14px', maxHeight: '14px', verticalAlign: 'middle', marginRight: '4px', display: 'inline-block' }}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = '/favicon.png';
+                              }}
+                            />
+                          )}
+                          <span style={{ fontWeight: 700, color: '#004f8b', textTransform: 'uppercase', verticalAlign: 'middle' }}>
+                            {companyNameSetting}
+                          </span>
+                          <span style={{ marginLeft: '6px', fontFamily: 'ui-monospace, monospace', color: '#64748b' }}>
+                            ({companyEmailSetting}, {companyPhoneSetting})
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right', width: '30%', verticalAlign: 'middle', padding: 0, border: 'none', fontWeight: 700, color: '#475569' }}>
+                          Page {chunk.pageNumber} of {chunk.totalPages}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </footer>
+              </DraggableElement>
+
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* ── LIVE WEB PDF PREVIEW MODAL ───────────────────────────────────────── */}
