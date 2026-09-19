@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Quotation, InvoiceItem } from '../types/erp';
 import { 
-  Printer, Send, ArrowLeft, Package, ChevronDown, FileText, Settings, Loader2, Save, CheckCircle2, Building2, Truck, Move, RotateCcw, Plus, Download, ExternalLink, Eye, SlidersHorizontal, X, MoreVertical
+  Printer, Send, ArrowLeft, ChevronDown, FileText, Settings, Loader2, Save, CheckCircle2, Building2, Truck, Move, RotateCcw, Plus, Download, ExternalLink, Eye, SlidersHorizontal, X, MoreVertical
 } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
@@ -826,48 +826,9 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
           )}
         </div>
 
-        {/* RIGHT SECTION: Action Buttons */}
+        {/* RIGHT SECTION: Action Buttons & 3-Dots Options Dropdown */}
         <div className="flex items-center gap-2">
-          {/* DRAG & MOVE TOGGLE BUTTON */}
-          <button
-            type="button"
-            onClick={() => setIsDragMode(!isDragMode)}
-            className={`flex items-center gap-1.5 font-bold text-xs px-3 py-1 transition cursor-pointer rounded border shadow-xs ${
-              isDragMode
-                ? 'bg-blue-600 text-white border-blue-700 ring-2 ring-blue-400 animate-pulse'
-                : 'bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-white text-slate-800 border-[#a0a0a0] shadow-inner'
-            }`}
-            title="Toggle Drag & Reposition Mode to move elements freely"
-          >
-            <Move className={`w-3.5 h-3.5 ${isDragMode ? 'text-white' : 'text-blue-600'}`} />
-            <span>{isDragMode ? 'Exit Drag Mode' : 'Drag & Move'}</span>
-          </button>
-
-          {/* SAVE LAYOUT POSITIONS PERMANENTLY BUTTON */}
-          <button
-            type="button"
-            onClick={() => handleSaveLayout()}
-            disabled={isSavingLayout}
-            className="flex items-center gap-1.5 bg-gradient-to-b from-[#0284c7] to-[#0369a1] hover:from-[#0369a1] hover:to-[#075985] text-white font-bold text-xs px-3 py-1 shadow-xs transition cursor-pointer rounded border border-sky-800 disabled:opacity-60"
-            title="Save custom element positions permanently to database"
-          >
-            {isSavingLayout ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-white" />}
-            <span>{isSavingLayout ? 'Saving...' : 'Save Layout'}</span>
-          </button>
-
-          {/* RESET LAYOUT POSITIONS BUTTON */}
-          {Object.keys(offsets).length > 0 && (
-            <button
-              type="button"
-              onClick={handleResetLayout}
-              className="flex items-center gap-1 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-white text-rose-700 font-bold text-xs px-2.5 py-1 transition cursor-pointer border border-[#a0a0a0] rounded shadow-inner"
-              title="Reset all element positions to default and clear from database"
-            >
-              <RotateCcw className="w-3 h-3 text-rose-600" />
-              <span>Reset Layout</span>
-            </button>
-          )}
-
+          
           {layoutSaveNotice && (
             <div className="flex items-center gap-1.5 text-emerald-800 bg-emerald-50 border border-emerald-300 px-2.5 py-0.5 rounded font-bold text-xs animate-in fade-in">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -875,52 +836,128 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
             </div>
           )}
 
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="flex items-center gap-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-white text-slate-800 font-bold text-xs px-3 py-1 transition cursor-pointer border border-[#a0a0a0] rounded shadow-inner"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 text-slate-700" />
-              <span>Back</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setIsPdfModalOpen(true)}
-            className="flex items-center gap-1.5 bg-gradient-to-b from-[#4f46e5] to-[#3730a3] hover:from-[#4338ca] hover:to-[#312e81] text-white font-bold text-xs px-3 py-1 shadow-xs transition cursor-pointer rounded border border-indigo-800"
-            title="Preview rendered Dompdf Invoice PDF live on screen inside a clean modal viewer"
-          >
-            <Eye className="w-3.5 h-3.5 text-white" />
-            <span>PDF Preview (Live)</span>
-          </button>
-
+          {/* PRIMARY QUICK CTA: SAVE INVOICE */}
           <button
             onClick={handleSaveInvoice}
             disabled={isSaving}
             className="flex items-center gap-1.5 bg-gradient-to-b from-[#0284c7] to-[#0369a1] hover:from-[#0369a1] hover:to-[#075985] text-white font-bold text-xs px-3.5 py-1 shadow-xs transition cursor-pointer rounded border border-sky-800 disabled:opacity-60"
+            title="Save Invoice directly to MySQL database"
           >
             {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-white" />}
             <span>{isSaving ? 'Saving...' : 'Save Invoice'}</span>
           </button>
 
-          <button
-            type="button"
-            onClick={handleDownloadPdfDirect}
-            className="flex items-center gap-1.5 bg-gradient-to-b from-[#10b981] to-[#047857] hover:from-[#059669] hover:to-[#046c4e] text-white font-bold text-xs px-3.5 py-1 shadow-xs transition cursor-pointer rounded border border-emerald-800"
-            title="Download crisp Invoice PDF generated by pure PHP 8.1 Dompdf engine"
-          >
-            <Download className="w-3.5 h-3.5 text-white" />
-            <span>Download PDF</span>
-          </button>
+          {/* 3-DOTS (...) OPTIONS DROPDOWN MENU */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsLeftQuoDropdownOpen(!isLeftQuoDropdownOpen)}
+              className="flex items-center gap-1 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-white border border-[#a0a0a0] text-[#3d3d3d] font-bold text-xs px-2.5 py-1 rounded shadow-inner cursor-pointer transition"
+              title="More Actions & Options (...)"
+            >
+              <MoreVertical className="w-4 h-4 text-[#0099ec]" />
+              <span>Actions (...)</span>
+              <ChevronDown className="w-3 h-3 text-slate-600" />
+            </button>
 
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-1.5 bg-gradient-to-b from-[#3d3d3d] to-[#222222] hover:from-[#2d2d2d] hover:to-[#111111] text-white font-bold text-xs px-3.5 py-1 transition cursor-pointer shadow-xs rounded border border-slate-900"
-          >
-            <Printer className="w-3.5 h-3.5 text-white" />
-            <span>Print</span>
-          </button>
+            {isLeftQuoDropdownOpen && (
+              <div className="absolute right-0 top-8 w-64 bg-white border border-slate-300 shadow-2xl py-1 z-50 animate-in fade-in slide-in-from-top-1 text-xs font-sans rounded-md">
+                <button
+                  onClick={() => {
+                    setIsLeftQuoDropdownOpen(false);
+                    handleSaveInvoice();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-blue-800 hover:bg-blue-50 font-bold cursor-pointer text-left transition"
+                >
+                  <Save className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Save Invoice to MySQL</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsLeftQuoDropdownOpen(false);
+                    setIsPdfModalOpen(true);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-indigo-800 hover:bg-indigo-50 font-bold cursor-pointer text-left border-t border-slate-100 transition"
+                >
+                  <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>PDF Preview (Live)</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsLeftQuoDropdownOpen(false);
+                    handleDownloadPdfDirect();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-emerald-800 hover:bg-emerald-50 font-bold cursor-pointer text-left border-t border-slate-100 transition"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Download PDF (Dompdf Engine)</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsLeftQuoDropdownOpen(false);
+                    handlePrint();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-slate-100 font-bold cursor-pointer text-left border-t border-slate-100 transition"
+                >
+                  <Printer className="w-3.5 h-3.5 text-slate-700" />
+                  <span>Print Invoice (Direct)</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsLeftQuoDropdownOpen(false);
+                    handleSaveLayout();
+                  }}
+                  disabled={isSavingLayout}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sky-800 hover:bg-sky-50 font-bold cursor-pointer text-left border-t border-slate-100 transition disabled:opacity-60"
+                >
+                  <Save className="w-3.5 h-3.5 text-sky-600" />
+                  <span>{isSavingLayout ? 'Saving Layout...' : 'Save Layout Positions'}</span>
+                </button>
+
+                {Object.keys(offsets).length > 0 && (
+                  <button
+                    onClick={() => {
+                      setIsLeftQuoDropdownOpen(false);
+                      handleResetLayout();
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-rose-700 hover:bg-rose-50 font-bold cursor-pointer text-left border-t border-slate-100 transition"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Reset Layout Positions</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => {
+                    setIsLeftQuoDropdownOpen(false);
+                    setIsDragMode(!isDragMode);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-blue-800 hover:bg-blue-50 font-bold cursor-pointer text-left border-t border-slate-100 transition"
+                >
+                  <Move className="w-3.5 h-3.5 text-blue-600" />
+                  <span>{isDragMode ? 'Exit Drag Mode' : 'Toggle Drag & Move'}</span>
+                </button>
+
+                {onBack && (
+                  <button
+                    onClick={() => {
+                      setIsLeftQuoDropdownOpen(false);
+                      onBack();
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-100 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Back</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
         </div>
 
       </div>
@@ -1166,69 +1203,74 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                         >
                           <tr>
                             <th className="p-2.5 w-10 text-center border-r border-slate-900">NO.</th>
-                            <th className="p-2.5 w-16 text-center border-r border-slate-900">PHOTO</th>
-                            <th className="p-2.5 border-r border-slate-900 min-w-[220px]">PRODUCTS & SPECIFICATIONS</th>
-                            <th className="p-2.5 w-16 text-center border-r border-slate-900">QTT</th>
-                            <th className="p-2.5 w-32 text-right border-r border-slate-900">PRICE PER UNIT (RM)</th>
-                            <th className="p-2.5 w-36 text-right">PRICE TOTAL (RM)</th>
+                            <th className="p-2.5 border-r border-slate-900 min-w-[200px]">ITEM</th>
+                            <th className="p-2.5 w-14 text-center border-r border-slate-900">QTY</th>
+                            <th className="p-2.5 w-16 text-center border-r border-slate-900">UNIT</th>
+                            <th className="p-2.5 w-36 border-r border-slate-900">OFFERED ITEM</th>
+                            <th className="p-2.5 w-28 text-right border-r border-slate-900">UNIT PRICE (RM)</th>
+                            <th className="p-2.5 w-32 text-right">TOTAL PRICE (RM)</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-900">
                           {items.length === 0 ? (
                             <tr>
-                              <td colSpan={6} className="p-8 text-center text-slate-400 italic font-medium">
+                              <td colSpan={7} className="p-8 text-center text-slate-400 italic font-medium">
                                 No items listed. Please select a completed Quotation above to populate items.
                               </td>
                             </tr>
                           ) : (
-                            items.map((item, idx) => (
+                            items.map((item: any, idx: number) => (
                               <tr key={idx} className={idx % 2 === 1 ? 'bg-slate-50/90' : 'bg-white'}>
                                 <td className="p-2.5 text-center font-mono font-bold text-slate-800 border-r border-slate-900">
                                   {idx + 1}
                                 </td>
 
-                                {/* Photo Thumbnail */}
-                                <td className="p-1.5 text-center border-r border-slate-900">
-                                  {item.image_url ? (
-                                    <DraggableElement id={`inv_photo_${idx}`} isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label={`Photo #${idx + 1}`} inline>
-                                      <img
-                                        src={item.image_url}
-                                        alt={item.description}
-                                        className="w-10 h-10 object-cover border border-slate-400 rounded-none mx-auto pointer-events-none"
-                                      />
-                                    </DraggableElement>
-                                  ) : (
-                                    <div className="w-10 h-10 bg-slate-100 border border-slate-300 rounded-none mx-auto flex items-center justify-center text-slate-400" title="No photo">
-                                      <Package className="w-4 h-4 opacity-40" />
-                                    </div>
-                                  )}
-                                </td>
-
-                                {/* Product Name & Specifications */}
-                                <td className="p-2.5 border-r border-slate-900">
-                                  <p className="font-bold text-slate-900 text-xs">{item.description}</p>
+                                {/* ITEM Column: Stacked Product Name, Specifications, Code & Full-Width Photo */}
+                                <td className="p-2.5 border-r border-slate-900 align-top">
+                                  <p className="font-bold text-slate-900 text-xs leading-tight mb-0.5">{item.description}</p>
                                   {item.specification && (
-                                    <p className="text-[11px] text-slate-600 leading-snug mt-0.5">{item.specification}</p>
+                                    <p className="text-[11px] text-slate-600 leading-snug font-sans mb-1">{item.specification}</p>
                                   )}
                                   {item.product_code && (
-                                    <span className="inline-block font-mono text-[10px] text-purple-900 font-bold bg-purple-50 px-1 rounded border border-purple-200 mt-1">
+                                    <span className="inline-block font-mono text-[10px] text-purple-900 font-bold bg-purple-50 px-1 rounded border border-purple-200 mb-1">
                                       Code: {item.product_code}
                                     </span>
                                   )}
+                                  {item.image_url ? (
+                                    <div className="w-full mt-1">
+                                      <DraggableElement id={`inv_photo_${idx}`} isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label={`Photo #${idx + 1}`}>
+                                        <img
+                                          src={item.image_url}
+                                          alt={item.description}
+                                          className="w-full max-h-36 object-contain border border-slate-300 rounded-none bg-white p-0.5 block pointer-events-none"
+                                        />
+                                      </DraggableElement>
+                                    </div>
+                                  ) : null}
                                 </td>
 
-                                {/* QTT */}
-                                <td className="p-2.5 text-center font-mono font-bold text-slate-900 border-r border-slate-900">
-                                  {item.quantity} {item.unit || ''}
+                                {/* QTY */}
+                                <td className="p-2.5 text-center font-mono font-bold text-slate-900 border-r border-slate-900 align-top">
+                                  {item.quantity}
                                 </td>
 
-                                {/* Price Per Unit */}
-                                <td className="p-2.5 text-right font-mono text-slate-900 border-r border-slate-900">
+                                {/* UNIT */}
+                                <td className="p-2.5 text-center font-sans font-semibold text-slate-800 border-r border-slate-900 align-top">
+                                  {item.unit || 'Unit'}
+                                </td>
+
+                                {/* OFFERED ITEM */}
+                                <td className="p-2.5 font-sans text-xs text-slate-800 border-r border-slate-900 align-top">
+                                  {item.offer || item.offered_item || '—'}
+                                </td>
+
+                                {/* UNIT PRICE (RM) */}
+                                <td className="p-2.5 text-right font-mono text-slate-900 border-r border-slate-900 align-top">
                                   {formatCurrency(item.unit_price)}
                                 </td>
 
-                                {/* Price Total */}
-                                <td className="p-2.5 text-right font-mono font-bold text-slate-900 text-xs">
+                                {/* TOTAL PRICE (RM) */}
+                                <td className="p-2.5 text-right font-mono font-bold text-slate-900 text-xs align-top">
                                   {formatCurrency(item.total)}
                                 </td>
                               </tr>
