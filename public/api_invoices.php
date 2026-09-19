@@ -57,6 +57,7 @@ try {
         `product_code` VARCHAR(100) DEFAULT NULL,
         `description` TEXT NOT NULL,
         `specification` TEXT DEFAULT NULL,
+        `offer` TEXT DEFAULT NULL,
         `quantity` DECIMAL(12, 2) NOT NULL DEFAULT 1.00,
         `unit` VARCHAR(50) DEFAULT 'Unit',
         `unit_price` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
@@ -240,13 +241,14 @@ try {
         $items = $data['items'] ?? [];
         if (is_array($items) && count($items) > 0) {
             $stmt_item = $conn->prepare("INSERT INTO invoice_items (
-                invoice_id, product_code, description, specification, quantity, unit, unit_price, discount_percent, total, image_url
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                invoice_id, product_code, description, specification, offer, quantity, unit, unit_price, discount_percent, total, image_url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
             foreach ($items as $item) {
                 $p_code = trim($item['product_code'] ?? '');
                 $desc = trim($item['description'] ?? 'Item Description');
                 $spec = trim($item['specification'] ?? '');
+                $offer = trim($item['offer'] ?? $item['offered_item'] ?? '');
                 $qty = floatval($item['quantity'] ?? $item['qty'] ?? 1);
                 $unit = trim($item['unit'] ?? 'Unit');
                 $price = floatval($item['unit_price'] ?? 0);
@@ -254,7 +256,7 @@ try {
                 $tot = floatval($item['total'] ?? ($qty * $price * (1 - $disc / 100)));
                 $img = trim($item['image_url'] ?? '');
 
-                $stmt_item->bind_param("ssssdsddds", $id, $p_code, $desc, $spec, $qty, $unit, $price, $disc, $tot, $img);
+                $stmt_item->bind_param("sssssdsddds", $id, $p_code, $desc, $spec, $offer, $qty, $unit, $price, $disc, $tot, $img);
                 $stmt_item->execute();
             }
             $stmt_item->close();
