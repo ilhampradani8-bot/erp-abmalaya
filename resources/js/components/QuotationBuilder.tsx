@@ -511,6 +511,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
       user_name: currentUser?.name || 'Admin',
       user_email: currentUser?.email || 'admin@abmalaya.com',
       created_by: quo.created_by || currentUser?.name || currentUser?.email || 'Muhammad Aimanuddin Bin Mohd Zaki',
+      items: quo.items || [],
     };
     fetch(getApiUrl('/api_quotations.php'), {
       method: 'POST',
@@ -520,7 +521,17 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
       .then((res) => res.json())
       .then((resData) => {
         if (resData.status === 'success') {
-          setSaveSuccessMessage(`Quotation ${quo.quotation_number || resData.quotation_number} saved successfully to MySQL database!`);
+          const savedId = resData.id || quo.id;
+          const savedNum = resData.quotation_number || quo.quotation_number;
+          const updatedQuo: Quotation = {
+            ...quo,
+            ...payload,
+            id: savedId,
+            quotation_number: savedNum,
+          };
+          setQuotation(updatedQuo);
+          setSelectedQuoId(savedId);
+          setSaveSuccessMessage(`Quotation ${savedNum} saved successfully to MySQL database!`);
           setTimeout(() => setSaveSuccessMessage(null), 4000);
           loadQuotationsListFromMySQL();
           if (callback) callback();
