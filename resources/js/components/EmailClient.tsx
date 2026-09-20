@@ -242,8 +242,10 @@ export const EmailClient: React.FC<EmailClientProps> = ({
   onSuccessSend,
   isModalMode = true,
 }) => {
-  // 1. Fetch clients from MySQL API
+  // 1. Fetch clients & fallback quotations from MySQL API
   const [dbClients, setDbClients] = useState<ClientData[]>([]);
+  const [internalQuotations, setInternalQuotations] = useState<Quotation[]>([]);
+  const [isFetchingQuotations, setIsFetchingQuotations] = useState<boolean>(false);
 
   const fetchDbClients = () => {
     fetch(getApiUrl('/api_clients.php'))
@@ -258,13 +260,30 @@ export const EmailClient: React.FC<EmailClientProps> = ({
       });
   };
 
+  const fetchQuotationsData = () => {
+    setIsFetchingQuotations(true);
+    fetch(getApiUrl('/api_quotations.php'))
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success' && Array.isArray(resData.data)) {
+          setInternalQuotations(resData.data);
+        }
+      })
+      .catch((err) => console.error('EmailClient quotations fetch error:', err))
+      .finally(() => setIsFetchingQuotations(false));
+  };
+
   useEffect(() => {
     fetchDbClients();
+    fetchQuotationsData();
     const interval = setInterval(() => {
-      fetchDbClients(); // Silent background auto-sync every 10 seconds
-    }, 10000);
+      fetchDbClients();
+      fetchQuotationsData();
+    }, 12000);
     return () => clearInterval(interval);
   }, []);
+
+  const effectiveQuotationsList = (quotationsList && quotationsList.length > 0) ? quotationsList : internalQuotations;
 
   // 2. Build Company Groups by Corporate Domain & Quotation Mapping
   const companyGroupsMap = new Map<string, CompanyGroup>();
@@ -347,8 +366,8 @@ export const EmailClient: React.FC<EmailClientProps> = ({
     }
   });
 
-  // Aggregate Quotations List by Company Domain
-  quotationsList.forEach((q) => {
+  // Aggregate Quotations List by Company Domain (Includes both email-based and manual SPH quotations)
+  effectiveQuotationsList.forEach((q) => {
     const qAny = q as any;
     const qEmails = parseEmails(q.client_email);
     const primaryEmail = qEmails[0] || '';
@@ -390,39 +409,32 @@ export const EmailClient: React.FC<EmailClientProps> = ({
     }
   });
 
-  // Helper to strictly validate if an RFQ email belongs to Quotation/SPH category
-  const isQuotationRfq = (r: RFQ): boolean => {
+  // Helper to strictly validate if an RFQ email is linked to an existing Quotation in effectiveQuotationsList
+  const isLinkedToQuotationList = (r: RFQ): boolean => {
     if (!r) return false;
-    const rAny = r as any;
+    const rIdStr = String(r.id || '').trim();
+    const rNumStr = String((r as any).rfq_number || '').trim();
+    const cleanSender = cleanSingleEmail(r.sender_email);
 
-    if (rAny.ai_classification === 'iklan' || rAny.ai_classification === 'waiting') {
+    return effectiveQuotationsList.some((q) => {
+      const qRfqId = String(q.rfq_id || '').trim();
+      if (qRfqId !== '' && (qRfqId === rIdStr || qRfqId === rNumStr || qRfqId === `RFQ-${rIdStr}` || qRfqId === `GMAIL-LIVE-${rIdStr}`)) {
+        return true;
+      }
+      const cleanClient = cleanSingleEmail(q.client_email);
+      if (cleanClient !== '' && cleanSender !== '' && cleanClient === cleanSender) {
+        return true;
+      }
+      if (q.company_name && r.company && q.company_name.toLowerCase().trim() === r.company.toLowerCase().trim() && q.company_name.trim() !== '') {
+        return true;
+      }
       return false;
-    }
-
-    const sender = (r.sender_email || '').toLowerCase();
-    const subject = (r.subject || '').toLowerCase();
-    if (/no-?reply|donotreply|newsletter|marketing|promotions|notifications@|bounce@|mailer-daemon|unsubscribe|discount|special offer|free trial|advertisement/i.test(sender + ' ' + subject)) {
-      return false;
-    }
-
-    const isLinkedToQuotation = quotationsList.some(
-      (q) => q.rfq_id === r.id || (q.company_name && r.company && q.company_name.toLowerCase().trim() === r.company.toLowerCase().trim())
-    );
-    if (isLinkedToQuotation) return true;
-
-    if (rAny.ai_classification === 'quotation') return true;
-
-    if (r.labels && r.labels.some((l) => /rfq|quotation|penawaran|sph|quote|harga|acc/i.test(l))) {
-      return true;
-    }
-
-    const textToTest = `${r.subject || ''} ${r.item_requested || ''} ${r.message_body || ''}`.toLowerCase();
-    return /rfq|quotation|penawaran|sph|quote|harga|proposal|spec|inquiry|purchase order|\bpo\b|supplier|tender/i.test(textToTest);
+    });
   };
 
-  // Aggregate RFQ List by Company Domain (STRICT QUOTATION CATEGORY ONLY)
+  // Aggregate RFQ List by Company Domain (STRICTLY FOR RFQS LINKED TO QUOTATION LIST)
   rfqList.forEach((r) => {
-    if (!isQuotationRfq(r)) return;
+    if (!isLinkedToQuotationList(r)) return;
 
     const rEmails = parseEmails(r.sender_email);
     const primaryEmail = rEmails[0] || '';
@@ -462,9 +474,9 @@ export const EmailClient: React.FC<EmailClientProps> = ({
     }
   });
 
-  // STRICT QUOTATION-ONLY FILTER: Only include groups that have Quotation or Quotation-RFQ entries
+  // STRICT QUOTATION-ONLY FILTER: Only include company groups that have active entries in quotationsList
   const companyGroups = Array.from(companyGroupsMap.values()).filter(
-    (g) => g.quotations.length > 0 || g.rfqs.length > 0
+    (g) => g.quotations.length > 0
   );
 
   const [selectedGroup, setSelectedGroup] = useState<CompanyGroup>(
@@ -926,9 +938,16 @@ export const EmailClient: React.FC<EmailClientProps> = ({
 
               {/* List of Company Profiles */}
               <div className="flex-1 overflow-y-auto divide-y divide-slate-200">
-                {filteredGroups.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-slate-400">
-                    No quotation company profiles found.
+                {isFetchingQuotations && effectiveQuotationsList.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-600 flex flex-col items-center justify-center space-y-2.5">
+                    <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                    <span className="font-extrabold text-slate-800">Memuat Data Quotation...</span>
+                    <span className="text-[10px] text-slate-400 leading-tight">Menyinkronkan data SPH dari MySQL Database</span>
+                  </div>
+                ) : filteredGroups.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-500 space-y-1">
+                    <p className="font-bold text-slate-700">Tidak ada perusahaan Quotation.</p>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">Hanya pesan & perusahaan yang terdaftar di Quotation List yang ditampilkan.</p>
                   </div>
                 ) : (
                   filteredGroups.map((group) => {

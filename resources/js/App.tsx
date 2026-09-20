@@ -165,12 +165,26 @@ export const App: React.FC = () => {
       .finally(() => setIsFetchingLive(false));
   };
 
+  const fetchQuotationsList = () => {
+    fetch(getApiUrl('/api_quotations.php'))
+      .then((res) => res.json())
+      .then((resData) => {
+        if (resData.status === 'success' && Array.isArray(resData.data)) {
+          setQuotationsCache(resData.data);
+          setHasFetchedQuotations(true);
+        }
+      })
+      .catch((err) => console.log('Quotations fetch error on App startup:', err));
+  };
+
   useEffect(() => {
     fetchLiveEmails(false);
+    fetchQuotationsList();
 
     const interval = setInterval(() => {
       if (!isPreviewOpenRef.current) {
         fetchLiveEmails(true);
+        fetchQuotationsList();
       }
     }, 180000); // 3 minutes interval
 
