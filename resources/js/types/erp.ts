@@ -16,6 +16,7 @@ export interface EmailAttachment {
 
 export interface RFQ {
   id: string;
+  rfq_number?: string;
   sender_name: string;
   sender_email: string;
   company: string;

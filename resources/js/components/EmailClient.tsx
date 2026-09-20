@@ -494,6 +494,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showCompanyDetailPanel, setShowCompanyDetailPanel] = useState<boolean>(false);
+  const [activeRightTab, setActiveRightTab] = useState<'table' | 'profile'>('table');
   const [showHeaderMenu, setShowHeaderMenu] = useState<boolean>(false);
   const [isLoadingChat, setIsLoadingChat] = useState<boolean>(false);
 
@@ -510,6 +511,39 @@ export const EmailClient: React.FC<EmailClientProps> = ({
   // Active quotation & RFQ selection within group
   const activeQuotation = selectedReplyQuotation || selectedGroup.quotations[0] || quotation || undefined;
   const activeRfq = selectedGroup.rfqs[0] || rfq || undefined;
+
+  // Memoized RFQ Email ↔ SPH Quotation Correlation Pairing for Right Panel Table
+  const correlatedPairs = React.useMemo(() => {
+    const pairs: Array<{
+      rfq?: RFQ;
+      quotations: Quotation[];
+    }> = [];
+
+    const matchedQuoIds = new Set<string>();
+
+    // 1. Pair each RFQ Email with its matching Quotations
+    selectedGroup.rfqs.forEach((r) => {
+      const matchedQuos = selectedGroup.quotations.filter((q) => {
+        const qRfqId = String(q.rfq_id || '').trim();
+        const rId = String(r.id || '').trim();
+        const rNum = String(r.rfq_number || '').trim();
+        const isRfqIdMatch = qRfqId !== '' && (qRfqId === rId || qRfqId === rNum || qRfqId === `RFQ-${rId}` || qRfqId === `GMAIL-LIVE-${rId}`);
+        const isEmailMatch = Boolean(q.client_email && r.sender_email && cleanSingleEmail(q.client_email) === cleanSingleEmail(r.sender_email));
+        return isRfqIdMatch || isEmailMatch;
+      });
+
+      matchedQuos.forEach((q) => matchedQuoIds.add(String(q.id)));
+      pairs.push({ rfq: r, quotations: matchedQuos });
+    });
+
+    // 2. Append unmatched Manual / Direct Quotations
+    const orphanQuos = selectedGroup.quotations.filter((q) => !matchedQuoIds.has(String(q.id)));
+    orphanQuos.forEach((q) => {
+      pairs.push({ rfq: undefined, quotations: [q] });
+    });
+
+    return pairs;
+  }, [selectedGroup]);
 
   // Client Modal Form State (+ Add / Edit Company)
   const [showClientModal, setShowClientModal] = useState<boolean>(false);
@@ -1331,13 +1365,13 @@ export const EmailClient: React.FC<EmailClientProps> = ({
 
           </div>
 
-          {/* RIGHT PANEL — DETAILED COMPANY PROFILE INFO FROM DATABASE */}
+          {/* RIGHT PANEL — DETAILED COMPANY PROFILE INFO & EMAIL/QUOTATION CORRELATION TABLE */}
           {showCompanyDetailPanel && (
-            <div className="w-80 border-l border-slate-200 bg-slate-50 flex flex-col shrink-0 min-h-0 overflow-y-auto font-sans p-4 space-y-4">
+            <div className="w-96 md:w-[420px] border-l border-slate-200 bg-slate-50 flex flex-col shrink-0 min-h-0 overflow-y-auto font-sans p-3 space-y-3">
               <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                 <h4 className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5 uppercase tracking-wide">
                   <Building className="w-4 h-4 text-blue-600" />
-                  <span>Company Profile Details</span>
+                  <span>Company Profile & Details</span>
                 </h4>
                 <button
                   onClick={() => setShowCompanyDetailPanel(false)}
@@ -1345,6 +1379,30 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                   title="Close Detail Panel"
                 >
                   <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Right Panel Tab Navigation */}
+              <div className="flex items-center border border-slate-200 bg-white rounded-lg p-1 text-xs font-semibold shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setActiveRightTab('table')}
+                  className={`flex-1 py-1.5 px-2 rounded font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    activeRightTab === 'table' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Daftar Email & SPH ({correlatedPairs.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveRightTab('profile')}
+                  className={`flex-1 py-1.5 px-2 rounded font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    activeRightTab === 'profile' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <Building className="w-3.5 h-3.5" />
+                  <span>Profil Perusahaan</span>
                 </button>
               </div>
 
@@ -1367,103 +1425,239 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                 </div>
               )}
 
-              {/* Section 1: Contact Information */}
-              <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs space-y-2.5 text-xs">
-                <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1">
-                  Primary Identity & Contact
-                </div>
-                <div className="flex items-center gap-3 py-1">
-                  <CompanyAvatar
-                    email={selectedGroup.primaryEmail}
-                    name={selectedGroup.companyName}
-                    logoUrl={selectedGroup.logoUrl}
-                    className="w-12 h-12"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <span className="text-slate-400 text-[10px] uppercase font-bold block">Company</span>
-                    <p className="font-extrabold text-slate-900 text-sm truncate">{selectedGroup.companyName}</p>
-                    <p className="font-semibold text-slate-600 text-xs truncate">{selectedGroup.primaryClientName || '—'}</p>
-                  </div>
-                </div>
-                <div>
-                  <span className="text-slate-500 font-medium text-[11px]">Phone / Mobile:</span>
-                  <p className="font-mono text-slate-800 font-bold mt-0.5">{selectedGroup.phone || '—'}</p>
-                </div>
-                <div>
-                  <span className="text-slate-500 font-medium text-[11px]">Tax ID / SST Reg No.:</span>
-                  <p className="font-mono text-slate-800 font-bold mt-0.5">{selectedGroup.taxId || '—'}</p>
-                </div>
-                <div>
-                  <span className="text-slate-500 font-medium text-[11px]">Quotation Reg:</span>
-                  <p className="font-mono text-blue-700 font-extrabold mt-0.5">
-                    {selectedGroup.quotations.length > 0
-                      ? selectedGroup.quotations.map(q => q.quotation_number || `#${q.id}`).join(', ')
-                      : 'No Quotations'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Section 2: Connected Domain Emails */}
-              <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs space-y-2 text-xs">
-                <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1 flex items-center justify-between">
-                  <span>Connected Domain Emails</span>
-                  <span className="bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-mono text-[9px] font-bold">
-                    {selectedGroup.emailList.length} Emails
-                  </span>
-                </div>
-                <div className="space-y-1.5 max-h-40 overflow-y-auto pt-1">
-                  {selectedGroup.emailList.map((em, i) => (
-                    <div key={i} className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 p-2 rounded text-[11px] font-mono text-slate-800 truncate shadow-2xs">
-                      <Mail className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                      <span className="truncate">{em}</span>
+              {/* TAB 1: CORRELATION TABLE (Daftar Email & Nomor SPH Quotation) */}
+              {activeRightTab === 'table' && (
+                <div className="space-y-3">
+                  <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs space-y-2 text-xs">
+                    <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1.5 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-slate-800">
+                        <FileText className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Tabel Korelasi Email ↔ SPH Quotation</span>
+                      </span>
+                      <span className="bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded font-mono text-[9px] font-bold">
+                        {selectedGroup.rfqs.length} Email | {selectedGroup.quotations.length} SPH
+                      </span>
                     </div>
-                  ))}
-                </div>
-              </div>
 
-              {/* Section 3: Company Address */}
-              <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs space-y-2 text-xs">
-                <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1 flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5 text-rose-500" />
-                  <span>Company Address</span>
-                </div>
-                <div className="text-slate-700 leading-relaxed font-sans pt-0.5">
-                  {selectedGroup.addressLine1 || selectedGroup.addressLine2 || selectedGroup.city ? (
-                    <>
-                      {selectedGroup.addressLine1 && <p className="font-semibold">{selectedGroup.addressLine1}</p>}
-                      {selectedGroup.addressLine2 && <p>{selectedGroup.addressLine2}</p>}
-                      <p className="text-slate-600 mt-0.5">
-                        {[selectedGroup.city, selectedGroup.state, selectedGroup.postalCode].filter(Boolean).join(', ')}
-                      </p>
-                      {selectedGroup.country && <p className="font-bold text-slate-800 mt-1">{selectedGroup.country}</p>}
-                    </>
-                  ) : (
-                    <p className="text-slate-400 italic">Address not yet entered in database.</p>
-                  )}
-                </div>
-              </div>
+                    <div className="overflow-x-auto pt-1">
+                      <table className="w-full text-left border-collapse text-[11px]">
+                        <thead>
+                          <tr className="bg-slate-100 border-b border-slate-200 text-[10px] uppercase font-extrabold text-slate-600">
+                            <th className="p-2 border-r border-slate-200">Email Pesan (RFQ)</th>
+                            <th className="p-2 border-r border-slate-200">Nomor SPH Quotation</th>
+                            <th className="p-2 text-center">Aksi</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-sans">
+                          {correlatedPairs.length === 0 ? (
+                            <tr>
+                              <td colSpan={3} className="p-4 text-center text-slate-400 italic">
+                                Belum ada pesan email atau SPH untuk perusahaan ini.
+                              </td>
+                            </tr>
+                          ) : (
+                            correlatedPairs.map((pair, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50/80 transition">
+                                {/* Column 1: Pesan Email */}
+                                <td className="p-2 border-r border-slate-100 align-top">
+                                  {pair.rfq ? (
+                                    <div className="space-y-0.5">
+                                      <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                                        <Mail className="w-3 h-3 text-blue-600 shrink-0" />
+                                        <span className="font-mono text-blue-700 text-[10px] bg-blue-50 px-1 py-0.2 rounded border border-blue-200">
+                                          {pair.rfq.rfq_number || `#${pair.rfq.id}`}
+                                        </span>
+                                      </div>
+                                      <p className="font-semibold text-slate-800 text-[11px] truncate max-w-[140px]" title={pair.rfq.subject}>
+                                        {pair.rfq.subject || 'RFQ Email'}
+                                      </p>
+                                      <p className="text-[10px] font-mono text-slate-500 truncate max-w-[140px]">
+                                        {cleanSingleEmail(pair.rfq.sender_email)}
+                                      </p>
+                                      {pair.rfq.date_received && (
+                                        <span className="text-[9px] text-slate-400 block">{pair.rfq.date_received}</span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-slate-400 italic text-[10px] font-mono block p-1">
+                                      Direct / Manual SPH
+                                    </span>
+                                  )}
+                                </td>
 
-              {/* Section 4: Notes */}
-              {selectedGroup.notes && (
-                <div className="bg-amber-50/90 border border-amber-200 rounded-lg p-3 text-xs space-y-1">
-                  <div className="font-bold text-amber-900 uppercase text-[10px] tracking-wider border-b border-amber-200/60 pb-1">
-                    Company Notes
+                                {/* Column 2: Nomor SPH Quotation */}
+                                <td className="p-2 border-r border-slate-100 align-top">
+                                  {pair.quotations.length > 0 ? (
+                                    <div className="space-y-1.5">
+                                      {pair.quotations.map((q) => (
+                                        <div key={q.id} className="bg-slate-50 border border-slate-200 p-1.5 rounded space-y-0.5 shadow-2xs">
+                                          <div className="flex items-center justify-between gap-1">
+                                            <span className="font-mono font-extrabold text-blue-900 text-[10px]">
+                                              {q.quotation_number || q.id}
+                                            </span>
+                                            <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold uppercase tracking-tight ${
+                                              q.status === 'ready_send' || q.status === 'penawaran_terkirim'
+                                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                                : q.approved_by
+                                                ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                                : 'bg-amber-100 text-amber-800 border border-amber-300'
+                                            }`}>
+                                              {q.status || 'Draft'}
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center justify-between text-[10px] text-slate-600 font-mono pt-0.5 border-t border-slate-200/60">
+                                            <span>Total:</span>
+                                            <span className="font-bold text-slate-900">RM {Number(q.grand_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] font-bold block text-center mt-1">
+                                      Belum Ada SPH
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* Column 3: Action Buttons */}
+                                <td className="p-2 align-middle text-center">
+                                  <div className="flex flex-col items-center justify-center gap-1">
+                                    {pair.rfq && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setPreviewEmailData(pair.rfq!)}
+                                        className="p-1 bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-700 rounded transition border border-slate-200 cursor-pointer w-7 h-7 flex items-center justify-center"
+                                        title="Preview Pesan Email Mentah"
+                                      >
+                                        <Eye className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                    {pair.quotations.map((q) => (
+                                      <a
+                                        key={q.id}
+                                        href={getApiUrl(`view_doc.php?id=${q.id}`)}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="p-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded transition border border-blue-200 cursor-pointer w-7 h-7 flex items-center justify-center"
+                                        title={`Buka PDF/Web SPH ${q.quotation_number || q.id}`}
+                                      >
+                                        <FileType className="w-3.5 h-3.5" />
+                                      </a>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                  <p className="text-amber-800 whitespace-pre-wrap leading-relaxed">{selectedGroup.notes}</p>
                 </div>
               )}
 
-              {/* Section 5: Edit Button */}
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={handleOpenEditClient}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs py-2 rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition cursor-pointer"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Edit Company Data</span>
-                </button>
-              </div>
+              {/* TAB 2: COMPANY PROFILE DETAILS */}
+              {activeRightTab === 'profile' && (
+                <div className="space-y-4">
+                  {/* Section 1: Contact Information */}
+                  <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs space-y-2.5 text-xs">
+                    <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1">
+                      Primary Identity & Contact
+                    </div>
+                    <div className="flex items-center gap-3 py-1">
+                      <CompanyAvatar
+                        email={selectedGroup.primaryEmail}
+                        name={selectedGroup.companyName}
+                        logoUrl={selectedGroup.logoUrl}
+                        className="w-12 h-12"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <span className="text-slate-400 text-[10px] uppercase font-bold block">Company</span>
+                        <p className="font-extrabold text-slate-900 text-sm truncate">{selectedGroup.companyName}</p>
+                        <p className="font-semibold text-slate-600 text-xs truncate">{selectedGroup.primaryClientName || '—'}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 font-medium text-[11px]">Phone / Mobile:</span>
+                      <p className="font-mono text-slate-800 font-bold mt-0.5">{selectedGroup.phone || '—'}</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 font-medium text-[11px]">Tax ID / SST Reg No.:</span>
+                      <p className="font-mono text-slate-800 font-bold mt-0.5">{selectedGroup.taxId || '—'}</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 font-medium text-[11px]">Quotation Reg:</span>
+                      <p className="font-mono text-blue-700 font-extrabold mt-0.5">
+                        {selectedGroup.quotations.length > 0
+                          ? selectedGroup.quotations.map(q => q.quotation_number || `#${q.id}`).join(', ')
+                          : 'No Quotations'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Section 2: Connected Domain Emails */}
+                  <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs space-y-2 text-xs">
+                    <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1 flex items-center justify-between">
+                      <span>Connected Domain Emails</span>
+                      <span className="bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-mono text-[9px] font-bold">
+                        {selectedGroup.emailList.length} Emails
+                      </span>
+                    </div>
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto pt-1">
+                      {selectedGroup.emailList.map((em, i) => (
+                        <div key={i} className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 p-2 rounded text-[11px] font-mono text-slate-800 truncate shadow-2xs">
+                          <Mail className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                          <span className="truncate">{em}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Section 3: Company Address */}
+                  <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs space-y-2 text-xs">
+                    <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1 flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Company Address</span>
+                    </div>
+                    <div className="text-slate-700 leading-relaxed font-sans pt-0.5">
+                      {selectedGroup.addressLine1 || selectedGroup.addressLine2 || selectedGroup.city ? (
+                        <>
+                          {selectedGroup.addressLine1 && <p className="font-semibold">{selectedGroup.addressLine1}</p>}
+                          {selectedGroup.addressLine2 && <p>{selectedGroup.addressLine2}</p>}
+                          <p className="text-slate-600 mt-0.5">
+                            {[selectedGroup.city, selectedGroup.state, selectedGroup.postalCode].filter(Boolean).join(', ')}
+                          </p>
+                          {selectedGroup.country && <p className="font-bold text-slate-800 mt-1">{selectedGroup.country}</p>}
+                        </>
+                      ) : (
+                        <p className="text-slate-400 italic">Address not yet entered in database.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Section 4: Notes */}
+                  {selectedGroup.notes && (
+                    <div className="bg-amber-50/90 border border-amber-200 rounded-lg p-3 text-xs space-y-1">
+                      <div className="font-bold text-amber-900 uppercase text-[10px] tracking-wider border-b border-amber-200/60 pb-1">
+                        Company Notes
+                      </div>
+                      <p className="text-amber-800 whitespace-pre-wrap leading-relaxed">{selectedGroup.notes}</p>
+                    </div>
+                  )}
+
+                  {/* Section 5: Edit Button */}
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={handleOpenEditClient}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs py-2 rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>Edit Company Data</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
