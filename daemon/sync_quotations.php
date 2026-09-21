@@ -67,11 +67,43 @@ function syncVerifiedClientRfqsToQuotations($db_conn) {
         }
     }
 
+    // Auto-generate PDF files for pending quotations
+    $pdf_dir = __DIR__ . '/../public/uploads/pdf/';
+    if (!file_exists($pdf_dir)) {
+        @mkdir($pdf_dir, 0777, true);
+    }
+    $node_script = __DIR__ . '/../scripts/generate_pdf_puppeteer.cjs';
+    $pending_quos = $db_conn->query("SELECT * FROM quotations WHERE pdf_created = 0 OR quotation_file IS NULL OR quotation_file = '' ORDER BY id DESC LIMIT 10");
+    if ($pending_quos && $pending_quos->num_rows > 0) {
+        while ($q = $pending_quos->fetch_assoc()) {
+            $q_id = $q['id'];
+            $q_num = $q['quotation_number'] ?: $q_id;
+            $safe_fn = preg_replace('/[^A-Za-z0-9_\-]/', '_', $q_num) . '.pdf';
+            $pdf_path = $pdf_dir . $safe_fn;
+            $pdf_url = '/uploads/pdf/' . $safe_fn;
+
+            $target_view_url = "http://127.0.0.1:8000/view_doc.php?type=quotation&id=" . urlencode($q_id);
+            $cmd = "node " . escapeshellarg($node_script) . " quotation " . escapeshellarg($q_id) . " " . escapeshellarg($pdf_path) . " " . escapeshellarg($target_view_url) . " 2>&1";
+
+            @exec($cmd, $out, $ret);
+
+            if (file_exists($pdf_path) && filesize($pdf_path) > 100) {
+                $up = $db_conn->prepare("UPDATE quotations SET pdf_created = 1, pdf_created_at = NOW(), quotation_file = ? WHERE id = ?");
+                if ($up) {
+                    $up->bind_param("ss", $pdf_url, $q_id);
+                    $up->execute();
+                    $up->close();
+                    $processed++;
+                }
+            }
+        }
+    }
+
     return $processed;
 }
 
 // Execute sync if run directly
 $synced_count = syncVerifiedClientRfqsToQuotations($db_conn);
 if (php_sapi_name() === 'cli' && basename(__FILE__) === basename($_SERVER['SCRIPT_FILENAME'])) {
-    echo "[" . date('Y-m-d H:i:s') . "] Quotation Sync Complete. Auto-synced {$synced_count} RFQs to quotations table.\n";
+    echo "[" . date('Y-m-d H:i:s') . "] Quotation Sync & PDF Automation Complete. Auto-synced {$synced_count} RFQs & PDFs to quotations table.\n";
 }

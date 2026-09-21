@@ -45,6 +45,9 @@ try {
         `bank_email` VARCHAR(100) DEFAULT 'abmalayaindustry@gmail.com',
         `notes` TEXT DEFAULT NULL,
         `status` VARCHAR(50) NOT NULL DEFAULT 'unpaid',
+        `invoice_file` TEXT DEFAULT NULL,
+        `pdf_created` TINYINT(1) DEFAULT 0,
+        `pdf_created_at` DATETIME DEFAULT NULL,
         `created_by` VARCHAR(100) DEFAULT NULL,
         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP

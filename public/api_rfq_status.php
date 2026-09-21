@@ -172,6 +172,27 @@ try {
                 $final_reply_sender = $recipient_email;
             }
 
+            // Ensure rfq_replies table exists for multi-reply history
+            $db_conn->query("CREATE TABLE IF NOT EXISTS rfq_replies (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                rfq_id INT DEFAULT NULL,
+                rfq_number VARCHAR(100) DEFAULT NULL,
+                reply_body TEXT DEFAULT NULL,
+                reply_sender VARCHAR(255) DEFAULT NULL,
+                client_email VARCHAR(255) DEFAULT NULL,
+                quotation_id INT DEFAULT NULL,
+                quotation_number VARCHAR(100) DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+            // Save this reply in rfq_replies table for thread history
+            $insReply = $db_conn->prepare("INSERT INTO rfq_replies (rfq_id, rfq_number, reply_body, reply_sender, client_email, quotation_id, quotation_number) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            if ($insReply) {
+                $insReply->bind_param("issssss", $clean_id, $rfq_num, $reply_body, $final_reply_sender, $client_email, $quo_id, $quo_num);
+                $insReply->execute();
+                $insReply->close();
+            }
+
             // 4. Update status in Database - save the actual sender chosen by user
             $stmt = $db_conn->prepare("UPDATE rfq_requests SET status = ?, reply_body = ?, reply_date = NOW(), reply_sender = ? WHERE rfq_number = ? OR id = ?");
             if ($stmt) {

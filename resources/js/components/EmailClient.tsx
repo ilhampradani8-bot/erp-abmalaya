@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Quotation, RFQ } from '../types/erp';
 import { 
-  Send, CheckCircle2, X, Loader2, Sparkles, Clock,
+  Send, CheckCircle2, X, Loader2, Sparkles, Clock, ArrowLeft,
   FileType, FileText, Search, Plus, Edit3, Building, Mail, Info, MapPin,
-  Paperclip, CheckCheck, Menu, CornerUpLeft, Eye, MoreVertical, Maximize2
+  Paperclip, CheckCheck, Menu, CornerUpLeft, Eye, MoreVertical, Maximize2, Save
 } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
@@ -214,11 +214,11 @@ const CompanyAvatar: React.FC<{
 
   if (targetLogoUrl && !imgFailed) {
     return (
-      <div className={`${className} rounded-full overflow-hidden shrink-0 bg-white border border-slate-200 flex items-center justify-center p-0.5 shadow-xs`}>
+      <div className={`${className} rounded-none overflow-hidden shrink-0 bg-white border border-slate-300 flex items-center justify-center p-0.5 shadow-2xs`}>
         <img
           src={targetLogoUrl}
           alt={name || 'Company Logo'}
-          className="w-full h-full object-contain rounded-full"
+          className="w-full h-full object-contain rounded-none"
           onError={() => setImgFailed(true)}
           loading="lazy"
         />
@@ -227,7 +227,7 @@ const CompanyAvatar: React.FC<{
   }
 
   return (
-    <div className={`${className} bg-gradient-to-tr from-blue-700 to-indigo-600 text-white rounded-full font-extrabold text-xs flex items-center justify-center shrink-0 shadow-xs uppercase tracking-wider`}>
+    <div className={`${className} bg-slate-900 text-white rounded-none font-extrabold text-xs flex items-center justify-center shrink-0 shadow-2xs uppercase tracking-wider border border-slate-800`}>
       {initials}
     </div>
   );
@@ -248,11 +248,16 @@ export const EmailClient: React.FC<EmailClientProps> = ({
   const [isFetchingQuotations, setIsFetchingQuotations] = useState<boolean>(false);
 
   const fetchDbClients = () => {
-    fetch(getApiUrl('/api_clients.php'))
+    fetch(getApiUrl(`/api_clients.php?t=${Date.now()}`), { cache: 'no-store' })
       .then((res) => res.json())
       .then((resData) => {
         if (resData.status === 'success' && Array.isArray(resData.data)) {
-          setDbClients(resData.data);
+          setDbClients((prev) => {
+            if (prev.length === resData.data.length && JSON.stringify(prev) === JSON.stringify(resData.data)) {
+              return prev;
+            }
+            return resData.data;
+          });
         }
       })
       .catch((err) => {
@@ -260,13 +265,20 @@ export const EmailClient: React.FC<EmailClientProps> = ({
       });
   };
 
-  const fetchQuotationsData = () => {
-    setIsFetchingQuotations(true);
-    fetch(getApiUrl('/api_quotations.php'))
+  const fetchQuotationsData = (isInitial: boolean = false) => {
+    if (isInitial) {
+      setIsFetchingQuotations(true);
+    }
+    fetch(getApiUrl(`/api_quotations.php?t=${Date.now()}`), { cache: 'no-store' })
       .then((res) => res.json())
       .then((resData) => {
         if (resData.status === 'success' && Array.isArray(resData.data)) {
-          setInternalQuotations(resData.data);
+          setInternalQuotations((prev) => {
+            if (prev.length === resData.data.length && JSON.stringify(prev) === JSON.stringify(resData.data)) {
+              return prev;
+            }
+            return resData.data;
+          });
         }
       })
       .catch((err) => console.error('EmailClient quotations fetch error:', err))
@@ -275,179 +287,174 @@ export const EmailClient: React.FC<EmailClientProps> = ({
 
   useEffect(() => {
     fetchDbClients();
-    fetchQuotationsData();
+    fetchQuotationsData(true);
     const interval = setInterval(() => {
       fetchDbClients();
-      fetchQuotationsData();
-    }, 12000);
+      fetchQuotationsData(false);
+    }, 15000);
     return () => clearInterval(interval);
   }, []);
 
   const effectiveQuotationsList = (quotationsList && quotationsList.length > 0) ? quotationsList : internalQuotations;
 
   // 2. Build Company Groups by Corporate Domain & Quotation Mapping
-  const companyGroupsMap = new Map<string, CompanyGroup>();
+  const companyGroups = React.useMemo(() => {
+    const companyGroupsMap = new Map<string, CompanyGroup>();
 
-  // Add active RFQ / Quotation target company first if present
-  if (rfq || quotation) {
-    const qAny = quotation as any;
-    const targetEmails = parseEmails(rfq?.sender_email || quotation?.client_email);
-    const primaryEmail = targetEmails[0] || '';
-    const { companyKey, companyName } = extractCompanyInfoFromEmail(primaryEmail, quotation?.company_name || rfq?.company);
+    // Step 1: Strictly create company groups from Quotations List ONLY (Only include companies in Quotation List)
+    effectiveQuotationsList.forEach((q) => {
+      const qAny = q as any;
+      const qEmails = parseEmails(q.client_email);
+      const primaryEmail = qEmails[0] || '';
+      const { companyKey, companyName } = extractCompanyInfoFromEmail(primaryEmail, q.company_name);
 
-    companyGroupsMap.set(companyKey, {
-      companyKey,
-      companyName,
-      primaryClientName: rfq?.sender_name || quotation?.client_name || 'Client',
-      primaryEmail,
-      emailList: targetEmails,
-      phone: quotation?.client_phone || rfq?.phone || '',
-      addressLine1: qAny?.address_line1 || '',
-      addressLine2: qAny?.address_line2 || '',
-      city: qAny?.city || '',
-      state: qAny?.state || '',
-      postalCode: qAny?.postal_code || '',
-      country: qAny?.country || 'Malaysia',
-      taxId: qAny?.tax_id || '',
-      notes: qAny?.notes || '',
-      lastActivity: quotation?.date_issued || rfq?.date_received || 'Today',
-      quotations: quotation ? [quotation] : [],
-      rfqs: rfq ? [rfq] : [],
-      repliedMessagesCount: quotation?.status === 'penawaran_terkirim' || quotation?.pdf_created === 1 ? 1 : 0,
-    });
-  }
+      // Check if an existing group matches by domain (for corporate domains) or exact company name
+      let targetKey = companyKey;
+      if (!companyGroupsMap.has(targetKey)) {
+        for (const [gKey, gObj] of companyGroupsMap.entries()) {
+          const domain1 = primaryEmail.includes('@') ? primaryEmail.split('@')[1].toLowerCase().trim() : '';
+          const domain2 = gObj.primaryEmail.includes('@') ? gObj.primaryEmail.split('@')[1].toLowerCase().trim() : '';
+          const isCorporateDomainMatch = domain1 && domain2 && !PUBLIC_DOMAINS.has(domain1) && domain1 === domain2;
+          const isNameMatch = q.company_name && gObj.companyName.toLowerCase().trim() === q.company_name.toLowerCase().trim() && q.company_name.trim() !== '';
 
-  // Populate from MySQL Clients DB
-  dbClients.forEach((dbC) => {
-    const parsed = parseEmails(dbC.email);
-    const primaryEmail = parsed[0] || '';
-    const { companyKey, companyName } = extractCompanyInfoFromEmail(primaryEmail, dbC.company_name);
-
-    if (!companyGroupsMap.has(companyKey)) {
-      companyGroupsMap.set(companyKey, {
-        companyKey,
-        companyName,
-        primaryClientName: dbC.client_name || 'Contact Person',
-        primaryEmail,
-        emailList: parsed,
-        phone: dbC.phone || '',
-        addressLine1: dbC.address_line1 || '',
-        addressLine2: dbC.address_line2 || '',
-        city: dbC.city || '',
-        state: dbC.state || '',
-        postalCode: dbC.postal_code || '',
-        country: dbC.country || 'Malaysia',
-        taxId: dbC.tax_id || '',
-        logoUrl: dbC.logo_url || '',
-        notes: dbC.notes || '',
-        dbClientId: dbC.id,
-        lastActivity: 'Registered',
-        quotations: [],
-        rfqs: [],
-        repliedMessagesCount: 0,
-      });
-    } else {
-      const existing = companyGroupsMap.get(companyKey)!;
-      existing.dbClientId = dbC.id;
-      if (dbC.logo_url) existing.logoUrl = dbC.logo_url;
-      if (dbC.client_name) existing.primaryClientName = dbC.client_name;
-      if (parsed.length > 0) {
-        existing.emailList = Array.from(new Set([...existing.emailList, ...parsed]));
-        existing.primaryEmail = existing.emailList[0] || '';
-      }
-      if (dbC.phone) existing.phone = dbC.phone;
-      if (dbC.address_line1) existing.addressLine1 = dbC.address_line1;
-      if (dbC.address_line2) existing.addressLine2 = dbC.address_line2;
-      if (dbC.city) existing.city = dbC.city;
-      if (dbC.state) existing.state = dbC.state;
-      if (dbC.postal_code) existing.postalCode = dbC.postal_code;
-      if (dbC.tax_id) existing.taxId = dbC.tax_id;
-      if (dbC.notes) existing.notes = dbC.notes;
-    }
-  });
-
-  // Aggregate Quotations List by Company Domain (Includes both email-based and manual SPH quotations)
-  effectiveQuotationsList.forEach((q) => {
-    const qAny = q as any;
-    const qEmails = parseEmails(q.client_email);
-    const primaryEmail = qEmails[0] || '';
-    const { companyKey, companyName } = extractCompanyInfoFromEmail(primaryEmail, q.company_name);
-
-    if (!companyGroupsMap.has(companyKey)) {
-      companyGroupsMap.set(companyKey, {
-        companyKey,
-        companyName,
-        primaryClientName: q.client_name || 'Client',
-        primaryEmail,
-        emailList: qEmails,
-        phone: q.client_phone || '',
-        addressLine1: qAny?.address_line1 || '',
-        addressLine2: qAny?.address_line2 || '',
-        city: qAny?.city || '',
-        state: qAny?.state || '',
-        postalCode: qAny?.postal_code || '',
-        country: qAny?.country || 'Malaysia',
-        taxId: qAny?.tax_id || '',
-        notes: qAny?.notes || '',
-        lastActivity: q.date_issued || 'Recent',
-        quotations: [q],
-        rfqs: [],
-        repliedMessagesCount: q.status === 'penawaran_terkirim' || q.pdf_created === 1 ? 1 : 0,
-      });
-    } else {
-      const group = companyGroupsMap.get(companyKey)!;
-      if (qEmails.length > 0) {
-        group.emailList = Array.from(new Set([...group.emailList, ...qEmails]));
-        if (!group.primaryEmail) group.primaryEmail = group.emailList[0];
-      }
-      if (!group.quotations.some((x) => x.id === q.id)) {
-        group.quotations.push(q);
-        if (q.status === 'penawaran_terkirim' || q.pdf_created === 1) {
-          group.repliedMessagesCount += 1;
+          if (isCorporateDomainMatch || isNameMatch) {
+            targetKey = gKey;
+            break;
+          }
         }
       }
-    }
-  });
 
-  // Helper to strictly validate if an RFQ email is linked to an existing Quotation in effectiveQuotationsList
-  const isLinkedToQuotationList = (r: RFQ): boolean => {
-    if (!r) return false;
-    const rIdStr = String(r.id || '').trim();
-    const rNumStr = String((r as any).rfq_number || '').trim();
-    const cleanSender = cleanSingleEmail(r.sender_email);
-
-    return effectiveQuotationsList.some((q) => {
-      const qRfqId = String(q.rfq_id || '').trim();
-      if (qRfqId !== '' && (qRfqId === rIdStr || qRfqId === rNumStr || qRfqId === `RFQ-${rIdStr}` || qRfqId === `GMAIL-LIVE-${rIdStr}`)) {
-        return true;
+      if (!companyGroupsMap.has(targetKey)) {
+        companyGroupsMap.set(targetKey, {
+          companyKey: targetKey,
+          companyName: q.company_name || companyName,
+          primaryClientName: q.client_name || 'Client',
+          primaryEmail,
+          emailList: qEmails,
+          phone: q.client_phone || '',
+          addressLine1: qAny?.address_line1 || '',
+          addressLine2: qAny?.address_line2 || '',
+          city: qAny?.city || '',
+          state: qAny?.state || '',
+          postalCode: qAny?.postal_code || '',
+          country: qAny?.country || 'Malaysia',
+          taxId: qAny?.tax_id || '',
+          notes: qAny?.notes || '',
+          lastActivity: q.date_issued || 'Recent',
+          quotations: [q],
+          rfqs: [],
+          repliedMessagesCount: q.status === 'penawaran_terkirim' || q.pdf_created === 1 ? 1 : 0,
+        });
+      } else {
+        const group = companyGroupsMap.get(targetKey)!;
+        if (q.company_name && !group.companyName) group.companyName = q.company_name;
+        if (q.client_name && !group.primaryClientName) group.primaryClientName = q.client_name;
+        if (q.client_phone && !group.phone) group.phone = q.client_phone;
+        if (qEmails.length > 0) {
+          group.emailList = Array.from(new Set([...group.emailList, ...qEmails]));
+          if (!group.primaryEmail) group.primaryEmail = group.emailList[0];
+        }
+        if (!group.quotations.some((x) => x.id === q.id)) {
+          group.quotations.push(q);
+          if (q.status === 'penawaran_terkirim' || q.pdf_created === 1) {
+            group.repliedMessagesCount += 1;
+          }
+        }
       }
-      const cleanClient = cleanSingleEmail(q.client_email);
-      if (cleanClient !== '' && cleanSender !== '' && cleanClient === cleanSender) {
-        return true;
-      }
-      if (q.company_name && r.company && q.company_name.toLowerCase().trim() === r.company.toLowerCase().trim() && q.company_name.trim() !== '') {
-        return true;
-      }
-      return false;
     });
-  };
 
-  // Aggregate RFQ List by Company Domain (STRICTLY FOR RFQS LINKED TO QUOTATION LIST)
-  rfqList.forEach((r) => {
-    if (!isLinkedToQuotationList(r)) return;
+    // Step 2: Sync metadata & extra emails from MySQL dbClients ONLY to existing quotation company groups
+    dbClients.forEach((dbC) => {
+      const parsed = parseEmails(dbC.email);
+      const primaryEmail = parsed[0] || '';
+      const { companyKey } = extractCompanyInfoFromEmail(primaryEmail, dbC.company_name);
 
-    const rEmails = parseEmails(r.sender_email);
-    const primaryEmail = rEmails[0] || '';
-    const { companyKey, companyName } = extractCompanyInfoFromEmail(primaryEmail, r.company);
+      let targetKey = companyKey;
+      if (!companyGroupsMap.has(targetKey)) {
+        for (const [gKey, gObj] of companyGroupsMap.entries()) {
+          const domain1 = primaryEmail.includes('@') ? primaryEmail.split('@')[1].toLowerCase().trim() : '';
+          const domain2 = gObj.primaryEmail.includes('@') ? gObj.primaryEmail.split('@')[1].toLowerCase().trim() : '';
+          const isCorporateDomainMatch = domain1 && domain2 && !PUBLIC_DOMAINS.has(domain1) && domain1 === domain2;
+          const isNameMatch = dbC.company_name && gObj.companyName.toLowerCase().trim() === dbC.company_name.toLowerCase().trim();
 
-    if (!companyGroupsMap.has(companyKey)) {
-      companyGroupsMap.set(companyKey, {
-        companyKey,
-        companyName,
-        primaryClientName: r.sender_name || 'Client',
-        primaryEmail,
-        emailList: rEmails,
-        phone: r.phone || '',
+          if (isCorporateDomainMatch || isNameMatch) {
+            targetKey = gKey;
+            break;
+          }
+        }
+      }
+
+      if (companyGroupsMap.has(targetKey)) {
+        const existing = companyGroupsMap.get(targetKey)!;
+        existing.dbClientId = dbC.id;
+        if (dbC.company_name) existing.companyName = dbC.company_name;
+        if (dbC.client_name) existing.primaryClientName = dbC.client_name;
+        if (dbC.logo_url) existing.logoUrl = dbC.logo_url;
+        if (parsed.length > 0) {
+          existing.emailList = Array.from(new Set([...existing.emailList, ...parsed]));
+          if (!existing.primaryEmail) existing.primaryEmail = existing.emailList[0] || '';
+        }
+        if (dbC.phone) existing.phone = dbC.phone;
+        if (dbC.address_line1) existing.addressLine1 = dbC.address_line1;
+        if (dbC.address_line2) existing.addressLine2 = dbC.address_line2;
+        if (dbC.city) existing.city = dbC.city;
+        if (dbC.state) existing.state = dbC.state;
+        if (dbC.postal_code) existing.postalCode = dbC.postal_code;
+        if (dbC.tax_id) existing.taxId = dbC.tax_id;
+        if (dbC.notes) existing.notes = dbC.notes;
+      }
+    });
+
+    // Step 3: Attach matching RFQ emails ONLY to existing company groups from Quotation List
+    rfqList.forEach((r) => {
+      const rEmails = parseEmails(r.sender_email);
+      const primaryEmail = rEmails[0] || '';
+      const { companyKey } = extractCompanyInfoFromEmail(primaryEmail, r.company);
+
+      let targetKey = companyKey;
+      if (!companyGroupsMap.has(targetKey)) {
+        for (const [gKey, gObj] of companyGroupsMap.entries()) {
+          const domain1 = primaryEmail.includes('@') ? primaryEmail.split('@')[1].toLowerCase().trim() : '';
+          const domain2 = gObj.primaryEmail.includes('@') ? gObj.primaryEmail.split('@')[1].toLowerCase().trim() : '';
+          const isCorporateDomainMatch = domain1 && domain2 && !PUBLIC_DOMAINS.has(domain1) && domain1 === domain2;
+          const isNameMatch = r.company && gObj.companyName.toLowerCase().trim() === r.company.toLowerCase().trim();
+
+          if (isCorporateDomainMatch || isNameMatch) {
+            targetKey = gKey;
+            break;
+          }
+        }
+      }
+
+      // ONLY attach if company group exists in Quotation List
+      if (companyGroupsMap.has(targetKey)) {
+        const group = companyGroupsMap.get(targetKey)!;
+        if (rEmails.length > 0) {
+          group.emailList = Array.from(new Set([...group.emailList, ...rEmails]));
+          if (!group.primaryEmail) group.primaryEmail = group.emailList[0];
+        }
+        if (!group.rfqs.some((x) => x.id === r.id)) {
+          group.rfqs.push(r);
+          if (r.status === 'penawaran_terkirim') group.repliedMessagesCount += 1;
+        }
+      }
+    });
+
+    return Array.from(companyGroupsMap.values());
+  }, [rfq, quotation, dbClients, effectiveQuotationsList, rfqList]);
+
+  const [selectedCompanyKey, setSelectedCompanyKey] = useState<string>('');
+
+  // Dynamically derive selectedGroup from current companyGroups so it always syncs with MySQL DB updates
+  const selectedGroup = React.useMemo<CompanyGroup>(() => {
+    if (companyGroups.length === 0) {
+      return {
+        companyKey: 'unassigned',
+        companyName: 'No Company Assigned',
+        primaryClientName: '',
+        primaryEmail: '',
+        emailList: [],
+        phone: '',
         addressLine1: '',
         addressLine2: '',
         city: '',
@@ -456,59 +463,28 @@ export const EmailClient: React.FC<EmailClientProps> = ({
         country: 'Malaysia',
         taxId: '',
         notes: '',
-        lastActivity: r.date_received || 'Recent',
+        lastActivity: 'No Activity',
         quotations: [],
-        rfqs: [r],
-        repliedMessagesCount: r.status === 'penawaran_terkirim' ? 1 : 0,
-      });
-    } else {
-      const group = companyGroupsMap.get(companyKey)!;
-      if (rEmails.length > 0) {
-        group.emailList = Array.from(new Set([...group.emailList, ...rEmails]));
-        if (!group.primaryEmail) group.primaryEmail = group.emailList[0];
-      }
-      if (!group.rfqs.some((x) => x.id === r.id)) {
-        group.rfqs.push(r);
-        if (r.status === 'penawaran_terkirim') group.repliedMessagesCount += 1;
-      }
+        rfqs: [],
+        repliedMessagesCount: 0,
+      };
     }
-  });
+    const found = companyGroups.find((g) => g.companyKey === selectedCompanyKey);
+    return found || companyGroups[0];
+  }, [companyGroups, selectedCompanyKey]);
 
-  // STRICT QUOTATION-ONLY FILTER: Only include company groups that have active entries in quotationsList
-  const companyGroups = Array.from(companyGroupsMap.values()).filter(
-    (g) => g.quotations.length > 0
-  );
-
-  const [selectedGroup, setSelectedGroup] = useState<CompanyGroup>(
-    companyGroups[0] || {
-      companyKey: 'unassigned',
-      companyName: 'No Company Assigned',
-      primaryClientName: '',
-      primaryEmail: '',
-      emailList: [],
-      phone: '',
-      addressLine1: '',
-      addressLine2: '',
-      city: '',
-      state: '',
-      postalCode: '',
-      country: 'Malaysia',
-      taxId: '',
-      notes: '',
-      lastActivity: 'No Activity',
-      quotations: [],
-      rfqs: [],
-      repliedMessagesCount: 0,
-    }
-  );
+  const setSelectedGroup = (group: CompanyGroup) => {
+    setSelectedCompanyKey(group.companyKey);
+  };
 
   // UI Toggle States
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
+  const [mobileView, setMobileView] = useState<'sidebar' | 'chat'>('sidebar');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showCompanyDetailPanel, setShowCompanyDetailPanel] = useState<boolean>(false);
   const [activeRightTab, setActiveRightTab] = useState<'table' | 'profile'>('table');
   const [showHeaderMenu, setShowHeaderMenu] = useState<boolean>(false);
-  const [isLoadingChat, setIsLoadingChat] = useState<boolean>(false);
+  const isLoadingChat = false;
 
   // Attachment & Quoted Reply States
   const [showAttachmentPicker, setShowAttachmentPicker] = useState<boolean>(false);
@@ -526,6 +502,37 @@ export const EmailClient: React.FC<EmailClientProps> = ({
   // Fullscreen Table Modal & Search State
   const [showFullTableModal, setShowFullTableModal] = useState<boolean>(false);
   const [fullTableSearch, setFullTableSearch] = useState<string>('');
+
+  // Targeted Reply State (WhatsApp Style)
+  const [selectedReplyTarget, setSelectedReplyTarget] = useState<{
+    rfqId?: string;
+    quotationId?: string;
+    subject?: string;
+    recipientEmail?: string;
+    senderName?: string;
+  } | null>(null);
+
+  // PDF Generation & OCR Scanning Progress States
+  const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
+  const [scanningOcrId, setScanningOcrId] = useState<string | null>(null);
+
+  // Status Progression Helper Functions (Matching QuotationList.tsx)
+  const isReadyForSend = (q: Quotation) => {
+    const hasPrice = Number(q.grand_total) > 0 || Number(q.subtotal) > 0;
+    const hasFile = Boolean(q.quotation_file) || q.pdf_created === 1;
+    const hasRecipient = Boolean(q.client_email || selectedGroup.primaryEmail || selectedGroup.emailList[0]);
+    return hasPrice && hasFile && hasRecipient;
+  };
+
+  const isDoneStatus = (q: Quotation) => {
+    const st = (q.status || 'draft').toLowerCase();
+    return st === 'done_send' || st === 'sent' || st === 'deal' || st === 'terkirim' || st === 'penawaran_terkirim';
+  };
+
+  const isReadySendStatus = (q: Quotation) => {
+    const st = (q.status || 'draft').toLowerCase();
+    return st === 'ready_send' || st === 'acc' || st === 'approved' || st === 'disetujui' || (isReadyForSend(q) && !isDoneStatus(q));
+  };
 
   // Active quotation & RFQ selection within group
   const activeQuotation = selectedReplyQuotation || selectedGroup.quotations[0] || quotation || undefined;
@@ -614,18 +621,18 @@ export const EmailClient: React.FC<EmailClientProps> = ({
 
     // 3. Draft Professional SPH Quotation Email Message Body
     const quoNo = targetQuo.quotation_number || targetQuo.id;
-    const clientName = targetQuo.client_name || selectedGroup.primaryClientName || 'Bapak/Ibu';
+    const clientName = targetQuo.client_name || selectedGroup.primaryClientName || 'Sir/Madam';
     const grandTotalFormatted = Number(targetQuo.grand_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
 
-    const draftBody = `Yth. ${clientName},\n\n` +
-      `Bersama email ini, kami dari PT/CV AB Malaya menyampaikan Surat Penawaran Harga (SPH) dengan rincian berikut:\n\n` +
-      `• Nomor SPH: ${quoNo}\n` +
-      `• Tanggal: ${targetQuo.date_issued || new Date().toISOString().split('T')[0]}\n` +
-      `• Total Penawaran: RM ${grandTotalFormatted}\n\n` +
-      `Dokumen penawaran harga lengkap terlampir dalam email ini.\n` +
-      `Mohon konfirmasi jika ada pertanyaan atau penyesuaian spesifikasi yang dibutuhkan.\n\n` +
-      `Atas perhatian dan kerjasamanya, kami ucapkan terima kasih.\n\n` +
-      `Hormat kami,\n` +
+    const draftBody = `Dear ${clientName},\n\n` +
+      `Please find attached our official Commercial Price Quotation (SPH) with details as follows:\n\n` +
+      `• Quotation No: ${quoNo}\n` +
+      `• Date: ${targetQuo.date_issued || new Date().toISOString().split('T')[0]}\n` +
+      `• Total Amount: MYR ${grandTotalFormatted}\n\n` +
+      `The full quotation document is attached to this email.\n` +
+      `Please let us know if you have any questions or require specification adjustments.\n\n` +
+      `Thank you for your business.\n\n` +
+      `Best regards,\n` +
       `AB Malaya Sales Team`;
 
     setMessageText(draftBody);
@@ -658,6 +665,59 @@ export const EmailClient: React.FC<EmailClientProps> = ({
         textareaRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }, 200);
+  };
+
+  // Direct Action: Create PDF in background via api_pdf.php
+  const handleCreatePdfBackground = async (q: Quotation) => {
+    setGeneratingPdfId(q.id);
+    try {
+      const actorName = 'AB Malaya Sales Team';
+      const actorEmail = fromEmail || 'sales@abmalaya.com';
+      const res = await fetch(
+        getApiUrl(
+          `/api_pdf.php?action=generate&type=quotation&id=${encodeURIComponent(q.id)}&user_name=${encodeURIComponent(actorName)}&user_email=${encodeURIComponent(actorEmail)}`
+        )
+      );
+      const data = await res.json();
+      if (data.status === 'success') {
+        fetchQuotationsData();
+      } else {
+        alert(`PDF Generation failed: ${data.message || 'Unknown error'}`);
+      }
+    } catch (err: any) {
+      console.error('Create PDF error:', err);
+      alert(`Error generating PDF: ${err?.message || 'Server connection error'}`);
+    } finally {
+      setGeneratingPdfId(null);
+    }
+  };
+
+  // Direct Action: Trigger AI OCR Scan via api_ocr_scan.php
+  const handleTriggerOcrScan = async (q: Quotation) => {
+    setScanningOcrId(q.id);
+    try {
+      const res = await fetch(getApiUrl('/api_ocr_scan.php'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quo_id: q.id,
+          actor_name: 'AB Malaya Sales Team',
+          actor_email: fromEmail || 'sales@abmalaya.com',
+        }),
+      });
+      const d = await res.json();
+      if (d.status === 'success') {
+        fetchQuotationsData();
+      } else {
+        alert(`AI Scan result: ${d.message || 'Scan requested'}`);
+        fetchQuotationsData();
+      }
+    } catch (err: any) {
+      console.error('OCR scan error:', err);
+      alert(`Error running AI scan: ${err?.message || 'Server error'}`);
+    } finally {
+      setScanningOcrId(null);
+    }
   };
 
   // Action: Generate & Open Automatic Invoice from Quotation SPH
@@ -701,16 +761,10 @@ export const EmailClient: React.FC<EmailClientProps> = ({
   };
 
   useEffect(() => {
-    setIsLoadingChat(true);
-    const timer = setTimeout(() => {
-      setIsLoadingChat(false);
-    }, 250);
-
     setToEmail(selectedGroup.primaryEmail || selectedGroup.emailList[0] || '');
     if (selectedGroup.quotations.length > 0 && !selectedReplyQuotation) {
       setSelectedReplyQuotation(selectedGroup.quotations[0]);
     }
-    return () => clearTimeout(timer);
   }, [selectedGroup.companyKey]);
 
   // Reactive sync when quotation or rfq is explicitly passed from outside (e.g. QuotationList Send confirmation)
@@ -824,27 +878,24 @@ export const EmailClient: React.FC<EmailClientProps> = ({
     const cleanEmailList = clientEmailList.map((em) => em.trim()).filter(Boolean);
     const joinedEmails = cleanEmailList.join(', ');
 
+    // Check if real MySQL ID exists in dbClients
+    let targetDbId = editingClientData.id;
+    if (!targetDbId || targetDbId > 10000000) {
+      const matchComp = dbClients.find(
+        (c) => c.company_name.toLowerCase().trim() === editingClientData.company_name.toLowerCase().trim()
+      );
+      if (matchComp && matchComp.id && matchComp.id < 10000000) {
+        targetDbId = matchComp.id;
+      }
+    }
+
     const payloadToSave = {
       ...editingClientData,
+      id: targetDbId && targetDbId < 10000000 ? targetDbId : 0,
       email: joinedEmails,
     };
 
     setIsSavingClient(true);
-
-    setDbClients((prev) => {
-      const idx = prev.findIndex(
-        (c) =>
-          (payloadToSave.id && c.id === payloadToSave.id) ||
-          c.company_name.toLowerCase().trim() === payloadToSave.company_name.toLowerCase().trim()
-      );
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = { ...copy[idx], ...payloadToSave };
-        return copy;
-      }
-      return [...prev, { ...payloadToSave, id: Date.now() }];
-    });
-    setShowClientModal(false);
 
     fetch(getApiUrl('/api_clients.php'), {
       method: 'POST',
@@ -855,14 +906,164 @@ export const EmailClient: React.FC<EmailClientProps> = ({
       .then((resData) => {
         setIsSavingClient(false);
         if (resData.status === 'success') {
+          const savedId = resData.id || targetDbId;
+          const savedLogo = resData.logo_url || payloadToSave.logo_url;
+
+          setDbClients((prev) => {
+            const idx = prev.findIndex(
+              (c) =>
+                (savedId && c.id === savedId) ||
+                c.company_name.toLowerCase().trim() === payloadToSave.company_name.toLowerCase().trim()
+            );
+            const fullRecord: ClientData = { ...payloadToSave, id: savedId, logo_url: savedLogo };
+            if (idx >= 0) {
+              const copy = [...prev];
+              copy[idx] = fullRecord;
+              return copy;
+            }
+            return [...prev, fullRecord];
+          });
+
           fetchDbClients();
+          const { companyKey: updatedKey } = extractCompanyInfoFromEmail(joinedEmails, payloadToSave.company_name);
+          setSelectedCompanyKey(updatedKey);
+          setShowClientModal(false);
+          alert(`Company profile for "${payloadToSave.company_name}" saved successfully!`);
         } else {
-          console.error('Failed to save client data:', resData.message);
+          alert(`Failed to save company profile: ${resData.message || 'Unknown error'}`);
         }
       })
       .catch((err) => {
         setIsSavingClient(false);
-        console.error('Save client error:', err);
+        alert(`Save company error: ${err.message || err}`);
+      });
+  };
+
+  // 1-Click Save Company to MySQL Database from Quotation Group
+  const [isQuickSavingDb, setIsQuickSavingDb] = useState<boolean>(false);
+
+  const handleQuickSaveCompanyGroup = (group: CompanyGroup, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!group.companyName || !group.companyName.trim()) {
+      alert('Nama Perusahaan wajib ada!');
+      return;
+    }
+    setIsQuickSavingDb(true);
+
+    const cleanEmails = (group.emailList && group.emailList.length > 0)
+      ? group.emailList.join(', ')
+      : (group.primaryEmail || '');
+
+    const payload = {
+      id: 0,
+      company_name: group.companyName,
+      client_name: group.primaryClientName || '',
+      email: cleanEmails,
+      phone: group.phone || '',
+      address_line1: group.addressLine1 || '',
+      address_line2: group.addressLine2 || '',
+      city: group.city || '',
+      state: group.state || '',
+      postal_code: group.postalCode || '',
+      country: group.country || 'Malaysia',
+      tax_id: group.taxId || '',
+      notes: group.notes || '',
+    };
+
+    fetch(getApiUrl('/api_clients.php'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then((res) => res.json())
+      .then((resData) => {
+        setIsQuickSavingDb(false);
+        if (resData.status === 'success') {
+          fetchDbClients();
+          alert(`Profil perusahaan "${group.companyName}" berhasil disimpan ke daftar kontak!`);
+        } else {
+          alert(`Gagal menyimpan kontak: ${resData.message || 'Unknown error'}`);
+        }
+      })
+      .catch((err) => {
+        setIsQuickSavingDb(false);
+        alert(`Save DB error: ${err.message || err}`);
+      });
+  };
+
+  // Inline Editing for Right Panel Paper Drawer (Tab 2: Company Profile)
+  const [isEditingRightProfile, setIsEditingRightProfile] = useState<boolean>(false);
+  const [rightProfileData, setRightProfileData] = useState<ClientData>({
+    company_name: '',
+    client_name: '',
+    email: '',
+    phone: '',
+    address_line1: '',
+    address_line2: '',
+    city: '',
+    state: '',
+    postal_code: '',
+    country: 'Malaysia',
+    tax_id: '',
+    notes: '',
+  });
+  const [isSavingRightProfile, setIsSavingRightProfile] = useState<boolean>(false);
+
+  useEffect(() => {
+    setIsEditingRightProfile(false);
+  }, [selectedGroup.companyKey]);
+
+  const handleStartEditingRightProfile = () => {
+    setRightProfileData({
+      id: selectedGroup.dbClientId,
+      company_name: selectedGroup.companyName || '',
+      client_name: selectedGroup.primaryClientName || '',
+      email: selectedGroup.emailList.join(', ') || selectedGroup.primaryEmail || '',
+      phone: selectedGroup.phone || '',
+      address_line1: selectedGroup.addressLine1 || '',
+      address_line2: selectedGroup.addressLine2 || '',
+      city: selectedGroup.city || '',
+      state: selectedGroup.state || '',
+      postal_code: selectedGroup.postalCode || '',
+      country: selectedGroup.country || 'Malaysia',
+      tax_id: selectedGroup.taxId || '',
+      notes: selectedGroup.notes || '',
+    });
+    setIsEditingRightProfile(true);
+  };
+
+  const handleSaveRightProfileData = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rightProfileData.company_name.trim()) {
+      alert('Nama Perusahaan wajib diisi!');
+      return;
+    }
+    setIsSavingRightProfile(true);
+
+    const payload = {
+      ...rightProfileData,
+      id: selectedGroup.dbClientId || 0,
+    };
+
+    fetch(getApiUrl('/api_clients.php'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then((res) => res.json())
+      .then((resData) => {
+        setIsSavingRightProfile(false);
+        if (resData.status === 'success') {
+          fetchDbClients();
+          setIsEditingRightProfile(false);
+          alert(`Profil perusahaan "${payload.company_name}" berhasil diperbarui!`);
+        } else {
+          alert(`Gagal menyimpan profil: ${resData.message || 'Unknown error'}`);
+        }
+      })
+      .catch((err) => {
+        setIsSavingRightProfile(false);
+        alert(`Save profile error: ${err.message || err}`);
       });
   };
 
@@ -871,17 +1072,19 @@ export const EmailClient: React.FC<EmailClientProps> = ({
     if (!messageText.trim()) return;
     setSending(true);
 
-    const targetId = activeQuotation?.id || activeRfq?.id || 'RFQ-001';
+    const targetId = selectedReplyTarget?.quotationId || selectedReplyTarget?.rfqId || activeQuotation?.id || activeRfq?.id || 'RFQ-001';
+    const recipient = selectedReplyTarget?.recipientEmail || toEmail || selectedGroup.primaryEmail || selectedGroup.emailList[0] || '';
 
     fetch(getApiUrl('/api_rfq_status.php'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         rfq_id: targetId,
+        quotation_id: selectedReplyTarget?.quotationId || activeQuotation?.id,
         status: 'penawaran_terkirim',
         reply_body: messageText,
         reply_sender: fromEmail,
-        target_client_email: toEmail,
+        target_client_email: recipient,
         attachment_file: attachedPdfFile || activeQuotation?.quotation_file || null,
         user_name: 'AB Malaya Sales Team (Staff PIC)',
       }),
@@ -891,7 +1094,9 @@ export const EmailClient: React.FC<EmailClientProps> = ({
         setSending(false);
         if (data.status === 'success') {
           selectedGroup.repliedMessagesCount += 1;
+          const sentText = messageText;
           setMessageText('');
+          setSelectedReplyTarget(null);
 
           // Update active quotation status in database to done_send if present
           if (activeQuotation?.id) {
@@ -908,10 +1113,10 @@ export const EmailClient: React.FC<EmailClientProps> = ({
             }).catch((e) => console.error('Error updating quotation to done_send:', e));
           }
 
-          setTimeout(() => {
-            if (onSuccessSend) onSuccessSend(messageText, fromEmail);
-            if (onClose && isModalMode) onClose();
-          }, 1200);
+          fetchQuotationsData();
+          fetchDbClients();
+
+          if (onSuccessSend) onSuccessSend(sentText, fromEmail);
         } else {
           alert('Failed to send email: ' + (data.message || 'Mail server rejected the dispatch request.'));
         }
@@ -976,15 +1181,15 @@ export const EmailClient: React.FC<EmailClientProps> = ({
   };
 
   // Filter groups based on search query
-  const filteredGroups = companyGroups.filter((g) => {
-    if (!searchQuery.trim()) return true;
+  const filteredGroups = React.useMemo(() => {
+    if (!searchQuery.trim()) return companyGroups;
     const q = searchQuery.toLowerCase();
-    return (
+    return companyGroups.filter((g) =>
       g.companyName.toLowerCase().includes(q) ||
       g.primaryClientName.toLowerCase().includes(q) ||
       g.emailList.some((e) => e.toLowerCase().includes(q))
     );
-  });
+  }, [companyGroups, searchQuery]);
 
   return (
     <div
@@ -995,56 +1200,37 @@ export const EmailClient: React.FC<EmailClientProps> = ({
       }
     >
       <div
-        className={`bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden border border-slate-700 ${
+        className={`bg-white rounded-none shadow-2xl flex flex-col overflow-hidden border border-slate-700 ${
           isModalMode ? 'w-full max-w-7xl h-[92vh]' : 'w-full h-full'
         }`}
       >
-        {/* HEADER BAR */}
-        <div className="bg-slate-900 text-white px-4 py-2.5 flex items-center justify-between shrink-0 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-1.5 hover:bg-slate-800 rounded transition text-slate-300 hover:text-white cursor-pointer"
-              title="Toggle Sidebar"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-            <div className="flex items-center gap-2">
-              <Mail className="w-4 h-4 text-blue-400" />
-              <h2 className="font-extrabold text-sm tracking-wide flex items-center gap-2">
-                <span className="truncate">Email Client</span>
-              </h2>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={handleOpenAddClient}
-              className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-3 py-1.5 rounded flex items-center gap-1.5 transition cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Company</span>
-            </button>
-            {onClose && (
-              <button
-                onClick={onClose}
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        </div>
 
         {/* MAIN SPLIT VIEW */}
         <div className="flex-1 flex overflow-hidden min-h-0">
           
-          {/* SIDEBAR — COMPANY PROFILES LIST (COLLAPSIBLE) */}
+          {/* SIDEBAR — COMPANY PROFILES LIST (COLLAPSIBLE / RESPONSIVE WA STYLE) */}
           {isSidebarOpen && (
-            <div className="w-80 border-r border-slate-200 bg-slate-50 flex flex-col shrink-0 min-h-0 transition-all duration-300">
+            <div className={`w-full sm:w-80 border-r border-slate-200 bg-slate-50 flex flex-col shrink-0 min-h-0 transition-all duration-300 ${
+              mobileView === 'chat' ? 'hidden sm:flex' : 'flex'
+            }`}>
               
-              {/* Search Box */}
-              <div className="p-3 border-b border-slate-200 bg-white">
+              {/* Sidebar Header & Search Box */}
+              <div className="p-2.5 border-b border-slate-200 bg-white space-y-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                    className="p-1 hover:bg-slate-100 rounded-none text-slate-700 transition cursor-pointer border border-slate-300"
+                    title="Hide Sidebar"
+                  >
+                    <Menu className="w-4 h-4 text-slate-700" />
+                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <Mail className="w-4 h-4 text-blue-600" />
+                    <span className="font-extrabold text-xs text-slate-900 tracking-wide uppercase">Email Client</span>
+                  </div>
+                </div>
+
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
                   <input
@@ -1052,7 +1238,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                     placeholder="Search Company / Email..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-slate-100 border border-slate-300 rounded text-xs pl-8 pr-3 py-1.5 focus:outline-none focus:border-blue-500 font-sans"
+                    className="w-full bg-slate-100 border border-slate-300 rounded-none text-xs pl-8 pr-3 py-1.5 focus:outline-none focus:border-blue-500 font-sans"
                   />
                 </div>
               </div>
@@ -1062,13 +1248,13 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                 {isFetchingQuotations && effectiveQuotationsList.length === 0 ? (
                   <div className="p-6 text-center text-xs text-slate-600 flex flex-col items-center justify-center space-y-2.5">
                     <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
-                    <span className="font-extrabold text-slate-800">Memuat Data Quotation...</span>
-                    <span className="text-[10px] text-slate-400 leading-tight">Menyinkronkan data SPH dari MySQL Database</span>
+                    <span className="font-extrabold text-slate-800">Memuat Data Penawaran...</span>
+                    <span className="text-[10px] text-slate-400 leading-tight">Menyinkronkan data SPH terbaru</span>
                   </div>
                 ) : filteredGroups.length === 0 ? (
                   <div className="p-6 text-center text-xs text-slate-500 space-y-1">
-                    <p className="font-bold text-slate-700">Tidak ada perusahaan Quotation.</p>
-                    <p className="text-[10px] text-slate-400 leading-relaxed">Hanya pesan & perusahaan yang terdaftar di Quotation List yang ditampilkan.</p>
+                    <p className="font-bold text-slate-700">No Quotations or Companies Found.</p>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">Only companies registered in the Quotation List are displayed.</p>
                   </div>
                 ) : (
                   filteredGroups.map((group) => {
@@ -1076,7 +1262,10 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                     return (
                       <div
                         key={group.companyKey}
-                        onClick={() => setSelectedGroup(group)}
+                        onClick={() => {
+                          setSelectedGroup(group);
+                          setMobileView('chat');
+                        }}
                         className={`p-3 cursor-pointer transition flex items-start gap-2.5 ${
                           isSelected ? 'bg-blue-50/90 border-l-4 border-blue-600' : 'hover:bg-slate-100'
                         }`}
@@ -1097,11 +1286,11 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                             <div className="flex items-center gap-1 shrink-0">
                               {group.repliedMessagesCount > 0 || group.quotations.some(q => q.status === 'penawaran_terkirim' || q.status === 'done_send' || (q.status as string) === 'Sent' || q.status === 'sent' || q.pdf_created === 1) ? (
                                 <span className="text-[9px] font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-300 px-1 py-0.2 rounded">
-                                  Dibalas
+                                  Replied
                                 </span>
                               ) : (
                                 <span className="text-[9px] font-extrabold text-amber-800 bg-amber-100 border border-amber-300 px-1 py-0.2 rounded">
-                                  Belum
+                                  Pending
                                 </span>
                               )}
                               {group.quotations.length > 0 && (
@@ -1123,10 +1312,21 @@ export const EmailClient: React.FC<EmailClientProps> = ({
 
                           <div className="flex items-center justify-between gap-1 mt-1 text-[10px] text-slate-400 font-mono">
                             <span className="truncate">{cleanSingleEmail(group.primaryEmail) || 'No Email'}</span>
-                            {group.emailList.length > 1 && (
-                              <span className="bg-slate-200 text-slate-700 px-1 rounded text-[9px] font-bold">
-                                +{group.emailList.length - 1} email
+                            {group.dbClientId ? (
+                              <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 py-0.2 rounded flex items-center gap-0.5 shrink-0" title="Tersimpan di kontak resmi">
+                                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" /> Tersimpan
                               </span>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={isQuickSavingDb}
+                                onClick={(e) => handleQuickSaveCompanyGroup(group, e)}
+                                className="text-[9px] font-extrabold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-1 py-0.2 rounded flex items-center gap-1 transition shadow-2xs cursor-pointer shrink-0"
+                                title="Simpan perusahaan ini ke daftar kontak"
+                              >
+                                <Save className="w-2.5 h-2.5 text-amber-700" />
+                                <span>+ Simpan Kontak</span>
+                              </button>
                             )}
                           </div>
                         </div>
@@ -1139,12 +1339,34 @@ export const EmailClient: React.FC<EmailClientProps> = ({
           )}
 
           {/* MAIN CHAT & COMPOSER AREA */}
-          <div className="flex-1 flex flex-col bg-white min-w-0 min-h-0">
+          <div className={`flex-1 flex flex-col bg-white min-w-0 min-h-0 ${
+            mobileView === 'sidebar' ? 'hidden sm:flex' : 'flex'
+          }`}>
             
-            {/* WhatsApp-Style Header Bar for Selected Company */}
-            <div className="p-2.5 bg-slate-100 border-b border-slate-200 flex items-center justify-between gap-2 shrink-0">
+            {/* WhatsApp-Style Native Chat Header Bar */}
+            <div className="p-2.5 bg-slate-100 border-b border-slate-200 flex items-center justify-between gap-2 shrink-0 rounded-none">
               <div className="flex items-center gap-2.5 min-w-0">
-                {/* Dynamic Circle Avatar */}
+                {/* Mobile WhatsApp-Style Back Button */}
+                <button
+                  type="button"
+                  onClick={() => setMobileView('sidebar')}
+                  className="sm:hidden p-1.5 bg-white hover:bg-slate-200 text-slate-800 rounded-none transition cursor-pointer shrink-0 border border-slate-300"
+                  title="Back to Company List"
+                >
+                  <ArrowLeft className="w-4 h-4 text-slate-800" />
+                </button>
+
+                {/* Burger Button (Toggle Sidebar) */}
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                  className="p-1.5 bg-white hover:bg-slate-200 text-slate-700 rounded-none transition cursor-pointer shrink-0 border border-slate-300"
+                  title={isSidebarOpen ? "Hide Sidebar" : "Show Sidebar"}
+                >
+                  <Menu className="w-4 h-4 text-slate-700" />
+                </button>
+
+                {/* Dynamic Square Avatar */}
                 <button
                   type="button"
                   onClick={() => setShowCompanyDetailPanel(!showCompanyDetailPanel)}
@@ -1155,63 +1377,101 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                     email={selectedGroup.primaryEmail}
                     name={selectedGroup.companyName}
                     logoUrl={selectedGroup.logoUrl}
-                    className="w-9 h-9"
+                    className="w-9 h-9 rounded-none"
                   />
                 </button>
                 <div className="min-w-0">
                   <h3 className="font-extrabold text-sm text-slate-900 truncate flex items-center gap-2">
                     <span>{selectedGroup.companyName}</span>
                     <span className="text-[10px] font-normal text-slate-500 font-mono">
-                      (Activity: {selectedGroup.lastActivity})
+                      ({selectedGroup.lastActivity})
                     </span>
                   </h3>
-                  <p className="text-xs text-slate-500 truncate font-mono flex items-center gap-2 mt-0.5">
-                    <span className="truncate">{selectedGroup.primaryClientName} — {cleanSingleEmail(selectedGroup.primaryEmail)}</span>
-                    {activeQuotation && (
-                      <span className="text-[10px] font-bold text-blue-800 bg-blue-100 border border-blue-300 px-1.5 py-0.5 rounded font-mono shrink-0">
-                        Quotation Reg: {activeQuotation.quotation_number || `#${activeQuotation.id}`}
-                      </span>
+                  <p className="text-xs text-slate-600 truncate font-mono flex items-center gap-1.5 mt-0.5">
+                    {selectedGroup.primaryClientName && (
+                      <span className="font-bold text-slate-800">{selectedGroup.primaryClientName} — </span>
                     )}
+                    <span className="truncate text-blue-700 font-medium" title={selectedGroup.emailList.join(', ') || selectedGroup.primaryEmail}>
+                      {selectedGroup.emailList && selectedGroup.emailList.length > 0
+                        ? selectedGroup.emailList.join(', ')
+                        : cleanSingleEmail(selectedGroup.primaryEmail) || 'No Email'}
+                    </span>
                   </p>
                 </div>
               </div>
 
-              <div className="relative shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setShowHeaderMenu(!showHeaderMenu)}
-                  className="p-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-md transition cursor-pointer flex items-center justify-center"
-                  title="Options Menu"
+                  onClick={() => setShowCompanyDetailPanel(!showCompanyDetailPanel)}
+                  className={`p-1.5 border rounded-none transition cursor-pointer flex items-center justify-center ${
+                    showCompanyDetailPanel ? 'bg-blue-600 text-white border-blue-700' : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700'
+                  }`}
+                  title="Corporate Profile Details"
                 >
-                  <MoreVertical className="w-4 h-4 text-slate-600" />
+                  <Building className="w-4 h-4" />
                 </button>
 
-                {showHeaderMenu && (
-                  <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-300 rounded-md shadow-xl z-50 py-1 font-sans text-xs">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowHeaderMenu(false);
-                        setShowCompanyDetailPanel(!showCompanyDetailPanel);
-                      }}
-                      className="w-full text-left px-3 py-2 hover:bg-blue-50 text-slate-800 transition flex items-center gap-2 font-bold cursor-pointer"
-                    >
-                      <Info className="w-3.5 h-3.5 text-blue-600" />
-                      <span>{showCompanyDetailPanel ? 'Hide Details' : 'Company Details'}</span>
-                    </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowHeaderMenu(!showHeaderMenu)}
+                    className="p-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-none transition cursor-pointer flex items-center justify-center"
+                    title="Options Menu"
+                  >
+                    <MoreVertical className="w-4 h-4 text-slate-600" />
+                  </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowHeaderMenu(false);
-                        handleOpenEditClient();
-                      }}
-                      className="w-full text-left px-3 py-2 hover:bg-blue-50 text-slate-800 transition flex items-center gap-2 font-bold cursor-pointer border-t border-slate-100"
-                    >
-                      <Edit3 className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Edit Profile</span>
-                    </button>
-                  </div>
+                  {showHeaderMenu && (
+                    <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-300 rounded-none shadow-xl z-50 py-1 font-sans text-xs">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowHeaderMenu(false);
+                          setShowCompanyDetailPanel(!showCompanyDetailPanel);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-blue-50 text-slate-800 transition flex items-center gap-2 font-bold cursor-pointer"
+                      >
+                        <Info className="w-3.5 h-3.5 text-blue-600" />
+                        <span>{showCompanyDetailPanel ? 'Hide Details' : 'Company Details'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowHeaderMenu(false);
+                          handleOpenEditClient();
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-blue-50 text-slate-800 transition flex items-center gap-2 font-bold cursor-pointer border-t border-slate-100"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Edit Profile</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowHeaderMenu(false);
+                          handleOpenAddClient();
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-blue-50 text-slate-800 transition flex items-center gap-2 font-bold cursor-pointer border-t border-slate-100"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Add New Company</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {onClose && (
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="p-1.5 bg-slate-200 hover:bg-rose-600 hover:text-white text-slate-700 rounded-none transition cursor-pointer border border-slate-300"
+                    title="Close Email Client"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 )}
               </div>
             </div>
@@ -1240,22 +1500,57 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                 </div>
               ) : (
                 <>
-                  {/* Chat Thread Messages: RFQ Emails (Left Bubble) & SPH Replies (Right Bubble) */}
                   {(() => {
-                    const effectiveRfqs = selectedGroup.quotations.map((q, idx) => ({
-                      id: q.id || String(idx + 1000),
-                      company: q.company_name || selectedGroup.companyName,
-                      sender_name: q.client_name || selectedGroup.primaryClientName,
-                      sender_email: cleanSingleEmail(q.client_email) || selectedGroup.primaryEmail,
-                      phone: q.client_phone || selectedGroup.phone,
-                      subject: `Commercial Quotation Inquiry - ${q.quotation_number || `#${q.id}`}`,
-                      item_requested: 'Quotation Request',
-                      message_body: `Official Commercial Quotation Request from ${q.company_name || q.client_name || 'Client'}.`,
-                      date_received: q.date_issued || selectedGroup.lastActivity || 'Recent',
-                      status: q.status || 'waiting',
-                      quotation_number: q.quotation_number,
-                      rawQuotation: q
-                    }));
+                    const effectiveRfqs = (() => {
+                      const list: any[] = [];
+                      if (selectedGroup.rfqs && selectedGroup.rfqs.length > 0) {
+                        selectedGroup.rfqs.forEach((r) => {
+                          const linkedQuo = selectedGroup.quotations.find((q) => {
+                            const qRfqId = String(q.rfq_id || '').trim();
+                            const rId = String(r.id || '').trim();
+                            return qRfqId !== '' && (qRfqId === rId || qRfqId === `RFQ-${rId}` || qRfqId === `GMAIL-LIVE-${rId}`);
+                          }) || selectedGroup.quotations[0];
+
+                          list.push({
+                            id: String(r.id),
+                            company: r.company || selectedGroup.companyName,
+                            sender_name: r.sender_name || selectedGroup.primaryClientName,
+                            sender_email: cleanSingleEmail(r.sender_email) || selectedGroup.primaryEmail,
+                            phone: r.phone || selectedGroup.phone,
+                            subject: r.subject || `Email Inquiry from ${r.sender_name || selectedGroup.companyName}`,
+                            item_requested: r.item_requested || 'Commercial Inquiry',
+                            message_body: r.message_body || r.item_requested || `Official email inquiry from ${r.sender_name || selectedGroup.companyName}.`,
+                            date_received: r.date_received || selectedGroup.lastActivity || 'Recent',
+                            status: r.status || 'masuk',
+                            quotation_number: linkedQuo?.quotation_number,
+                            rawQuotation: linkedQuo,
+                            rawRfq: r,
+                          });
+                        });
+                      }
+
+                      selectedGroup.quotations.forEach((q, idx) => {
+                        const isAlreadyRepresented = list.some((it) => it.rawQuotation?.id === q.id);
+                        if (!isAlreadyRepresented) {
+                          list.push({
+                            id: String(q.id || idx + 1000),
+                            company: q.company_name || selectedGroup.companyName,
+                            sender_name: q.client_name || selectedGroup.primaryClientName,
+                            sender_email: cleanSingleEmail(q.client_email) || selectedGroup.primaryEmail,
+                            phone: q.client_phone || selectedGroup.phone,
+                            subject: `Commercial Quotation Inquiry - ${q.quotation_number || `#${q.id}`}`,
+                            item_requested: 'Quotation Request',
+                            message_body: `Official Commercial Quotation Request from ${q.company_name || q.client_name || 'Client'}.`,
+                            date_received: q.date_issued || selectedGroup.lastActivity || 'Recent',
+                            status: q.status || 'waiting',
+                            quotation_number: q.quotation_number,
+                            rawQuotation: q,
+                          });
+                        }
+                      });
+
+                      return list;
+                    })();
 
                     if (effectiveRfqs.length === 0 && selectedGroup.quotations.filter(q => q.status === 'penawaran_terkirim').length === 0) {
                       return (
@@ -1288,12 +1583,12 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                         {((rfqItem as any).is_replied || (rfqItem as any).replies?.length > 0 || rfqItem.status === 'penawaran_terkirim' || rfqItem.status === 'done_send' || rfqItem.status === 'deal' || (linkedQuotation && (linkedQuotation.status === 'penawaran_terkirim' || linkedQuotation.status === 'done_send' || linkedQuotation.pdf_created === 1))) ? (
                                           <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded w-fit flex items-center gap-1">
                                             <CheckCheck className="w-3 h-3 text-emerald-600" />
-                                            <span>Sudah Dibalas</span>
+                                            <span>Replied</span>
                                           </span>
                                         ) : (
                                           <span className="text-[10px] font-extrabold text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded w-fit flex items-center gap-1">
                                             <Clock className="w-3 h-3 text-amber-600" />
-                                            <span>Belum Dibalas</span>
+                                            <span>Pending Reply</span>
                                           </span>
                                         )}
                                       </div>
@@ -1319,11 +1614,23 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                       <button
                                         type="button"
                                         onClick={() => {
-                                          setToEmail(cleanSingleEmail(rfqItem.sender_email) || selectedGroup.primaryEmail);
-                                          const qLinked = linkedQuotation || selectedGroup.quotations[0] || null;
-                                          setSelectedReplyQuotation(qLinked);
+                                          const cleanEmail = cleanSingleEmail(rfqItem.sender_email) || selectedGroup.primaryEmail;
+                                          setToEmail(cleanEmail);
+                                          setSelectedReplyTarget({
+                                            rfqId: String(rfqItem.id),
+                                            quotationId: linkedQuotation?.id,
+                                            subject: rfqItem.subject || 'Quotation Request',
+                                            recipientEmail: cleanEmail,
+                                            senderName: rfqItem.sender_name || selectedGroup.primaryClientName,
+                                          });
+                                          if (linkedQuotation) {
+                                            setSelectedReplyQuotation(linkedQuotation);
+                                          }
+                                          if (textareaRef.current) {
+                                            textareaRef.current.focus();
+                                          }
                                         }}
-                                        className="text-[10px] font-extrabold text-blue-700 hover:text-blue-900 inline-flex items-center gap-1 cursor-pointer bg-blue-50 px-2 py-0.5 rounded border border-blue-200"
+                                        className="text-[10px] font-extrabold text-blue-700 hover:text-blue-900 inline-flex items-center gap-1 cursor-pointer bg-blue-50 px-2 py-0.5 rounded border border-blue-200 transition hover:bg-blue-100"
                                       >
                                         <CornerUpLeft className="w-3 h-3 text-blue-600" />
                                         <span>Reply to this message</span>
@@ -1345,8 +1652,8 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                           );
                         })}
 
-                        {/* Right Bubbles (Sent SPH Replies) with ! circle button on the LEFT */}
-                        {selectedGroup.quotations.filter(q => q.status === 'penawaran_terkirim' || q.status === 'done_send' || q.status === 'sent').map((quoItem) => (
+                        {/* Right Bubbles (Sent SPH Replies - Supports Multi-Reply History Balasan #1, Balasan #2) */}
+                        {selectedGroup.quotations.filter(q => q.status === 'penawaran_terkirim' || q.status === 'done_send' || q.status === 'sent').map((quoItem, quoIdx) => (
                           <div key={quoItem.id} className="flex flex-col items-end space-y-1 w-full">
                             <div className="flex items-center gap-2 max-w-[90%] justify-end">
                               <button
@@ -1358,11 +1665,11 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                 !
                               </button>
 
-                              <div className="bg-blue-100 text-slate-900 rounded-lg shadow-xs border border-blue-200 p-3 font-sans text-xs space-y-1.5 flex-1 min-w-0">
+                              <div className="bg-blue-100 text-slate-900 rounded-none shadow-xs border border-blue-200 p-3 font-sans text-xs space-y-1.5 flex-1 min-w-0">
                                 <div className="flex items-center justify-between gap-2 border-b border-blue-200/60 pb-1">
                                   <span className="font-extrabold text-blue-900 flex items-center gap-1">
                                     <CheckCheck className="w-3.5 h-3.5 text-blue-600" />
-                                    <span>AB Malaya Sales Team</span>
+                                    <span>AB Malaya Sales Team — <span className="text-[10px] text-blue-800 bg-blue-200/80 px-1 rounded font-mono">Reply #{quoIdx + 1}</span></span>
                                   </span>
                                   <span className="text-[10px] font-mono text-slate-500">{quoItem.date_issued}</span>
                                 </div>
@@ -1375,27 +1682,45 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                   Quotation offer of RM {(quoItem.grand_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} has been issued and sent.
                                 </p>
 
-                                <div className="pt-1 flex items-center gap-2 flex-wrap">
-                                  {quoItem.quotation_file && (
+                                <div className="pt-1 flex items-center justify-between gap-2 flex-wrap border-t border-blue-200/40">
+                                  {quoItem.quotation_file ? (
                                     <a
                                       href={getApiUrl(quoItem.quotation_file)}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1.5 bg-blue-700 text-white px-2.5 py-1 rounded text-[11px] font-bold shadow-2xs hover:bg-blue-800 transition"
+                                      className="inline-flex items-center gap-1.5 bg-blue-700 text-white px-2 py-0.5 rounded-none text-[10px] font-bold shadow-2xs hover:bg-blue-800 transition"
                                     >
-                                      <FileType className="w-3.5 h-3.5" />
-                                      <span>Download {quoItem.quotation_file.substring(quoItem.quotation_file.lastIndexOf('/') + 1)}</span>
+                                      <FileType className="w-3 h-3" />
+                                      <span>Download Quotation PDF</span>
                                     </a>
+                                  ) : (
+                                    <span></span>
                                   )}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleGenerateInvoiceFromQuotation(quoItem)}
-                                    className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded text-[11px] font-extrabold shadow-2xs transition cursor-pointer"
-                                    title="Buat & Buka Invoice Otomatis dari SPH ini"
-                                  >
-                                    <FileText className="w-3.5 h-3.5" />
-                                    <span>Otomatis Invoice</span>
-                                  </button>
+
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const cleanEmail = cleanSingleEmail(quoItem.client_email) || selectedGroup.primaryEmail;
+                                        setToEmail(cleanEmail);
+                                        setSelectedReplyTarget({
+                                          rfqId: String(quoItem.rfq_id || quoItem.id),
+                                          quotationId: quoItem.id,
+                                          subject: `Reply #${quoIdx + 2}: Quotation ${quoItem.quotation_number || quoItem.id}`,
+                                          recipientEmail: cleanEmail,
+                                          senderName: quoItem.client_name || selectedGroup.primaryClientName,
+                                        });
+                                        setSelectedReplyQuotation(quoItem);
+                                        if (textareaRef.current) {
+                                          textareaRef.current.focus();
+                                        }
+                                      }}
+                                      className="text-[10px] font-extrabold text-blue-800 hover:text-blue-950 inline-flex items-center gap-1 cursor-pointer bg-white px-2 py-0.5 rounded-none border border-blue-300 shadow-2xs transition"
+                                    >
+                                      <CornerUpLeft className="w-3 h-3 text-blue-600" />
+                                      <span>Reply (Reply #{quoIdx + 2})</span>
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -1408,58 +1733,53 @@ export const EmailClient: React.FC<EmailClientProps> = ({
               )}
             </div>
 
-            {/* QUOTED REPLY CONTEXT HEADER BAR */}
-            <div className="bg-slate-100 border-t border-slate-200 px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-xs font-sans">
-              <div className="flex items-center gap-2 truncate min-w-0">
-                <CornerUpLeft className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                <span className="font-bold text-slate-700 truncate">
-                  Replying to Email (Quotation: <span className="font-extrabold text-blue-900">{activeQuotation ? (activeQuotation.quotation_number || activeQuotation.id) : 'General / Inquiry'}</span>)
-                </span>
-                
-                {/* Clean Email Selector if multiple emails, or clean single email badge */}
-                {selectedGroup.emailList.length > 1 ? (
-                  <div className="flex items-center gap-1 shrink-0">
-                    <span className="text-slate-500 font-bold text-[10px]">To:</span>
-                    <select
-                      value={cleanSingleEmail(toEmail)}
-                      onChange={(e) => setToEmail(e.target.value)}
-                      className="bg-white border border-blue-300 text-blue-900 rounded text-[11px] px-2 py-0.5 font-mono font-bold shrink-0 cursor-pointer shadow-2xs"
-                      title="Select recipient email for this reply"
-                    >
-                      {selectedGroup.emailList.map((em) => {
-                        const cleanEm = cleanSingleEmail(em);
-                        return (
-                          <option key={cleanEm} value={cleanEm}>
-                            {cleanEm}
-                          </option>
-                        );
-                      })}
-                    </select>
+            {/* QUOTED REPLY BANNER OR NEW EMAIL RECIPIENT SELECTOR */}
+            {selectedReplyTarget ? (
+              <div className="bg-blue-50 border-l-4 border-blue-600 px-3 py-2 flex items-center justify-between text-xs font-sans border-t border-b border-blue-200 shrink-0">
+                <div className="flex items-center gap-2 truncate min-w-0">
+                  <CornerUpLeft className="w-4 h-4 text-blue-600 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="font-extrabold text-blue-900 truncate block">
+                      Replying to Email: {selectedReplyTarget.senderName || 'Client'} ({selectedReplyTarget.recipientEmail})
+                    </span>
+                    <span className="text-[11px] text-slate-600 font-mono truncate block">
+                      Subject / RFQ: {selectedReplyTarget.subject || selectedReplyTarget.rfqId || 'Quotation Request'}
+                    </span>
                   </div>
-                ) : (
-                  <span className="text-slate-600 font-mono text-[11px] truncate font-semibold">
-                    ({cleanSingleEmail(toEmail || selectedGroup.primaryEmail)})
-                  </span>
-                )}
-              </div>
-
-              {selectedGroup.quotations.length > 1 && (
-                <select
-                  value={activeQuotation?.id || ''}
-                  onChange={(e) => {
-                    const q = selectedGroup.quotations.find((x) => x.id === e.target.value) || null;
-                    setSelectedReplyQuotation(q);
-                  }}
-                  className="bg-white border border-slate-300 rounded text-[11px] px-2 py-0.5 font-mono text-slate-700 shrink-0 cursor-pointer shadow-2xs"
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedReplyTarget(null)}
+                  className="p-1 hover:bg-blue-200 text-slate-600 rounded-none cursor-pointer shrink-0 ml-2"
+                  title="Cancel Reply Mode"
                 >
-                  {selectedGroup.quotations.map((q) => (
-                    <option key={q.id} value={q.id}>
-                      Select Quotation: {q.quotation_number || q.id}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="bg-slate-100 border-t border-b border-slate-200 px-3 py-1.5 text-xs text-slate-700 font-sans flex items-center justify-between gap-2 shrink-0">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <span className="font-bold text-slate-700 text-xs shrink-0 flex items-center gap-1">
+                    <Mail className="w-3.5 h-3.5 text-blue-600" />
+                    <span>To:</span>
+                  </span>
+                  <select
+                    value={toEmail || selectedGroup.primaryEmail || ''}
+                    onChange={(e) => setToEmail(e.target.value)}
+                    className="bg-white border border-slate-300 text-slate-900 text-xs font-mono rounded px-2 py-1 focus:outline-none focus:border-blue-500 min-w-0 max-w-xs cursor-pointer shadow-2xs"
+                  >
+                    {Array.from(new Set([selectedGroup.primaryEmail, ...selectedGroup.emailList].filter(Boolean))).map((email) => (
+                      <option key={email} value={email}>
+                        {email}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <span className="text-[10px] text-slate-500 font-semibold shrink-0 hidden sm:inline">
+                  Direct Email Mode
+                </span>
+              </div>
+            )}
 
             {/* AI ASSISTANT EXPANDABLE DRAFT BOX */}
             {showAiBox && (
@@ -1534,14 +1854,19 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                     <button onClick={() => setAttachedPdfFile(null)} className="hover:text-blue-900 hover:bg-blue-200 p-0.5 rounded-full shrink-0 ml-1 transition"><X className="w-3 h-3"/></button>
                   </div>
                 )}
-                <div className="w-full bg-white border border-slate-300 focus-within:border-blue-500 rounded-2xl px-3 py-1.5 flex items-center shadow-2xs">
+                <div className="w-full bg-white border border-slate-300 focus-within:border-blue-500 rounded-none px-3 py-1.5 flex items-center shadow-2xs">
                   <textarea
                     ref={textareaRef}
                     rows={1}
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
-                    placeholder={`Type a message for ${selectedGroup.companyName}...`}
-                    className="w-full bg-transparent text-xs text-slate-900 focus:outline-none resize-none font-sans leading-relaxed"
+                    disabled={sending}
+                    placeholder={
+                      selectedReplyTarget
+                        ? `Type email reply for ${selectedReplyTarget.senderName || selectedGroup.companyName}...`
+                        : `Type a new email message for ${selectedGroup.companyName}...`
+                    }
+                    className="w-full bg-transparent text-xs text-slate-900 focus:outline-none resize-none font-sans leading-relaxed disabled:opacity-50 disabled:bg-slate-50 cursor-text"
                     style={{ minHeight: '38px', maxHeight: '140px' }}
                   />
                 </div>
@@ -1552,8 +1877,8 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                 type="button"
                 onClick={handleSendEmail}
                 disabled={sending || !messageText.trim()}
-                className="w-10 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center transition cursor-pointer disabled:opacity-40 shadow-md shrink-0 mb-0.5"
-                title="Send Email Reply"
+                className="w-10 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-none flex items-center justify-center transition cursor-pointer disabled:opacity-40 shadow-md shrink-0 mb-0.5"
+                title={selectedReplyTarget ? "Send Email Reply" : `Send Direct Email to ${toEmail || selectedGroup.primaryEmail}`}
               >
                 {sending ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <Send className="w-4 h-4 text-white ml-0.5" />}
               </button>
@@ -1562,333 +1887,647 @@ export const EmailClient: React.FC<EmailClientProps> = ({
 
           </div>
 
-          {/* RIGHT PANEL — DETAILED COMPANY PROFILE INFO & EMAIL/QUOTATION CORRELATION TABLE */}
+          {/* RIGHT PANEL — CORPORATE PROFILE SLIDE-OVER RIGHT POPUP DRAWER */}
           {showCompanyDetailPanel && (
-            <div className="w-96 md:w-[420px] border-l border-slate-200 bg-slate-50 flex flex-col shrink-0 min-h-0 overflow-y-auto font-sans p-3 space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                <h4 className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5 uppercase tracking-wide">
-                  <Building className="w-4 h-4 text-blue-600" />
-                  <span>Company Profile & Details</span>
-                </h4>
-                <button
-                  onClick={() => setShowCompanyDetailPanel(false)}
-                  className="text-slate-400 hover:text-slate-700 text-xs font-bold p-1 rounded"
-                  title="Close Detail Panel"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+            <div
+              onClick={() => setShowCompanyDetailPanel(false)}
+              className="fixed inset-0 z-50 flex justify-end bg-transparent font-sans animate-in fade-in"
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-md sm:max-w-lg bg-white h-full shadow-2xl flex flex-col border-l border-slate-300 animate-in slide-in-from-right duration-200 overflow-hidden"
+              >
+                
+                {/* Popup Header */}
+                <div className="bg-slate-900 text-white p-3.5 flex items-center justify-between border-b border-slate-800 shrink-0">
+                  <div className="flex items-center gap-2 font-extrabold text-sm">
+                    <Building className="w-4.5 h-4.5 text-blue-400" />
+                    <span>Company Profile & Details</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowCompanyDetailPanel(false)}
+                    className="text-slate-400 hover:text-white transition p-1 rounded cursor-pointer"
+                    title="Close Details"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
 
-              {/* Right Panel Tab Navigation */}
-              <div className="flex items-center border border-slate-200 bg-white rounded-lg p-1 text-xs font-semibold shadow-2xs">
-                <button
-                  type="button"
-                  onClick={() => setActiveRightTab('table')}
-                  className={`flex-1 py-1.5 px-2 rounded font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                    activeRightTab === 'table' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>Daftar Email & SPH ({correlatedPairs.length})</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveRightTab('profile')}
-                  className={`flex-1 py-1.5 px-2 rounded font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                    activeRightTab === 'profile' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  <Building className="w-3.5 h-3.5" />
-                  <span>Profil Perusahaan</span>
-                </button>
-              </div>
+                {/* Popup Content */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+                  {/* Right Panel Tab Navigation */}
+                  <div className="flex items-center border border-slate-200 bg-white rounded-lg p-1 text-xs font-semibold shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => setActiveRightTab('table')}
+                      className={`flex-1 py-1.5 px-2 rounded font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                        activeRightTab === 'table' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                      }`}
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>Email & Quotation List ({correlatedPairs.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveRightTab('profile')}
+                      className={`flex-1 py-1.5 px-2 rounded font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                        activeRightTab === 'profile' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                      }`}
+                    >
+                      <Building className="w-3.5 h-3.5" />
+                      <span>Company Profile</span>
+                    </button>
+                  </div>
 
-              {!selectedGroup.dbClientId && (
-                <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-xs shadow-xs">
-                  <div className="flex items-start gap-2 text-rose-800">
-                    <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold mb-1">Not Saved in Database</p>
-                      <p className="text-rose-700 mb-2 leading-relaxed">This company's contact record is not yet officially saved in MySQL. Save now to retain permanent history.</p>
+                  {selectedGroup.dbClientId ? (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 text-xs shadow-xs flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-emerald-900 font-bold">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>Tersimpan di Daftar Kontak Resmi (ID: #{selectedGroup.dbClientId})</span>
+                      </div>
+                      <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-300 px-1.5 py-0.5 rounded font-mono shrink-0">
+                        Kontak Resmi
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 text-xs shadow-xs space-y-2">
+                      <div className="flex items-start gap-2 text-amber-900">
+                        <Info className="w-4.5 h-4.5 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="font-extrabold text-xs">Belum Tersimpan di Buku Kontak</p>
+                          <p className="text-amber-800 text-[11px] leading-relaxed mt-0.5">
+                            Perusahaan ini ditemukan dari Penawaran Harga (SPH). Klik simpan di bawah agar tersimpan resmi di daftar kontak perusahaan.
+                          </p>
+                        </div>
+                      </div>
                       <button
                         type="button"
-                        onClick={handleOpenEditClient}
-                        className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold px-3 py-1.5 rounded shadow-sm transition cursor-pointer"
+                        disabled={isQuickSavingDb}
+                        onClick={() => handleQuickSaveCompanyGroup(selectedGroup)}
+                        className="w-full bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-3 py-1.5 rounded shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5 text-xs"
                       >
-                        Save Company Profile
+                        {isQuickSavingDb ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        <span>+ Simpan ke Daftar Kontak</span>
                       </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 1: CORRELATION TABLE (Daftar Email & Nomor SPH Quotation) */}
-              {activeRightTab === 'table' && (
-                <div className="space-y-3">
-                  <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs space-y-2 text-xs">
-                    <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1.5 flex items-center justify-between gap-1">
-                      <span className="flex items-center gap-1.5 text-slate-800">
-                        <FileText className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Tabel Korelasi Email ↔ SPH Quotation</span>
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setShowFullTableModal(true)}
-                          className="bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-700 border border-slate-200 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 transition cursor-pointer shrink-0"
-                          title="Buka Popup Modal View Fullscreen"
-                        >
-                          <Maximize2 className="w-3 h-3 text-blue-600" />
-                          <span>View Full</span>
-                        </button>
-                        <span className="bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded font-mono text-[9px] font-bold shrink-0">
-                          {selectedGroup.rfqs.length} Email | {selectedGroup.quotations.length} SPH
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="overflow-x-auto pt-1">
-                      <table className="w-full text-left border-collapse text-[11px]">
-                        <thead>
-                          <tr className="bg-slate-100 border-b border-slate-200 text-[10px] uppercase font-extrabold text-slate-600">
-                            <th className="p-2 border-r border-slate-200">Email Pesan (RFQ)</th>
-                            <th className="p-2 border-r border-slate-200">Nomor SPH Quotation</th>
-                            <th className="p-2 text-center">Aksi</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 font-sans">
-                          {correlatedPairs.length === 0 ? (
-                            <tr>
-                              <td colSpan={3} className="p-4 text-center text-slate-400 italic">
-                                Belum ada pesan email atau SPH untuk perusahaan ini.
-                              </td>
-                            </tr>
-                          ) : (
-                            correlatedPairs.map((pair, idx) => (
-                              <tr key={idx} className="hover:bg-slate-50/80 transition">
-                                {/* Column 1: Pesan Email */}
-                                <td className="p-2 border-r border-slate-100 align-top">
-                                  {pair.rfq ? (
-                                    <div className="space-y-0.5">
-                                      <div className="flex items-center gap-1.5 font-bold text-slate-900">
-                                        <Mail className="w-3 h-3 text-blue-600 shrink-0" />
-                                        <span className="font-mono text-blue-700 text-[10px] bg-blue-50 px-1 py-0.2 rounded border border-blue-200">
-                                          {pair.rfq.rfq_number || `#${pair.rfq.id}`}
-                                        </span>
-                                      </div>
-                                      <p className="font-semibold text-slate-800 text-[11px] truncate max-w-[140px]" title={pair.rfq.subject}>
-                                        {pair.rfq.subject || 'RFQ Email'}
-                                      </p>
-                                      <p className="text-[10px] font-mono text-slate-500 truncate max-w-[140px]">
-                                        {cleanSingleEmail(pair.rfq.sender_email)}
-                                      </p>
-                                      {pair.rfq.date_received && (
-                                        <span className="text-[9px] text-slate-400 block">{pair.rfq.date_received}</span>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <span className="text-slate-400 italic text-[10px] font-mono block p-1">
-                                      Direct / Manual SPH
-                                    </span>
-                                  )}
-                                </td>
-
-                                {/* Column 2: Nomor SPH Quotation */}
-                                <td className="p-2 border-r border-slate-100 align-top">
-                                  {pair.quotations.length > 0 ? (
-                                    <div className="space-y-1.5">
-                                      {pair.quotations.map((q) => (
-                                        <div key={q.id} className="bg-slate-50 border border-slate-200 p-1.5 rounded space-y-0.5 shadow-2xs">
-                                          <div className="flex items-center justify-between gap-1">
-                                            <span className="font-mono font-extrabold text-blue-900 text-[10px]">
-                                              {q.quotation_number || q.id}
-                                            </span>
-                                            <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold uppercase tracking-tight ${
-                                              q.status === 'ready_send' || q.status === 'penawaran_terkirim' || q.status === 'done_send'
-                                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                                : q.approved_by
-                                                ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                                                : 'bg-amber-100 text-amber-800 border border-amber-300'
-                                            }`}>
-                                              {q.status || 'Draft'}
-                                            </span>
-                                          </div>
-                                          <div className="flex items-center justify-between text-[10px] text-slate-600 font-mono pt-0.5 border-t border-slate-200/60">
-                                            <span>Total:</span>
-                                            <span className="font-bold text-slate-900">RM {Number(q.grand_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <span className="text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] font-bold block text-center mt-1">
-                                      Belum Ada SPH
-                                    </span>
-                                  )}
-                                </td>
-
-                                {/* Column 3: Action Buttons */}
-                                <td className="p-2 align-middle text-center">
-                                  <div className="flex flex-col items-center justify-center gap-1">
-                                    {pair.rfq && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setPreviewEmailData(pair.rfq!)}
-                                        className="p-1 bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-700 rounded transition border border-slate-200 cursor-pointer w-7 h-7 flex items-center justify-center"
-                                        title="Preview Pesan Email Mentah"
-                                      >
-                                        <Eye className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
-                                    {pair.quotations.map((q) => (
-                                      <div key={q.id} className="flex flex-col items-center gap-1">
-                                        <a
-                                          href={getApiUrl(`view_doc.php?id=${q.id}`)}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="p-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded transition border border-slate-200 cursor-pointer w-7 h-7 flex items-center justify-center"
-                                          title={`Buka PDF/Web SPH ${q.quotation_number || q.id}`}
-                                        >
-                                          <FileType className="w-3.5 h-3.5" />
-                                        </a>
-
-                                        {q.status !== 'penawaran_terkirim' && q.status !== 'done_send' && q.status !== 'sent' ? (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleSendQuotationDirect(q)}
-                                            className="px-1.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded transition border border-emerald-700 cursor-pointer flex items-center justify-center gap-1 text-[9px] font-bold shadow-2xs w-full"
-                                            title={`Kirim SPH Quotation ${q.quotation_number || q.id}`}
-                                          >
-                                            <Send className="w-2.5 h-2.5" />
-                                            <span>Kirim</span>
-                                          </button>
-                                        ) : (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleGenerateInvoiceFromQuotation(q)}
-                                            className="px-1.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded transition border border-emerald-700 cursor-pointer flex items-center justify-center gap-1 text-[9px] font-extrabold shadow-2xs w-full"
-                                            title="Buat & Buka Invoice Otomatis"
-                                          >
-                                            <FileText className="w-2.5 h-2.5" />
-                                            <span>Invoice</span>
-                                          </button>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 2: COMPANY PROFILE DETAILS */}
-              {activeRightTab === 'profile' && (
-                <div className="space-y-4">
-                  {/* Section 1: Contact Information */}
-                  <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs space-y-2.5 text-xs">
-                    <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1">
-                      Primary Identity & Contact
-                    </div>
-                    <div className="flex items-center gap-3 py-1">
-                      <CompanyAvatar
-                        email={selectedGroup.primaryEmail}
-                        name={selectedGroup.companyName}
-                        logoUrl={selectedGroup.logoUrl}
-                        className="w-12 h-12"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <span className="text-slate-400 text-[10px] uppercase font-bold block">Company</span>
-                        <p className="font-extrabold text-slate-900 text-sm truncate">{selectedGroup.companyName}</p>
-                        <p className="font-semibold text-slate-600 text-xs truncate">{selectedGroup.primaryClientName || '—'}</p>
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 font-medium text-[11px]">Phone / Mobile:</span>
-                      <p className="font-mono text-slate-800 font-bold mt-0.5">{selectedGroup.phone || '—'}</p>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 font-medium text-[11px]">Tax ID / SST Reg No.:</span>
-                      <p className="font-mono text-slate-800 font-bold mt-0.5">{selectedGroup.taxId || '—'}</p>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 font-medium text-[11px]">Quotation Reg:</span>
-                      <p className="font-mono text-blue-700 font-extrabold mt-0.5">
-                        {selectedGroup.quotations.length > 0
-                          ? selectedGroup.quotations.map(q => q.quotation_number || `#${q.id}`).join(', ')
-                          : 'No Quotations'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Section 2: Connected Domain Emails */}
-                  <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs space-y-2 text-xs">
-                    <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1 flex items-center justify-between">
-                      <span>Connected Domain Emails</span>
-                      <span className="bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-mono text-[9px] font-bold">
-                        {selectedGroup.emailList.length} Emails
-                      </span>
-                    </div>
-                    <div className="space-y-1.5 max-h-40 overflow-y-auto pt-1">
-                      {selectedGroup.emailList.map((em, i) => (
-                        <div key={i} className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 p-2 rounded text-[11px] font-mono text-slate-800 truncate shadow-2xs">
-                          <Mail className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                          <span className="truncate">{em}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Section 3: Company Address */}
-                  <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs space-y-2 text-xs">
-                    <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1 flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5 text-rose-500" />
-                      <span>Company Address</span>
-                    </div>
-                    <div className="text-slate-700 leading-relaxed font-sans pt-0.5">
-                      {selectedGroup.addressLine1 || selectedGroup.addressLine2 || selectedGroup.city ? (
-                        <>
-                          {selectedGroup.addressLine1 && <p className="font-semibold">{selectedGroup.addressLine1}</p>}
-                          {selectedGroup.addressLine2 && <p>{selectedGroup.addressLine2}</p>}
-                          <p className="text-slate-600 mt-0.5">
-                            {[selectedGroup.city, selectedGroup.state, selectedGroup.postalCode].filter(Boolean).join(', ')}
-                          </p>
-                          {selectedGroup.country && <p className="font-bold text-slate-800 mt-1">{selectedGroup.country}</p>}
-                        </>
-                      ) : (
-                        <p className="text-slate-400 italic">Address not yet entered in database.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Section 4: Notes */}
-                  {selectedGroup.notes && (
-                    <div className="bg-amber-50/90 border border-amber-200 rounded-lg p-3 text-xs space-y-1">
-                      <div className="font-bold text-amber-900 uppercase text-[10px] tracking-wider border-b border-amber-200/60 pb-1">
-                        Company Notes
-                      </div>
-                      <p className="text-amber-800 whitespace-pre-wrap leading-relaxed">{selectedGroup.notes}</p>
                     </div>
                   )}
 
-                  {/* Section 5: Edit Button */}
-                  <div className="pt-2">
-                    <button
-                      type="button"
-                      onClick={handleOpenEditClient}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs py-2 rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition cursor-pointer"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                      <span>Edit Company Data</span>
-                    </button>
-                  </div>
+                  {/* TAB 1: CORRELATION TABLE (Daftar Email & Nomor SPH Quotation) */}
+                  {activeRightTab === 'table' && (
+                    <div className="space-y-3">
+                      <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs space-y-2 text-xs">
+                        <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1.5 flex items-center justify-between gap-1">
+                          <span className="flex items-center gap-1.5 text-slate-800">
+                            <FileText className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Email ↔ Quotation Table</span>
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowCompanyDetailPanel(false);
+                                setShowFullTableModal(true);
+                              }}
+                              className="bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-700 border border-slate-200 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 transition cursor-pointer shrink-0"
+                              title="Open Fullscreen View Modal"
+                            >
+                              <Maximize2 className="w-3 h-3 text-blue-600" />
+                              <span>View Full</span>
+                            </button>
+                            <span className="bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded font-mono text-[9px] font-bold shrink-0">
+                              {selectedGroup.rfqs.length} Email | {selectedGroup.quotations.length} SPH
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="overflow-x-auto pt-1">
+                          <table className="w-full text-left border-collapse text-[11px]">
+                            <thead>
+                              <tr className="bg-slate-100 border-b border-slate-200 text-[10px] uppercase font-extrabold text-slate-600">
+                                <th className="p-2 border-r border-slate-200 w-2/5">Email Message (RFQ)</th>
+                                <th className="p-2 border-r border-slate-200 w-3/5">SPH Quotation & Action Workflow</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200 font-sans">
+                              {correlatedPairs.length === 0 ? (
+                                <tr>
+                                  <td colSpan={2} className="p-4 text-center text-slate-400 italic">
+                                    No email messages or quotations found for this company.
+                                  </td>
+                                </tr>
+                              ) : (
+                                correlatedPairs.map((pair, idx) => (
+                                  <tr key={idx} className="hover:bg-slate-50/80 transition">
+                                    {/* Column 1: Pesan Email */}
+                                    <td className="p-2 border-r border-slate-200 align-top">
+                                      {pair.rfq ? (
+                                        <div className="space-y-1">
+                                          <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                                            <Mail className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                            <span className="font-mono text-blue-700 text-[10px] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-bold">
+                                              {pair.rfq.rfq_number || `#${pair.rfq.id}`}
+                                            </span>
+                                          </div>
+                                          <p className="font-bold text-slate-900 text-[11px] truncate max-w-[130px]" title={pair.rfq.subject}>
+                                            {pair.rfq.subject || 'RFQ Email'}
+                                          </p>
+                                          <p className="text-[10px] font-mono text-slate-600 truncate max-w-[130px]">
+                                            {cleanSingleEmail(pair.rfq.sender_email)}
+                                          </p>
+                                          {pair.rfq.date_received && (
+                                            <span className="text-[9px] text-slate-400 block font-mono">{pair.rfq.date_received}</span>
+                                          )}
+                                          <button
+                                            type="button"
+                                            onClick={() => setPreviewEmailData(pair.rfq!)}
+                                            className="mt-1 px-1.5 py-0.5 bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-700 rounded transition border border-slate-200 cursor-pointer text-[9px] font-bold inline-flex items-center gap-1"
+                                            title="Preview Raw Email Message"
+                                          >
+                                            <Eye className="w-3 h-3 text-blue-600" />
+                                            <span>Preview</span>
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <span className="text-slate-400 italic text-[10px] font-mono block p-1">
+                                          Direct / Manual SPH
+                                        </span>
+                                      )}
+                                    </td>
+
+                                    {/* Column 2: Aligned SPH Quotation Details & Action Buttons */}
+                                    <td className="p-1.5 align-top">
+                                      {pair.quotations.length > 0 ? (
+                                        <div className="space-y-2">
+                                          {pair.quotations.map((q, qIdx) => {
+                                            const isDone = isDoneStatus(q);
+                                            const isReady = isReadySendStatus(q);
+                                            const pdfReady = Boolean(q.quotation_file) || q.pdf_created === 1;
+                                            const ocrDone = q.ocr_scan_status === 'done' || q.ocr_scan_status === 'skipped';
+                                            const isScanning = scanningOcrId === q.id || q.ocr_scan_status === 'processing';
+                                            const isGeneratingPdf = generatingPdfId === q.id;
+
+                                            return (
+                                              <div
+                                                key={q.id}
+                                                className={`p-1.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between gap-1.5 shadow-2xs ${
+                                                  qIdx > 0 ? 'border-t-2 border-t-slate-300 pt-2 mt-2' : ''
+                                                }`}
+                                              >
+                                                {/* SPH Info */}
+                                                <div className="flex-1 space-y-1 text-left min-w-0">
+                                                  <div className="flex items-center justify-between gap-1">
+                                                    <span className="font-mono font-black text-blue-900 text-[10px] truncate">
+                                                      {q.quotation_number || q.id}
+                                                    </span>
+                                                    {(() => {
+                                                      const badgeClass = isDone
+                                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                                        : isReady
+                                                        ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                                        : 'bg-amber-100 text-amber-800 border border-amber-300';
+                                                      const badgeLabel = isDone ? 'Done' : isReady ? 'Siap Kirim' : 'Draft';
+                                                      return (
+                                                        <span className={`px-1 py-0.2 rounded text-[8px] font-extrabold uppercase tracking-tight shrink-0 ${badgeClass}`}>
+                                                          {badgeLabel}
+                                                        </span>
+                                                      );
+                                                    })()}
+                                                  </div>
+                                                  <div className="text-[9px] text-slate-600 font-mono pt-0.5 border-t border-slate-200/80 flex items-center justify-between gap-1">
+                                                    <span>Total:</span>
+                                                    <span className="font-extrabold text-slate-900">
+                                                      RM {Number(q.grand_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                                    </span>
+                                                  </div>
+                                                </div>
+
+                                                {/* Vertical Divider */}
+                                                <div className="w-[1px] bg-slate-300 self-stretch shrink-0" />
+
+                                                {/* Action Buttons */}
+                                                <div className="w-24 shrink-0 flex flex-col items-center justify-center gap-1">
+                                                  {!ocrDone && !isDone && (
+                                                    <button
+                                                      type="button"
+                                                      disabled={isScanning}
+                                                      onClick={() => handleTriggerOcrScan(q)}
+                                                      className={`px-1 py-0.5 text-white rounded transition border cursor-pointer flex items-center justify-center gap-1 text-[8px] font-extrabold shadow-2xs w-full ${
+                                                        isScanning
+                                                          ? 'bg-purple-400 border-purple-500 cursor-not-allowed'
+                                                          : q.ocr_scan_status === 'waiting_ai_limit' || q.ocr_scan_status === 'waiting'
+                                                          ? 'bg-amber-600 hover:bg-amber-700 border-amber-700'
+                                                          : 'bg-purple-600 hover:bg-purple-700 border-purple-700'
+                                                      }`}
+                                                      title="Run AI OCR Item Scanning"
+                                                    >
+                                                      {isScanning ? (
+                                                        <>
+                                                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                                          <span>Scanning...</span>
+                                                        </>
+                                                      ) : (
+                                                        <>
+                                                          <Sparkles className="w-2.5 h-2.5 text-amber-300" />
+                                                          <span>{q.ocr_scan_status === 'waiting_ai_limit' ? 'Waiting AI' : 'Scan AI'}</span>
+                                                        </>
+                                                      )}
+                                                    </button>
+                                                  )}
+
+                                                  {!pdfReady && !isDone && (
+                                                    <button
+                                                      type="button"
+                                                      disabled={isGeneratingPdf}
+                                                      onClick={() => handleCreatePdfBackground(q)}
+                                                      className="px-1 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded transition border border-blue-700 cursor-pointer flex items-center justify-center gap-1 text-[8px] font-extrabold shadow-2xs w-full disabled:opacity-75"
+                                                      title="Generate PDF SPH Document"
+                                                    >
+                                                      {isGeneratingPdf ? (
+                                                        <>
+                                                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                                          <span>Generating...</span>
+                                                        </>
+                                                      ) : (
+                                                        <>
+                                                          <FileType className="w-2.5 h-2.5" />
+                                                          <span>Create PDF</span>
+                                                        </>
+                                                      )}
+                                                    </button>
+                                                  )}
+
+                                                  {pdfReady && (
+                                                    <a
+                                                      href={getApiUrl(`view_doc.php?id=${encodeURIComponent(q.quotation_number || q.id)}`)}
+                                                      target="_blank"
+                                                      rel="noreferrer"
+                                                      className="px-1 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded text-[8px] font-extrabold flex items-center justify-center gap-1 border border-blue-200 transition shadow-2xs w-full cursor-pointer"
+                                                      title={`View Quotation Doc ${q.quotation_number || q.id}`}
+                                                    >
+                                                      <Eye className="w-2.5 h-2.5 text-blue-600" />
+                                                      <span>View Doc</span>
+                                                    </a>
+                                                  )}
+
+                                                  {!isDone && (isReady || pdfReady) && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleSendQuotationDirect(q)}
+                                                      className="px-1 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded transition border border-emerald-700 cursor-pointer flex items-center justify-center gap-1 text-[8px] font-extrabold shadow-2xs w-full"
+                                                      title={`Send SPH ${q.quotation_number || q.id}`}
+                                                    >
+                                                      <Send className="w-2.5 h-2.5" />
+                                                      <span>Siap Kirim</span>
+                                                    </button>
+                                                  )}
+
+                                                  {isDone && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleGenerateInvoiceFromQuotation(q)}
+                                                      className="px-1 py-0.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded transition border border-emerald-800 cursor-pointer flex items-center justify-center gap-1 text-[8px] font-extrabold shadow-2xs w-full"
+                                                      title="Generate & View Automatic Invoice"
+                                                    >
+                                                      <FileText className="w-2.5 h-2.5" />
+                                                      <span>Auto Invoice</span>
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : (
+                                        <span className="text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] font-bold block text-center mt-1">
+                                          No Quotation
+                                        </span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 2: COMPANY PROFILE DETAILS */}
+                  {activeRightTab === 'profile' && (
+                    <div className="space-y-4">
+                      {isEditingRightProfile ? (
+                        /* INLINE EDIT FORM FOR RIGHT PANEL DRAWER */
+                        <form onSubmit={handleSaveRightProfileData} className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-xs space-y-3 text-xs">
+                          <div className="font-bold text-slate-800 uppercase text-[10px] tracking-wider border-b border-slate-200 pb-1.5 flex items-center justify-between">
+                            <span className="flex items-center gap-1.5 text-blue-700 font-extrabold">
+                              <Edit3 className="w-3.5 h-3.5" /> Edit Profil Perusahaan
+                            </span>
+                            <span className="text-slate-400 text-[10px] lowercase font-normal">Direct Inline Edit</span>
+                          </div>
+
+                          <div className="space-y-2.5">
+                            <div>
+                              <label className="block text-[11px] font-extrabold text-slate-700 mb-1">
+                                Nama Perusahaan <span className="text-rose-600">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                value={rightProfileData.company_name}
+                                onChange={(e) => setRightProfileData({ ...rightProfileData, company_name: e.target.value })}
+                                className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
+                                placeholder="Contoh: PT MIJ DIGITAL INDONESIA"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1">Nama Kontak / PIC</label>
+                                <input
+                                  type="text"
+                                  value={rightProfileData.client_name || ''}
+                                  onChange={(e) => setRightProfileData({ ...rightProfileData, client_name: e.target.value })}
+                                  className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
+                                  placeholder="Nama PIC"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1">Telepon / WhatsApp</label>
+                                <input
+                                  type="text"
+                                  value={rightProfileData.phone || ''}
+                                  onChange={(e) => setRightProfileData({ ...rightProfileData, phone: e.target.value })}
+                                  className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
+                                  placeholder="+60123456789"
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-700 mb-1">Daftar Email (Dipisah koma)</label>
+                              <input
+                                type="text"
+                                value={rightProfileData.email || ''}
+                                onChange={(e) => setRightProfileData({ ...rightProfileData, email: e.target.value })}
+                                className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs font-mono text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
+                                placeholder="sales@company.com, info@company.com"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-700 mb-1">No. Cukai / Tax ID / SST No.</label>
+                              <input
+                                type="text"
+                                value={rightProfileData.tax_id || ''}
+                                onChange={(e) => setRightProfileData({ ...rightProfileData, tax_id: e.target.value })}
+                                className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs font-mono text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
+                                placeholder="C1234567890"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-700 mb-1">Alamat Baris 1</label>
+                              <input
+                                type="text"
+                                value={rightProfileData.address_line1 || ''}
+                                onChange={(e) => setRightProfileData({ ...rightProfileData, address_line1: e.target.value })}
+                                className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
+                                placeholder="Alamat Gedung / Jalan"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-700 mb-1">Alamat Baris 2</label>
+                              <input
+                                type="text"
+                                value={rightProfileData.address_line2 || ''}
+                                onChange={(e) => setRightProfileData({ ...rightProfileData, address_line2: e.target.value })}
+                                className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
+                                placeholder="Kecamatan / Unit / Suite"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1">Kota / Bandar</label>
+                                <input
+                                  type="text"
+                                  value={rightProfileData.city || ''}
+                                  onChange={(e) => setRightProfileData({ ...rightProfileData, city: e.target.value })}
+                                  className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
+                                  placeholder="Kuala Lumpur"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1">Negeri / State</label>
+                                <input
+                                  type="text"
+                                  value={rightProfileData.state || ''}
+                                  onChange={(e) => setRightProfileData({ ...rightProfileData, state: e.target.value })}
+                                  className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
+                                  placeholder="Selangor"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1">Kode Pos</label>
+                                <input
+                                  type="text"
+                                  value={rightProfileData.postal_code || ''}
+                                  onChange={(e) => setRightProfileData({ ...rightProfileData, postal_code: e.target.value })}
+                                  className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs font-mono text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
+                                  placeholder="50450"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1">Negara / Country</label>
+                                <input
+                                  type="text"
+                                  value={rightProfileData.country || 'Malaysia'}
+                                  onChange={(e) => setRightProfileData({ ...rightProfileData, country: e.target.value })}
+                                  className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
+                                  placeholder="Malaysia"
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-700 mb-1">Catatan Perusahaan (Notes)</label>
+                              <textarea
+                                rows={2}
+                                value={rightProfileData.notes || ''}
+                                onChange={(e) => setRightProfileData({ ...rightProfileData, notes: e.target.value })}
+                                className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none resize-none"
+                                placeholder="Catatan khusus klien..."
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+                            <button
+                              type="button"
+                              onClick={() => setIsEditingRightProfile(false)}
+                              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded text-xs transition cursor-pointer"
+                            >
+                              Batal
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={isSavingRightProfile}
+                              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded text-xs transition shadow-sm cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                            >
+                              {isSavingRightProfile ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                              <span>Simpan Perubahan</span>
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        /* READ-ONLY VIEW MODE WITH QUICK ACTION BUTTONS */
+                        <>
+                          {/* Section 1: Contact Information */}
+                          <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs space-y-2.5 text-xs">
+                            <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1">
+                              Primary Identity & Contact
+                            </div>
+                            <div className="flex items-center gap-3 py-1">
+                              <CompanyAvatar
+                                email={selectedGroup.primaryEmail}
+                                name={selectedGroup.companyName}
+                                logoUrl={selectedGroup.logoUrl}
+                                className="w-12 h-12"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <span className="text-slate-400 text-[10px] uppercase font-bold block">Company</span>
+                                <p className="font-extrabold text-slate-900 text-sm truncate">{selectedGroup.companyName}</p>
+                                <p className="font-semibold text-slate-600 text-xs truncate">{selectedGroup.primaryClientName || '—'}</p>
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 font-medium text-[11px]">Phone / Mobile:</span>
+                              <p className="font-mono text-slate-800 font-bold mt-0.5">{selectedGroup.phone || '—'}</p>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 font-medium text-[11px]">Tax ID / SST Reg No.:</span>
+                              <p className="font-mono text-slate-800 font-bold mt-0.5">{selectedGroup.taxId || '—'}</p>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 font-medium text-[11px]">Quotation Reg:</span>
+                              <div className="flex flex-wrap gap-1.5 mt-1">
+                                {selectedGroup.quotations.length > 0 ? (
+                                  selectedGroup.quotations.map((q) => (
+                                    <a
+                                      key={q.id}
+                                      href={getApiUrl(`view_doc.php?id=${encodeURIComponent(q.quotation_number || q.id)}`)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[10px] font-mono font-bold transition shadow-2xs cursor-pointer"
+                                      title={`Buka Dokumen SPH ${q.quotation_number || q.id}`}
+                                    >
+                                      <FileType className="w-3 h-3 text-blue-600" />
+                                      <span>View Doc ({q.quotation_number || `#${q.id}`})</span>
+                                    </a>
+                                  ))
+                                ) : (
+                                  <span className="text-slate-400 italic font-mono text-[11px]">No Quotations Registered</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Section 2: Connected Domain Emails */}
+                          <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs space-y-2 text-xs">
+                            <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1 flex items-center justify-between">
+                              <span>Connected Domain Emails</span>
+                              <span className="bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-mono text-[9px] font-bold">
+                                {selectedGroup.emailList.length} Emails
+                              </span>
+                            </div>
+                            <div className="space-y-1.5 max-h-40 overflow-y-auto pt-1">
+                              {selectedGroup.emailList.map((em, i) => (
+                                <div key={i} className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 p-2 rounded text-[11px] font-mono text-slate-800 truncate shadow-2xs">
+                                  <Mail className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                  <span className="truncate">{em}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Section 3: Company Address */}
+                          <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs space-y-2 text-xs">
+                            <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1 flex items-center gap-1">
+                              <MapPin className="w-3.5 h-3.5 text-rose-500" />
+                              <span>Company Address</span>
+                            </div>
+                            <div className="text-slate-700 leading-relaxed font-sans pt-0.5">
+                              {selectedGroup.addressLine1 || selectedGroup.addressLine2 || selectedGroup.city ? (
+                                <>
+                                  {selectedGroup.addressLine1 && <p className="font-semibold">{selectedGroup.addressLine1}</p>}
+                                  {selectedGroup.addressLine2 && <p>{selectedGroup.addressLine2}</p>}
+                                  <p className="text-slate-600 mt-0.5">
+                                    {[selectedGroup.city, selectedGroup.state, selectedGroup.postalCode].filter(Boolean).join(', ')}
+                                  </p>
+                                  {selectedGroup.country && <p className="font-bold text-slate-800 mt-1">{selectedGroup.country}</p>}
+                                </>
+                              ) : (
+                                <p className="text-slate-400 italic">Alamat belum diisi.</p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Section 4: Notes */}
+                          {selectedGroup.notes && (
+                            <div className="bg-amber-50/90 border border-amber-200 rounded-lg p-3 text-xs space-y-1">
+                              <div className="font-bold text-amber-900 uppercase text-[10px] tracking-wider border-b border-amber-200/60 pb-1">
+                                Company Notes
+                              </div>
+                              <p className="text-amber-800 whitespace-pre-wrap leading-relaxed">{selectedGroup.notes}</p>
+                            </div>
+                          )}
+
+                          {/* Section 5: Action Buttons (Inline Edit + Save to Contacts) */}
+                          <div className="pt-2 flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleStartEditingRightProfile}
+                              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs py-2 rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition cursor-pointer"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span>Edit Profil</span>
+                            </button>
+                            {!selectedGroup.dbClientId && (
+                              <button
+                                type="button"
+                                disabled={isQuickSavingDb}
+                                onClick={() => handleQuickSaveCompanyGroup(selectedGroup)}
+                                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs py-2 rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition cursor-pointer"
+                              >
+                                {isQuickSavingDb ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                                <span>+ Simpan Kontak</span>
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
-              )}
+
+                {/* Popup Footer */}
+                <div className="bg-white border-t border-slate-200 p-3 flex items-center justify-end shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowCompanyDetailPanel(false)}
+                    className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-xs rounded-lg shadow-2xs cursor-pointer"
+                  >
+                    Close Details
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -2268,16 +2907,16 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-800 text-slate-200 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-700">
-                      <th className="p-3 border-r border-slate-700 w-1/3">Detail Email Pesan (RFQ)</th>
-                      <th className="p-3 border-r border-slate-700 w-1/3">Surat Penawaran Harga (SPH Quotation)</th>
-                      <th className="p-3 text-center w-1/3">Aksi & Status Kirim</th>
+                      <th className="p-3 border-r border-slate-700 w-1/3">Email Message Details (RFQ)</th>
+                      <th className="p-3 border-r border-slate-700 w-1/3">Commercial Quotation (SPH)</th>
+                      <th className="p-3 text-center w-1/3">Actions & Delivery Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {correlatedPairs.length === 0 ? (
                       <tr>
                         <td colSpan={3} className="p-8 text-center text-slate-400 italic">
-                          Belum ada data email atau SPH untuk perusahaan ini.
+                          No email or quotation records for this company.
                         </td>
                       </tr>
                     ) : (
@@ -2321,7 +2960,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                               ) : (
                                 <div className="p-3 bg-slate-50 border border-dashed border-slate-300 rounded text-center">
                                   <span className="text-slate-500 font-semibold text-xs block">Direct / Manual SPH Quotation</span>
-                                  <span className="text-[10px] text-slate-400 italic">Dibuat langsung dari Sistem Quotation List</span>
+                                  <span className="text-[10px] text-slate-400 italic">Created directly from Quotation System</span>
                                 </div>
                               )}
                             </td>
@@ -2336,15 +2975,21 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                         <span className="font-mono font-black text-blue-900 text-xs">
                                           {q.quotation_number || q.id}
                                         </span>
-                                        <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide ${
-                                          q.status === 'ready_send' || q.status === 'penawaran_terkirim' || q.status === 'done_send'
+                                        {(() => {
+                                          const isDone = isDoneStatus(q);
+                                          const isReady = isReadySendStatus(q);
+                                          const badgeClass = isDone
                                             ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                            : q.approved_by
+                                            : isReady
                                             ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                                            : 'bg-amber-100 text-amber-800 border border-amber-300'
-                                        }`}>
-                                          {q.status || 'Draft'}
-                                        </span>
+                                            : 'bg-amber-100 text-amber-800 border border-amber-300';
+                                          const badgeLabel = isDone ? 'Done' : isReady ? 'Siap Kirim' : 'Draft';
+                                          return (
+                                            <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide ${badgeClass}`}>
+                                              {badgeLabel}
+                                            </span>
+                                          );
+                                        })()}
                                       </div>
                                       <div className="flex items-center justify-between text-xs text-slate-600 font-mono pt-1 border-t border-slate-100">
                                         <span>Grand Total:</span>
@@ -2357,7 +3002,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                 </div>
                               ) : (
                                 <div className="p-3 bg-amber-50 border border-amber-200 rounded text-amber-800 text-center font-bold text-xs">
-                                  Belum Memiliki SPH Quotation
+                                  No Quotation Issued
                                 </div>
                               )}
                             </td>
@@ -2374,44 +3019,112 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                     className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition border border-slate-300 text-xs font-semibold flex items-center gap-1.5 w-full justify-center cursor-pointer"
                                   >
                                     <Eye className="w-3.5 h-3.5 text-slate-600" />
-                                    <span>Preview Pesan Email</span>
+                                    <span>Preview Email</span>
                                   </button>
                                 )}
 
-                                {pair.quotations.map((q) => (
-                                  <div key={q.id} className="w-full space-y-1">
-                                    <a
-                                      href={getApiUrl(`view_doc.php?id=${q.id}`)}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition border border-blue-200 text-xs font-semibold flex items-center gap-1.5 w-full justify-center cursor-pointer"
-                                    >
-                                      <FileType className="w-3.5 h-3.5 text-blue-600" />
-                                      <span>Buka Dokumen SPH ({q.quotation_number || q.id})</span>
-                                    </a>
+                                {pair.quotations.map((q) => {
+                                  const isDone = isDoneStatus(q);
+                                  const isReady = isReadySendStatus(q);
+                                  const pdfReady = Boolean(q.quotation_file) || q.pdf_created === 1;
+                                  const ocrDone = q.ocr_scan_status === 'done' || q.ocr_scan_status === 'skipped';
+                                  const isScanning = scanningOcrId === q.id || q.ocr_scan_status === 'processing';
+                                  const isGeneratingPdf = generatingPdfId === q.id;
 
-                                    {q.status !== 'penawaran_terkirim' && q.status !== 'done_send' && q.status !== 'sent' ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSendQuotationDirect(q)}
-                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition border border-emerald-700 text-xs font-extrabold flex items-center gap-1.5 w-full justify-center shadow-xs cursor-pointer"
-                                      >
-                                        <Send className="w-3.5 h-3.5" />
-                                        <span>Kirim SPH Quotation</span>
-                                      </button>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleGenerateInvoiceFromQuotation(q)}
-                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition border border-emerald-700 text-xs font-extrabold flex items-center gap-1.5 w-full justify-center shadow-xs cursor-pointer"
-                                        title={`Buat & Buka Invoice Otomatis dari ${q.quotation_number || q.id}`}
-                                      >
-                                        <FileText className="w-3.5 h-3.5" />
-                                        <span>Otomatis Invoice</span>
-                                      </button>
-                                    )}
-                                  </div>
-                                ))}
+                                  return (
+                                    <div key={q.id} className="w-full space-y-1 pt-1 border-t border-slate-100 first:border-t-0">
+                                      {/* 1. OCR Scan AI (If not scanned yet and not done) */}
+                                      {!ocrDone && !isDone && (
+                                        <button
+                                          type="button"
+                                          disabled={isScanning}
+                                          onClick={() => handleTriggerOcrScan(q)}
+                                          className={`px-3 py-1.5 text-white rounded-lg transition border text-xs font-extrabold flex items-center gap-1.5 w-full justify-center shadow-xs cursor-pointer ${
+                                            isScanning
+                                              ? 'bg-purple-400 border-purple-500 cursor-not-allowed'
+                                              : q.ocr_scan_status === 'waiting_ai_limit' || q.ocr_scan_status === 'waiting'
+                                              ? 'bg-amber-600 hover:bg-amber-700 border-amber-700'
+                                              : 'bg-purple-600 hover:bg-purple-700 border-purple-700'
+                                          }`}
+                                          title="Run AI OCR Item Scanning"
+                                        >
+                                          {isScanning ? (
+                                            <>
+                                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                              <span>Scanning AI...</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                                              <span>{q.ocr_scan_status === 'waiting_ai_limit' ? 'Waiting AI (Limit)' : 'Scan AI'}</span>
+                                            </>
+                                          )}
+                                        </button>
+                                      )}
+
+                                      {/* 2. Create PDF / Build SPH (If PDF not created yet and not done) */}
+                                      {!pdfReady && !isDone && (
+                                        <button
+                                          type="button"
+                                          disabled={isGeneratingPdf}
+                                          onClick={() => handleCreatePdfBackground(q)}
+                                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition border border-blue-700 text-xs font-extrabold flex items-center gap-1.5 w-full justify-center shadow-xs cursor-pointer disabled:opacity-75"
+                                          title="Generate PDF SPH Document"
+                                        >
+                                          {isGeneratingPdf ? (
+                                            <>
+                                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                              <span>Generating PDF...</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <FileType className="w-3.5 h-3.5" />
+                                              <span>Create PDF</span>
+                                            </>
+                                          )}
+                                        </button>
+                                      )}
+
+                                      {/* 3. View Doc Link (If PDF created) */}
+                                      {pdfReady && (
+                                        <a
+                                          href={getApiUrl(`view_doc.php?id=${encodeURIComponent(q.quotation_number || q.id)}`)}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 rounded-lg transition border border-blue-200 text-xs font-extrabold flex items-center gap-1.5 w-full justify-center shadow-xs cursor-pointer"
+                                        >
+                                          <Eye className="w-3.5 h-3.5 text-blue-600" />
+                                          <span>View Doc ({q.quotation_number || q.id})</span>
+                                        </a>
+                                      )}
+
+                                      {/* 4. Send SPH / Siap Kirim (If Ready for send and not done) */}
+                                      {!isDone && (isReady || pdfReady) && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSendQuotationDirect(q)}
+                                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition border border-emerald-700 text-xs font-extrabold flex items-center gap-1.5 w-full justify-center shadow-xs cursor-pointer"
+                                        >
+                                          <Send className="w-3.5 h-3.5" />
+                                          <span>Siap Kirim SPH</span>
+                                        </button>
+                                      )}
+
+                                      {/* 5. Auto Invoice (If Done / Terkirim) */}
+                                      {isDone && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleGenerateInvoiceFromQuotation(q)}
+                                          className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg transition border border-emerald-800 text-xs font-extrabold flex items-center gap-1.5 w-full justify-center shadow-xs cursor-pointer"
+                                          title={`Generate Automatic Invoice from ${q.quotation_number || q.id}`}
+                                        >
+                                          <FileText className="w-3.5 h-3.5" />
+                                          <span>Auto Invoice</span>
+                                        </button>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </td>
                           </tr>
@@ -2429,7 +3142,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                 onClick={() => setShowFullTableModal(false)}
                 className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-xs rounded-lg shadow-xs cursor-pointer"
               >
-                Tutup Popup View Full
+                Close Fullscreen View
               </button>
             </div>
           </div>
@@ -2444,7 +3157,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
             <div className="bg-slate-900 text-white p-3.5 flex items-center justify-between shrink-0 border-b border-slate-800">
               <div className="flex items-center gap-2 font-extrabold text-sm">
                 <Info className="w-4 h-4 text-blue-400" />
-                <span>Detail Informasi Email & Status Sistem</span>
+                <span>Email Details & System Status</span>
               </div>
               <button
                 type="button"
@@ -2462,18 +3175,18 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                 <div className="font-extrabold text-slate-900 text-xs border-b border-slate-200 pb-1 flex items-center justify-between">
                   <span className="flex items-center gap-1.5 text-blue-900">
                     <Mail className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Status di Inbox (Pesan Email RFQ)</span>
+                    <span>Inbox Status (RFQ Email Message)</span>
                   </span>
                   <span className="bg-blue-100 text-blue-800 border border-blue-300 font-mono text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase">
                     {infoModalData.rfq?.status || 'Active Thread'}
                   </span>
                 </div>
                 <div className="space-y-1 text-slate-700">
-                  <div><strong className="text-slate-900">No. RFQ:</strong> {infoModalData.rfq?.rfq_number || (infoModalData.rfq?.id ? `#${infoModalData.rfq.id}` : 'General Inquiry')}</div>
+                  <div><strong className="text-slate-900">RFQ No:</strong> {infoModalData.rfq?.rfq_number || (infoModalData.rfq?.id ? `#${infoModalData.rfq.id}` : 'General Inquiry')}</div>
                   <div><strong className="text-slate-900">Subject:</strong> {infoModalData.rfq?.subject || 'Direct Quotation Reply'}</div>
-                  <div><strong className="text-slate-900">Pengirim:</strong> {infoModalData.rfq?.sender_name || selectedGroup.primaryClientName} &lt;{cleanSingleEmail(infoModalData.rfq?.sender_email || selectedGroup.primaryEmail)}&gt;</div>
-                  <div><strong className="text-slate-900">Tanggal Diterima/Masuk:</strong> {infoModalData.rfq?.date_received || selectedGroup.lastActivity}</div>
-                  <div><strong className="text-slate-900">Sumber Email:</strong> {infoModalData.rfq ? 'Gmail Live API / Spreadsheet Sync' : 'Direct Manual System'}</div>
+                  <div><strong className="text-slate-900">Sender:</strong> {infoModalData.rfq?.sender_name || selectedGroup.primaryClientName} &lt;{cleanSingleEmail(infoModalData.rfq?.sender_email || selectedGroup.primaryEmail)}&gt;</div>
+                  <div><strong className="text-slate-900">Received Date:</strong> {infoModalData.rfq?.date_received || selectedGroup.lastActivity}</div>
+                  <div><strong className="text-slate-900">Email Source:</strong> {infoModalData.rfq ? 'Gmail Live API / Spreadsheet Sync' : 'Direct Manual System'}</div>
                 </div>
               </div>
 
@@ -2482,7 +3195,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                 <div className="font-extrabold text-slate-900 text-xs border-b border-slate-200 pb-1 flex items-center justify-between">
                   <span className="flex items-center gap-1.5 text-emerald-900">
                     <FileText className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Status di Database Quotation List</span>
+                    <span>Quotation Database Status</span>
                   </span>
                   <span className={`font-mono text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase border ${
                     infoModalData.quotation?.status === 'penawaran_terkirim' || infoModalData.quotation?.status === 'done_send'
@@ -2497,16 +3210,16 @@ export const EmailClient: React.FC<EmailClientProps> = ({
 
                 {infoModalData.quotation ? (
                   <div className="space-y-1 text-slate-700">
-                    <div><strong className="text-slate-900">Nomor SPH:</strong> {infoModalData.quotation.quotation_number || infoModalData.quotation.id}</div>
-                    <div><strong className="text-slate-900">Perusahaan:</strong> {infoModalData.quotation.company_name || selectedGroup.companyName}</div>
-                    <div><strong className="text-slate-900">Total Penawaran:</strong> RM {Number(infoModalData.quotation.grand_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
-                    <div><strong className="text-slate-900">Tanggal Dibuat:</strong> {infoModalData.quotation.date_issued}</div>
+                    <div><strong className="text-slate-900">Quotation No:</strong> {infoModalData.quotation.quotation_number || infoModalData.quotation.id}</div>
+                    <div><strong className="text-slate-900">Company:</strong> {infoModalData.quotation.company_name || selectedGroup.companyName}</div>
+                    <div><strong className="text-slate-900">Total Offer:</strong> MYR {Number(infoModalData.quotation.grand_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+                    <div><strong className="text-slate-900">Date Issued:</strong> {infoModalData.quotation.date_issued}</div>
                     {infoModalData.quotation.approved_by && (
-                      <div><strong className="text-slate-900">Disetujui Oleh:</strong> {infoModalData.quotation.approved_by}</div>
+                      <div><strong className="text-slate-900">Approved By:</strong> {infoModalData.quotation.approved_by}</div>
                     )}
                   </div>
                 ) : (
-                  <p className="text-slate-400 italic text-[11px]">Belum terhubung ke dokumen SPH spesifik.</p>
+                  <p className="text-slate-400 italic text-[11px]">Not linked to a specific quotation document.</p>
                 )}
               </div>
 
@@ -2514,7 +3227,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
               {infoModalData.rfq && (
                 <div className="bg-white border border-slate-200 rounded-lg p-3 space-y-1.5">
                   <span className="font-extrabold text-slate-900 text-[11px] uppercase tracking-wider block border-b border-slate-100 pb-1">
-                    Ringkasan Teks Pesan Email
+                    Email Message Content Summary
                   </span>
                   <div className="bg-slate-50 border border-slate-200 rounded p-2 text-slate-800 leading-relaxed font-sans max-h-36 overflow-y-auto whitespace-pre-wrap text-[11px]">
                     {cleanEmailBodyText(infoModalData.rfq.message_body || infoModalData.rfq.item_requested)}
@@ -2528,13 +3241,13 @@ export const EmailClient: React.FC<EmailClientProps> = ({
               <div className="flex items-center gap-2">
                 {infoModalData.quotation && (
                   <a
-                    href={getApiUrl(`view_doc.php?id=${infoModalData.quotation.id}`)}
+                    href={getApiUrl(`view_doc.php?id=${encodeURIComponent(infoModalData.quotation.quotation_number || infoModalData.quotation.id)}`)}
                     target="_blank"
                     rel="noreferrer"
-                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded border border-blue-200 text-xs flex items-center gap-1"
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded border border-blue-700 text-xs flex items-center gap-1 cursor-pointer shadow-xs"
                   >
-                    <FileType className="w-3.5 h-3.5" />
-                    <span>Buka Web SPH</span>
+                    <Eye className="w-3.5 h-3.5 text-white" />
+                    <span>View Quotation Doc ({infoModalData.quotation.quotation_number || infoModalData.quotation.id})</span>
                   </a>
                 )}
                 {infoModalData.quotation && (
@@ -2548,7 +3261,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                     className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded text-xs flex items-center gap-1 shadow-2xs cursor-pointer"
                   >
                     <FileText className="w-3.5 h-3.5" />
-                    <span>Otomatis Invoice</span>
+                    <span>Auto Invoice</span>
                   </button>
                 )}
               </div>
@@ -2558,7 +3271,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                 onClick={() => setInfoModalData(null)}
                 className="px-4 py-1.5 bg-slate-800 text-white font-bold rounded text-xs hover:bg-slate-700 cursor-pointer"
               >
-                Tutup
+                Close
               </button>
             </div>
           </div>

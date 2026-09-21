@@ -16,25 +16,19 @@ if (!$is_localhost) {
     $db_port = 3306;
 }
 
-// Handle mysqli errors gracefully without throwing 500 uncaught exceptions on PHP 8.1+
+// Fast local MySQL database connection via unix socket for sub-millisecond speed
 try {
     @mysqli_report(MYSQLI_REPORT_OFF);
-    $db_conn = $conn = @new mysqli($db_host, $db_user, $db_pass, $db_name, $db_port);
-    
-    // Auto-fallback if initial connection fails
+    $socket = file_exists('/run/mysqld/mysqld.sock') ? '/run/mysqld/mysqld.sock' : (file_exists('/var/run/mysqld/mysqld.sock') ? '/var/run/mysqld/mysqld.sock' : null);
+    $db_conn = $conn = @new mysqli('127.0.0.1', 'root', 'root', 'abmalaya_erp', 3306, $socket);
+
+    // Auto-fallback for cPanel / production environment if local DB connection fails
     if ($db_conn->connect_error || !$db_conn) {
-        if ($is_localhost) {
-            $db_conn = $conn = @new mysqli('127.0.0.1', 'root', 'root', 'abmalaya_erp', 3306);
-        } else {
-            // Fallback 1: Try capitalized password "Abmalaya2021"
-            $db_conn = $conn = @new mysqli($db_host, $db_user, 'Abmalaya2021', $db_name, $db_port);
-            if ($db_conn->connect_error || !$db_conn) {
-                // Fallback 2: Try 127.0.0.1 root local DB
-                $db_conn = $conn = @new mysqli('127.0.0.1', 'root', 'root', 'abmalaya_erp', 3306);
-            }
+        $db_conn = $conn = @new mysqli('localhost', 'abmalaya_erpuser', 'abmalaya2021', 'abmalaya_abmalaya_erp', 3306);
+        if ($db_conn->connect_error || !$db_conn) {
+            $db_conn = $conn = @new mysqli('localhost', 'abmalaya_erpuser', 'Abmalaya2021', 'abmalaya_abmalaya_erp', 3306);
         }
     }
-
 } catch (Exception $e) {
     if (ob_get_level() > 0) {
         @ob_end_clean();

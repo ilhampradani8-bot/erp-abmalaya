@@ -7,6 +7,9 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 try {
     require_once __DIR__ . '/db_connect.php';
@@ -130,17 +133,8 @@ try {
                     $matched = false;
                     if (!empty($pcode) && isset($master_products[$pcode])) {
                         $matched = true;
-                    } else if (!empty($desc)) {
-                        if (isset($master_products[$desc])) {
-                            $matched = true;
-                        } else if (strlen($desc) >= 4) {
-                            foreach ($master_products as $prod_name => $val) {
-                                if (strlen($prod_name) >= 4 && (strpos($desc, $prod_name) !== false || strpos($prod_name, $desc) !== false)) {
-                                    $matched = true;
-                                    break;
-                                }
-                            }
-                        }
+                    } else if (!empty($desc) && isset($master_products[$desc])) {
+                        $matched = true;
                     }
                     if (!$matched) {
                         $unregistered_count++;

@@ -92,6 +92,14 @@ try {
             } elseif ($base_name === 'scan_ocr.php') {
                 $status_label = 'ACTIVE';
                 $info_diag = 'Pemindai spesifikasi lampiran PDF aktif.';
+            } elseif ($base_name === 'sync_quotations.php') {
+                $status_label = 'ACTIVE';
+                $desc = 'Otomasi SPH Quotation & Mesin PDF Generator';
+                $info_diag = 'Penulisan SPH otomatis dan generator dokumen PDF SPH aktif.';
+            } elseif ($base_name === 'sync_invoices.php') {
+                $status_label = 'ACTIVE';
+                $desc = 'Otomasi Invoice & Mesin PDF Invoice Generator';
+                $info_diag = 'Penulisan Invoice otomatis dan generator dokumen PDF Invoice aktif.';
             } elseif ($base_name === 'run_all.php') {
                 $status_label = 'ACTIVE';
                 $info_diag = 'Master runner penjadwalan Cron 1-menit aktif.';

@@ -7,6 +7,9 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     ob_end_clean();
@@ -16,29 +19,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/db_connect.php';
 $connection = isset($conn) ? $conn : $db_conn;
-
-// Ensure clients table exists
-$connection->query("CREATE TABLE IF NOT EXISTS clients (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    company_name VARCHAR(255) NOT NULL,
-    client_name VARCHAR(255) DEFAULT NULL,
-    email TEXT DEFAULT NULL,
-    phone VARCHAR(100) DEFAULT NULL,
-    address_line1 TEXT DEFAULT NULL,
-    address_line2 TEXT DEFAULT NULL,
-    city VARCHAR(100) DEFAULT NULL,
-    state VARCHAR(100) DEFAULT NULL,
-    postal_code VARCHAR(50) DEFAULT NULL,
-    country VARCHAR(100) DEFAULT 'Malaysia',
-    tax_id VARCHAR(100) DEFAULT NULL,
-    logo_url VARCHAR(500) DEFAULT NULL,
-    notes TEXT DEFAULT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-// Auto-migrate column logo_url if not exists
-@$connection->query("ALTER TABLE clients ADD COLUMN logo_url VARCHAR(500) DEFAULT NULL");
 
 // Helper to compute official company logo from domain / email
 function computeCompanyLogoUrl($email) {
@@ -147,7 +127,9 @@ function autoSyncClientsFromRfqsAndQuotations($connection) {
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'GET') {
-    autoSyncClientsFromRfqsAndQuotations($connection);
+    if (isset($_GET['sync']) && $_GET['sync'] === 'true') {
+        autoSyncClientsFromRfqsAndQuotations($connection);
+    }
 
     $result = $connection->query("SELECT * FROM clients ORDER BY company_name ASC");
     $clients = [];
@@ -195,13 +177,42 @@ if ($method === 'POST') {
         exit;
     }
 
+    // 1. Try to find existing record by ID (if valid)
+    $targetId = 0;
     if ($id > 0) {
-        // Update existing
+        $checkId = $connection->prepare("SELECT id FROM clients WHERE id = ?");
+        if ($checkId) {
+            $checkId->bind_param("i", $id);
+            $checkId->execute();
+            $cRes = $checkId->get_result();
+            if ($cRes && $cRow = $cRes->fetch_assoc()) {
+                $targetId = intval($cRow['id']);
+            }
+            $checkId->close();
+        }
+    }
+
+    // 2. If not found by ID, try to find existing record by company_name
+    if ($targetId === 0) {
+        $checkComp = $connection->prepare("SELECT id FROM clients WHERE LOWER(TRIM(company_name)) = LOWER(TRIM(?)) LIMIT 1");
+        if ($checkComp) {
+            $checkComp->bind_param("s", $company_name);
+            $checkComp->execute();
+            $compRes = $checkComp->get_result();
+            if ($compRes && $compRow = $compRes->fetch_assoc()) {
+                $targetId = intval($compRow['id']);
+            }
+            $checkComp->close();
+        }
+    }
+
+    if ($targetId > 0) {
+        // Update existing record
         $stmt = $connection->prepare("UPDATE clients SET company_name=?, client_name=?, email=?, phone=?, address_line1=?, address_line2=?, city=?, state=?, postal_code=?, country=?, tax_id=?, logo_url=?, notes=? WHERE id=?");
-        $stmt->bind_param("sssssssssssssi", $company_name, $client_name, $email, $phone, $address_line1, $address_line2, $city, $state, $postal_code, $country, $tax_id, $logo_url, $notes, $id);
+        $stmt->bind_param("sssssssssssssi", $company_name, $client_name, $email, $phone, $address_line1, $address_line2, $city, $state, $postal_code, $country, $tax_id, $logo_url, $notes, $targetId);
         if ($stmt->execute()) {
             ob_end_clean();
-            echo json_encode(['status' => 'success', 'message' => 'Client updated successfully', 'id' => $id, 'logo_url' => $logo_url]);
+            echo json_encode(['status' => 'success', 'message' => 'Client updated successfully', 'id' => $targetId, 'logo_url' => $logo_url]);
             exit;
         } else {
             ob_end_clean();
@@ -209,7 +220,7 @@ if ($method === 'POST') {
             exit;
         }
     } else {
-        // Insert new client
+        // Insert new client record
         $stmt = $connection->prepare("INSERT INTO clients (company_name, client_name, email, phone, address_line1, address_line2, city, state, postal_code, country, tax_id, logo_url, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->bind_param("sssssssssssss", $company_name, $client_name, $email, $phone, $address_line1, $address_line2, $city, $state, $postal_code, $country, $tax_id, $logo_url, $notes);
         if ($stmt->execute()) {
