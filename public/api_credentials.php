@@ -38,6 +38,7 @@ $defaults = [
     ['DOC_DEFAULT_DISCOUNT', '0', 'Document'],
     ['DOC_CURRENCY', 'MYR', 'Document'],
     ['DOC_VALID_UNTIL', '14 Days', 'Document'],
+    ['CLIENT_CHAT_START_DATE', '2026-08-27', 'Client Chat Settings'],
 ];
 
 foreach ($defaults as $def) {

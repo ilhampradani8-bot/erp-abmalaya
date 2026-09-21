@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Quotation, RFQ } from '../types/erp';
 import { 
-  Send, CheckCircle2, X, Loader2, Sparkles, 
+  Send, CheckCircle2, X, Loader2, Sparkles, Clock,
   FileType, FileText, Search, Plus, Edit3, Building, Mail, Info, MapPin,
-  Paperclip, CheckCheck, Menu, CornerUpLeft, Eye, MoreVertical
+  Paperclip, CheckCheck, Menu, CornerUpLeft, Eye, MoreVertical, Maximize2
 } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
@@ -520,6 +520,13 @@ export const EmailClient: React.FC<EmailClientProps> = ({
   // Clean Email Preview Modal State
   const [previewEmailData, setPreviewEmailData] = useState<RFQ | null>(null);
 
+  // Bubble Info Popup Modal State
+  const [infoModalData, setInfoModalData] = useState<{ rfq?: RFQ; quotation?: Quotation } | null>(null);
+
+  // Fullscreen Table Modal & Search State
+  const [showFullTableModal, setShowFullTableModal] = useState<boolean>(false);
+  const [fullTableSearch, setFullTableSearch] = useState<string>('');
+
   // Active quotation & RFQ selection within group
   const activeQuotation = selectedReplyQuotation || selectedGroup.quotations[0] || quotation || undefined;
   const activeRfq = selectedGroup.rfqs[0] || rfq || undefined;
@@ -573,6 +580,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
     tax_id: '',
     notes: '',
   });
+  const [clientEmailList, setClientEmailList] = useState<string[]>(['']);
   const [isSavingClient, setIsSavingClient] = useState<boolean>(false);
 
   // Composer States
@@ -590,6 +598,107 @@ export const EmailClient: React.FC<EmailClientProps> = ({
 
   // Auto-expanding textarea height ref
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Direct Action: Kirim Quotation SPH (Populate Composer & Update Database Status to penawaran_terkirim)
+  const handleSendQuotationDirect = (targetQuo: Quotation) => {
+    if (!targetQuo) return;
+
+    // 1. Select Quotation & PDF File
+    setSelectedReplyQuotation(targetQuo);
+    const targetPdf = targetQuo.quotation_file || targetQuo.source_file || (targetQuo.pdf_created === 1 ? `SPH-${targetQuo.quotation_number}.pdf` : null);
+    if (targetPdf) setAttachedPdfFile(targetPdf);
+
+    // 2. Set Recipient Email
+    const recipient = targetQuo.client_email || selectedGroup.primaryEmail || selectedGroup.emailList[0] || '';
+    if (recipient) setToEmail(recipient);
+
+    // 3. Draft Professional SPH Quotation Email Message Body
+    const quoNo = targetQuo.quotation_number || targetQuo.id;
+    const clientName = targetQuo.client_name || selectedGroup.primaryClientName || 'Bapak/Ibu';
+    const grandTotalFormatted = Number(targetQuo.grand_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
+
+    const draftBody = `Yth. ${clientName},\n\n` +
+      `Bersama email ini, kami dari PT/CV AB Malaya menyampaikan Surat Penawaran Harga (SPH) dengan rincian berikut:\n\n` +
+      `• Nomor SPH: ${quoNo}\n` +
+      `• Tanggal: ${targetQuo.date_issued || new Date().toISOString().split('T')[0]}\n` +
+      `• Total Penawaran: RM ${grandTotalFormatted}\n\n` +
+      `Dokumen penawaran harga lengkap terlampir dalam email ini.\n` +
+      `Mohon konfirmasi jika ada pertanyaan atau penyesuaian spesifikasi yang dibutuhkan.\n\n` +
+      `Atas perhatian dan kerjasamanya, kami ucapkan terima kasih.\n\n` +
+      `Hormat kami,\n` +
+      `AB Malaya Sales Team`;
+
+    setMessageText(draftBody);
+
+    // 4. Sync Status directly to MySQL DB via api_quotations.php
+    fetch(getApiUrl('/api_quotations.php'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: targetQuo.id,
+        status: 'penawaran_terkirim',
+        action: 'status_update',
+        user_name: 'AB Malaya Sales Team (Direct Send)',
+        user_email: fromEmail,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.status === 'success') {
+          fetchQuotationsData();
+        }
+      })
+      .catch((err) => console.error('Error updating quotation status to penawaran_terkirim:', err));
+
+    // 5. Close fullscreen popup modal & focus composer textarea
+    setShowFullTableModal(false);
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 200);
+  };
+
+  // Action: Generate & Open Automatic Invoice from Quotation SPH
+  const handleGenerateInvoiceFromQuotation = (targetQuo: Quotation) => {
+    if (!targetQuo) return;
+
+    const quoId = String(targetQuo.id);
+    const quoNum = targetQuo.quotation_number || quoId;
+    const invId = `INV-${quoId}`;
+    const invNum = `ABM/INV/${new Date().getFullYear()}/${quoNum}`;
+
+    fetch(getApiUrl('/api_invoices.php'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: invId,
+        invoice_number: invNum,
+        quotation_id: quoId,
+        invoice_date: new Date().toISOString().split('T')[0],
+        due_date: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+        client_name: targetQuo.client_name || selectedGroup.primaryClientName || '',
+        client_email: targetQuo.client_email || selectedGroup.primaryEmail || '',
+        client_phone: targetQuo.client_phone || selectedGroup.phone || '',
+        company_name: targetQuo.company_name || selectedGroup.companyName || '',
+        subtotal: Number(targetQuo.grand_total || 0),
+        tax_percent: 11,
+        tax_amount: Number(targetQuo.grand_total || 0) * 0.11,
+        grand_total: Number(targetQuo.grand_total || 0),
+        status: 'unpaid',
+        created_by: 'AB Malaya Sales Team (Auto Invoice)',
+      }),
+    })
+      .then((res) => res.json())
+      .then(() => {
+        window.open(getApiUrl(`view_doc.php?type=invoice&id=${encodeURIComponent(quoId)}`), '_blank');
+      })
+      .catch((err) => {
+        console.error('Error auto-generating invoice:', err);
+        window.open(getApiUrl(`view_doc.php?type=invoice&id=${encodeURIComponent(quoId)}`), '_blank');
+      });
+  };
 
   useEffect(() => {
     setIsLoadingChat(true);
@@ -677,16 +786,19 @@ export const EmailClient: React.FC<EmailClientProps> = ({
       tax_id: '',
       notes: '',
     });
+    setClientEmailList(['']);
     setShowClientModal(true);
   };
 
   // Open modal to Edit Selected Client
   const handleOpenEditClient = () => {
+    const rawEmails = parseEmails(selectedGroup.primaryEmail || selectedGroup.emailList.join(', '));
+    const initialList = rawEmails.length > 0 ? rawEmails : [''];
     setEditingClientData({
       id: selectedGroup.dbClientId,
       company_name: selectedGroup.companyName,
       client_name: selectedGroup.primaryClientName,
-      email: selectedGroup.primaryEmail || selectedGroup.emailList.join(', '),
+      email: initialList.join(', '),
       phone: selectedGroup.phone,
       address_line1: selectedGroup.addressLine1,
       address_line2: selectedGroup.addressLine2,
@@ -697,6 +809,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
       tax_id: selectedGroup.taxId,
       notes: selectedGroup.notes,
     });
+    setClientEmailList(initialList);
     setShowClientModal(true);
   };
 
@@ -708,27 +821,35 @@ export const EmailClient: React.FC<EmailClientProps> = ({
       return;
     }
 
+    const cleanEmailList = clientEmailList.map((em) => em.trim()).filter(Boolean);
+    const joinedEmails = cleanEmailList.join(', ');
+
+    const payloadToSave = {
+      ...editingClientData,
+      email: joinedEmails,
+    };
+
     setIsSavingClient(true);
 
     setDbClients((prev) => {
       const idx = prev.findIndex(
         (c) =>
-          (editingClientData.id && c.id === editingClientData.id) ||
-          c.company_name.toLowerCase().trim() === editingClientData.company_name.toLowerCase().trim()
+          (payloadToSave.id && c.id === payloadToSave.id) ||
+          c.company_name.toLowerCase().trim() === payloadToSave.company_name.toLowerCase().trim()
       );
       if (idx >= 0) {
         const copy = [...prev];
-        copy[idx] = { ...copy[idx], ...editingClientData };
+        copy[idx] = { ...copy[idx], ...payloadToSave };
         return copy;
       }
-      return [...prev, { ...editingClientData, id: Date.now() }];
+      return [...prev, { ...payloadToSave, id: Date.now() }];
     });
     setShowClientModal(false);
 
     fetch(getApiUrl('/api_clients.php'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(editingClientData),
+      body: JSON.stringify(payloadToSave),
     })
       .then((res) => res.json())
       .then((resData) => {
@@ -973,11 +1094,22 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                             <h4 className="font-extrabold text-xs text-slate-900 truncate">
                               {group.companyName}
                             </h4>
-                            {group.quotations.length > 0 && (
-                              <span className="text-[10px] font-bold text-blue-800 bg-blue-100 border border-blue-300 px-1.5 py-0.2 rounded shrink-0">
-                                {group.quotations.length} SPH
-                              </span>
-                            )}
+                            <div className="flex items-center gap-1 shrink-0">
+                              {group.repliedMessagesCount > 0 || group.quotations.some(q => q.status === 'penawaran_terkirim' || q.status === 'done_send' || (q.status as string) === 'Sent' || q.status === 'sent' || q.pdf_created === 1) ? (
+                                <span className="text-[9px] font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-300 px-1 py-0.2 rounded">
+                                  Dibalas
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-extrabold text-amber-800 bg-amber-100 border border-amber-300 px-1 py-0.2 rounded">
+                                  Belum
+                                </span>
+                              )}
+                              {group.quotations.length > 0 && (
+                                <span className="text-[10px] font-bold text-blue-800 bg-blue-100 border border-blue-300 px-1.5 py-0.2 rounded">
+                                  {group.quotations.length} SPH
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           <p className="text-[11px] font-semibold text-slate-600 truncate mt-0.5 flex items-center justify-between gap-1">
@@ -1139,87 +1271,133 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                           const linkedQuotation = rfqItem.rawQuotation;
 
                           return (
-                            <div key={rfqItem.id} className="flex flex-col items-start space-y-1">
-                              {/* Left Bubble (Client Email / RFQ) */}
-                              <div className="bg-white text-slate-800 rounded-lg shadow-xs border border-slate-200 p-3 max-w-[85%] font-sans text-xs space-y-1.5">
-                                <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-1">
-                                  <div className="flex flex-col">
-                                    <span className="font-extrabold text-slate-900">
-                                      {rfqItem.sender_name || selectedGroup.primaryClientName} ({cleanSingleEmail(rfqItem.sender_email)})
-                                    </span>
-                                    <span className="text-[10px] font-bold text-blue-800 bg-blue-50 border border-blue-300 px-1.5 py-0.5 rounded w-fit mt-1 flex items-center gap-1">
-                                      <FileText className="w-3 h-3 text-blue-600" />
-                                      <span>Quotation Reg: {linkedQuotation?.quotation_number || selectedGroup.quotations[0]?.quotation_number || 'Unlinked'}</span>
-                                    </span>
+                            <div key={rfqItem.id} className="flex flex-col items-start space-y-1 w-full">
+                              {/* Left Bubble (Client Email / RFQ) with ! circle button on the RIGHT */}
+                              <div className="flex items-center gap-2 max-w-[90%]">
+                                <div className="bg-white text-slate-800 rounded-lg shadow-xs border border-slate-200 p-3 font-sans text-xs space-y-1.5 flex-1 min-w-0">
+                                  <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-1">
+                                    <div className="flex flex-col">
+                                      <span className="font-extrabold text-slate-900">
+                                        {rfqItem.sender_name || selectedGroup.primaryClientName} ({cleanSingleEmail(rfqItem.sender_email)})
+                                      </span>
+                                      <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                                        <span className="text-[10px] font-bold text-blue-800 bg-blue-50 border border-blue-300 px-1.5 py-0.5 rounded w-fit flex items-center gap-1">
+                                          <FileText className="w-3 h-3 text-blue-600" />
+                                          <span>Quotation Reg: {linkedQuotation?.quotation_number || selectedGroup.quotations[0]?.quotation_number || 'Unlinked'}</span>
+                                        </span>
+                                        {((rfqItem as any).is_replied || (rfqItem as any).replies?.length > 0 || rfqItem.status === 'penawaran_terkirim' || rfqItem.status === 'done_send' || rfqItem.status === 'deal' || (linkedQuotation && (linkedQuotation.status === 'penawaran_terkirim' || linkedQuotation.status === 'done_send' || linkedQuotation.pdf_created === 1))) ? (
+                                          <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded w-fit flex items-center gap-1">
+                                            <CheckCheck className="w-3 h-3 text-emerald-600" />
+                                            <span>Sudah Dibalas</span>
+                                          </span>
+                                        ) : (
+                                          <span className="text-[10px] font-extrabold text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded w-fit flex items-center gap-1">
+                                            <Clock className="w-3 h-3 text-amber-600" />
+                                            <span>Belum Dibalas</span>
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <span className="text-[10px] font-mono text-slate-400 shrink-0 mt-0.5">{rfqItem.date_received || 'Recent'}</span>
                                   </div>
-                                  <span className="text-[10px] font-mono text-slate-400 shrink-0 mt-0.5">{rfqItem.date_received || 'Recent'}</span>
+
+                                  <p className="font-bold text-slate-800 text-xs">{rfqItem.subject || 'Quotation Request'}</p>
+
+                                  <div className="flex items-center justify-between pt-1 gap-2 flex-wrap">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setPreviewEmailData(rfqItem as RFQ);
+                                      }}
+                                      className="text-[10px] font-bold text-blue-700 hover:text-blue-900 inline-flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Eye className="w-3 h-3 text-blue-600" />
+                                      <span>View Full Email</span>
+                                    </button>
+
+                                    <div className="flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setToEmail(cleanSingleEmail(rfqItem.sender_email) || selectedGroup.primaryEmail);
+                                          const qLinked = linkedQuotation || selectedGroup.quotations[0] || null;
+                                          setSelectedReplyQuotation(qLinked);
+                                        }}
+                                        className="text-[10px] font-extrabold text-blue-700 hover:text-blue-900 inline-flex items-center gap-1 cursor-pointer bg-blue-50 px-2 py-0.5 rounded border border-blue-200"
+                                      >
+                                        <CornerUpLeft className="w-3 h-3 text-blue-600" />
+                                        <span>Reply to this message</span>
+                                      </button>
+                                    </div>
+                                  </div>
                                 </div>
 
-                                <p className="font-bold text-slate-800 text-xs">{rfqItem.subject || 'Quotation Request'}</p>
-
-                                <div className="flex items-center justify-between pt-1 gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setPreviewEmailData(rfqItem as RFQ);
-                                    }}
-                                    className="text-[10px] font-bold text-blue-700 hover:text-blue-900 inline-flex items-center gap-1 cursor-pointer"
-                                  >
-                                    <Eye className="w-3 h-3 text-blue-600" />
-                                    <span>View Full Email</span>
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setToEmail(cleanSingleEmail(rfqItem.sender_email) || selectedGroup.primaryEmail);
-                                      const qLinked = linkedQuotation || selectedGroup.quotations[0] || null;
-                                      setSelectedReplyQuotation(qLinked);
-                                    }}
-                                    className="text-[10px] font-extrabold text-blue-700 hover:text-blue-900 inline-flex items-center gap-1 cursor-pointer bg-blue-50 px-2 py-0.5 rounded border border-blue-200"
-                                  >
-                                    <CornerUpLeft className="w-3 h-3 text-blue-600" />
-                                    <span>Reply to this message</span>
-                                  </button>
-                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setInfoModalData({ rfq: rfqItem as any, quotation: linkedQuotation || selectedGroup.quotations[0] })}
+                                  className="w-6 h-6 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 font-black text-xs shrink-0 shadow-2xs border border-blue-300 transition cursor-pointer flex items-center justify-center hover:scale-110 active:scale-95"
+                                  title="Info Detail Email, Quotation & Status Inbox"
+                                >
+                                  !
+                                </button>
                               </div>
                             </div>
                           );
                         })}
 
-                        {/* Right Bubbles (Sent SPH Replies) */}
-                        {selectedGroup.quotations.filter(q => q.status === 'penawaran_terkirim').map((quoItem) => (
-                          <div key={quoItem.id} className="flex flex-col items-end space-y-1">
-                            <div className="bg-blue-100 text-slate-900 rounded-lg shadow-xs border border-blue-200 p-3 max-w-[85%] font-sans text-xs space-y-1.5">
-                              <div className="flex items-center justify-between gap-2 border-b border-blue-200/60 pb-1">
-                                <span className="font-extrabold text-blue-900 flex items-center gap-1">
-                                  <CheckCheck className="w-3.5 h-3.5 text-blue-600" />
-                                  <span>AB Malaya Sales Team</span>
-                                </span>
-                                <span className="text-[10px] font-mono text-slate-500">{quoItem.date_issued}</span>
-                              </div>
+                        {/* Right Bubbles (Sent SPH Replies) with ! circle button on the LEFT */}
+                        {selectedGroup.quotations.filter(q => q.status === 'penawaran_terkirim' || q.status === 'done_send' || q.status === 'sent').map((quoItem) => (
+                          <div key={quoItem.id} className="flex flex-col items-end space-y-1 w-full">
+                            <div className="flex items-center gap-2 max-w-[90%] justify-end">
+                              <button
+                                type="button"
+                                onClick={() => setInfoModalData({ quotation: quoItem, rfq: activeRfq })}
+                                className="w-6 h-6 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-black text-xs shrink-0 shadow-2xs border border-emerald-300 transition cursor-pointer flex items-center justify-center hover:scale-110 active:scale-95"
+                                title="Info Detail Email, Quotation & Status Inbox"
+                              >
+                                !
+                              </button>
 
-                              <div className="font-bold text-slate-800">
-                                Quotation Reply #{quoItem.quotation_number || quoItem.id}
-                              </div>
-
-                              <p className="text-slate-700 text-[11px] whitespace-pre-wrap">
-                                Quotation offer of RM {(quoItem.grand_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} has been issued and sent.
-                              </p>
-
-                              {quoItem.quotation_file && (
-                                <div className="pt-1">
-                                  <a
-                                    href={getApiUrl(quoItem.quotation_file)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1.5 bg-blue-700 text-white px-2.5 py-1 rounded text-[11px] font-bold shadow-2xs hover:bg-blue-800 transition"
-                                  >
-                                    <FileType className="w-3.5 h-3.5" />
-                                    <span>Download {quoItem.quotation_file.substring(quoItem.quotation_file.lastIndexOf('/') + 1)}</span>
-                                  </a>
+                              <div className="bg-blue-100 text-slate-900 rounded-lg shadow-xs border border-blue-200 p-3 font-sans text-xs space-y-1.5 flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2 border-b border-blue-200/60 pb-1">
+                                  <span className="font-extrabold text-blue-900 flex items-center gap-1">
+                                    <CheckCheck className="w-3.5 h-3.5 text-blue-600" />
+                                    <span>AB Malaya Sales Team</span>
+                                  </span>
+                                  <span className="text-[10px] font-mono text-slate-500">{quoItem.date_issued}</span>
                                 </div>
-                              )}
+
+                                <div className="font-bold text-slate-800">
+                                  Quotation Reply #{quoItem.quotation_number || quoItem.id}
+                                </div>
+
+                                <p className="text-slate-700 text-[11px] whitespace-pre-wrap">
+                                  Quotation offer of RM {(quoItem.grand_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} has been issued and sent.
+                                </p>
+
+                                <div className="pt-1 flex items-center gap-2 flex-wrap">
+                                  {quoItem.quotation_file && (
+                                    <a
+                                      href={getApiUrl(quoItem.quotation_file)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1.5 bg-blue-700 text-white px-2.5 py-1 rounded text-[11px] font-bold shadow-2xs hover:bg-blue-800 transition"
+                                    >
+                                      <FileType className="w-3.5 h-3.5" />
+                                      <span>Download {quoItem.quotation_file.substring(quoItem.quotation_file.lastIndexOf('/') + 1)}</span>
+                                    </a>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleGenerateInvoiceFromQuotation(quoItem)}
+                                    className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded text-[11px] font-extrabold shadow-2xs transition cursor-pointer"
+                                    title="Buat & Buka Invoice Otomatis dari SPH ini"
+                                  >
+                                    <FileText className="w-3.5 h-3.5" />
+                                    <span>Otomatis Invoice</span>
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -1448,14 +1626,25 @@ export const EmailClient: React.FC<EmailClientProps> = ({
               {activeRightTab === 'table' && (
                 <div className="space-y-3">
                   <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs space-y-2 text-xs">
-                    <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1.5 flex items-center justify-between">
+                    <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1.5 flex items-center justify-between gap-1">
                       <span className="flex items-center gap-1.5 text-slate-800">
                         <FileText className="w-3.5 h-3.5 text-blue-600" />
                         <span>Tabel Korelasi Email ↔ SPH Quotation</span>
                       </span>
-                      <span className="bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded font-mono text-[9px] font-bold">
-                        {selectedGroup.rfqs.length} Email | {selectedGroup.quotations.length} SPH
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setShowFullTableModal(true)}
+                          className="bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-700 border border-slate-200 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 transition cursor-pointer shrink-0"
+                          title="Buka Popup Modal View Fullscreen"
+                        >
+                          <Maximize2 className="w-3 h-3 text-blue-600" />
+                          <span>View Full</span>
+                        </button>
+                        <span className="bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded font-mono text-[9px] font-bold shrink-0">
+                          {selectedGroup.rfqs.length} Email | {selectedGroup.quotations.length} SPH
+                        </span>
+                      </div>
                     </div>
 
                     <div className="overflow-x-auto pt-1">
@@ -1515,7 +1704,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                               {q.quotation_number || q.id}
                                             </span>
                                             <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold uppercase tracking-tight ${
-                                              q.status === 'ready_send' || q.status === 'penawaran_terkirim'
+                                              q.status === 'ready_send' || q.status === 'penawaran_terkirim' || q.status === 'done_send'
                                                 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                                                 : q.approved_by
                                                 ? 'bg-blue-100 text-blue-800 border border-blue-300'
@@ -1552,16 +1741,39 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                       </button>
                                     )}
                                     {pair.quotations.map((q) => (
-                                      <a
-                                        key={q.id}
-                                        href={getApiUrl(`view_doc.php?id=${q.id}`)}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="p-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded transition border border-blue-200 cursor-pointer w-7 h-7 flex items-center justify-center"
-                                        title={`Buka PDF/Web SPH ${q.quotation_number || q.id}`}
-                                      >
-                                        <FileType className="w-3.5 h-3.5" />
-                                      </a>
+                                      <div key={q.id} className="flex flex-col items-center gap-1">
+                                        <a
+                                          href={getApiUrl(`view_doc.php?id=${q.id}`)}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="p-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded transition border border-slate-200 cursor-pointer w-7 h-7 flex items-center justify-center"
+                                          title={`Buka PDF/Web SPH ${q.quotation_number || q.id}`}
+                                        >
+                                          <FileType className="w-3.5 h-3.5" />
+                                        </a>
+
+                                        {q.status !== 'penawaran_terkirim' && q.status !== 'done_send' && q.status !== 'sent' ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSendQuotationDirect(q)}
+                                            className="px-1.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded transition border border-emerald-700 cursor-pointer flex items-center justify-center gap-1 text-[9px] font-bold shadow-2xs w-full"
+                                            title={`Kirim SPH Quotation ${q.quotation_number || q.id}`}
+                                          >
+                                            <Send className="w-2.5 h-2.5" />
+                                            <span>Kirim</span>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleGenerateInvoiceFromQuotation(q)}
+                                            className="px-1.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded transition border border-emerald-700 cursor-pointer flex items-center justify-center gap-1 text-[9px] font-extrabold shadow-2xs w-full"
+                                            title="Buat & Buka Invoice Otomatis"
+                                          >
+                                            <FileText className="w-2.5 h-2.5" />
+                                            <span>Invoice</span>
+                                          </button>
+                                        )}
+                                      </div>
                                     ))}
                                   </div>
                                 </td>
@@ -1792,7 +2004,9 @@ export const EmailClient: React.FC<EmailClientProps> = ({
           <div className="bg-white border border-slate-700 rounded-lg w-full max-w-4xl shadow-2xl p-4 space-y-3 max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between border-b border-slate-200 pb-2 shrink-0">
               <h3 className="font-extrabold text-sm text-slate-900">
-                {editingClientData.id ? 'Edit Company Profile' : 'Add New Company'}
+                {editingClientData.id || editingClientData.company_name
+                  ? `Editing Company Profile - ${editingClientData.company_name || selectedGroup.companyName}`
+                  : 'Add New Company Profile'}
               </h3>
               <button onClick={() => setShowClientModal(false)} className="text-slate-400 hover:text-slate-700">
                 <X className="w-4 h-4" />
@@ -1825,13 +2039,53 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Email (comma-separated)</label>
-                    <input
-                      type="text"
-                      value={editingClientData.email || ''}
-                      onChange={(e) => setEditingClientData({ ...editingClientData, email: e.target.value })}
-                      className="w-full border border-slate-300 rounded p-2 font-mono focus:outline-none focus:border-blue-500"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-bold text-slate-700">Company Emails (List)</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...clientEmailList, ''];
+                          setClientEmailList(updated);
+                        }}
+                        className="text-[11px] font-extrabold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                      >
+                        <Plus className="w-3 h-3 text-blue-600" />
+                        <span>Add Email</span>
+                      </button>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                      {clientEmailList.map((emailVal, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5">
+                          <input
+                            type="email"
+                            placeholder="e.g. sales@company.com"
+                            value={emailVal}
+                            onChange={(e) => {
+                              const updated = [...clientEmailList];
+                              updated[idx] = e.target.value;
+                              setClientEmailList(updated);
+                              setEditingClientData({ ...editingClientData, email: updated.filter(Boolean).join(', ') });
+                            }}
+                            className="flex-1 border border-slate-300 rounded p-1.5 font-mono text-xs focus:outline-none focus:border-blue-500"
+                          />
+                          {clientEmailList.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = clientEmailList.filter((_, i) => i !== idx);
+                                setClientEmailList(updated.length > 0 ? updated : ['']);
+                                setEditingClientData({ ...editingClientData, email: updated.filter(Boolean).join(', ') });
+                              }}
+                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded border border-rose-200 cursor-pointer transition"
+                              title="Remove email"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   <div>
@@ -1948,6 +2202,365 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* FULLSCREEN POPUP MODAL FOR CORRELATION TABLE */}
+      {showFullTableModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 md:p-6 font-sans">
+          <div className="bg-white border border-slate-700 rounded-xl w-full max-w-6xl shadow-2xl flex flex-col h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="bg-slate-900 text-white p-4 flex items-center justify-between shrink-0 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <CompanyAvatar
+                  email={selectedGroup.primaryEmail}
+                  name={selectedGroup.companyName}
+                  logoUrl={selectedGroup.logoUrl}
+                  className="w-10 h-10"
+                />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="font-extrabold text-base text-white">{selectedGroup.companyName}</h2>
+                    <span className="bg-blue-600/30 text-blue-300 border border-blue-500/40 text-[10px] px-2 py-0.5 rounded font-mono font-bold">
+                      {selectedGroup.rfqs.length} Email RFQ | {selectedGroup.quotations.length} SPH Quotation
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">
+                    {selectedGroup.primaryClientName} ({selectedGroup.primaryEmail || 'No Email Registered'})
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowFullTableModal(false)}
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition cursor-pointer"
+                  title="Close Fullscreen View"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Filter Toolbar */}
+            <div className="bg-slate-50 border-b border-slate-200 p-3 flex items-center justify-between gap-3 shrink-0 text-xs">
+              <div className="flex items-center gap-2 flex-1 max-w-md">
+                <div className="relative w-full">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Filter by subject, RFQ number, SPH number, or status..."
+                    value={fullTableSearch}
+                    onChange={(e) => setFullTableSearch(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 font-sans"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-slate-600 font-semibold text-xs">
+                <span>Total Items: <strong className="text-slate-900">{correlatedPairs.length}</strong> Pairs</span>
+              </div>
+            </div>
+
+            {/* Modal Table Content */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-100/50">
+              <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-800 text-slate-200 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-700">
+                      <th className="p-3 border-r border-slate-700 w-1/3">Detail Email Pesan (RFQ)</th>
+                      <th className="p-3 border-r border-slate-700 w-1/3">Surat Penawaran Harga (SPH Quotation)</th>
+                      <th className="p-3 text-center w-1/3">Aksi & Status Kirim</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {correlatedPairs.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="p-8 text-center text-slate-400 italic">
+                          Belum ada data email atau SPH untuk perusahaan ini.
+                        </td>
+                      </tr>
+                    ) : (
+                      correlatedPairs
+                        .filter((pair) => {
+                          if (!fullTableSearch.trim()) return true;
+                          const s = fullTableSearch.toLowerCase();
+                          const rfqMatch = pair.rfq && (
+                            (pair.rfq.subject || '').toLowerCase().includes(s) ||
+                            (pair.rfq.rfq_number || '').toLowerCase().includes(s) ||
+                            (pair.rfq.sender_email || '').toLowerCase().includes(s)
+                          );
+                          const quoMatch = pair.quotations.some(q => 
+                            (q.quotation_number || '').toLowerCase().includes(s) ||
+                            (q.status || '').toLowerCase().includes(s)
+                          );
+                          return rfqMatch || quoMatch;
+                        })
+                        .map((pair, idx) => (
+                          <tr key={idx} className="hover:bg-blue-50/40 transition">
+                            {/* Column 1: RFQ Email */}
+                            <td className="p-3 border-r border-slate-200 align-top">
+                              {pair.rfq ? (
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-blue-700 bg-blue-100 border border-blue-300 font-extrabold text-xs px-2 py-0.5 rounded">
+                                      {pair.rfq.rfq_number || `#${pair.rfq.id}`}
+                                    </span>
+                                    {pair.rfq.date_received && (
+                                      <span className="text-[10px] text-slate-500 font-mono">{pair.rfq.date_received}</span>
+                                    )}
+                                  </div>
+                                  <h4 className="font-extrabold text-slate-900 text-xs">{pair.rfq.subject || 'RFQ Message'}</h4>
+                                  <p className="text-slate-600 font-mono text-[11px]">
+                                    {pair.rfq.sender_name} &lt;{cleanSingleEmail(pair.rfq.sender_email)}&gt;
+                                  </p>
+                                  <div className="bg-slate-50 border border-slate-200 rounded p-2 text-slate-700 text-[11px] leading-relaxed line-clamp-3">
+                                    {cleanEmailBodyText(pair.rfq.message_body || pair.rfq.item_requested)}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="p-3 bg-slate-50 border border-dashed border-slate-300 rounded text-center">
+                                  <span className="text-slate-500 font-semibold text-xs block">Direct / Manual SPH Quotation</span>
+                                  <span className="text-[10px] text-slate-400 italic">Dibuat langsung dari Sistem Quotation List</span>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Column 2: Quotations */}
+                            <td className="p-3 border-r border-slate-200 align-top">
+                              {pair.quotations.length > 0 ? (
+                                <div className="space-y-2">
+                                  {pair.quotations.map((q) => (
+                                    <div key={q.id} className="bg-white border border-slate-200 rounded-lg p-2.5 shadow-2xs space-y-1.5">
+                                      <div className="flex items-center justify-between">
+                                        <span className="font-mono font-black text-blue-900 text-xs">
+                                          {q.quotation_number || q.id}
+                                        </span>
+                                        <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide ${
+                                          q.status === 'ready_send' || q.status === 'penawaran_terkirim' || q.status === 'done_send'
+                                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                            : q.approved_by
+                                            ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                            : 'bg-amber-100 text-amber-800 border border-amber-300'
+                                        }`}>
+                                          {q.status || 'Draft'}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between text-xs text-slate-600 font-mono pt-1 border-t border-slate-100">
+                                        <span>Grand Total:</span>
+                                        <span className="font-extrabold text-slate-900 text-xs">
+                                          RM {Number(q.grand_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="p-3 bg-amber-50 border border-amber-200 rounded text-amber-800 text-center font-bold text-xs">
+                                  Belum Memiliki SPH Quotation
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Column 3: Actions & Kirim Quotation */}
+                            <td className="p-3 align-middle text-center">
+                              <div className="flex flex-col items-center justify-center gap-2">
+                                {pair.rfq && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPreviewEmailData(pair.rfq!);
+                                    }}
+                                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition border border-slate-300 text-xs font-semibold flex items-center gap-1.5 w-full justify-center cursor-pointer"
+                                  >
+                                    <Eye className="w-3.5 h-3.5 text-slate-600" />
+                                    <span>Preview Pesan Email</span>
+                                  </button>
+                                )}
+
+                                {pair.quotations.map((q) => (
+                                  <div key={q.id} className="w-full space-y-1">
+                                    <a
+                                      href={getApiUrl(`view_doc.php?id=${q.id}`)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition border border-blue-200 text-xs font-semibold flex items-center gap-1.5 w-full justify-center cursor-pointer"
+                                    >
+                                      <FileType className="w-3.5 h-3.5 text-blue-600" />
+                                      <span>Buka Dokumen SPH ({q.quotation_number || q.id})</span>
+                                    </a>
+
+                                    {q.status !== 'penawaran_terkirim' && q.status !== 'done_send' && q.status !== 'sent' ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSendQuotationDirect(q)}
+                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition border border-emerald-700 text-xs font-extrabold flex items-center gap-1.5 w-full justify-center shadow-xs cursor-pointer"
+                                      >
+                                        <Send className="w-3.5 h-3.5" />
+                                        <span>Kirim SPH Quotation</span>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleGenerateInvoiceFromQuotation(q)}
+                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition border border-emerald-700 text-xs font-extrabold flex items-center gap-1.5 w-full justify-center shadow-xs cursor-pointer"
+                                        title={`Buat & Buka Invoice Otomatis dari ${q.quotation_number || q.id}`}
+                                      >
+                                        <FileText className="w-3.5 h-3.5" />
+                                        <span>Otomatis Invoice</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-slate-50 border-t border-slate-200 p-3 flex items-center justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowFullTableModal(false)}
+                className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-xs rounded-lg shadow-xs cursor-pointer"
+              >
+                Tutup Popup View Full
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BUBBLE DETAIL INFO POPUP MODAL */}
+      {infoModalData && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans">
+          <div className="bg-white border border-slate-700 rounded-xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            {/* Modal Header */}
+            <div className="bg-slate-900 text-white p-3.5 flex items-center justify-between shrink-0 border-b border-slate-800">
+              <div className="flex items-center gap-2 font-extrabold text-sm">
+                <Info className="w-4 h-4 text-blue-400" />
+                <span>Detail Informasi Email & Status Sistem</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInfoModalData(null)}
+                className="text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 overflow-y-auto space-y-4 text-xs">
+              {/* Section 1: Info Status di Inbox (RFQ Status) */}
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                <div className="font-extrabold text-slate-900 text-xs border-b border-slate-200 pb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-blue-900">
+                    <Mail className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Status di Inbox (Pesan Email RFQ)</span>
+                  </span>
+                  <span className="bg-blue-100 text-blue-800 border border-blue-300 font-mono text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase">
+                    {infoModalData.rfq?.status || 'Active Thread'}
+                  </span>
+                </div>
+                <div className="space-y-1 text-slate-700">
+                  <div><strong className="text-slate-900">No. RFQ:</strong> {infoModalData.rfq?.rfq_number || (infoModalData.rfq?.id ? `#${infoModalData.rfq.id}` : 'General Inquiry')}</div>
+                  <div><strong className="text-slate-900">Subject:</strong> {infoModalData.rfq?.subject || 'Direct Quotation Reply'}</div>
+                  <div><strong className="text-slate-900">Pengirim:</strong> {infoModalData.rfq?.sender_name || selectedGroup.primaryClientName} &lt;{cleanSingleEmail(infoModalData.rfq?.sender_email || selectedGroup.primaryEmail)}&gt;</div>
+                  <div><strong className="text-slate-900">Tanggal Diterima/Masuk:</strong> {infoModalData.rfq?.date_received || selectedGroup.lastActivity}</div>
+                  <div><strong className="text-slate-900">Sumber Email:</strong> {infoModalData.rfq ? 'Gmail Live API / Spreadsheet Sync' : 'Direct Manual System'}</div>
+                </div>
+              </div>
+
+              {/* Section 2: Info Status di Quotation Database */}
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                <div className="font-extrabold text-slate-900 text-xs border-b border-slate-200 pb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-emerald-900">
+                    <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Status di Database Quotation List</span>
+                  </span>
+                  <span className={`font-mono text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase border ${
+                    infoModalData.quotation?.status === 'penawaran_terkirim' || infoModalData.quotation?.status === 'done_send'
+                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                      : infoModalData.quotation?.approved_by
+                      ? 'bg-blue-100 text-blue-800 border-blue-300'
+                      : 'bg-amber-100 text-amber-800 border-amber-300'
+                  }`}>
+                    {infoModalData.quotation?.status || 'Draft'}
+                  </span>
+                </div>
+
+                {infoModalData.quotation ? (
+                  <div className="space-y-1 text-slate-700">
+                    <div><strong className="text-slate-900">Nomor SPH:</strong> {infoModalData.quotation.quotation_number || infoModalData.quotation.id}</div>
+                    <div><strong className="text-slate-900">Perusahaan:</strong> {infoModalData.quotation.company_name || selectedGroup.companyName}</div>
+                    <div><strong className="text-slate-900">Total Penawaran:</strong> RM {Number(infoModalData.quotation.grand_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+                    <div><strong className="text-slate-900">Tanggal Dibuat:</strong> {infoModalData.quotation.date_issued}</div>
+                    {infoModalData.quotation.approved_by && (
+                      <div><strong className="text-slate-900">Disetujui Oleh:</strong> {infoModalData.quotation.approved_by}</div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-slate-400 italic text-[11px]">Belum terhubung ke dokumen SPH spesifik.</p>
+                )}
+              </div>
+
+              {/* Section 3: Ringkasan Isi Pesan Email */}
+              {infoModalData.rfq && (
+                <div className="bg-white border border-slate-200 rounded-lg p-3 space-y-1.5">
+                  <span className="font-extrabold text-slate-900 text-[11px] uppercase tracking-wider block border-b border-slate-100 pb-1">
+                    Ringkasan Teks Pesan Email
+                  </span>
+                  <div className="bg-slate-50 border border-slate-200 rounded p-2 text-slate-800 leading-relaxed font-sans max-h-36 overflow-y-auto whitespace-pre-wrap text-[11px]">
+                    {cleanEmailBodyText(infoModalData.rfq.message_body || infoModalData.rfq.item_requested)}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-slate-50 border-t border-slate-200 p-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-2">
+                {infoModalData.quotation && (
+                  <a
+                    href={getApiUrl(`view_doc.php?id=${infoModalData.quotation.id}`)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded border border-blue-200 text-xs flex items-center gap-1"
+                  >
+                    <FileType className="w-3.5 h-3.5" />
+                    <span>Buka Web SPH</span>
+                  </a>
+                )}
+                {infoModalData.quotation && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const q = infoModalData.quotation!;
+                      setInfoModalData(null);
+                      handleGenerateInvoiceFromQuotation(q);
+                    }}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded text-xs flex items-center gap-1 shadow-2xs cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Otomatis Invoice</span>
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setInfoModalData(null)}
+                className="px-4 py-1.5 bg-slate-800 text-white font-bold rounded text-xs hover:bg-slate-700 cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -562,12 +562,15 @@ try {
     $key_list = array_values(array_unique($key_list));
     $active_gemini_key = !empty($key_list) ? $key_list[array_rand($key_list)] : getEnvValue('GEMINI_API_KEY', '');
 
-    $start_date_limit = '';
+    $start_date_limit = '2026-08-27';
     if ($db_conn && !$db_conn->connect_error) {
-        $res_start = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key IN ('INBOX_RULE_START_DATE', 'imap_start_date', 'info_start_date') AND credential_value != '' ORDER BY id DESC LIMIT 1");
+        $res_start = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key IN ('CLIENT_CHAT_START_DATE', 'CLIENT_EMAIL_START_DATE', 'INBOX_RULE_START_DATE', 'imap_start_date', 'info_start_date') AND credential_value != '' ORDER BY FIELD(credential_key, 'CLIENT_CHAT_START_DATE', 'CLIENT_EMAIL_START_DATE', 'INBOX_RULE_START_DATE', 'imap_start_date', 'info_start_date') ASC LIMIT 1");
         if ($res_start && $res_start->num_rows > 0) {
             $row_start = $res_start->fetch_assoc();
-            $start_date_limit = trim($row_start['credential_value']);
+            $val = trim($row_start['credential_value']);
+            if (!empty($val)) {
+                $start_date_limit = $val;
+            }
         }
     }
 
@@ -670,7 +673,8 @@ try {
                              ELSE 'diproses'
                          END");
 
-        $res = $db_conn->query("SELECT * FROM rfq_requests ORDER BY id DESC LIMIT 200");
+        $query_where = "WHERE created_at >= '" . $db_conn->real_escape_string($start_date_limit) . " 00:00:00' AND (ai_classification != 'junk' OR ai_classification IS NULL)";
+        $res = $db_conn->query("SELECT * FROM rfq_requests {$query_where} ORDER BY id DESC LIMIT 200");
         if ($res && $res->num_rows > 0) {
             $data = [];
             while ($row = $res->fetch_assoc()) {
@@ -785,6 +789,55 @@ try {
     // 🔄 LIVE GMAIL IMAP SYNC PATH
     $inbox = @imap_open($hostname, $username, $password, OP_READONLY, 1, array('DISABLE_AUTHENTICATOR' => 'GSSAPI'));
     if (!$inbox) {
+        // Fallback gracefully to DB cache if IMAP connection fails or times out
+        if ($db_conn && !$db_conn->connect_error) {
+            $query_where = "WHERE created_at >= '" . $db_conn->real_escape_string($start_date_limit) . " 00:00:00' AND (ai_classification != 'junk' OR ai_classification IS NULL)";
+            $res = $db_conn->query("SELECT * FROM rfq_requests {$query_where} ORDER BY id DESC LIMIT 200");
+            if ($res && $res->num_rows > 0) {
+                $data = [];
+                while ($row = $res->fetch_assoc()) {
+                    $attachments = [];
+                    appendGoogleDriveAttachments($attachments, $row['message_body'], $row['id']);
+                    $data[] = [
+                        'id' => str_replace('RFQ-', 'GMAIL-LIVE-', $row['rfq_number']),
+                        'sender_name' => $row['client_name'] ?: 'Gmail Client',
+                        'sender_email' => $row['client_email'] ?: 'abmalayaindustry@gmail.com',
+                        'recipient_email' => isset($row['recipient_email']) && !empty($row['recipient_email']) ? $row['recipient_email'] : 'abmalayaindustry@gmail.com',
+                        'company' => $row['client_company'] ?: $row['client_name'],
+                        'phone' => '',
+                        'subject' => $row['subject'],
+                        'message_body' => $row['message_body'],
+                        'original_body' => $row['message_body'],
+                        'item_requested' => $row['item_requested'] ?: extractRealRequestedItem($row['subject'], $row['message_body']),
+                        'quantity_requested' => '1 Package',
+                        'budget_estimate' => extractRealBudgetEstimate($row['message_body']),
+                        'date_received' => date('Y-m-d H:i', strtotime($row['created_at'])),
+                        'status' => $row['status'] ?: 'masuk',
+                        'ai_verified' => isset($row['ai_verified']) ? (int)$row['ai_verified'] : 0,
+                        'ai_classification' => isset($row['ai_classification']) ? $row['ai_classification'] : '',
+                        'ai_error' => isset($row['ai_error']) ? $row['ai_error'] : null,
+                        'labels' => ['Primary RFQ'],
+                        'attachments' => $attachments,
+                        'replies' => !empty($row['reply_body']) ? [
+                            [
+                                'body' => $row['reply_body'],
+                                'date' => $row['reply_date'],
+                                'sender' => $row['reply_sender'] ?: ($row['recipient_email'] ?: 'abmalayaindustry@gmail.com')
+                            ]
+                        ] : []
+                    ];
+                }
+                ob_end_clean();
+                echo json_encode([
+                    'status' => 'success',
+                    'source' => 'local_db_cache_imap_fallback',
+                    'fetched_count' => count($data),
+                    'data' => $data,
+                    'notice' => 'IMAP connection timed out/failed, served from DB cache'
+                ], JSON_INVALID_UTF8_IGNORE | JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+        }
         throw new Exception('Cannot connect to Gmail: ' . imap_last_error());
     }
 
@@ -1190,7 +1243,8 @@ try {
                              ELSE 'diproses'
                          END");
 
-        $res = $db_conn->query("SELECT * FROM rfq_requests ORDER BY id DESC LIMIT 200");
+        $query_where = "WHERE created_at >= '" . $db_conn->real_escape_string($start_date_limit) . " 00:00:00' AND (ai_classification != 'junk' OR ai_classification IS NULL)";
+        $res = $db_conn->query("SELECT * FROM rfq_requests {$query_where} ORDER BY id DESC LIMIT 200");
         if ($res && $res->num_rows > 0) {
             $data = [];
             while ($row = $res->fetch_assoc()) {
@@ -1265,8 +1319,8 @@ try {
         'data' => $data
     ], JSON_INVALID_UTF8_IGNORE | JSON_UNESCAPED_UNICODE);
 
-} catch (Exception $e) {
-    ob_end_clean();
+} catch (Throwable $e) {
+    @ob_end_clean();
     echo json_encode([
         'status' => 'error',
         'message' => $e->getMessage()

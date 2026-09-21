@@ -125,15 +125,31 @@ if ($resI && $rowI = $resI->fetch_assoc()) {
 // Fetch Quotation / Invoice Record
 $doc = null;
 if ($type === 'invoice') {
-    $stmt = $connection->prepare("SELECT * FROM invoices WHERE id = ? OR invoice_number = ? LIMIT 1");
+    $stmt = $connection->prepare("SELECT * FROM invoices WHERE id = ? OR invoice_number = ? OR quotation_id = ? LIMIT 1");
     if ($stmt) {
-        $stmt->bind_param("ss", $id, $id);
+        $stmt->bind_param("sss", $id, $id, $id);
         $stmt->execute();
         $r = $stmt->get_result();
         if ($r && $row = $r->fetch_assoc()) {
             $doc = $row;
         }
         $stmt->close();
+    }
+    // Fallback: If no dedicated invoice record found, load quotation and render as Invoice automatically
+    if (!$doc) {
+        $stmtQ = $connection->prepare("SELECT * FROM quotations WHERE id = ? OR quotation_number = ? LIMIT 1");
+        if ($stmtQ) {
+            $stmtQ->bind_param("ss", $id, $id);
+            $stmtQ->execute();
+            $rQ = $stmtQ->get_result();
+            if ($rQ && $rowQ = $rQ->fetch_assoc()) {
+                $doc = $rowQ;
+                $doc['invoice_number'] = 'ABM/INV/' . date('Ymd') . '/' . ($doc['quotation_number'] ?? $doc['id']);
+                $doc['invoice_date'] = date('Y-m-d');
+                $doc['due_date'] = date('Y-m-d', strtotime('+14 days'));
+            }
+            $stmtQ->close();
+        }
     }
 } else {
     $stmt = $connection->prepare("SELECT * FROM quotations WHERE id = ? OR quotation_number = ? LIMIT 1");
@@ -169,6 +185,20 @@ if ($type === 'invoice') {
             }
         }
         $stmtItems->close();
+    }
+    if (empty($items)) {
+        $stmtItemsQ = $connection->prepare("SELECT * FROM quotation_items WHERE quotation_id = ? OR quotation_id = ? OR quotation_id = ? ORDER BY id ASC");
+        if ($stmtItemsQ) {
+            $stmtItemsQ->bind_param("sss", $id, $quoIdPrimary, $quoNumSecondary);
+            $stmtItemsQ->execute();
+            $resItemsQ = $stmtItemsQ->get_result();
+            if ($resItemsQ) {
+                while ($rowItemQ = $resItemsQ->fetch_assoc()) {
+                    $items[] = $rowItemQ;
+                }
+            }
+            $stmtItemsQ->close();
+        }
     }
 } else {
     $stmtItems = $connection->prepare("SELECT * FROM quotation_items WHERE quotation_id = ? OR quotation_id = ? OR quotation_id = ? ORDER BY id ASC");
