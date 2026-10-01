@@ -89,7 +89,7 @@ export const App: React.FC = () => {
     if (cachedUser) {
       try {
         const parsed = JSON.parse(cachedUser);
-        if (parsed && parsed.email && !parsed.email.toLowerCase().includes('purchasing')) {
+        if (parsed && parsed.email) {
           return parsed;
         }
       } catch (e) {}
