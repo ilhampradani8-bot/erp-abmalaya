@@ -34,7 +34,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
   smtpConfig,
   onSaveSmtpConfig,
 }) => {
-  // 8 Primary Apple-style Navigation Tabs
+  // 8 Primary Navigation Tabs (Apple iTunes / System Preferences density)
   const [activeTab, setActiveTab] = useState<
     'credentials' | 'inbox_rules' | 'ai' | 'paper' | 'quotation_settings' | 'invoice' | 'cloud_sync' | 'database'
   >('credentials');
@@ -825,94 +825,41 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
       });
   };
 
-  // 8 Apple-styled Tabs Specification with Custom Gradient Squircle Icons
+  // 8 Fast Apple-styled Tabs Navigation
   const tabs = [
-    { 
-      id: 'credentials', 
-      label: 'Email & SMTP Server', 
-      icon: Key, 
-      color: 'from-blue-500 to-indigo-600',
-      description: 'Host, TLS Port, and App Password'
-    },
-    { 
-      id: 'inbox_rules', 
-      label: 'Inbox Rules & Ingest Date', 
-      icon: Sliders, 
-      color: 'from-purple-500 to-violet-600',
-      description: 'Filters, auto-tagging, and cutoff boundary'
-    },
-    { 
-      id: 'ai', 
-      label: 'AI Engines & Key Pool', 
-      icon: Bot, 
-      color: 'from-pink-500 to-rose-600',
-      description: 'Gemini 2.5 Flash Inbox & OCR key pool'
-    },
-    { 
-      id: 'paper', 
-      label: 'SPH Letterhead & Branding', 
-      icon: FileText, 
-      color: 'from-amber-500 to-orange-600',
-      description: 'Logo, stamp, digital signature & bank'
-    },
-    { 
-      id: 'quotation_settings', 
-      label: 'Quotation Defaults & Fee', 
-      icon: Percent, 
-      color: 'from-emerald-500 to-teal-600',
-      description: 'Currency, Tax rate, and System Fee %'
-    },
-    { 
-      id: 'invoice', 
-      label: 'Invoice Template & Signatory', 
-      icon: Receipt, 
-      color: 'from-cyan-500 to-blue-600',
-      description: 'SSM registration, signatories & terms'
-    },
-    { 
-      id: 'cloud_sync', 
-      label: 'Google Sheets Cloud Backup', 
-      icon: Cloud, 
-      color: 'from-sky-500 to-indigo-500',
-      description: 'Multi-target live product catalog sync'
-    },
-    { 
-      id: 'database', 
-      label: 'SQL Database Architecture', 
-      icon: Database, 
-      color: 'from-slate-600 to-slate-800',
-      description: 'Live MySQL schemas and table registries'
-    },
+    { id: 'credentials', label: '1. Email & SMTP', icon: Key, badge: 'TLS 587' },
+    { id: 'inbox_rules', label: '2. Inbox Rules & Cutoff', icon: Sliders, badge: 'Rules' },
+    { id: 'ai', label: '3. Gemini AI Keys Pool', icon: Bot, badge: 'Pool' },
+    { id: 'paper', label: '4. SPH Letterhead & Paper', icon: FileText, badge: 'SPH' },
+    { id: 'quotation_settings', label: '5. Quotation Defaults & Fee', icon: Percent, badge: 'Fee' },
+    { id: 'invoice', label: '6. Invoice Format & Signatory', icon: Receipt, badge: 'Invoice' },
+    { id: 'cloud_sync', label: '7. Google Sheets Backup', icon: Cloud, badge: 'Sheets' },
+    { id: 'database', label: '8. MySQL Tables & Schema', icon: Database, badge: 'MySQL' },
   ];
 
   // Core MySQL Tables Registry
   const coreTables = [
-    { name: 'rfq_requests', label: 'RFQ Inquiries Registry', type: 'InnoDB', charset: 'utf8mb4', estimatedRows: 'RFQ Table', desc: 'Incoming RFQ email inquiries and manual entries.' },
-    { name: 'quotations', label: 'Quotation Documents (SPH)', type: 'InnoDB', charset: 'utf8mb4', estimatedRows: 'SPH Table', desc: 'Header data, SPH numbers, grand totals, SST/tax, and validity.' },
-    { name: 'quotation_items', label: 'Quotation Line Items', type: 'InnoDB', charset: 'utf8mb4', estimatedRows: 'SPH Items', desc: 'Item rows, IMPA codes, quantities, unit prices, and discounts.' },
-    { name: 'invoices', label: 'Official Invoice Documents', type: 'InnoDB', charset: 'utf8mb4', estimatedRows: 'Invoice Table', desc: 'Commercial invoices, invoice numbers, due dates, and paid status.' },
-    { name: 'invoice_items', label: 'Invoice Line Items', type: 'InnoDB', charset: 'utf8mb4', estimatedRows: 'Invoice Items', desc: 'Billed items, scope of supply, units, and itemized amounts.' },
-    { name: 'products', label: 'Master Product Catalog', type: 'InnoDB', charset: 'utf8mb4', estimatedRows: 'Products', desc: 'Standard parts catalog, IMPA/SKU, description, and supplier.' },
-    { name: 'product_categories', label: 'Product Categories', type: 'InnoDB', charset: 'utf8mb4', estimatedRows: 'Categories', desc: 'Hierarchical category structure and classification rules.' },
-    { name: 'product_change_logs', label: 'Product Audit Logs', type: 'InnoDB', charset: 'utf8mb4', estimatedRows: 'Audit Trail', desc: 'Change history for pricing, specs, and supplier updates.' },
-    { name: 'spreadsheet_backups', label: 'Cloud Spreadsheet Targets', type: 'InnoDB', charset: 'utf8mb4', estimatedRows: 'Cloud Targets', desc: 'Google Sheets IDs for automated master catalog sync.' },
-    { name: 'gemini_api_keys', label: 'Gemini AI API Keys Pool', type: 'InnoDB', charset: 'utf8mb4', estimatedRows: 'AI Keys Pool', desc: 'Active API key pool for AI RFQ classification and OCR PDF scans.' },
-    { name: 'api_credentials', label: 'System Configuration Store', type: 'InnoDB', charset: 'utf8mb4', estimatedRows: 'Config Store', desc: 'SMTP server settings, filter rules, and system fee parameters.' },
-    { name: 'system_paper_settings', label: 'SPH Letterhead Configuration', type: 'InnoDB', charset: 'utf8mb4', estimatedRows: 'SPH Config', desc: 'Letterhead branding, logos, official stamps, and bank accounts.' },
-    { name: 'system_invoice_settings', label: 'Invoice Format Settings', type: 'InnoDB', charset: 'utf8mb4', estimatedRows: 'Invoice Config', desc: 'Invoice headers, SSM number, signatories, and payment terms.' },
-    { name: 'users', label: 'System User Accounts', type: 'InnoDB', charset: 'utf8mb4', estimatedRows: 'User Accounts', desc: 'Active logins, role-based access controls, and password hashes.' },
-    { name: 'user_activity_logs', label: 'Security & Activity Logs', type: 'InnoDB', charset: 'utf8mb4', estimatedRows: 'Activity Logs', desc: 'Audit record of user logins, quotation dispatches, and changes.' },
+    { name: 'rfq_requests', label: 'RFQ Inquiries Registry', type: 'InnoDB', charset: 'utf8mb4', desc: 'Incoming RFQ inquiries and manual quotes.' },
+    { name: 'quotations', label: 'Quotation Documents (SPH)', type: 'InnoDB', charset: 'utf8mb4', desc: 'Header data, SPH numbers, grand totals, SST, and validity.' },
+    { name: 'quotation_items', label: 'Quotation Line Items', type: 'InnoDB', charset: 'utf8mb4', desc: 'Item rows, IMPA codes, quantities, and unit prices.' },
+    { name: 'invoices', label: 'Official Invoices', type: 'InnoDB', charset: 'utf8mb4', desc: 'Commercial invoices, numbers, due dates, and paid status.' },
+    { name: 'invoice_items', label: 'Invoice Line Items', type: 'InnoDB', charset: 'utf8mb4', desc: 'Itemized products/services billed in invoice.' },
+    { name: 'products', label: 'Master Product Catalog', type: 'InnoDB', charset: 'utf8mb4', desc: 'Standard catalog, IMPA/SKU, description, and supplier.' },
+    { name: 'product_categories', label: 'Product Categories', type: 'InnoDB', charset: 'utf8mb4', desc: 'Category structure and auto-classification rules.' },
+    { name: 'product_change_logs', label: 'Product Audit Logs', type: 'InnoDB', charset: 'utf8mb4', desc: 'Change history for pricing, specs, and supplier updates.' },
+    { name: 'spreadsheet_backups', label: 'Cloud Spreadsheet Targets', type: 'InnoDB', charset: 'utf8mb4', desc: 'Google Sheets IDs for automated catalog backup.' },
+    { name: 'gemini_api_keys', label: 'Gemini AI API Keys Pool', type: 'InnoDB', charset: 'utf8mb4', desc: 'API key pool for AI RFQ classification and OCR PDF scans.' },
+    { name: 'api_credentials', label: 'Configuration Key-Value Store', type: 'InnoDB', charset: 'utf8mb4', desc: 'SMTP settings, filter rules, and system fee parameters.' },
+    { name: 'system_paper_settings', label: 'SPH Letterhead Configuration', type: 'InnoDB', charset: 'utf8mb4', desc: 'Branding, logos, official stamps, and bank accounts.' },
+    { name: 'system_invoice_settings', label: 'Invoice Format Settings', type: 'InnoDB', charset: 'utf8mb4', desc: 'Invoice headers, SSM number, signatories, and payment terms.' },
+    { name: 'users', label: 'System User Accounts', type: 'InnoDB', charset: 'utf8mb4', desc: 'Logins, role-based permissions, and password hashes.' },
+    { name: 'user_activity_logs', label: 'Security & Activity Logs', type: 'InnoDB', charset: 'utf8mb4', desc: 'Audit record of user logins and system dispatches.' },
   ];
 
-  const filteredTabs = tabs.filter(t => 
-    t.label.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    t.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   return (
-    <div className="w-full flex-1 bg-[#f5f6f8] text-slate-800 font-sans min-h-screen flex flex-col antialiased">
+    <div className="w-full flex-1 bg-[#f0f2f5] text-slate-800 font-sans min-h-screen flex flex-col antialiased overflow-y-auto">
       
-      {/* ── TOP NOTIFICATION BANNER ────────────────────────────────────────── */}
+      {/* ── TOP NOTIFICATION TOAST BANNER ───────────────────────────────────── */}
       {isSaved && (
         <div className="w-full bg-emerald-600 text-white px-5 py-2.5 flex items-center justify-between text-xs font-semibold shadow-md z-30 animate-in fade-in sticky top-0">
           <div className="flex items-center space-x-2.5">
@@ -923,985 +870,890 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         </div>
       )}
 
-      {/* ── APPLE SYSTEM SETTINGS MASTER LAYOUT (SIDEBAR + MAIN CONTENT) ────── */}
-      <div className="w-full flex-1 flex flex-col md:flex-row max-w-[1600px] mx-auto p-4 md:p-6 gap-6">
-        
-        {/* ── LEFT SIDEBAR (Apple macOS Style Navigation) ───────────────────── */}
-        <aside className="w-full md:w-80 flex-shrink-0 flex flex-col space-y-4">
-          
-          {/* Header Card */}
-          <div className="p-4 bg-white/80 backdrop-blur-xl border border-slate-200/80 rounded-2xl shadow-xs">
-            <div className="flex items-center space-x-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-sm">
-                <SlidersHorizontal className="w-5 h-5" />
-              </div>
-              <div>
-                <h1 className="text-base font-bold text-slate-900 tracking-tight">System Settings</h1>
-                <p className="text-xs text-slate-500 font-medium">ERP Core & Services</p>
-              </div>
+      {/* ── FAST SILVER HEADER & SEGMENTED TABS (Classic Apple iTunes / Mac Preferences Style) ── */}
+      <header className="w-full bg-gradient-to-b from-white via-slate-50 to-slate-100 border-b border-slate-300 shadow-2xs sticky top-0 z-20">
+        <div className="max-w-[1600px] mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-blue-600 to-indigo-700 flex items-center justify-center text-white font-bold shadow-xs">
+              <Server className="w-4 h-4" />
             </div>
-
-            {/* Quick Search Bar */}
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search settings..."
-                className="w-full pl-8 pr-3 py-1.5 bg-slate-100/80 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-blue-500/30 transition-all"
-              />
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-bold text-slate-900 uppercase tracking-tight">System Settings</span>
+                <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.2 rounded border border-blue-200 font-mono">
+                  MySQL 8.0 Live
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500">Configure email servers, AI keys, document letterheads, and database registries.</p>
             </div>
           </div>
 
-          {/* Navigation Items List */}
-          <nav className="bg-white/80 backdrop-blur-xl border border-slate-200/80 rounded-2xl shadow-xs p-2 space-y-1">
-            {filteredTabs.map((tab) => {
+          {/* Segmented Fast Tab Bar */}
+          <nav className="flex items-center flex-wrap gap-1 bg-slate-200/80 p-1 rounded-lg border border-slate-300 shadow-inner">
+            {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl transition-all text-left cursor-pointer ${
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-blue-600 text-white shadow-sm font-semibold'
-                      : 'text-slate-700 hover:bg-slate-100/80 hover:text-slate-900'
+                      ? 'bg-blue-600 text-white shadow-xs font-bold'
+                      : 'text-slate-700 hover:text-slate-900 hover:bg-white/80'
                   }`}
                 >
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-white flex-shrink-0 bg-gradient-to-br ${tab.color} shadow-2xs`}>
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium truncate">{tab.label}</div>
-                    <div className={`text-[10px] truncate ${isActive ? 'text-blue-100' : 'text-slate-400'}`}>
-                      {tab.description}
-                    </div>
-                  </div>
+                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-slate-500'}`} />
+                  <span>{tab.label}</span>
                 </button>
               );
             })}
           </nav>
+        </div>
+      </header>
 
-          {/* System Status Pill Card */}
-          <div className="p-3.5 bg-white/60 backdrop-blur-md border border-slate-200/60 rounded-2xl text-xs space-y-2">
-            <div className="flex items-center justify-between text-slate-600 text-[11px] font-medium">
-              <span className="flex items-center space-x-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Database Status</span>
-              </span>
-              <span className="font-mono text-slate-700 font-semibold">MySQL 8.0</span>
-            </div>
-            <div className="flex items-center justify-between text-slate-600 text-[11px] font-medium">
-              <span>Sync Engine</span>
-              <span className="font-mono text-blue-600 font-semibold">Auto Active</span>
-            </div>
-          </div>
-        </aside>
+      {/* ── MAIN SETTINGS BODY PANE (High Density, Fast & Clean) ─────────────── */}
+      <main className="w-full flex-1 max-w-[1600px] mx-auto p-4 md:p-6 space-y-6">
 
-        {/* ── RIGHT MAIN CONTENT PANE (Apple Inset Grouped Style) ────────────── */}
-        <main className="flex-1 min-w-0 flex flex-col space-y-6">
-
-          {/* ════════════════════════════════════════════════════════════════════
-              TAB 1: EMAIL & SMTP SERVER
-          ════════════════════════════════════════════════════════════════════ */}
-          {activeTab === 'credentials' && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="bg-white/90 backdrop-blur-xl border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-900">Email & SMTP Server Settings</h2>
-                    <p className="text-xs text-slate-500">Configure outbound email delivery service (Stored in SQL: <code className="text-blue-600 font-mono">api_credentials</code>)</p>
-                  </div>
-                  <span className="text-xs font-mono bg-blue-50 text-blue-600 font-semibold px-2.5 py-1 rounded-full border border-blue-100">
-                    TLS 587
-                  </span>
+        {/* ════════════════════════════════════════════════════════════════════
+            TAB 1: EMAIL & SMTP SERVER
+        ════════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'credentials' && (
+          <div className="w-full space-y-4 animate-in fade-in">
+            <div className="w-full bg-white border border-slate-300 rounded-xl shadow-xs overflow-hidden">
+              <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Key className="w-4 h-4 text-blue-600" />
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Outbound SMTP Server Configuration (MySQL: api_credentials)</span>
                 </div>
-
-                <form onSubmit={handleSaveSmtp} className="p-6 space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">SMTP Host</label>
-                      <input
-                        type="text"
-                        value={formConfig.host}
-                        onChange={(e) => setFormConfig({ ...formConfig, host: e.target.value })}
-                        placeholder="smtp.gmail.com"
-                        className="w-full px-3.5 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 focus:outline-hidden font-mono"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">SMTP Port</label>
-                      <input
-                        type="number"
-                        value={formConfig.port}
-                        onChange={(e) => setFormConfig({ ...formConfig, port: Number(e.target.value) })}
-                        placeholder="587"
-                        className="w-full px-3.5 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 focus:outline-hidden font-mono"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">Sender Email / Username</label>
-                      <input
-                        type="email"
-                        value={formConfig.from_email || formConfig.username}
-                        onChange={(e) => setFormConfig({ ...formConfig, from_email: e.target.value, username: e.target.value })}
-                        placeholder="sales@abmalaya.com"
-                        className="w-full px-3.5 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 focus:outline-hidden font-mono"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">App Password (16 Characters)</label>
-                      <div className="relative">
-                        <input
-                          type={showPassword ? 'text' : 'password'}
-                          value={plainPassword}
-                          onChange={(e) => setPlainPassword(e.target.value)}
-                          placeholder="•••• •••• •••• ••••"
-                          className="w-full px-3.5 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 focus:outline-hidden font-mono pr-10"
-                          required
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
-                    <span className="text-xs text-slate-500">
-                      Credentials are encrypted and safely stored in the MySQL database table.
-                    </span>
-                    <button
-                      type="submit"
-                      className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      <span>Save Email Settings</span>
-                    </button>
-                  </div>
-                </form>
+                <span className="text-[11px] text-slate-500 font-mono">TLS Port 587</span>
               </div>
-            </div>
-          )}
 
-          {/* ════════════════════════════════════════════════════════════════════
-              TAB 2: INBOX RULES & INGEST DATE BOUNDARY
-          ════════════════════════════════════════════════════════════════════ */}
-          {activeTab === 'inbox_rules' && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="bg-white/90 backdrop-blur-xl border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <form onSubmit={handleSaveSmtp} className="p-5 space-y-4 text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
-                    <h2 className="text-sm font-bold text-slate-900">Email Ingestion & Filter Rules</h2>
-                    <p className="text-xs text-slate-500">Automated classification rules and start date cutoff boundary</p>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">SMTP Host</label>
+                    <input
+                      type="text"
+                      value={formConfig.host}
+                      onChange={(e) => setFormConfig({ ...formConfig, host: e.target.value })}
+                      placeholder="smtp.gmail.com"
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-hidden font-mono"
+                      required
+                    />
                   </div>
-                  <button
-                    onClick={handleSaveInboxRules}
-                    className="inline-flex items-center space-x-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    <span>Save Rules</span>
-                  </button>
-                </div>
 
-                <div className="p-6 space-y-5">
-                  {/* Date Boundary Box */}
-                  <div className="p-4 bg-slate-50/80 border border-slate-200/80 rounded-xl flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <span className="text-xs font-bold text-slate-800">Email Ingestion Date Cutoff</span>
-                      <p className="text-[11px] text-slate-500">Emails received before this date are skipped automatically for faster sync.</p>
-                    </div>
-                    <div className="flex items-center space-x-2">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">SMTP Port</label>
+                    <input
+                      type="number"
+                      value={formConfig.port}
+                      onChange={(e) => setFormConfig({ ...formConfig, port: Number(e.target.value) })}
+                      placeholder="587"
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-hidden font-mono"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Sender Email / Username</label>
+                    <input
+                      type="email"
+                      value={formConfig.from_email || formConfig.username}
+                      onChange={(e) => setFormConfig({ ...formConfig, from_email: e.target.value, username: e.target.value })}
+                      placeholder="sales@abmalaya.com"
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-hidden font-mono"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">App Password (16 Characters)</label>
+                    <div className="relative">
                       <input
-                        type="date"
-                        value={inboxRules.fetchStartDate}
-                        onChange={(e) => setInboxRules({ ...inboxRules, fetchStartDate: e.target.value })}
-                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 focus:outline-hidden"
+                        type={showPassword ? 'text' : 'password'}
+                        value={plainPassword}
+                        onChange={(e) => setPlainPassword(e.target.value)}
+                        placeholder="•••• •••• •••• ••••"
+                        className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-hidden font-mono pr-9"
+                        required
                       />
                       <button
                         type="button"
-                        onClick={() => setInboxRules({ ...inboxRules, fetchStartDate: '' })}
-                        className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-rose-600 hover:bg-slate-200/60 rounded-xl transition-all cursor-pointer"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
                       >
-                        Reset
+                        {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       </button>
                     </div>
                   </div>
-
-                  {/* Rules Grouped Inset List */}
-                  <div className="divide-y divide-slate-100 border border-slate-200/80 rounded-xl overflow-hidden bg-white">
-                    {[
-                      {
-                        key: 'excludeNoreply',
-                        title: 'Exclude Automated No-Reply Emails',
-                        desc: 'Filter out noreply@, notification@, and automated robotic senders.'
-                      },
-                      {
-                        key: 'excludeMedsos',
-                        title: 'Exclude Social Media & Marketing Notifications',
-                        desc: 'Skip newsletters, LinkedIn, marketing, and spam promotional materials.'
-                      },
-                      {
-                        key: 'prioritizePdf',
-                        title: 'Prioritize Inquiries with PDF Attachments',
-                        desc: 'Place inquiries containing technical RFQ documents at the top of the queue.'
-                      },
-                      {
-                        key: 'requireAttachment',
-                        title: 'Require Attachments for RFQ Ingestion',
-                        desc: 'Only classify emails that contain at least one file attachment as an RFQ.'
-                      },
-                      {
-                        key: 'autoLabelRfq',
-                        title: 'Automatic RFQ Tagging & Status Labeling',
-                        desc: 'Apply classification tags (Equipment, Spare Parts, General Supply) automatically.'
-                      },
-                      {
-                        key: 'excludeSystemAlerts',
-                        title: 'Exclude System & IT Infrastructure Alerts',
-                        desc: 'Ignore server alarms, delivery failure notices, and DNS reports.'
-                      },
-                    ].map((rule) => (
-                      <div key={rule.key} className="p-4 flex items-center justify-between hover:bg-slate-50/50 transition-all">
-                        <div className="pr-4">
-                          <div className="text-xs font-semibold text-slate-800">{rule.title}</div>
-                          <div className="text-[11px] text-slate-500">{rule.desc}</div>
-                        </div>
-                        {/* Apple Style Toggle Switch */}
-                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                          <input
-                            type="checkbox"
-                            checked={(inboxRules as any)[rule.key]}
-                            onChange={(e) => setInboxRules({ ...inboxRules, [rule.key]: e.target.checked })}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                        </label>
-                      </div>
-                    ))}
-                  </div>
                 </div>
-              </div>
-            </div>
-          )}
 
-          {/* ════════════════════════════════════════════════════════════════════
-              TAB 3: AI ENGINES & KEY POOL
-          ════════════════════════════════════════════════════════════════════ */}
-          {activeTab === 'ai' && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              {/* Pool 1: Inbox RFQ AI */}
-              <div className="bg-white/90 backdrop-blur-xl border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center text-white shadow-2xs">
-                      <Bot className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-bold text-slate-900">RFQ Inbox Classification AI Pool</h2>
-                      <p className="text-xs text-slate-500">Gemini 2.5 Flash keys for intelligent email parsing and customer RFQ detection</p>
-                    </div>
-                  </div>
+                <div className="pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] text-slate-500">Credentials are safely encrypted and stored in MySQL database table <code className="text-blue-600 font-mono">api_credentials</code>.</span>
                   <button
-                    onClick={() => {
-                      setModalKeyPool('inbox');
-                      setEditingKeyItem(null);
-                      setModalAlias('');
-                      setModalKeyString('');
-                      setIsAiModalOpen(true);
-                    }}
-                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Key</span>
-                  </button>
-                </div>
-
-                <div className="p-6 space-y-3">
-                  {inboxAiKeys.map((item) => (
-                    <div key={item.id} className="p-4 bg-slate-50/80 border border-slate-200/80 rounded-xl flex flex-wrap items-center justify-between gap-3">
-                      <div className="space-y-1">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs font-bold text-slate-900">{item.alias}</span>
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                            item.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
-                          }`}>
-                            {item.status.toUpperCase()}
-                          </span>
-                        </div>
-                        <div className="text-xs font-mono text-slate-600">{maskKey(item.key)}</div>
-                        <div className="text-[11px] text-slate-500 flex items-center space-x-3 font-medium">
-                          <span>Model: <code className="text-blue-600 font-mono">{item.modelName}</code></span>
-                          <span>•</span>
-                          <span>Quota: {item.dailyLimit}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleToggleAiKeyStatus(item.id, 'inbox')}
-                          className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                            item.status === 'active' ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                          }`}
-                        >
-                          {item.status === 'active' ? 'Disable' : 'Enable'}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setModalKeyPool('inbox');
-                            setEditingKeyItem(item);
-                            setModalAlias(item.alias);
-                            setModalKeyString(item.key);
-                            setIsAiModalOpen(true);
-                          }}
-                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-200/60 rounded-lg transition-all cursor-pointer"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteAiKey(item.id, 'inbox')}
-                          className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-200/60 rounded-lg transition-all cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Pool 2: OCR Vision AI */}
-              <div className="bg-white/90 backdrop-blur-xl border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-2xs">
-                      <ScanLine className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-bold text-slate-900">Vision OCR Document Scanning Pool</h2>
-                      <p className="text-xs text-slate-500">Gemini 2.5 Flash Vision keys for high-speed PDF & image table extraction</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setModalKeyPool('ocr');
-                      setEditingKeyItem(null);
-                      setModalAlias('');
-                      setModalKeyString('');
-                      setIsAiModalOpen(true);
-                    }}
-                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Key</span>
-                  </button>
-                </div>
-
-                <div className="p-6 space-y-3">
-                  {ocrAiKeys.map((item) => (
-                    <div key={item.id} className="p-4 bg-slate-50/80 border border-slate-200/80 rounded-xl flex flex-wrap items-center justify-between gap-3">
-                      <div className="space-y-1">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs font-bold text-slate-900">{item.alias}</span>
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                            item.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
-                          }`}>
-                            {item.status.toUpperCase()}
-                          </span>
-                        </div>
-                        <div className="text-xs font-mono text-slate-600">{maskKey(item.key)}</div>
-                        <div className="text-[11px] text-slate-500 flex items-center space-x-3 font-medium">
-                          <span>Model: <code className="text-indigo-600 font-mono">{item.modelName}</code></span>
-                          <span>•</span>
-                          <span>Quota: {item.dailyLimit}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleToggleAiKeyStatus(item.id, 'ocr')}
-                          className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                            item.status === 'active' ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                          }`}
-                        >
-                          {item.status === 'active' ? 'Disable' : 'Enable'}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setModalKeyPool('ocr');
-                            setEditingKeyItem(item);
-                            setModalAlias(item.alias);
-                            setModalKeyString(item.key);
-                            setIsAiModalOpen(true);
-                          }}
-                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-200/60 rounded-lg transition-all cursor-pointer"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteAiKey(item.id, 'ocr')}
-                          className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-200/60 rounded-lg transition-all cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ════════════════════════════════════════════════════════════════════
-              TAB 4: SPH LETTERHEAD & PAPER BRANDING
-          ════════════════════════════════════════════════════════════════════ */}
-          {activeTab === 'paper' && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="bg-white/90 backdrop-blur-xl border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-900">SPH Letterhead & Branding Layout</h2>
-                    <p className="text-xs text-slate-500">Customize quotation documents, logos, official stamps, and bank accounts</p>
-                  </div>
-                  <button
-                    onClick={handleSavePaper}
-                    className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
+                    type="submit"
+                    className="inline-flex items-center space-x-1.5 px-4 py-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-lg shadow-xs text-xs transition-all cursor-pointer"
                   >
                     <Save className="w-3.5 h-3.5" />
-                    <span>Save SPH Settings</span>
+                    <span>Save Email Configuration</span>
                   </button>
                 </div>
-
-                <div className="p-6 space-y-6">
-                  {/* Uploads Row */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    {[
-                      { label: 'Company Logo', type: 'logo', val: paperSettings.logoUrl },
-                      { label: 'Official Stamp', type: 'stamp', val: paperSettings.stampUrl },
-                      { label: 'Digital Signature', type: 'signature', val: paperSettings.signatureUrl },
-                      { label: 'Header Banner', type: 'header_image', val: paperSettings.headerImageUrl },
-                    ].map((item) => (
-                      <div key={item.type} className="p-3.5 bg-slate-50/80 border border-slate-200/80 rounded-xl flex flex-col items-center justify-center space-y-2 text-center">
-                        <span className="text-xs font-semibold text-slate-700">{item.label}</span>
-                        {item.val ? (
-                          <img src={item.val} alt={item.label} className="h-12 object-contain rounded border border-slate-200 bg-white p-1" />
-                        ) : (
-                          <div className="h-12 w-full flex items-center justify-center border border-dashed border-slate-300 rounded text-[11px] text-slate-400">
-                            No Asset
-                          </div>
-                        )}
-                        <label className="cursor-pointer inline-flex items-center space-x-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700">
-                          <Upload className="w-3.5 h-3.5" />
-                          <span>Upload</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => handleUploadPaperImage(e, item.type as any)}
-                            className="hidden"
-                          />
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Company Info Fields */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">Company Name</label>
-                      <input
-                        type="text"
-                        value={paperSettings.companyName}
-                        onChange={(e) => setPaperSettings({ ...paperSettings, companyName: e.target.value })}
-                        className="w-full px-3.5 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 focus:outline-hidden"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">Official Contact Phone</label>
-                      <input
-                        type="text"
-                        value={paperSettings.phone}
-                        onChange={(e) => setPaperSettings({ ...paperSettings, phone: e.target.value })}
-                        className="w-full px-3.5 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 focus:outline-hidden"
-                      />
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">Company Address</label>
-                      <textarea
-                        rows={2}
-                        value={paperSettings.companyAddress}
-                        onChange={(e) => setPaperSettings({ ...paperSettings, companyAddress: e.target.value })}
-                        className="w-full px-3.5 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 focus:outline-hidden"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Bank Details */}
-                  <div className="p-4 bg-slate-50/80 border border-slate-200/80 rounded-xl space-y-3">
-                    <span className="text-xs font-bold text-slate-900 block">Bank Account for Quotation Payment</span>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Bank Name</label>
-                        <input
-                          type="text"
-                          value={paperSettings.bankName}
-                          onChange={(e) => setPaperSettings({ ...paperSettings, bankName: e.target.value })}
-                          placeholder="Maybank Islamic Berhad"
-                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-hidden"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Account Number</label>
-                        <input
-                          type="text"
-                          value={paperSettings.bankAccountNumber}
-                          onChange={(e) => setPaperSettings({ ...paperSettings, bankAccountNumber: e.target.value })}
-                          placeholder="5648 9201 3345"
-                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 font-mono focus:outline-hidden"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Account Holder Name</label>
-                        <input
-                          type="text"
-                          value={paperSettings.bankAccountName}
-                          onChange={(e) => setPaperSettings({ ...paperSettings, bankAccountName: e.target.value })}
-                          placeholder="AB MALAYA SDN BHD"
-                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-hidden"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              </form>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* ════════════════════════════════════════════════════════════════════
-              TAB 5: QUOTATION DEFAULTS & SOFTWARE FEE
-          ════════════════════════════════════════════════════════════════════ */}
-          {activeTab === 'quotation_settings' && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="bg-white/90 backdrop-blur-xl border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-900">Quotation Defaults & System Fee Rules</h2>
-                    <p className="text-xs text-slate-500">Configure currency codes, SST/tax rates, quotation validity, and platform fee caps</p>
-                  </div>
-                  <button
-                    onClick={handleSaveQuotationSettings}
-                    className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    <span>Save Settings</span>
-                  </button>
+        {/* ════════════════════════════════════════════════════════════════════
+            TAB 2: INBOX RULES & INGEST DATE BOUNDARY
+        ════════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'inbox_rules' && (
+          <div className="w-full space-y-4 animate-in fade-in">
+            <div className="w-full bg-white border border-slate-300 rounded-xl shadow-xs overflow-hidden">
+              <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Sliders className="w-4 h-4 text-purple-600" />
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Automated Ingestion Rules & Ingest Date Boundary</span>
                 </div>
-
-                <div className="p-6 space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">Default Currency</label>
-                      <select
-                        value={quotationSettings.currency}
-                        onChange={(e) => setQuotationSettings({ ...quotationSettings, currency: e.target.value })}
-                        className="w-full px-3.5 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs text-slate-800 font-semibold focus:outline-hidden"
-                      >
-                        <option value="MYR">MYR - Malaysian Ringgit (RM)</option>
-                        <option value="USD">USD - US Dollar ($)</option>
-                        <option value="SGD">SGD - Singapore Dollar (S$)</option>
-                        <option value="IDR">IDR - Indonesian Rupiah (Rp)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">Tax Rate (%)</label>
-                      <input
-                        type="number"
-                        value={quotationSettings.taxPercent}
-                        onChange={(e) => setQuotationSettings({ ...quotationSettings, taxPercent: Number(e.target.value) })}
-                        placeholder="11"
-                        className="w-full px-3.5 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs text-slate-800 font-mono focus:outline-hidden"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">Quotation Validity</label>
-                      <input
-                        type="text"
-                        value={quotationSettings.validUntil}
-                        onChange={(e) => setQuotationSettings({ ...quotationSettings, validUntil: e.target.value })}
-                        placeholder="14 Days"
-                        className="w-full px-3.5 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden"
-                      />
-                    </div>
-                  </div>
-
-                  {/* System Fee Box */}
-                  <div className="p-5 bg-gradient-to-br from-blue-50/60 to-indigo-50/60 border border-blue-200/80 rounded-2xl space-y-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs">
-                        <Percent className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <span className="text-xs font-bold text-slate-900">Platform & System Software Fee</span>
-                        <p className="text-[11px] text-slate-500">Calculated on total quotation margin with an automatic safety cap</p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">Fee Percentage (%)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={softwareFee.percent}
-                          onChange={(e) => setSoftwareFee({ ...softwareFee, percent: Number(e.target.value) })}
-                          className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 focus:outline-hidden"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">Maximum Fee Cap ({quotationSettings.currency})</label>
-                        <input
-                          type="number"
-                          value={softwareFee.maxLimit}
-                          onChange={(e) => setSoftwareFee({ ...softwareFee, maxLimit: Number(e.target.value) })}
-                          className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 focus:outline-hidden"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <button
+                  onClick={handleSaveInboxRules}
+                  className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-lg shadow-xs text-xs transition-all cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save Rules</span>
+                </button>
               </div>
-            </div>
-          )}
 
-          {/* ════════════════════════════════════════════════════════════════════
-              TAB 6: INVOICE TEMPLATE & SIGNATORIES
-          ════════════════════════════════════════════════════════════════════ */}
-          {activeTab === 'invoice' && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="bg-white/90 backdrop-blur-xl border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="p-5 space-y-4">
+                {/* Date Boundary Box */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg flex flex-wrap items-center justify-between gap-3 text-xs">
                   <div>
-                    <h2 className="text-sm font-bold text-slate-900">Commercial Invoice Document Settings</h2>
-                    <p className="text-xs text-slate-500">Configure SSM business registration, signatories, payment instructions, and terms</p>
+                    <span className="font-bold text-slate-900">Email Ingestion Date Cutoff</span>
+                    <p className="text-[11px] text-slate-500">Emails received before this date will be automatically ignored to speed up background sync.</p>
                   </div>
-                  <button
-                    onClick={handleSaveInvoiceSettings}
-                    className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    <span>Save Invoice Settings</span>
-                  </button>
-                </div>
-
-                <div className="p-6 space-y-6">
-                  {/* Uploads Row */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    {[
-                      { label: 'Invoice Logo', type: 'logo', val: invoiceSettings.logoUrl },
-                      { label: 'Official Stamp', type: 'stamp', val: invoiceSettings.stampUrl },
-                      { label: 'Signatory Signature', type: 'signature', val: invoiceSettings.signatureUrl },
-                      { label: 'Header Banner', type: 'header_image', val: invoiceSettings.headerImageUrl },
-                    ].map((item) => (
-                      <div key={item.type} className="p-3.5 bg-slate-50/80 border border-slate-200/80 rounded-xl flex flex-col items-center justify-center space-y-2 text-center">
-                        <span className="text-xs font-semibold text-slate-700">{item.label}</span>
-                        {item.val ? (
-                          <img src={item.val} alt={item.label} className="h-12 object-contain rounded border border-slate-200 bg-white p-1" />
-                        ) : (
-                          <div className="h-12 w-full flex items-center justify-center border border-dashed border-slate-300 rounded text-[11px] text-slate-400">
-                            No Asset
-                          </div>
-                        )}
-                        <label className="cursor-pointer inline-flex items-center space-x-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700">
-                          <Upload className="w-3.5 h-3.5" />
-                          <span>Upload</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => handleUploadInvoiceImage(e, item.type as any)}
-                            className="hidden"
-                          />
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">SSM Registration Number</label>
-                      <input
-                        type="text"
-                        value={invoiceSettings.ssmNumber}
-                        onChange={(e) => setInvoiceSettings({ ...invoiceSettings, ssmNumber: e.target.value })}
-                        placeholder="202101012345 (1412644-T)"
-                        className="w-full px-3.5 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:outline-hidden"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">Signatory Full Name</label>
-                      <input
-                        type="text"
-                        value={invoiceSettings.signatoryName}
-                        onChange={(e) => setInvoiceSettings({ ...invoiceSettings, signatoryName: e.target.value })}
-                        placeholder="Aiman Zaki"
-                        className="w-full px-3.5 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">Signatory Designation / Title</label>
-                      <input
-                        type="text"
-                        value={invoiceSettings.signatoryTitle}
-                        onChange={(e) => setInvoiceSettings({ ...invoiceSettings, signatoryTitle: e.target.value })}
-                        placeholder="Managing Director"
-                        className="w-full px-3.5 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">Bank SWIFT / BIC Code</label>
-                      <input
-                        type="text"
-                        value={invoiceSettings.bankSwiftCode}
-                        onChange={(e) => setInvoiceSettings({ ...invoiceSettings, bankSwiftCode: e.target.value })}
-                        placeholder="MBBEMYKL"
-                        className="w-full px-3.5 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:outline-hidden"
-                      />
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">Invoice Payment Instructions & Terms</label>
-                      <textarea
-                        rows={3}
-                        value={invoiceSettings.paymentTerms}
-                        onChange={(e) => setInvoiceSettings({ ...invoiceSettings, paymentTerms: e.target.value })}
-                        className="w-full px-3.5 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ════════════════════════════════════════════════════════════════════
-              TAB 7: GOOGLE SHEETS CLOUD SYNC
-          ════════════════════════════════════════════════════════════════════ */}
-          {activeTab === 'cloud_sync' && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="bg-white/90 backdrop-blur-xl border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-900">Google Sheets Cloud Backup Targets</h2>
-                    <p className="text-xs text-slate-500">Synchronize products, pricing, and supplier catalogs to Google Spreadsheets</p>
-                  </div>
-                  <button
-                    onClick={() => setIsAddBackupModalOpen(true)}
-                    className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Target</span>
-                  </button>
-                </div>
-
-                <div className="p-6 space-y-4">
-                  {/* Service Account Email Info Box */}
-                  <div className="p-4 bg-slate-50/80 border border-slate-200/80 rounded-xl flex flex-wrap items-center justify-between gap-3">
-                    <div className="space-y-0.5">
-                      <span className="text-xs font-bold text-slate-900">Google Service Account</span>
-                      <p className="text-[11px] text-slate-500">Share your Google Spreadsheet with Editor permissions to this account:</p>
-                      <code className="text-xs font-mono text-blue-600 font-semibold block pt-1">
-                        erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com
-                      </code>
-                    </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="date"
+                      value={inboxRules.fetchStartDate}
+                      onChange={(e) => setInboxRules({ ...inboxRules, fetchStartDate: e.target.value })}
+                      className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:outline-hidden focus:border-blue-500"
+                    />
                     <button
-                      onClick={() => handleCopyEmail('erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com')}
-                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl text-xs font-semibold text-slate-700 shadow-2xs transition-all cursor-pointer"
+                      type="button"
+                      onClick={() => setInboxRules({ ...inboxRules, fetchStartDate: '' })}
+                      className="px-2.5 py-1.5 text-xs text-slate-600 hover:text-rose-600 hover:bg-slate-200 rounded-lg cursor-pointer"
                     >
-                      {isCopiedEmail ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{isCopiedEmail ? 'Copied' : 'Copy Email'}</span>
+                      Reset Date
                     </button>
                   </div>
+                </div>
 
-                  {/* Targets List */}
-                  <div className="space-y-3">
-                    {backupsList.length === 0 ? (
-                      <div className="p-8 text-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
-                        No Google Sheets backup targets configured. Click "Add Target" above.
+                {/* Grouped Rules Rows */}
+                <div className="divide-y divide-slate-200 border border-slate-200 rounded-lg overflow-hidden bg-white text-xs">
+                  {[
+                    { key: 'excludeNoreply', title: 'Exclude Automated No-Reply Emails', desc: 'Skip noreply@, notification@, and automated robotic messages.' },
+                    { key: 'excludeMedsos', title: 'Exclude Social Media & Promotional Newsletters', desc: 'Filter out social updates, LinkedIn notifications, and promotional circulars.' },
+                    { key: 'prioritizePdf', title: 'Prioritize Inquiries with PDF Documents', desc: 'Move inquiries containing technical RFQ attachments to the top of inbox.' },
+                    { key: 'requireAttachment', title: 'Require Attachments for RFQ Ingestion', desc: 'Only classify emails that contain at least one document as an RFQ.' },
+                    { key: 'autoLabelRfq', title: 'Automatic RFQ Tagging & Status Labeling', desc: 'Tag categories (Equipment, Spare Parts, General) automatically.' },
+                    { key: 'excludeSystemAlerts', title: 'Exclude System & IT Infrastructure Alerts', desc: 'Ignore server delivery reports, mailer-daemon, and system warnings.' },
+                  ].map((rule) => (
+                    <div key={rule.key} className="p-3.5 flex items-center justify-between hover:bg-slate-50 transition-all">
+                      <div className="pr-4">
+                        <div className="font-bold text-slate-900">{rule.title}</div>
+                        <div className="text-[11px] text-slate-500">{rule.desc}</div>
                       </div>
-                    ) : (
-                      backupsList.map((target) => (
-                        <div key={target.id} className="p-4 bg-white border border-slate-200/80 rounded-xl shadow-2xs flex flex-wrap items-center justify-between gap-3">
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-2">
-                              <span className="text-xs font-bold text-slate-900">{target.title}</span>
-                              {target.is_primary === 1 && (
-                                <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full">
-                                  PRIMARY
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-xs font-mono text-slate-500">ID: {target.spreadsheet_id}</div>
-                            <div className="text-[11px] text-slate-400">
-                              Sheet: <span className="font-semibold text-slate-600">{target.sheet_name || 'Sheet1'}</span> • Last Sync: {target.last_sync_at || 'Never'}
-                            </div>
+                      <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={(inboxRules as any)[rule.key]}
+                          onChange={(e) => setInboxRules({ ...inboxRules, [rule.key]: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-10 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
-                            {/* Result Indicator */}
-                            {connectionResultsMap[target.id] && (
-                              <div className={`text-[11px] font-semibold flex items-center space-x-1.5 pt-1 ${
-                                connectionResultsMap[target.id].status === 'success' ? 'text-emerald-600' : 'text-rose-600'
-                              }`}>
-                                {connectionResultsMap[target.id].status === 'success' ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
-                                <span>{connectionResultsMap[target.id].message}</span>
-                              </div>
+        {/* ════════════════════════════════════════════════════════════════════
+            TAB 3: GEMINI AI KEYS POOL
+        ════════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'ai' && (
+          <div className="w-full space-y-4 animate-in fade-in">
+            {/* Pool 1: Inbox RFQ AI */}
+            <div className="w-full bg-white border border-slate-300 rounded-xl shadow-xs overflow-hidden">
+              <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Bot className="w-4 h-4 text-pink-600" />
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">RFQ Inbox Classification AI Pool (Gemini 2.5 Flash)</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setModalKeyPool('inbox');
+                    setEditingKeyItem(null);
+                    setModalAlias('');
+                    setModalKeyString('');
+                    setIsAiModalOpen(true);
+                  }}
+                  className="inline-flex items-center space-x-1 px-3 py-1 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 text-white font-bold rounded-lg text-xs shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Key</span>
+                </button>
+              </div>
+
+              <div className="p-4 space-y-2.5">
+                {inboxAiKeys.map((item) => (
+                  <div key={item.id} className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-slate-900">{item.alias}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.2 rounded-full ${
+                          item.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {item.status.toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="font-mono text-slate-600">{maskKey(item.key)}</div>
+                      <div className="text-[11px] text-slate-500 font-medium">Model: {item.modelName} • Quota: {item.dailyLimit}</div>
+                    </div>
+
+                    <div className="flex items-center space-x-1.5">
+                      <button
+                        onClick={() => handleToggleAiKeyStatus(item.id, 'inbox')}
+                        className={`px-2.5 py-1 rounded text-xs font-semibold cursor-pointer ${
+                          item.status === 'active' ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                        }`}
+                      >
+                        {item.status === 'active' ? 'Disable' : 'Enable'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setModalKeyPool('inbox');
+                          setEditingKeyItem(item);
+                          setModalAlias(item.alias);
+                          setModalKeyString(item.key);
+                          setIsAiModalOpen(true);
+                        }}
+                        className="p-1 text-slate-500 hover:text-blue-600 hover:bg-slate-200 rounded cursor-pointer"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAiKey(item.id, 'inbox')}
+                        className="p-1 text-slate-500 hover:text-rose-600 hover:bg-slate-200 rounded cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Pool 2: OCR Vision AI */}
+            <div className="w-full bg-white border border-slate-300 rounded-xl shadow-xs overflow-hidden">
+              <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <ScanLine className="w-4 h-4 text-indigo-600" />
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Vision OCR Document Scan Pool (Gemini 2.5 Flash Vision)</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setModalKeyPool('ocr');
+                    setEditingKeyItem(null);
+                    setModalAlias('');
+                    setModalKeyString('');
+                    setIsAiModalOpen(true);
+                  }}
+                  className="inline-flex items-center space-x-1 px-3 py-1 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 text-white font-bold rounded-lg text-xs shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Key</span>
+                </button>
+              </div>
+
+              <div className="p-4 space-y-2.5">
+                {ocrAiKeys.map((item) => (
+                  <div key={item.id} className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-slate-900">{item.alias}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.2 rounded-full ${
+                          item.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {item.status.toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="font-mono text-slate-600">{maskKey(item.key)}</div>
+                      <div className="text-[11px] text-slate-500 font-medium">Model: {item.modelName} • Quota: {item.dailyLimit}</div>
+                    </div>
+
+                    <div className="flex items-center space-x-1.5">
+                      <button
+                        onClick={() => handleToggleAiKeyStatus(item.id, 'ocr')}
+                        className={`px-2.5 py-1 rounded text-xs font-semibold cursor-pointer ${
+                          item.status === 'active' ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                        }`}
+                      >
+                        {item.status === 'active' ? 'Disable' : 'Enable'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setModalKeyPool('ocr');
+                          setEditingKeyItem(item);
+                          setModalAlias(item.alias);
+                          setModalKeyString(item.key);
+                          setIsAiModalOpen(true);
+                        }}
+                        className="p-1 text-slate-500 hover:text-blue-600 hover:bg-slate-200 rounded cursor-pointer"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAiKey(item.id, 'ocr')}
+                        className="p-1 text-slate-500 hover:text-rose-600 hover:bg-slate-200 rounded cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════════
+            TAB 4: SPH LETTERHEAD & PAPER BRANDING
+        ════════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'paper' && (
+          <div className="w-full space-y-4 animate-in fade-in">
+            <div className="w-full bg-white border border-slate-300 rounded-xl shadow-xs overflow-hidden">
+              <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <FileText className="w-4 h-4 text-amber-600" />
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Quotation Letterhead (SPH) & Company Branding</span>
+                </div>
+                <button
+                  onClick={handleSavePaper}
+                  className="inline-flex items-center space-x-1.5 px-4 py-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 text-white font-bold rounded-lg shadow-xs text-xs transition-all cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save SPH Settings</span>
+                </button>
+              </div>
+
+              <div className="p-5 space-y-5 text-xs">
+                {/* Visual Assets Upload Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Company Logo', type: 'logo', val: paperSettings.logoUrl },
+                    { label: 'Official Stamp', type: 'stamp', val: paperSettings.stampUrl },
+                    { label: 'Digital Signature (TTD)', type: 'signature', val: paperSettings.signatureUrl },
+                    { label: 'Header Image Banner', type: 'header_image', val: paperSettings.headerImageUrl },
+                  ].map((item) => (
+                    <div key={item.type} className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-col items-center justify-center space-y-1.5 text-center">
+                      <span className="font-bold text-slate-700 text-[11px]">{item.label}</span>
+                      {item.val ? (
+                        <img src={item.val} alt={item.label} className="h-10 object-contain rounded border border-slate-200 bg-white p-0.5" />
+                      ) : (
+                        <div className="h-10 w-full flex items-center justify-center border border-dashed border-slate-300 rounded text-[10px] text-slate-400">
+                          No File
+                        </div>
+                      )}
+                      <label className="cursor-pointer inline-flex items-center space-x-1 text-[11px] font-bold text-blue-600 hover:text-blue-700">
+                        <Upload className="w-3 h-3" />
+                        <span>Upload</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleUploadPaperImage(e, item.type as any)}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Company Fields */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Company Legal Name</label>
+                    <input
+                      type="text"
+                      value={paperSettings.companyName}
+                      onChange={(e) => setPaperSettings({ ...paperSettings, companyName: e.target.value })}
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Official Telephone / Contact</label>
+                    <input
+                      type="text"
+                      value={paperSettings.phone}
+                      onChange={(e) => setPaperSettings({ ...paperSettings, phone: e.target.value })}
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1">Registered Address</label>
+                    <textarea
+                      rows={2}
+                      value={paperSettings.companyAddress}
+                      onChange={(e) => setPaperSettings({ ...paperSettings, companyAddress: e.target.value })}
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                {/* Bank Details */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+                  <span className="font-bold text-slate-900 block text-xs">Bank Account for Quotation Payments</span>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">Bank Name</label>
+                      <input
+                        type="text"
+                        value={paperSettings.bankName}
+                        onChange={(e) => setPaperSettings({ ...paperSettings, bankName: e.target.value })}
+                        className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">Account Number</label>
+                      <input
+                        type="text"
+                        value={paperSettings.bankAccountNumber}
+                        onChange={(e) => setPaperSettings({ ...paperSettings, bankAccountNumber: e.target.value })}
+                        className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">Account Beneficiary Name</label>
+                      <input
+                        type="text"
+                        value={paperSettings.bankAccountName}
+                        onChange={(e) => setPaperSettings({ ...paperSettings, bankAccountName: e.target.value })}
+                        className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════════
+            TAB 5: QUOTATION DEFAULTS & SOFTWARE FEE
+        ════════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'quotation_settings' && (
+          <div className="w-full space-y-4 animate-in fade-in">
+            <div className="w-full bg-white border border-slate-300 rounded-xl shadow-xs overflow-hidden">
+              <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Percent className="w-4 h-4 text-emerald-600" />
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Quotation Defaults & System Margin Fee Parameters</span>
+                </div>
+                <button
+                  onClick={handleSaveQuotationSettings}
+                  className="inline-flex items-center space-x-1.5 px-4 py-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 text-white font-bold rounded-lg shadow-xs text-xs transition-all cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save Settings</span>
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4 text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Currency Code</label>
+                    <select
+                      value={quotationSettings.currency}
+                      onChange={(e) => setQuotationSettings({ ...quotationSettings, currency: e.target.value })}
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 font-bold focus:outline-hidden"
+                    >
+                      <option value="MYR">MYR - Malaysian Ringgit (RM)</option>
+                      <option value="USD">USD - US Dollar ($)</option>
+                      <option value="SGD">SGD - Singapore Dollar (S$)</option>
+                      <option value="IDR">IDR - Indonesian Rupiah (Rp)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Standard Tax Rate (%)</label>
+                    <input
+                      type="number"
+                      value={quotationSettings.taxPercent}
+                      onChange={(e) => setQuotationSettings({ ...quotationSettings, taxPercent: Number(e.target.value) })}
+                      placeholder="11"
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 font-mono font-bold focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Default Quotation Validity</label>
+                    <input
+                      type="text"
+                      value={quotationSettings.validUntil}
+                      onChange={(e) => setQuotationSettings({ ...quotationSettings, validUntil: e.target.value })}
+                      placeholder="14 Days"
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                {/* Platform Fee Box */}
+                <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Percent className="w-4 h-4 text-blue-600" />
+                    <span className="font-bold text-slate-900 text-xs">Platform Software Fee Formula</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">Fee Percentage (%)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={softwareFee.percent}
+                        onChange={(e) => setSoftwareFee({ ...softwareFee, percent: Number(e.target.value) })}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-mono font-bold text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">Maximum Safety Cap ({quotationSettings.currency})</label>
+                      <input
+                        type="number"
+                        value={softwareFee.maxLimit}
+                        onChange={(e) => setSoftwareFee({ ...softwareFee, maxLimit: Number(e.target.value) })}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-mono font-bold text-slate-800"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════════
+            TAB 6: INVOICE TEMPLATE & SIGNATORY
+        ════════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'invoice' && (
+          <div className="w-full space-y-4 animate-in fade-in">
+            <div className="w-full bg-white border border-slate-300 rounded-xl shadow-xs overflow-hidden">
+              <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Receipt className="w-4 h-4 text-cyan-600" />
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Commercial Invoice Template & Legal Signatories</span>
+                </div>
+                <button
+                  onClick={handleSaveInvoiceSettings}
+                  className="inline-flex items-center space-x-1.5 px-4 py-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 text-white font-bold rounded-lg shadow-xs text-xs transition-all cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save Invoice Settings</span>
+                </button>
+              </div>
+
+              <div className="p-5 space-y-5 text-xs">
+                {/* Uploads Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Invoice Logo', type: 'logo', val: invoiceSettings.logoUrl },
+                    { label: 'Official Stamp', type: 'stamp', val: invoiceSettings.stampUrl },
+                    { label: 'Signatory Signature', type: 'signature', val: invoiceSettings.signatureUrl },
+                    { label: 'Header Banner', type: 'header_image', val: invoiceSettings.headerImageUrl },
+                  ].map((item) => (
+                    <div key={item.type} className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-col items-center justify-center space-y-1.5 text-center">
+                      <span className="font-bold text-slate-700 text-[11px]">{item.label}</span>
+                      {item.val ? (
+                        <img src={item.val} alt={item.label} className="h-10 object-contain rounded border border-slate-200 bg-white p-0.5" />
+                      ) : (
+                        <div className="h-10 w-full flex items-center justify-center border border-dashed border-slate-300 rounded text-[10px] text-slate-400">
+                          No File
+                        </div>
+                      )}
+                      <label className="cursor-pointer inline-flex items-center space-x-1 text-[11px] font-bold text-blue-600 hover:text-blue-700">
+                        <Upload className="w-3 h-3" />
+                        <span>Upload</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleUploadInvoiceImage(e, item.type as any)}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">SSM Registration Number</label>
+                    <input
+                      type="text"
+                      value={invoiceSettings.ssmNumber}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, ssmNumber: e.target.value })}
+                      placeholder="202101012345 (1412644-T)"
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Signatory Full Name</label>
+                    <input
+                      type="text"
+                      value={invoiceSettings.signatoryName}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, signatoryName: e.target.value })}
+                      placeholder="Aiman Zaki"
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Signatory Designation</label>
+                    <input
+                      type="text"
+                      value={invoiceSettings.signatoryTitle}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, signatoryTitle: e.target.value })}
+                      placeholder="Managing Director"
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Bank SWIFT / BIC Code</label>
+                    <input
+                      type="text"
+                      value={invoiceSettings.bankSwiftCode}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, bankSwiftCode: e.target.value })}
+                      placeholder="MBBEMYKL"
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 font-mono"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1">Invoice Payment Terms & Bank Instructions</label>
+                    <textarea
+                      rows={2}
+                      value={invoiceSettings.paymentTerms}
+                      onChange={(e) => setInvoiceSettings({ ...invoiceSettings, paymentTerms: e.target.value })}
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════════
+            TAB 7: GOOGLE SHEETS CLOUD SYNC
+        ════════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'cloud_sync' && (
+          <div className="w-full space-y-4 animate-in fade-in">
+            <div className="w-full bg-white border border-slate-300 rounded-xl shadow-xs overflow-hidden">
+              <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Cloud className="w-4 h-4 text-sky-600" />
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Google Sheets Automated Master Catalog Backup</span>
+                </div>
+                <button
+                  onClick={() => setIsAddBackupModalOpen(true)}
+                  className="inline-flex items-center space-x-1 px-3 py-1 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 text-white font-bold rounded-lg text-xs shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Target</span>
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4 text-xs">
+                {/* Service Account Copy Box */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <span className="font-bold text-slate-900 block">Google Cloud Service Account</span>
+                    <p className="text-[11px] text-slate-500">Share your target Google Spreadsheet with Editor permissions to:</p>
+                    <code className="text-xs font-mono text-blue-600 font-bold block pt-0.5">
+                      erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com
+                    </code>
+                  </div>
+                  <button
+                    onClick={() => handleCopyEmail('erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com')}
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-100 cursor-pointer"
+                  >
+                    {isCopiedEmail ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{isCopiedEmail ? 'Copied!' : 'Copy Email'}</span>
+                  </button>
+                </div>
+
+                {/* Target Spreadsheets List */}
+                <div className="space-y-2">
+                  {backupsList.length === 0 ? (
+                    <div className="p-6 text-center text-slate-400 text-xs border border-dashed border-slate-300 rounded-lg">
+                      No Google Sheets backup targets configured. Click "Add Target" to connect.
+                    </div>
+                  ) : (
+                    backupsList.map((target) => (
+                      <div key={target.id} className="p-3.5 bg-white border border-slate-300 rounded-lg flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-bold text-slate-900">{target.title}</span>
+                            {target.is_primary === 1 && (
+                              <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.2 rounded border border-blue-200">
+                                PRIMARY
+                              </span>
                             )}
                           </div>
-
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={() => handleTestConnection(target.id, target.spreadsheet_id)}
-                              disabled={testingConnectionId === target.id}
-                              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-all cursor-pointer"
-                            >
-                              {testingConnectionId === target.id ? 'Testing...' : 'Test Connection'}
-                            </button>
-                            <button
-                              onClick={() => handleRunBackupNow(target.id)}
-                              disabled={runningBackupId === target.id}
-                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-all shadow-2xs cursor-pointer"
-                            >
-                              {runningBackupId === target.id ? 'Syncing...' : 'Sync Now'}
-                            </button>
-                            <button
-                              onClick={() => handleDeleteBackupTarget(target.id)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-lg transition-all cursor-pointer"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
+                          <div className="font-mono text-slate-500 text-[11px]">ID: {target.spreadsheet_id}</div>
+                          <div className="text-[11px] text-slate-400">Sheet: <span className="font-semibold text-slate-700">{target.sheet_name || 'Sheet1'}</span> • Last Sync: {target.last_sync_at || 'Never'}</div>
+                          
+                          {connectionResultsMap[target.id] && (
+                            <div className={`text-[11px] font-bold flex items-center space-x-1 pt-0.5 ${
+                              connectionResultsMap[target.id].status === 'success' ? 'text-emerald-600' : 'text-rose-600'
+                            }`}>
+                              {connectionResultsMap[target.id].status === 'success' ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+                              <span>{connectionResultsMap[target.id].message}</span>
+                            </div>
+                          )}
                         </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
-          {/* ════════════════════════════════════════════════════════════════════
-              TAB 8: SQL DATABASE ARCHITECTURE & TABLES REGISTRY
-          ════════════════════════════════════════════════════════════════════ */}
-          {activeTab === 'database' && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="bg-white/90 backdrop-blur-xl border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-900">MySQL Database Architecture & Table Registries</h2>
-                    <p className="text-xs text-slate-500">Live schema inspection, character encoding, and database storage health</p>
-                  </div>
-                  <a
-                    href="/adminer.php"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-black text-white text-xs font-semibold rounded-xl shadow-xs transition-all"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Open Database Manager</span>
-                  </a>
-                </div>
-
-                <div className="p-6 space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {coreTables.map((tbl) => (
-                      <div key={tbl.name} className="p-3.5 bg-slate-50/80 border border-slate-200/80 rounded-xl space-y-1.5 hover:bg-white hover:border-blue-300 transition-all">
-                        <div className="flex items-center justify-between">
-                          <code className="text-xs font-mono font-bold text-blue-600">{tbl.name}</code>
-                          <span className="text-[10px] font-semibold text-slate-500 bg-slate-200/70 px-1.5 py-0.5 rounded">
-                            {tbl.type}
-                          </span>
+                        <div className="flex items-center space-x-1.5">
+                          <button
+                            onClick={() => handleTestConnection(target.id, target.spreadsheet_id)}
+                            disabled={testingConnectionId === target.id}
+                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded text-xs font-semibold cursor-pointer"
+                          >
+                            {testingConnectionId === target.id ? 'Testing...' : 'Test Connection'}
+                          </button>
+                          <button
+                            onClick={() => handleRunBackupNow(target.id)}
+                            disabled={runningBackupId === target.id}
+                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold shadow-2xs cursor-pointer"
+                          >
+                            {runningBackupId === target.id ? 'Syncing...' : 'Sync Now'}
+                          </button>
+                          <button
+                            onClick={() => handleDeleteBackupTarget(target.id)}
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                        <div className="text-xs font-semibold text-slate-800">{tbl.label}</div>
-                        <div className="text-[11px] text-slate-500 leading-relaxed">{tbl.desc}</div>
                       </div>
-                    ))}
-                  </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-        </main>
-      </div>
+        {/* ════════════════════════════════════════════════════════════════════
+            TAB 8: MYSQL DATABASE SCHEMA & ARCHITECTURE
+        ════════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'database' && (
+          <div className="w-full space-y-4 animate-in fade-in">
+            <div className="w-full bg-white border border-slate-300 rounded-xl shadow-xs overflow-hidden">
+              <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Database className="w-4 h-4 text-slate-700" />
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">MySQL Core Tables & Storage Engine Registry</span>
+                </div>
+                <a
+                  href="/adminer.php"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center space-x-1.5 px-3 py-1 bg-slate-900 hover:bg-black text-white font-bold rounded-lg text-xs shadow-xs"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open Database Manager</span>
+                </a>
+              </div>
+
+              <div className="p-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                  {coreTables.map((tbl) => (
+                    <div key={tbl.name} className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1 hover:border-blue-400 transition-all">
+                      <div className="flex items-center justify-between">
+                        <code className="font-mono font-bold text-blue-600 text-xs">{tbl.name}</code>
+                        <span className="text-[10px] font-bold text-slate-500 bg-slate-200 px-1.5 py-0.2 rounded font-mono">
+                          {tbl.type}
+                        </span>
+                      </div>
+                      <div className="font-bold text-slate-900">{tbl.label}</div>
+                      <div className="text-[11px] text-slate-500">{tbl.desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </main>
 
       {/* ── MODAL: ADD / EDIT AI KEY ────────────────────────────────────────── */}
       {isAiModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900">
-                {editingKeyItem ? 'Edit AI API Key' : `Add ${modalKeyPool === 'inbox' ? 'Inbox RFQ' : 'Vision OCR'} Key`}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-300 overflow-hidden text-xs">
+            <div className="px-5 py-3.5 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                {editingKeyItem ? 'Edit AI Key' : `Add ${modalKeyPool === 'inbox' ? 'Inbox RFQ' : 'Vision OCR'} Key`}
               </h3>
               <button
                 onClick={() => setIsAiModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleAddAiKeySubmit} className="p-6 space-y-4">
+            <form onSubmit={handleAddAiKeySubmit} className="p-5 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Key Alias / Description</label>
+                <label className="block font-bold text-slate-700 mb-1">Key Description / Alias</label>
                 <input
                   type="text"
                   value={modalAlias}
                   onChange={(e) => setModalAlias(e.target.value)}
-                  placeholder="e.g. Gemini 2.5 Flash Backup Key"
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden"
+                  placeholder="e.g. Gemini 2.5 Flash Secondary Key"
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">API Key String</label>
+                <label className="block font-bold text-slate-700 mb-1">API Key String</label>
                 <input
                   type="text"
                   value={modalKeyString}
                   onChange={(e) => setModalKeyString(e.target.value)}
                   placeholder="AIzaSy..."
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:outline-hidden"
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-mono text-slate-800 focus:bg-white focus:outline-hidden"
                   required
                 />
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2">
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end space-x-2">
                 <button
                   type="button"
                   onClick={() => setIsAiModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+                  className="px-3.5 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-xs cursor-pointer"
                 >
-                  {editingKeyItem ? 'Update Key' : 'Save Key'}
+                  {editingKeyItem ? 'Save Changes' : 'Add API Key'}
                 </button>
               </div>
             </form>
@@ -1909,56 +1761,56 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         </div>
       )}
 
-      {/* ── MODAL: ADD SPREADSHEET BACKUP TARGET ───────────────────────────── */}
+      {/* ── MODAL: ADD SPREADSHEET TARGET ───────────────────────────────────── */}
       {isAddBackupModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900">Add Google Sheets Target</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-300 overflow-hidden text-xs">
+            <div className="px-5 py-3.5 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">Add Google Spreadsheet Target</h3>
               <button
                 onClick={() => setIsAddBackupModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleAddBackupTarget} className="p-6 space-y-4">
+            <form onSubmit={handleAddBackupTarget} className="p-5 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Target Title / Label</label>
+                <label className="block font-bold text-slate-700 mb-1">Target Name / Title</label>
                 <input
                   type="text"
                   value={backupTitle}
                   onChange={(e) => setBackupTitle(e.target.value)}
                   placeholder="Master Product Catalog 2026"
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden"
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Google Spreadsheet ID</label>
+                <label className="block font-bold text-slate-700 mb-1">Google Spreadsheet ID</label>
                 <input
                   type="text"
                   value={backupSpreadsheetId}
                   onChange={(e) => setBackupSpreadsheetId(e.target.value)}
                   placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:outline-hidden"
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg font-mono text-slate-800 focus:bg-white focus:outline-hidden"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Sheet / Tab Name</label>
+                <label className="block font-bold text-slate-700 mb-1">Sheet / Tab Name</label>
                 <input
                   type="text"
                   value={backupSheetName}
                   onChange={(e) => setBackupSheetName(e.target.value)}
                   placeholder="Sheet1"
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-hidden"
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden"
                 />
               </div>
 
-              <div className="flex items-center space-x-2 pt-1">
+              <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
                   id="chkPrimary"
@@ -1966,23 +1818,23 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   onChange={(e) => setBackupIsPrimary(e.target.checked)}
                   className="w-4 h-4 rounded text-blue-600 border-slate-300"
                 />
-                <label htmlFor="chkPrimary" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                <label htmlFor="chkPrimary" className="font-bold text-slate-700 cursor-pointer">
                   Set as Primary Catalog Target
                 </label>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2">
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end space-x-2">
                 <button
                   type="button"
                   onClick={() => setIsAddBackupModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+                  className="px-3.5 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSavingBackup}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-xs cursor-pointer"
                 >
                   {isSavingBackup ? 'Saving...' : 'Add Target'}
                 </button>

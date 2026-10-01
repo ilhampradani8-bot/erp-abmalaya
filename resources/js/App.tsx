@@ -519,7 +519,7 @@ export const App: React.FC = () => {
           )}
 
           {/* Page Content Body - 100% Full Width Seamless Canvas */}
-          <main className="flex-1 w-full flex flex-col bg-white overflow-hidden">
+          <main className="flex-1 w-full flex flex-col bg-slate-50 overflow-y-auto">
             
             {/* Dynamic Active View wrapped in Error Boundary */}
             <ErrorBoundary>

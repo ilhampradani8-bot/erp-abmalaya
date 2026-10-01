@@ -4,7 +4,7 @@ import { UserAccount, UserRole, ActivityLog } from '../types/erp';
 import { 
   UserPlus, Users, Search, Trash2, Key, ShieldCheck, CheckCircle2, 
   X, Edit3, Activity, Shield, Sparkles, Clock, Lock, Check,
-  SlidersHorizontal, RefreshCw, Smartphone, Laptop, Zap, Eye, EyeOff
+  SlidersHorizontal, RefreshCw, UserCheck, Eye, EyeOff, Laptop, Zap
 } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
@@ -27,7 +27,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
   const [showAddModal, setShowAddModal] = useState(false);
   const [modalTab, setModalTab] = useState<'profile' | 'password'>('profile');
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
-  const [viewLayout, setViewLayout] = useState<'grid' | 'table'>('table');
+  const [viewLayout, setViewLayout] = useState<'table' | 'cards'>('table');
 
   // Form states
   const [name, setName] = useState('');
@@ -106,15 +106,15 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
     e.preventDefault();
     if (!editingUser) return;
     if (!currentPasswordInput.trim()) {
-      setModalPwdMessage({ type: 'error', text: 'Silakan masukkan sandi saat ini atau Master Passphrase.' });
+      setModalPwdMessage({ type: 'error', text: 'Please enter your current password or ERP Master Passphrase.' });
       return;
     }
     if (!userPassword.trim() || userPassword.trim().length < 4) {
-      setModalPwdMessage({ type: 'error', text: 'Sandi baru minimal harus 4 karakter.' });
+      setModalPwdMessage({ type: 'error', text: 'New password must be at least 4 characters.' });
       return;
     }
     if (userPassword !== confirmPassword) {
-      setModalPwdMessage({ type: 'error', text: 'Konfirmasi sandi baru tidak cocok. Periksa kembali.' });
+      setModalPwdMessage({ type: 'error', text: 'Password confirmation does not match.' });
       return;
     }
 
@@ -133,16 +133,16 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
       });
       const data = await res.json();
       if (data.status === 'success') {
-        setModalPwdMessage({ type: 'success', text: `Sandi untuk ${editingUser.name} berhasil diperbarui di MySQL!` });
+        setModalPwdMessage({ type: 'success', text: `Password for ${editingUser.name} updated successfully in MySQL!` });
         setCurrentPasswordInput('');
         setUserPassword('');
         setConfirmPassword('');
         fetchLogs();
       } else {
-        setModalPwdMessage({ type: 'error', text: data.message || 'Gagal mengubah sandi akun.' });
+        setModalPwdMessage({ type: 'error', text: data.message || 'Failed to update account password.' });
       }
     } catch (err: any) {
-      setModalPwdMessage({ type: 'error', text: 'Koneksi error: ' + err.message });
+      setModalPwdMessage({ type: 'error', text: 'Connection error: ' + err.message });
     } finally {
       setIsUpdatingPassword(false);
     }
@@ -151,7 +151,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !email.trim()) {
-      alert('Nama dan Email wajib diisi!');
+      alert('Name and Email are required!');
       return;
     }
 
@@ -190,7 +190,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
   };
 
   const handleDeleteClick = (userId: string, userName: string) => {
-    if (confirm(`Apakah Anda yakin ingin menghapus akun pengguna "${userName}"?`)) {
+    if (confirm(`Are you sure you want to delete user account "${userName}"?`)) {
       onDeleteUser(userId);
     }
   };
@@ -203,195 +203,269 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
   };
 
   return (
-    <div className="w-full flex-1 bg-[#090a0f] text-slate-100 font-sans min-h-screen flex flex-col p-4 md:p-6 space-y-5 selection:bg-cyan-500 selection:text-black">
+    <div className="w-full flex-1 bg-[#f0f2f5] text-slate-800 font-sans min-h-screen flex flex-col p-4 md:p-6 space-y-5 antialiased overflow-y-auto">
       
-      {/* ── TOP WATCHOS ACTIVITY METRIC CAPSULES ─────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Ring 1: Total Users */}
-        <div className="bg-[#13151f]/90 border border-white/10 rounded-2xl p-3.5 flex items-center justify-between shadow-lg backdrop-blur-xl relative overflow-hidden group hover:border-cyan-500/40 transition-all">
-          <div className="space-y-1 z-10">
-            <span className="text-[11px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#00f0ff]" />
-              Total Akun
-            </span>
-            <div className="text-2xl font-black text-white tracking-tight flex items-baseline gap-1">
-              <span>{users.length}</span>
-              <span className="text-[11px] font-semibold text-slate-400">Pengguna</span>
-            </div>
-            <p className="text-[10px] text-cyan-400 font-medium">Terdaftar di MySQL</p>
-          </div>
-          <div className="w-12 h-12 rounded-full border-4 border-cyan-500/20 border-t-cyan-400 flex items-center justify-center text-cyan-400 shadow-[0_0_15px_rgba(0,240,255,0.15)]">
+      {/* ── TOP FAST METRICS TOOLBAR (Apple iTunes / Mac Preferences Bar) ────── */}
+      <header className="w-full bg-gradient-to-b from-white via-slate-50 to-slate-100 border border-slate-300 rounded-xl shadow-xs p-3.5 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center space-x-3">
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-b from-blue-500 to-blue-700 flex items-center justify-center text-white shadow-xs font-bold">
             <Users className="w-5 h-5" />
           </div>
-        </div>
-
-        {/* Ring 2: Active Session */}
-        <div className="bg-[#13151f]/90 border border-white/10 rounded-2xl p-3.5 flex items-center justify-between shadow-lg backdrop-blur-xl relative overflow-hidden group hover:border-emerald-500/40 transition-all">
-          <div className="space-y-1 z-10">
-            <span className="text-[11px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#00e676]" />
-              Sesi Anda
-            </span>
-            <div className="text-sm font-black text-white tracking-tight truncate max-w-[130px]">
-              {currentUser?.name || 'Admin'}
+          <div>
+            <div className="flex items-center space-x-2">
+              <h1 className="text-sm font-bold text-slate-900 tracking-tight">User Accounts & Roles</h1>
+              <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full border border-blue-200">
+                MySQL Connected
+              </span>
             </div>
-            <p className="text-[10px] text-emerald-400 font-mono truncate">{currentUser?.email || 'sales@abmalaya.com'}</p>
-          </div>
-          <div className="w-12 h-12 rounded-full border-4 border-emerald-500/20 border-t-emerald-400 flex items-center justify-center text-emerald-400 shadow-[0_0_15px_rgba(0,230,118,0.15)]">
-            <Zap className="w-5 h-5" />
+            <p className="text-[11px] text-slate-500">Manage operator permissions, reset passwords, and switch active profiles.</p>
           </div>
         </div>
 
-        {/* Ring 3: Admin Privileges */}
-        <div className="bg-[#13151f]/90 border border-white/10 rounded-2xl p-3.5 flex items-center justify-between shadow-lg backdrop-blur-xl relative overflow-hidden group hover:border-amber-500/40 transition-all">
-          <div className="space-y-1 z-10">
-            <span className="text-[11px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_#ff9500]" />
-              Hak Akses Admin
-            </span>
-            <div className="text-2xl font-black text-white tracking-tight flex items-baseline gap-1">
-              <span>{adminCount}</span>
-              <span className="text-[11px] font-semibold text-slate-400">/ {users.length}</span>
-            </div>
-            <p className="text-[10px] text-amber-400 font-medium">Full Master Control</p>
+        {/* Quick Stats Pills */}
+        <div className="flex items-center space-x-2 text-xs">
+          <div className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg shadow-2xs flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span className="text-slate-600 font-medium">Total:</span>
+            <span className="font-bold text-slate-900 font-mono">{users.length} Users</span>
           </div>
-          <div className="w-12 h-12 rounded-full border-4 border-amber-500/20 border-t-amber-400 flex items-center justify-center text-amber-400 shadow-[0_0_15px_rgba(255,149,0,0.15)]">
-            <ShieldCheck className="w-5 h-5" />
+          <div className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg shadow-2xs flex items-center space-x-2">
+            <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+            <span className="text-slate-600 font-medium">Admins:</span>
+            <span className="font-bold text-blue-700 font-mono">{adminCount}</span>
           </div>
-        </div>
-
-        {/* Ring 4: Standard Staff */}
-        <div className="bg-[#13151f]/90 border border-white/10 rounded-2xl p-3.5 flex items-center justify-between shadow-lg backdrop-blur-xl relative overflow-hidden group hover:border-purple-500/40 transition-all">
-          <div className="space-y-1 z-10">
-            <span className="text-[11px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-purple-400 shadow-[0_0_8px_#af52de]" />
-              Karyawan & Sales
-            </span>
-            <div className="text-2xl font-black text-white tracking-tight flex items-baseline gap-1">
-              <span>{staffCount}</span>
-              <span className="text-[11px] font-semibold text-slate-400">Anggota</span>
-            </div>
-            <p className="text-[10px] text-purple-400 font-medium">Standard Operator</p>
-          </div>
-          <div className="w-12 h-12 rounded-full border-4 border-purple-500/20 border-t-purple-400 flex items-center justify-center text-purple-400 shadow-[0_0_15px_rgba(175,82,222,0.15)]">
-            <Smartphone className="w-5 h-5" />
+          <div className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg shadow-2xs flex items-center space-x-2">
+            <span className="text-slate-600 font-medium">Staff:</span>
+            <span className="font-bold text-slate-700 font-mono">{staffCount}</span>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* ── SEARCH & CONTROLS TOOLBAR ────────────────────────────────────────── */}
-      <div className="w-full bg-[#13151f]/90 border border-white/10 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-lg backdrop-blur-xl">
-        <div className="flex items-center space-x-2 flex-1 min-w-[260px]">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Cari nama anggota tim, email, atau divisi..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-[#090a0f] border border-white/15 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition"
-            />
-          </div>
+      {/* ── SEARCH & ACTION CONTROLS BAR ─────────────────────────────────────── */}
+      <div className="w-full bg-white border border-slate-300 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+        <div className="relative flex-1 min-w-[240px]">
+          <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search accounts by name, email, or department..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+          />
         </div>
 
         <div className="flex items-center space-x-2">
-          {/* Layout Toggle */}
-          <div className="bg-[#090a0f] p-1 rounded-xl border border-white/10 flex items-center space-x-1 text-xs">
+          {/* Layout Switcher */}
+          <div className="bg-slate-100 p-0.5 rounded-lg border border-slate-300 flex items-center text-xs">
             <button
-              type="button"
               onClick={() => setViewLayout('table')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition ${viewLayout === 'table' ? 'bg-cyan-500 text-black shadow-xs' : 'text-slate-400 hover:text-white'}`}
+              className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                viewLayout === 'table' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+              }`}
             >
-              Tabel
+              Table View
             </button>
             <button
-              type="button"
-              onClick={() => setViewLayout('grid')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition ${viewLayout === 'grid' ? 'bg-cyan-500 text-black shadow-xs' : 'text-slate-400 hover:text-white'}`}
+              onClick={() => setViewLayout('cards')}
+              className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                viewLayout === 'cards' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+              }`}
             >
-              Kartu Modular
+              Card View
             </button>
           </div>
 
+          {/* Refresh Activity Logs */}
           <button
-            type="button"
+            onClick={fetchLogs}
+            disabled={isLoadingLogs}
+            title="Refresh logs"
+            className="p-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-lg text-xs transition-all cursor-pointer"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoadingLogs ? 'animate-spin text-blue-600' : ''}`} />
+          </button>
+
+          {/* Add New User Button */}
+          <button
             onClick={handleOpenAddModal}
-            className="inline-flex items-center space-x-1.5 px-4 py-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-cyan-500/20 transition-all cursor-pointer"
+            className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-xs rounded-lg shadow-xs transition-all cursor-pointer"
           >
             <UserPlus className="w-3.5 h-3.5" />
-            <span>+ Tambah Pengguna</span>
+            <span>Add User</span>
           </button>
         </div>
       </div>
 
-      {/* ── MODULAR GRID VIEW (watchOS Style) ─────────────────────────────────── */}
-      {viewLayout === 'grid' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+      {/* ── ACCOUNTS LISTING (FAST TABLE / CARD VIEW) ────────────────────────── */}
+      {viewLayout === 'table' ? (
+        <div className="w-full bg-white border border-slate-300 rounded-xl shadow-xs overflow-hidden">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 text-slate-700 font-bold uppercase tracking-wider text-[10px]">
+                <th className="py-2.5 px-4">User Details</th>
+                <th className="py-2.5 px-4">Role & Access</th>
+                <th className="py-2.5 px-4">Department</th>
+                <th className="py-2.5 px-4">Status</th>
+                <th className="py-2.5 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-slate-400 text-xs">
+                    No matching user accounts found.
+                  </td>
+                </tr>
+              ) : (
+                filteredUsers.map((user) => {
+                  const isCurrent = currentUser?.email?.toLowerCase() === user.email.toLowerCase();
+                  const isAdmin = user.role === 'Admin';
+                  return (
+                    <tr key={user.id} className="hover:bg-blue-50/40 transition-all group">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs text-white shadow-2xs ${
+                            isAdmin ? 'bg-gradient-to-b from-blue-600 to-indigo-700' : 'bg-gradient-to-b from-slate-600 to-slate-800'
+                          }`}>
+                            {getInitials(user.name)}
+                          </div>
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className="font-bold text-slate-900">{user.name}</span>
+                              {isCurrent && (
+                                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded border border-emerald-300">
+                                  Current Session
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-slate-500 font-mono">{user.email}</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-bold ${
+                          isAdmin ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700 border border-slate-200'
+                        }`}>
+                          <Shield className="w-3 h-3" />
+                          <span>{user.role}</span>
+                        </span>
+                      </td>
+
+                      <td className="py-3 px-4 text-slate-600 font-medium">
+                        {user.department || 'General'}
+                      </td>
+
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center space-x-1.5 text-[11px] font-semibold text-emerald-700">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                          <span>Active</span>
+                        </span>
+                      </td>
+
+                      <td className="py-3 px-4 text-right">
+                        <div className="inline-flex items-center space-x-1">
+                          <button
+                            onClick={() => onSwitchUser(user)}
+                            title="Switch into this user account"
+                            className="px-2 py-1 bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 border border-slate-300 rounded text-[11px] font-semibold transition-all cursor-pointer"
+                          >
+                            Switch
+                          </button>
+                          <button
+                            onClick={() => handleOpenEditModal(user, 'password')}
+                            title="Change password"
+                            className="p-1 text-slate-500 hover:text-amber-600 hover:bg-slate-100 rounded transition-all cursor-pointer"
+                          >
+                            <Key className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleOpenEditModal(user, 'profile')}
+                            title="Edit details"
+                            className="p-1 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded transition-all cursor-pointer"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          {users.length > 1 && (
+                            <button
+                              onClick={() => handleDeleteClick(user.id, user.name)}
+                              title="Delete account"
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredUsers.map((user) => {
-            const isSelf = Boolean(currentUser && user.email.toLowerCase() === currentUser.email?.toLowerCase());
+            const isCurrent = currentUser?.email?.toLowerCase() === user.email.toLowerCase();
             const isAdmin = user.role === 'Admin';
             return (
-              <div
-                key={user.id}
-                onClick={() => handleOpenEditModal(user, 'profile')}
-                className={`bg-[#13151f]/90 border ${isSelf ? 'border-emerald-500/50 shadow-[0_0_20px_rgba(0,230,118,0.15)]' : 'border-white/10 hover:border-cyan-500/40'} rounded-3xl p-4 flex flex-col justify-between space-y-3 backdrop-blur-xl transition-all cursor-pointer group relative overflow-hidden`}
-              >
-                {/* Header Badge */}
-                <div className="flex items-center justify-between">
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${isAdmin ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'}`}>
-                    {user.role || 'Karyawan'}
-                  </span>
-                  {isSelf && (
-                    <span className="flex items-center space-x-1 text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30 animate-pulse">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#00e676]" />
-                      <span>Sesi Aktif</span>
+              <div key={user.id} className="bg-white border border-slate-300 rounded-xl p-4 shadow-xs space-y-3 relative hover:border-blue-400 transition-all">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm text-white shadow-xs ${
+                      isAdmin ? 'bg-gradient-to-b from-blue-600 to-indigo-700' : 'bg-gradient-to-b from-slate-600 to-slate-800'
+                    }`}>
+                      {getInitials(user.name)}
+                    </div>
+                    <div>
+                      <div className="font-bold text-slate-900 text-xs">{user.name}</div>
+                      <div className="text-[11px] text-slate-500 font-mono">{user.email}</div>
+                    </div>
+                  </div>
+                  {isCurrent && (
+                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Active
                     </span>
                   )}
                 </div>
 
-                {/* Avatar & Info */}
-                <div className="flex items-center space-x-3">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-base ${isAdmin ? 'bg-gradient-to-br from-amber-500 to-orange-600 text-black shadow-lg shadow-orange-500/20' : 'bg-gradient-to-br from-cyan-500 to-blue-600 text-black shadow-lg shadow-cyan-500/20'}`}>
-                    {getInitials(user.name)}
-                  </div>
-                  <div className="space-y-0.5 flex-1 min-w-0">
-                    <h4 className="font-extrabold text-sm text-white truncate group-hover:text-cyan-400 transition">{user.name}</h4>
-                    <p className="text-[11px] font-mono text-slate-400 truncate">{user.email}</p>
-                    <p className="text-[10px] text-slate-500 truncate">{user.department || 'Sales Executive'}</p>
-                  </div>
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                  <span className="text-[11px] text-slate-500 font-medium">{user.department}</span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    isAdmin ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700'
+                  }`}>
+                    {user.role}
+                  </span>
                 </div>
 
-                {/* Bottom Actions */}
-                <div className="pt-2 border-t border-white/10 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1">
                   <button
-                    type="button"
-                    onClick={() => handleOpenEditModal(user, 'password')}
-                    className="text-[11px] font-bold text-amber-400 hover:text-amber-300 inline-flex items-center space-x-1"
+                    onClick={() => onSwitchUser(user)}
+                    className="flex-1 py-1 bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 border border-slate-300 rounded text-xs font-semibold transition-all cursor-pointer text-center"
                   >
-                    <Key className="w-3 h-3" />
-                    <span>Ubah Sandi</span>
+                    Switch User
                   </button>
-
-                  <div className="flex items-center space-x-1">
-                    {!isSelf && (
-                      <button
-                        type="button"
-                        onClick={() => onSwitchUser(user)}
-                        className="px-2 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-lg text-[10px] font-bold transition"
-                      >
-                        Beralih Sesi
-                      </button>
-                    )}
-                    {!isSelf && (
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteClick(user.id, user.name)}
-                        className="p-1 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-rose-500/10"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
+                  <button
+                    onClick={() => handleOpenEditModal(user, 'password')}
+                    className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-slate-100 rounded border border-slate-200 cursor-pointer"
+                  >
+                    <Key className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleOpenEditModal(user, 'profile')}
+                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded border border-slate-200 cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+                  {users.length > 1 && (
+                    <button
+                      onClick={() => handleDeleteClick(user.id, user.name)}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded border border-slate-200 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -399,436 +473,241 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
         </div>
       )}
 
-      {/* ── HIGH DENSITY TABLE VIEW ──────────────────────────────────────────── */}
-      {viewLayout === 'table' && (
-        <div className="w-full bg-[#13151f]/90 border border-white/10 rounded-2xl overflow-hidden shadow-lg backdrop-blur-xl">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-[#090a0f]/90 text-slate-400 font-bold uppercase text-[10px] tracking-wider border-b border-white/10">
-                <tr>
-                  <th className="p-3 w-12 text-center">Inisial</th>
-                  <th className="p-3">Nama & Alamat Email</th>
-                  <th className="p-3 w-36">Hak Akses (Role)</th>
-                  <th className="p-3 w-48">Departemen / Divisi</th>
-                  <th className="p-3 w-36 text-center">Status Sesi</th>
-                  <th className="p-3 w-40 text-center">Aksi / Kelola</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5 text-slate-300">
-                {filteredUsers.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-500">
-                      Tidak ditemukan anggota tim yang cocok dengan pencarian.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredUsers.map((user) => {
-                    const isSelf = Boolean(currentUser && user.email.toLowerCase() === currentUser.email?.toLowerCase());
-                    const isAdmin = user.role === 'Admin';
-                    return (
-                      <tr
-                        key={user.id}
-                        onClick={() => handleOpenEditModal(user, 'profile')}
-                        className={`hover:bg-white/5 transition cursor-pointer ${isSelf ? 'bg-emerald-500/5' : ''}`}
-                      >
-                        <td className="p-3 text-center">
-                          <div className={`w-8 h-8 rounded-xl mx-auto flex items-center justify-center font-black text-xs ${isAdmin ? 'bg-amber-500 text-black' : 'bg-cyan-500 text-black'}`}>
-                            {getInitials(user.name)}
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          <div className="font-extrabold text-white flex items-center space-x-2">
-                            <span>{user.name}</span>
-                            {isSelf && (
-                              <span className="text-[9px] font-black bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30">
-                                Sesi Anda
-                              </span>
-                            )}
-                          </div>
-                          <div className="font-mono text-cyan-400 text-[11px] mt-0.5">{user.email}</div>
-                        </td>
-                        <td className="p-3">
-                          <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${isAdmin ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'}`}>
-                            <Shield className="w-3 h-3" />
-                            <span>{user.role || 'Karyawan'}</span>
-                          </span>
-                        </td>
-                        <td className="p-3 font-medium text-slate-300">{user.department || 'Sales Executive'}</td>
-                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
-                          {isSelf ? (
-                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-black">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                              <span>Aktif</span>
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => onSwitchUser(user)}
-                              className="px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-lg text-[10px] font-bold transition"
-                            >
-                              Beralih Sesi
-                            </button>
-                          )}
-                        </td>
-                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-center space-x-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEditModal(user, 'password')}
-                              className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-[10px] font-bold transition inline-flex items-center space-x-1"
-                              title="Ganti Sandi"
-                            >
-                              <Key className="w-3 h-3" />
-                              <span>Sandi</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEditModal(user, 'profile')}
-                              className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/10"
-                              title="Edit Profil"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            {!isSelf && (
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteClick(user.id, user.name)}
-                                className="p-1 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-rose-500/10"
-                                title="Hapus Akun"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ── LIVE AUDIT TRAIL TIMELINE (watchOS Activity Log) ──────────────────── */}
-      <div className="w-full bg-[#13151f]/90 border border-white/10 rounded-2xl p-4 shadow-lg backdrop-blur-xl space-y-3">
-        <div className="flex items-center justify-between">
+      {/* ── RECENT SECURITY & ACTIVITY AUDIT LOGS ────────────────────────────── */}
+      <div className="w-full bg-white border border-slate-300 rounded-xl shadow-xs overflow-hidden">
+        <div className="px-4 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <Activity className="w-4 h-4 text-cyan-400" />
-            <span className="text-xs font-bold text-white uppercase tracking-wider">Log Aktivitas & Audit Trail Sesi Pengguna (Live MySQL)</span>
+            <Activity className="w-4 h-4 text-blue-600" />
+            <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Security & User Activity Logs</span>
           </div>
-          <button
-            type="button"
-            onClick={fetchLogs}
-            className="p-1 text-slate-400 hover:text-cyan-400 rounded-lg hover:bg-white/5 transition"
-            title="Muat Ulang Log"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingLogs ? 'animate-spin' : ''}`} />
-          </button>
+          <span className="text-[11px] text-slate-500 font-mono">Real-time MySQL Audit Trail</span>
         </div>
 
-        <div className="border border-white/10 rounded-xl overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead className="bg-[#090a0f] text-slate-400 font-bold uppercase text-[10px] tracking-wider border-b border-white/10">
-              <tr>
-                <th className="p-2.5 w-44">Waktu / Timestamp</th>
-                <th className="p-2.5 w-48">Pengguna</th>
-                <th className="p-2.5 w-32">Jenis Aktivitas</th>
-                <th className="p-2.5">Rincian Detail</th>
-                <th className="p-2.5 w-28 text-center">IP Address</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5 text-slate-300">
-              {isLoadingLogs ? (
-                <tr>
-                  <td colSpan={5} className="p-5 text-center text-slate-500 font-medium">
-                    Memuat log aktivitas...
-                  </td>
-                </tr>
-              ) : activityLogs.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="p-5 text-center text-slate-500 font-medium">
-                    Belum ada log aktivitas sesi login recorded di database.
-                  </td>
-                </tr>
-              ) : (
-                activityLogs.map((log: any) => (
-                  <tr key={log.id} className="hover:bg-white/5">
-                    <td className="p-2.5 font-mono text-[11px] text-slate-400 whitespace-nowrap">{log.created_at}</td>
-                    <td className="p-2.5 whitespace-nowrap">
-                      <div className="font-bold text-white">{log.user_name}</div>
-                      <div className="text-[10px] font-mono text-cyan-400">{log.user_email}</div>
-                    </td>
-                    <td className="p-2.5 whitespace-nowrap">
-                      <span className="bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-bold px-2 py-0.5 rounded-full text-[10px]">
-                        {log.action_type || log.action || 'LOGIN'}
-                      </span>
-                    </td>
-                    <td className="p-2.5 text-slate-300 font-medium">{log.details}</td>
-                    <td className="p-2.5 font-mono text-[10px] text-center text-slate-400 whitespace-nowrap">{log.ip_address || '127.0.0.1'}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 text-xs">
+          {activityLogs.length === 0 ? (
+            <div className="p-6 text-center text-slate-400 text-xs">
+              No recorded user activity logs in MySQL database.
+            </div>
+          ) : (
+            activityLogs.map((log, index) => (
+              <div key={log.id || index} className="p-3 flex items-start justify-between hover:bg-slate-50 transition-all">
+                <div className="space-y-0.5">
+                  <div className="flex items-center space-x-2">
+                    <span className="font-bold text-slate-900">{log.user_name || 'System'}</span>
+                    <span className="text-[10px] font-mono text-slate-400">({log.user_email || 'system'})</span>
+                    <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.2 rounded border border-slate-200 font-mono">
+                      {log.action}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600">{log.details}</p>
+                </div>
+                <div className="text-right text-[10px] text-slate-400 font-mono flex-shrink-0 pl-3">
+                  <div>{log.created_at}</div>
+                  <div>IP: {log.ip_address || '127.0.0.1'}</div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
-      {/* ── WATCHOS POPUP MODAL (Add / Edit User & Password) ─────────────────── */}
+      {/* ── MODAL: ADD / EDIT USER & PASSWORD ────────────────────────────────── */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 select-none animate-in fade-in">
-          <div className="bg-[#13151f] border border-white/20 max-w-lg w-full shadow-2xl rounded-3xl overflow-hidden animate-in zoom-in-95">
-            {/* Header */}
-            <div className="p-4 bg-[#090a0f] border-b border-white/10 flex items-center justify-between">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-black font-black">
-                  {modalTab === 'password' ? <Key className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                </div>
-                <div>
-                  <h3 className="font-black text-sm text-white uppercase tracking-wider">
-                    {editingUser ? `Kelola Pengguna: ${editingUser.name}` : 'Tambah Anggota Tim Baru'}
-                  </h3>
-                  <p className="text-[11px] text-slate-400">
-                    {editingUser ? `${editingUser.email} • ${editingUser.role}` : 'Pendaftaran akun sistem ERP'}
-                  </p>
-                </div>
-              </div>
-
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-300 overflow-hidden">
+            
+            {/* Modal Top Bar */}
+            <div className="px-5 py-3.5 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                {editingUser ? `Account Settings: ${editingUser.name}` : 'Create New User Account'}
+              </h3>
               <button
-                type="button"
                 onClick={() => setShowAddModal(false)}
-                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition"
+                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Sub-tabs for existing user */}
+            {/* Modal Tab Selector if Editing */}
             {editingUser && (
-              <div className="flex border-b border-white/10 bg-[#090a0f] p-1.5 gap-1 text-xs font-bold">
+              <div className="flex border-b border-slate-200 bg-slate-50 text-xs font-semibold">
                 <button
-                  type="button"
-                  onClick={() => setModalTab('profile')}
-                  className={`flex-1 py-1.5 rounded-xl transition ${modalTab === 'profile' ? 'bg-cyan-500 text-black font-black shadow-xs' : 'text-slate-400 hover:text-white'}`}
+                  onClick={() => { setModalTab('profile'); setModalPwdMessage(null); }}
+                  className={`flex-1 py-2 text-center transition-all cursor-pointer ${
+                    modalTab === 'profile' ? 'bg-white text-blue-700 border-b-2 border-blue-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+                  }`}
                 >
-                  1. User Profile
+                  Profile & Roles
                 </button>
                 <button
-                  type="button"
-                  onClick={() => setModalTab('password')}
-                  className={`flex-1 py-1.5 rounded-xl transition ${modalTab === 'password' ? 'bg-amber-500 text-black font-black shadow-xs' : 'text-slate-400 hover:text-white'}`}
+                  onClick={() => { setModalTab('password'); setModalPwdMessage(null); }}
+                  className={`flex-1 py-2 text-center transition-all cursor-pointer ${
+                    modalTab === 'password' ? 'bg-white text-blue-700 border-b-2 border-blue-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+                  }`}
                 >
-                  2. Password & Security
+                  Change Password
                 </button>
               </div>
             )}
 
-            {/* TAB 1: PROFIL */}
+            {/* TAB 1: Profile & Details */}
             {modalTab === 'profile' && (
               <form onSubmit={handleFormSubmit} className="p-5 space-y-4 text-xs">
                 <div>
-                  <label className="block font-bold text-slate-300 mb-1">Full Name:</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name</label>
                   <input
                     type="text"
-                    required
-                    placeholder="e.g. Aiman Zaki"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full bg-[#090a0f] border border-white/15 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 font-sans"
+                    placeholder="e.g. Aiman Zaki"
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500"
+                    required
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-300 mb-1">Email Address:</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Email Address (Login Username)</label>
                   <input
                     type="email"
-                    required
-                    placeholder="aimanzaki@abmalaya.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-[#090a0f] border border-white/15 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 font-mono"
+                    placeholder="e.g. sales@abmalaya.com"
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 font-mono"
+                    required
                   />
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-300 mb-1">Department / Division:</label>
-                  <input
-                    type="text"
-                    placeholder="Sales / Procurement / Operations"
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                    className="w-full bg-[#090a0f] border border-white/15 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 font-sans"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-300 mb-2">
-                    Role & Permissions:
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <label
-                      className={`flex items-center justify-between p-3 border rounded-2xl cursor-pointer transition ${
-                        role === 'Admin'
-                          ? 'bg-amber-500/20 border-amber-500 text-amber-200 font-bold'
-                          : 'bg-[#090a0f] border-white/10 hover:border-white/20 text-slate-400'
-                      }`}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Role / Access</label>
+                    <select
+                      value={role}
+                      onChange={(e) => setRole(e.target.value as UserRole)}
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:outline-hidden font-semibold"
                     >
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name="user_role"
-                          value="Admin"
-                          checked={role === 'Admin'}
-                          onChange={() => setRole('Admin')}
-                          className="accent-amber-500"
-                        />
-                        <div>
-                          <span className="block text-xs text-white">Admin</span>
-                          <span className="text-[10px] text-slate-400 font-normal">Full Control</span>
-                        </div>
-                      </div>
-                      <ShieldCheck className="w-4 h-4 text-amber-400" />
-                    </label>
+                      <option value="Admin">Admin (Full Master Access)</option>
+                      <option value="Sales Engineer">Sales Engineer</option>
+                      <option value="Manager">Manager</option>
+                      <option value="Finance">Finance</option>
+                      <option value="Karyawan">Staff / Operator</option>
+                    </select>
+                  </div>
 
-                    <label
-                      className={`flex items-center justify-between p-3 border rounded-2xl cursor-pointer transition ${
-                        role === 'Karyawan' || role === 'Staff'
-                          ? 'bg-cyan-500/20 border-cyan-500 text-cyan-200 font-bold'
-                          : 'bg-[#090a0f] border-white/10 hover:border-white/20 text-slate-400'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name="user_role"
-                          value="Staff"
-                          checked={role === 'Karyawan' || role === 'Staff'}
-                          onChange={() => setRole('Staff')}
-                          className="accent-cyan-500"
-                        />
-                        <div>
-                          <span className="block text-xs text-white">Staff</span>
-                          <span className="text-[10px] text-slate-400 font-normal">Standard</span>
-                        </div>
-                      </div>
-                      <Users className="w-4 h-4 text-cyan-400" />
-                    </label>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Department</label>
+                    <input
+                      type="text"
+                      value={department}
+                      onChange={(e) => setDepartment(e.target.value)}
+                      placeholder="Sales & Business Dev"
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:outline-hidden"
+                    />
                   </div>
                 </div>
 
                 {!editingUser && (
                   <div>
-                    <label className="block font-bold text-slate-300 mb-1">Initial Password:</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Default Password</label>
                     <input
                       type="password"
-                      placeholder="Default: abmalaya2026!"
                       value={userPassword}
                       onChange={(e) => setUserPassword(e.target.value)}
-                      className="w-full bg-[#090a0f] border border-white/15 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 font-mono"
+                      placeholder="Leave empty for default abm.admin2026!"
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:bg-white focus:outline-hidden"
                     />
-                    <p className="text-[10px] text-slate-500 mt-1">
-                      Leave empty to automatically use default password <code>abmalaya2026!</code>.
-                    </p>
                   </div>
                 )}
 
-                <div className="pt-3 border-t border-white/10 flex items-center justify-end gap-2">
+                <div className="pt-3 border-t border-slate-200 flex items-center justify-end space-x-2">
                   <button
                     type="button"
                     onClick={() => setShowAddModal(false)}
-                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl"
+                    className="px-3.5 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-semibold transition-all cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-extrabold rounded-xl shadow-lg shadow-cyan-500/20"
+                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer"
                   >
-                    {editingUser ? 'Save User Profile' : '+ Create User Account'}
+                    {editingUser ? 'Save Changes' : 'Create Account'}
                   </button>
                 </div>
               </form>
             )}
 
-            {/* TAB 2: PASSWORD */}
+            {/* TAB 2: Change Password */}
             {modalTab === 'password' && editingUser && (
               <form onSubmit={handleModalPasswordSave} className="p-5 space-y-4 text-xs">
-                <div className="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs rounded-2xl flex items-start gap-2.5">
-                  <Key className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                  <div>
-                    <strong className="block text-amber-300">Change Password: {editingUser.name}</strong>
-                    <span className="text-[11px] text-amber-200/80">
-                      This new password will be used for login and user switching across the ERP.
-                    </span>
-                  </div>
-                </div>
-
                 {modalPwdMessage && (
-                  <div className={`p-3 rounded-2xl text-xs flex items-center gap-2 font-bold ${
-                    modalPwdMessage.type === 'success' 
-                      ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300' 
-                      : 'bg-rose-500/20 border border-rose-500/40 text-rose-300'
+                  <div className={`p-2.5 rounded-lg text-xs font-semibold flex items-center space-x-2 ${
+                    modalPwdMessage.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
                   }`}>
-                    {modalPwdMessage.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <X className="w-4 h-4 text-rose-400" />}
+                    {modalPwdMessage.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" /> : <X className="w-4 h-4 text-rose-600 flex-shrink-0" />}
                     <span>{modalPwdMessage.text}</span>
                   </div>
                 )}
 
                 <div>
-                  <label className="block font-bold text-slate-300 mb-1">Current Password / Master Passphrase:</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Current Password / Master Passphrase</label>
                   <input
                     type="password"
-                    required
-                    placeholder="Enter current password or Master Passphrase..."
                     value={currentPasswordInput}
                     onChange={(e) => setCurrentPasswordInput(e.target.value)}
-                    className="w-full bg-[#090a0f] border border-white/15 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 font-mono"
-                  />
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    Use current account password or Master Passphrase (<code>abmalaya2026!</code>).
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-300 mb-1">New Password:</label>
-                  <input
-                    type="password"
+                    placeholder="Enter current password or abm.admin2026!"
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:bg-white focus:outline-hidden"
                     required
-                    placeholder="Enter new password (min. 4 characters)..."
-                    value={userPassword}
-                    onChange={(e) => setUserPassword(e.target.value)}
-                    className="w-full bg-[#090a0f] border border-white/15 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 font-mono"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-300 mb-1">Confirm New Password:</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">New Password</label>
+                  <div className="relative">
+                    <input
+                      type={showPwd ? 'text' : 'password'}
+                      value={userPassword}
+                      onChange={(e) => setUserPassword(e.target.value)}
+                      placeholder="Minimum 4 characters"
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:bg-white focus:outline-hidden pr-9"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPwd(!showPwd)}
+                      className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Confirm New Password</label>
                   <input
                     type="password"
-                    required
-                    placeholder="Re-enter new password..."
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full bg-[#090a0f] border border-white/15 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 font-mono"
+                    placeholder="Re-type new password"
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:bg-white focus:outline-hidden"
+                    required
                   />
                 </div>
 
-                <div className="pt-3 border-t border-white/10 flex items-center justify-end gap-2">
+                <div className="pt-3 border-t border-slate-200 flex items-center justify-end space-x-2">
                   <button
                     type="button"
                     onClick={() => setShowAddModal(false)}
-                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl"
+                    className="px-3.5 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-semibold transition-all cursor-pointer"
                   >
                     Close
                   </button>
                   <button
                     type="submit"
-                    disabled={isUpdatingPassword || !userPassword.trim()}
-                    className="px-5 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-black font-extrabold rounded-xl shadow-lg shadow-amber-500/20 disabled:opacity-50 inline-flex items-center gap-1.5"
+                    disabled={isUpdatingPassword}
+                    className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer"
                   >
-                    <Key className="w-3.5 h-3.5" />
-                    <span>{isUpdatingPassword ? 'Saving...' : 'Save New Password'}</span>
+                    {isUpdatingPassword ? 'Updating...' : 'Update Password'}
                   </button>
                 </div>
               </form>
@@ -841,5 +720,3 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
     </div>
   );
 };
-
-export default AccountSettings;
