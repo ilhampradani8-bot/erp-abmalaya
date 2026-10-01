@@ -33,14 +33,18 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Active View Label */}
           <span className="font-extrabold text-blue-700 uppercase tracking-wide text-xs">
-            {viewMode === 'inbox' && 'RFQ Inbox'}
-            {viewMode === 'product_catalog' && 'Product Master Catalog'}
-            {viewMode === 'quotation_list' && 'Quotation Data (SPH Records)'}
-            {viewMode === 'builder' && 'Quotation Builder'}
-            {viewMode === 'notification_log' && 'Notifications Log & History'}
-            {viewMode === 'doc_preview' && 'Document Preview (PDF)'}
-            {viewMode === 'account_settings' && 'Account Settings'}
-            {viewMode === 'system_settings' && 'System Settings'}
+            {viewMode === 'inbox' && 'Kotak Masuk RFQ'}
+            {viewMode === 'client_chat' && 'Email Klien'}
+            {viewMode === 'product_catalog' && 'Katalog Master Produk'}
+            {viewMode === 'quotation_list' && 'Daftar Penawaran (Data SPH)'}
+            {viewMode === 'builder' && 'Pembuat Penawaran (SPH Builder)'}
+            {viewMode === 'invoice_builder' && 'Pembuat Faktur (Invoice Builder)'}
+            {viewMode === 'notification_log' && 'Riwayat & Log Notifikasi'}
+            {viewMode === 'doc_preview' && 'Pratinjau Dokumen (PDF)'}
+            {viewMode === 'account_settings' && 'Pengaturan Akun Pengguna'}
+            {viewMode === 'system_settings' && 'Pengaturan Sistem ERP'}
+            {viewMode === 'trash' && 'Tempat Sampah Produk'}
+            {viewMode === 'trash_quotation' && 'Tempat Sampah Penawaran'}
           </span>
         </div>
 
@@ -51,7 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
             className="flex items-center gap-1.5 bg-[#0099ec] hover:bg-[#0080ce] text-white font-extrabold text-[11px] px-3 py-1 rounded-none transition cursor-pointer shadow-2xs"
           >
             <PlusCircle className="w-3.5 h-3.5" />
-            <span>Create New SPH Quotation</span>
+            <span>Buat Penawaran SPH Baru</span>
           </button>
         </div>
 

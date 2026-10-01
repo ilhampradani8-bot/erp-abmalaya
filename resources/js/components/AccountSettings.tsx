@@ -106,15 +106,15 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
     e.preventDefault();
     if (!editingUser) return;
     if (!currentPasswordInput.trim()) {
-      setModalPwdMessage({ type: 'error', text: 'Please enter your current password or ERP Master Passphrase.' });
+      setModalPwdMessage({ type: 'error', text: 'Masukkan kata sandi lama atau Passphrase Master ERP.' });
       return;
     }
     if (!userPassword.trim() || userPassword.trim().length < 4) {
-      setModalPwdMessage({ type: 'error', text: 'New password must be at least 4 characters.' });
+      setModalPwdMessage({ type: 'error', text: 'Kata sandi baru minimal 4 karakter.' });
       return;
     }
     if (userPassword !== confirmPassword) {
-      setModalPwdMessage({ type: 'error', text: 'Password confirmation does not match.' });
+      setModalPwdMessage({ type: 'error', text: 'Konfirmasi kata sandi tidak cocok.' });
       return;
     }
 
@@ -133,16 +133,16 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
       });
       const data = await res.json();
       if (data.status === 'success') {
-        setModalPwdMessage({ type: 'success', text: `Password for ${editingUser.name} updated successfully in MySQL!` });
+        setModalPwdMessage({ type: 'success', text: `Kata sandi akun ${editingUser.name} berhasil diperbarui di database!` });
         setCurrentPasswordInput('');
         setUserPassword('');
         setConfirmPassword('');
         fetchLogs();
       } else {
-        setModalPwdMessage({ type: 'error', text: data.message || 'Failed to update account password.' });
+        setModalPwdMessage({ type: 'error', text: data.message || 'Gagal memperbarui kata sandi akun.' });
       }
     } catch (err: any) {
-      setModalPwdMessage({ type: 'error', text: 'Connection error: ' + err.message });
+      setModalPwdMessage({ type: 'error', text: 'Kesalahan koneksi: ' + err.message });
     } finally {
       setIsUpdatingPassword(false);
     }
@@ -151,7 +151,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !email.trim()) {
-      alert('Name and Email are required!');
+      alert('Nama dan Email wajib diisi!');
       return;
     }
 
@@ -190,7 +190,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
   };
 
   const handleDeleteClick = (userId: string, userName: string) => {
-    if (confirm(`Are you sure you want to delete user account "${userName}"?`)) {
+    if (confirm(`Apakah Anda yakin ingin menghapus akun pengguna "${userName}"?`)) {
       onDeleteUser(userId);
     }
   };
@@ -213,12 +213,12 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <h1 className="text-sm font-bold text-slate-900 tracking-tight">User Accounts & Roles</h1>
+              <h1 className="text-sm font-bold text-slate-900 tracking-tight">Akun Pengguna & Hak Akses</h1>
               <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full border border-blue-200">
-                MySQL Connected
+                MySQL Terhubung
               </span>
             </div>
-            <p className="text-[11px] text-slate-500">Manage operator permissions, reset passwords, and switch active profiles.</p>
+            <p className="text-[11px] text-slate-500">Kelola hak akses operator, ganti kata sandi akun, dan ganti profil aktif.</p>
           </div>
         </div>
 
@@ -227,15 +227,15 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
           <div className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg shadow-2xs flex items-center space-x-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
             <span className="text-slate-600 font-medium">Total:</span>
-            <span className="font-bold text-slate-900 font-mono">{users.length} Users</span>
+            <span className="font-bold text-slate-900 font-mono">{users.length} Akun</span>
           </div>
           <div className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg shadow-2xs flex items-center space-x-2">
             <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-            <span className="text-slate-600 font-medium">Admins:</span>
+            <span className="text-slate-600 font-medium">Admin:</span>
             <span className="font-bold text-blue-700 font-mono">{adminCount}</span>
           </div>
           <div className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg shadow-2xs flex items-center space-x-2">
-            <span className="text-slate-600 font-medium">Staff:</span>
+            <span className="text-slate-600 font-medium">Karyawan:</span>
             <span className="font-bold text-slate-700 font-mono">{staffCount}</span>
           </div>
         </div>
@@ -247,7 +247,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
           <input
             type="text"
-            placeholder="Search accounts by name, email, or department..."
+            placeholder="Cari akun berdasarkan nama, email, atau departemen..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
@@ -263,7 +263,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                 viewLayout === 'table' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              Table View
+              Tampilan Tabel
             </button>
             <button
               onClick={() => setViewLayout('cards')}
@@ -271,7 +271,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                 viewLayout === 'cards' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              Card View
+              Tampilan Kartu
             </button>
           </div>
 
@@ -279,7 +279,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
           <button
             onClick={fetchLogs}
             disabled={isLoadingLogs}
-            title="Refresh logs"
+            title="Segarkan log aktivitas"
             className="p-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-lg text-xs transition-all cursor-pointer"
           >
             <RefreshCw className={`w-4 h-4 ${isLoadingLogs ? 'animate-spin text-blue-600' : ''}`} />
@@ -291,7 +291,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
             className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-xs rounded-lg shadow-xs transition-all cursor-pointer"
           >
             <UserPlus className="w-3.5 h-3.5" />
-            <span>Add User</span>
+            <span>Tambah Akun</span>
           </button>
         </div>
       </div>
@@ -299,173 +299,223 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
       {/* ── ACCOUNTS LISTING (FAST TABLE / CARD VIEW) ────────────────────────── */}
       {viewLayout === 'table' ? (
         <div className="w-full bg-white border border-slate-300 rounded-xl shadow-xs overflow-hidden">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 text-slate-700 font-bold uppercase tracking-wider text-[10px]">
-                <th className="py-2.5 px-4">User Details</th>
-                <th className="py-2.5 px-4">Role & Access</th>
-                <th className="py-2.5 px-4">Department</th>
-                <th className="py-2.5 px-4">Status</th>
-                <th className="py-2.5 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {filteredUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-400 text-xs">
-                    No matching user accounts found.
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 text-slate-700 font-bold uppercase tracking-wider text-[10px]">
+                  <th className="py-2.5 px-4">Nama Pengguna & Email</th>
+                  <th className="py-2.5 px-4">Departemen / Divisi</th>
+                  <th className="py-2.5 px-4">Hak Akses (Role)</th>
+                  <th className="py-2.5 px-4">Status Akun</th>
+                  <th className="py-2.5 px-4 text-right">Aksi Cepat</th>
                 </tr>
-              ) : (
-                filteredUsers.map((user) => {
-                  const isCurrent = currentUser?.email?.toLowerCase() === user.email.toLowerCase();
-                  const isAdmin = user.role === 'Admin';
-                  return (
-                    <tr key={user.id} className="hover:bg-blue-50/40 transition-all group">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center space-x-3">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs text-white shadow-2xs ${
-                            isAdmin ? 'bg-gradient-to-b from-blue-600 to-indigo-700' : 'bg-gradient-to-b from-slate-600 to-slate-800'
-                          }`}>
-                            {getInitials(user.name)}
-                          </div>
-                          <div>
-                            <div className="flex items-center space-x-2">
-                              <span className="font-bold text-slate-900">{user.name}</span>
-                              {isCurrent && (
-                                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded border border-emerald-300">
-                                  Current Session
-                                </span>
-                              )}
+              </thead>
+              <tbody className="divide-y divide-slate-200 text-slate-800">
+                {filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-slate-400">
+                      Tidak ditemukan akun pengguna yang cocok dengan pencarian.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredUsers.map((user) => {
+                    const isCurrent = currentUser?.id === user.id || currentUser?.email === user.email;
+                    const isAdminUser = user.role === 'Admin';
+                    return (
+                      <tr 
+                        key={user.id} 
+                        className={`hover:bg-slate-50/80 transition-colors ${
+                          isCurrent ? 'bg-blue-50/60 font-medium' : ''
+                        }`}
+                      >
+                        <td className="py-3 px-4">
+                          <div className="flex items-center space-x-3">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shadow-2xs ${
+                              isAdminUser ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white' : 'bg-slate-200 text-slate-700'
+                            }`}>
+                              {getInitials(user.name)}
                             </div>
-                            <span className="text-[11px] text-slate-500 font-mono">{user.email}</span>
+                            <div>
+                              <div className="flex items-center space-x-1.5">
+                                <span className="font-bold text-slate-900">{user.name}</span>
+                                {isCurrent && (
+                                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded border border-emerald-200">
+                                    Aktif
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[11px] text-slate-500 font-mono">{user.email}</span>
+                            </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="py-3 px-4">
-                        <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-bold ${
-                          isAdmin ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700 border border-slate-200'
-                        }`}>
-                          <Shield className="w-3 h-3" />
-                          <span>{user.role}</span>
-                        </span>
-                      </td>
+                        <td className="py-3 px-4">
+                          <span className="inline-block px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md text-[11px] font-medium border border-slate-200">
+                            {user.department || 'Sales Executive'}
+                          </span>
+                        </td>
 
-                      <td className="py-3 px-4 text-slate-600 font-medium">
-                        {user.department || 'General'}
-                      </td>
+                        <td className="py-3 px-4">
+                          {isAdminUser ? (
+                            <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                              <ShieldCheck className="w-3 h-3 text-purple-600" />
+                              <span>Administrator</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-300">
+                              <span>{user.role || 'Karyawan'}</span>
+                            </span>
+                          )}
+                        </td>
 
-                      <td className="py-3 px-4">
-                        <span className="inline-flex items-center space-x-1.5 text-[11px] font-semibold text-emerald-700">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                          <span>Active</span>
-                        </span>
-                      </td>
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center space-x-1 text-[11px] text-emerald-700 font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            <span>{user.status || 'Active'}</span>
+                          </span>
+                        </td>
 
-                      <td className="py-3 px-4 text-right">
-                        <div className="inline-flex items-center space-x-1">
-                          <button
-                            onClick={() => onSwitchUser(user)}
-                            title="Switch into this user account"
-                            className="px-2 py-1 bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 border border-slate-300 rounded text-[11px] font-semibold transition-all cursor-pointer"
-                          >
-                            Switch
-                          </button>
-                          <button
-                            onClick={() => handleOpenEditModal(user, 'password')}
-                            title="Change password"
-                            className="p-1 text-slate-500 hover:text-amber-600 hover:bg-slate-100 rounded transition-all cursor-pointer"
-                          >
-                            <Key className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleOpenEditModal(user, 'profile')}
-                            title="Edit details"
-                            className="p-1 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded transition-all cursor-pointer"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          {users.length > 1 && (
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end space-x-1">
+                            {!isCurrent && (
+                              <button
+                                onClick={() => onSwitchUser(user)}
+                                title="Beralih ke akun ini"
+                                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-semibold text-[11px] transition-all border border-slate-300 cursor-pointer"
+                              >
+                                Ganti Akun
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => handleOpenEditModal(user, 'password')}
+                              title="Ganti kata sandi akun"
+                              className="p-1.5 text-slate-500 hover:text-amber-700 hover:bg-amber-50 rounded-md transition-all cursor-pointer"
+                            >
+                              <Key className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              onClick={() => handleOpenEditModal(user, 'profile')}
+                              title="Edit rincian profil"
+                              className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-all cursor-pointer"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+
                             <button
                               onClick={() => handleDeleteClick(user.id, user.name)}
-                              title="Delete account"
-                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all cursor-pointer"
+                              disabled={isCurrent}
+                              title={isCurrent ? 'Tidak dapat menghapus akun yang sedang aktif' : 'Hapus akun'}
+                              className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                                isCurrent 
+                                  ? 'text-slate-300 cursor-not-allowed' 
+                                  : 'text-slate-500 hover:text-rose-700 hover:bg-rose-50'
+                              }`}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        /* Cards Grid View */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredUsers.map((user) => {
-            const isCurrent = currentUser?.email?.toLowerCase() === user.email.toLowerCase();
-            const isAdmin = user.role === 'Admin';
+            const isCurrent = currentUser?.id === user.id || currentUser?.email === user.email;
+            const isAdminUser = user.role === 'Admin';
             return (
-              <div key={user.id} className="bg-white border border-slate-300 rounded-xl p-4 shadow-xs space-y-3 relative hover:border-blue-400 transition-all">
+              <div
+                key={user.id}
+                className={`bg-white border rounded-xl p-4 shadow-xs transition-all flex flex-col justify-between space-y-3 ${
+                  isCurrent ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-300 hover:border-slate-400'
+                }`}
+              >
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm text-white shadow-xs ${
-                      isAdmin ? 'bg-gradient-to-b from-blue-600 to-indigo-700' : 'bg-gradient-to-b from-slate-600 to-slate-800'
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm shadow-2xs ${
+                      isAdminUser ? 'bg-gradient-to-br from-blue-600 to-indigo-700 text-white' : 'bg-slate-200 text-slate-700'
                     }`}>
                       {getInitials(user.name)}
                     </div>
                     <div>
-                      <div className="font-bold text-slate-900 text-xs">{user.name}</div>
-                      <div className="text-[11px] text-slate-500 font-mono">{user.email}</div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="font-bold text-slate-900 text-sm">{user.name}</span>
+                        {isCurrent && (
+                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded border border-emerald-200">
+                            Aktif
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-500 font-mono">{user.email}</span>
                     </div>
                   </div>
-                  {isCurrent && (
-                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
-                      Active
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
+                  <span className="text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 font-medium">
+                    {user.department || 'Sales Executive'}
+                  </span>
+                  {isAdminUser ? (
+                    <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                      <ShieldCheck className="w-3 h-3 text-purple-600" />
+                      <span>Admin</span>
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-semibold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full border border-slate-300">
+                      {user.role || 'Karyawan'}
                     </span>
                   )}
                 </div>
 
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                  <span className="text-[11px] text-slate-500 font-medium">{user.department}</span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    isAdmin ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700'
-                  }`}>
-                    {user.role}
-                  </span>
-                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                  {!isCurrent ? (
+                    <button
+                      onClick={() => onSwitchUser(user)}
+                      className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-semibold text-xs border border-slate-300 cursor-pointer"
+                    >
+                      Ganti Akun
+                    </button>
+                  ) : (
+                    <span className="text-[11px] font-bold text-blue-700 flex items-center space-x-1">
+                      <UserCheck className="w-3.5 h-3.5" />
+                      <span>Sesi Anda</span>
+                    </span>
+                  )}
 
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1">
-                  <button
-                    onClick={() => onSwitchUser(user)}
-                    className="flex-1 py-1 bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 border border-slate-300 rounded text-xs font-semibold transition-all cursor-pointer text-center"
-                  >
-                    Switch User
-                  </button>
-                  <button
-                    onClick={() => handleOpenEditModal(user, 'password')}
-                    className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-slate-100 rounded border border-slate-200 cursor-pointer"
-                  >
-                    <Key className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => handleOpenEditModal(user, 'profile')}
-                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded border border-slate-200 cursor-pointer"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
-                  {users.length > 1 && (
+                  <div className="flex items-center space-x-1">
+                    <button
+                      onClick={() => handleOpenEditModal(user, 'password')}
+                      title="Ganti kata sandi akun"
+                      className="p-1.5 text-slate-500 hover:text-amber-700 hover:bg-amber-50 rounded-md cursor-pointer"
+                    >
+                      <Key className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleOpenEditModal(user, 'profile')}
+                      title="Edit rincian profil"
+                      className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded-md cursor-pointer"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       onClick={() => handleDeleteClick(user.id, user.name)}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded border border-slate-200 cursor-pointer"
+                      disabled={isCurrent}
+                      title={isCurrent ? 'Tidak dapat menghapus akun yang sedang aktif' : 'Hapus akun'}
+                      className={`p-1.5 rounded-md cursor-pointer ${
+                        isCurrent ? 'text-slate-300 cursor-not-allowed' : 'text-slate-500 hover:text-rose-700 hover:bg-rose-50'
+                      }`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                  )}
+                  </div>
                 </div>
               </div>
             );
@@ -473,148 +523,178 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
         </div>
       )}
 
-      {/* ── RECENT SECURITY & ACTIVITY AUDIT LOGS ────────────────────────────── */}
-      <div className="w-full bg-white border border-slate-300 rounded-xl shadow-xs overflow-hidden">
-        <div className="px-4 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
+      {/* ── SECURITY & ACTIVITY AUDIT TRAIL ─────────────────────────────────── */}
+      <div className="w-full bg-white border border-slate-300 rounded-xl p-4 shadow-xs space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
           <div className="flex items-center space-x-2">
             <Activity className="w-4 h-4 text-blue-600" />
-            <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Security & User Activity Logs</span>
+            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+              Riwayat Aktivitas Keamanan & Audit Trail (MySQL: user_activity_logs)
+            </h2>
           </div>
-          <span className="text-[11px] text-slate-500 font-mono">Real-time MySQL Audit Trail</span>
+          <span className="text-[11px] text-slate-500 font-mono">20 Entri Terakhir</span>
         </div>
 
-        <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 text-xs">
-          {activityLogs.length === 0 ? (
-            <div className="p-6 text-center text-slate-400 text-xs">
-              No recorded user activity logs in MySQL database.
-            </div>
-          ) : (
-            activityLogs.map((log, index) => (
-              <div key={log.id || index} className="p-3 flex items-start justify-between hover:bg-slate-50 transition-all">
-                <div className="space-y-0.5">
-                  <div className="flex items-center space-x-2">
-                    <span className="font-bold text-slate-900">{log.user_name || 'System'}</span>
-                    <span className="text-[10px] font-mono text-slate-400">({log.user_email || 'system'})</span>
-                    <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.2 rounded border border-slate-200 font-mono">
-                      {log.action}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-600">{log.details}</p>
-                </div>
-                <div className="text-right text-[10px] text-slate-400 font-mono flex-shrink-0 pl-3">
-                  <div>{log.created_at}</div>
-                  <div>IP: {log.ip_address || '127.0.0.1'}</div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+        {isLoadingLogs ? (
+          <div className="py-6 text-center text-xs text-slate-400 flex items-center justify-center space-x-2">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600" />
+            <span>Memuat log aktivitas pengguna...</span>
+          </div>
+        ) : activityLogs.length === 0 ? (
+          <div className="py-6 text-center text-xs text-slate-400">
+            Belum ada log aktivitas keamanan yang tercatat di database.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-100 text-slate-600 text-[10px] uppercase font-bold border-b border-slate-200">
+                  <th className="py-2 px-3">Waktu</th>
+                  <th className="py-2 px-3">Operator</th>
+                  <th className="py-2 px-3">Aktivitas</th>
+                  <th className="py-2 px-3">Rincian Deskripsi</th>
+                  <th className="py-2 px-3">Alamat IP</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700 text-[11px]">
+                {activityLogs.slice(0, 15).map((log, idx) => (
+                  <tr key={log.id || idx} className="hover:bg-slate-50">
+                    <td className="py-2 px-3 font-mono text-slate-500 whitespace-nowrap">
+                      {log.created_at || log.timestamp || 'Baru Saja'}
+                    </td>
+                    <td className="py-2 px-3 font-semibold text-slate-900 whitespace-nowrap">
+                      {log.user_name || log.operator || 'Sistem'}
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-mono text-[10px]">
+                        {log.action || log.activity_type || 'Aktivitas'}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-slate-600">
+                      {log.details || log.description || '-'}
+                    </td>
+                    <td className="py-2 px-3 font-mono text-slate-400 whitespace-nowrap">
+                      {log.ip_address || '127.0.0.1'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* ── MODAL: ADD / EDIT USER & PASSWORD ────────────────────────────────── */}
+      {/* ── MODAL: ADD / EDIT USER & PASSWORD CHANGE (Fast Apple UI) ────────── */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-300 overflow-hidden">
-            
-            {/* Modal Top Bar */}
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in">
+          <div className="bg-white border border-slate-300 rounded-xl shadow-2xl w-full max-w-md overflow-hidden text-xs">
+            {/* Modal Header */}
             <div className="px-5 py-3.5 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
-              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                {editingUser ? `Account Settings: ${editingUser.name}` : 'Create New User Account'}
-              </h3>
+              <div className="flex items-center space-x-2">
+                <Users className="w-4 h-4 text-blue-600" />
+                <span className="font-bold text-slate-900 text-sm">
+                  {editingUser ? `Edit Akun: ${editingUser.name}` : 'Tambah Akun Pengguna Baru'}
+                </span>
+              </div>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Modal Tab Selector if Editing */}
+            {/* Modal Sub-Tabs if Editing */}
             {editingUser && (
-              <div className="flex border-b border-slate-200 bg-slate-50 text-xs font-semibold">
+              <div className="flex border-b border-slate-200 bg-slate-50 px-4 pt-2">
                 <button
-                  onClick={() => { setModalTab('profile'); setModalPwdMessage(null); }}
-                  className={`flex-1 py-2 text-center transition-all cursor-pointer ${
-                    modalTab === 'profile' ? 'bg-white text-blue-700 border-b-2 border-blue-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+                  onClick={() => setModalTab('profile')}
+                  className={`pb-2 px-3 font-semibold text-xs transition-all border-b-2 cursor-pointer ${
+                    modalTab === 'profile'
+                      ? 'border-blue-600 text-blue-600 font-bold'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  Profile & Roles
+                  Informasi Profil
                 </button>
                 <button
-                  onClick={() => { setModalTab('password'); setModalPwdMessage(null); }}
-                  className={`flex-1 py-2 text-center transition-all cursor-pointer ${
-                    modalTab === 'password' ? 'bg-white text-blue-700 border-b-2 border-blue-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+                  onClick={() => setModalTab('password')}
+                  className={`pb-2 px-3 font-semibold text-xs transition-all border-b-2 cursor-pointer ${
+                    modalTab === 'password'
+                      ? 'border-blue-600 text-blue-600 font-bold'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  Change Password
+                  Ganti Kata Sandi
                 </button>
               </div>
             )}
 
-            {/* TAB 1: Profile & Details */}
+            {/* Tab 1: Profile Information */}
             {modalTab === 'profile' && (
-              <form onSubmit={handleFormSubmit} className="p-5 space-y-4 text-xs">
+              <form onSubmit={handleFormSubmit} className="p-5 space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Nama Lengkap</label>
                   <input
                     type="text"
+                    required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Aiman Zaki"
-                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500"
-                    required
+                    placeholder="mis. Muhammad Aiman"
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Email Address (Login Username)</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Alamat Email (Login Pengguna)</label>
                   <input
                     type="email"
+                    required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="e.g. sales@abmalaya.com"
-                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 font-mono"
-                    required
+                    placeholder="mis. aiman@abmalaya.com"
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 font-mono"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Role / Access</label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Departemen / Divisi</label>
                     <select
-                      value={role}
-                      onChange={(e) => setRole(e.target.value as UserRole)}
-                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:outline-hidden font-semibold"
+                      value={department}
+                      onChange={(e) => setDepartment(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500"
                     >
-                      <option value="Admin">Admin (Full Master Access)</option>
-                      <option value="Sales Engineer">Sales Engineer</option>
-                      <option value="Manager">Manager</option>
-                      <option value="Finance">Finance</option>
-                      <option value="Karyawan">Staff / Operator</option>
+                      <option value="Sales Executive">Sales Executive</option>
+                      <option value="Purchasing">Purchasing</option>
+                      <option value="Finance & Accounting">Finance & Accounting</option>
+                      <option value="Operations">Operations</option>
+                      <option value="Management">Management</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Department</label>
-                    <input
-                      type="text"
-                      value={department}
-                      onChange={(e) => setDepartment(e.target.value)}
-                      placeholder="Sales & Business Dev"
-                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:outline-hidden"
-                    />
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Hak Akses (Role)</label>
+                    <select
+                      value={role}
+                      onChange={(e) => setRole(e.target.value as any)}
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 font-semibold"
+                    >
+                      <option value="Karyawan">Karyawan (Staf Standar)</option>
+                      <option value="Admin">Administrator (Akses Penuh)</option>
+                    </select>
                   </div>
                 </div>
 
                 {!editingUser && (
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Default Password</label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Kata Sandi Awal (Password)</label>
                     <input
                       type="password"
                       value={userPassword}
                       onChange={(e) => setUserPassword(e.target.value)}
-                      placeholder="Leave empty for default abm.admin2026!"
-                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:bg-white focus:outline-hidden"
+                      placeholder="Masukkan kata sandi awal untuk akun baru..."
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 font-mono"
                     />
                   </div>
                 )}
@@ -623,59 +703,67 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowAddModal(false)}
-                    className="px-3.5 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+                    className="px-3.5 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg font-semibold cursor-pointer"
                   >
-                    Cancel
+                    Batal
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-xs cursor-pointer"
                   >
-                    {editingUser ? 'Save Changes' : 'Create Account'}
+                    {editingUser ? 'Simpan Perubahan' : 'Tambah Akun'}
                   </button>
                 </div>
               </form>
             )}
 
-            {/* TAB 2: Change Password */}
+            {/* Tab 2: Change Password (Inside Modal) */}
             {modalTab === 'password' && editingUser && (
-              <form onSubmit={handleModalPasswordSave} className="p-5 space-y-4 text-xs">
+              <form onSubmit={handleModalPasswordSave} className="p-5 space-y-4">
                 {modalPwdMessage && (
-                  <div className={`p-2.5 rounded-lg text-xs font-semibold flex items-center space-x-2 ${
-                    modalPwdMessage.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
-                  }`}>
-                    {modalPwdMessage.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" /> : <X className="w-4 h-4 text-rose-600 flex-shrink-0" />}
-                    <span>{modalPwdMessage.text}</span>
+                  <div
+                    className={`p-2.5 rounded-lg border text-xs font-semibold ${
+                      modalPwdMessage.type === 'success'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                        : 'bg-rose-50 text-rose-800 border-rose-300'
+                    }`}
+                  >
+                    {modalPwdMessage.text}
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Current Password / Master Passphrase</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Kata Sandi Lama / Passphrase Master ERP
+                  </label>
                   <input
                     type="password"
+                    required
                     value={currentPasswordInput}
                     onChange={(e) => setCurrentPasswordInput(e.target.value)}
-                    placeholder="Enter current password or abm.admin2026!"
-                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:bg-white focus:outline-hidden"
-                    required
+                    placeholder="Sandi lama atau abm.admin2026!"
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 font-mono"
                   />
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Masukkan kata sandi lama akun atau Passphrase Master ERP untuk verifikasi.
+                  </p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">New Password</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Kata Sandi Baru</label>
                   <div className="relative">
                     <input
                       type={showPwd ? 'text' : 'password'}
+                      required
                       value={userPassword}
                       onChange={(e) => setUserPassword(e.target.value)}
-                      placeholder="Minimum 4 characters"
-                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:bg-white focus:outline-hidden pr-9"
-                      required
+                      placeholder="Minimal 4 karakter"
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 font-mono pr-8"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPwd(!showPwd)}
-                      className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
                     >
                       {showPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
@@ -683,14 +771,14 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Confirm New Password</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Konfirmasi Kata Sandi Baru</label>
                   <input
                     type="password"
+                    required
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Re-type new password"
-                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:bg-white focus:outline-hidden"
-                    required
+                    placeholder="Ulangi kata sandi baru"
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 font-mono"
                   />
                 </div>
 
@@ -698,21 +786,20 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowAddModal(false)}
-                    className="px-3.5 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+                    className="px-3.5 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg font-semibold cursor-pointer"
                   >
-                    Close
+                    Tutup
                   </button>
                   <button
                     type="submit"
                     disabled={isUpdatingPassword}
-                    className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                    className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-xs cursor-pointer"
                   >
-                    {isUpdatingPassword ? 'Updating...' : 'Update Password'}
+                    {isUpdatingPassword ? 'Menyimpan...' : 'Perbarui Kata Sandi'}
                   </button>
                 </div>
               </form>
             )}
-
           </div>
         </div>
       )}

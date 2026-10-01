@@ -87,21 +87,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
     // ── Komunikasi & Inbox ──
     {
       id: 'inbox',
-      label: 'RFQ Inbox',
+      label: 'Kotak Masuk RFQ',
       icon: Mail,
       badge: pendingCount > 0 ? pendingCount : null,
       badgeColor: 'bg-amber-500 text-white font-bold',
     },
     {
       id: 'client_chat',
-      label: 'Client Email',
+      label: 'Email Klien',
       icon: MessageSquare,
       badge: null,
       badgeColor: '',
     },
     {
       id: 'notification_log',
-      label: 'Notifications',
+      label: 'Notifikasi',
       icon: Bell,
       badge: unreadNotificationCount > 0 ? unreadNotificationCount : null,
       badgeColor: 'backdrop-blur-md bg-rose-600/90 text-white border border-rose-300/50 shadow-xs font-black',
@@ -109,59 +109,59 @@ export const Sidebar: React.FC<SidebarProps> = ({
     // ── Penawaran & Dokumen Niaga ──
     {
       id: 'product_catalog',
-      label: 'Products Catalog',
+      label: 'Katalog Produk',
       icon: Package,
-      badge: 'Catalog',
+      badge: 'Katalog',
       badgeColor: 'bg-amber-100 text-amber-900 border border-amber-300 font-bold',
     },
     {
       id: 'quotation_list',
-      label: 'Quotation List',
+      label: 'Daftar Penawaran (SPH)',
       icon: FileSpreadsheet,
       badge: 'MySQL',
       badgeColor: 'bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold',
     },
     {
       id: 'builder',
-      label: 'Quotation Builder (SPH)',
+      label: 'Buat Penawaran (SPH)',
       icon: FileText,
       badge: null,
       badgeColor: '',
     },
     {
       id: 'invoice_builder',
-      label: 'Invoice Builder',
+      label: 'Buat Faktur (Invoice)',
       icon: Receipt,
-      badge: 'Invoice',
+      badge: 'Faktur',
       badgeColor: 'bg-[#0070c0] text-white font-bold',
     },
     {
       id: 'doc_preview',
-      label: 'Document Preview',
+      label: 'Pratinjau Dokumen PDF',
       icon: FileCheck,
       badge: 'PDF',
       badgeColor: 'backdrop-blur-md bg-blue-500/15 text-blue-800 border border-blue-300/60 font-bold',
     },
     {
       id: 'trash',
-      label: 'Trash & Junk',
+      label: 'Tempat Sampah',
       icon: Trash2,
-      badge: 'Junk',
+      badge: 'Sampah',
       badgeColor: 'bg-rose-100 text-rose-800 border border-rose-200 font-bold',
     },
     // ── Pengaturan Sistem ──
     {
       id: 'account_settings',
-      label: 'Account & Users',
+      label: 'Akun Pengguna & Hak Akses',
       icon: Users,
-      badge: isAdmin ? 'Admin' : 'Restricted',
+      badge: isAdmin ? 'Admin' : 'Terbatas',
       badgeColor: isAdmin ? 'backdrop-blur-md bg-purple-500/15 text-purple-800 border border-purple-300/60 font-bold' : 'bg-slate-200 text-slate-600',
     },
     {
       id: 'system_settings',
-      label: 'System Settings',
+      label: 'Pengaturan Sistem ERP',
       icon: Settings,
-      badge: 'Core',
+      badge: 'Sistem',
       badgeColor: 'bg-slate-800 text-slate-100 font-bold',
     },
   ];
@@ -241,7 +241,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {isAccountMenuOpen && !isCollapsed && (
             <div className="absolute left-3 right-3 top-14 bg-white border border-slate-300 rounded-lg shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2">
               <div className="px-3 py-1.5 border-b border-slate-200 flex items-center justify-between">
-                <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Switch User Account</p>
+                <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Ganti Akun Pengguna</p>
                 <button
                   type="button"
                   onClick={() => {
@@ -250,7 +250,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   }}
                   className="text-[10px] text-blue-600 hover:text-blue-800 font-extrabold cursor-pointer"
                 >
-                  Manage
+                  Kelola
                 </button>
               </div>
 
@@ -320,10 +320,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition cursor-pointer ${
                   isCollapsed ? 'justify-center px-2' : ''
                 }`}
-                title={isCollapsed ? 'Lock ERP Access (Logout)' : undefined}
+                title={isCollapsed ? 'Kunci Akses ERP (Logout)' : undefined}
               >
                 <LogOut className="w-4 h-4 shrink-0 text-rose-500" />
-                {!isCollapsed && <span>Lock ERP Access</span>}
+                {!isCollapsed && <span>Kunci Akses ERP (Keluar)</span>}
               </button>
             </div>
           )}

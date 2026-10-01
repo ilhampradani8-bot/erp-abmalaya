@@ -825,35 +825,35 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
       });
   };
 
-  // 8 Fast Apple-styled Tabs Navigation
+  // 8 Tab Navigasi Fast Apple UI
   const tabs = [
     { id: 'credentials', label: '1. Email & SMTP', icon: Key, badge: 'TLS 587' },
-    { id: 'inbox_rules', label: '2. Inbox Rules & Cutoff', icon: Sliders, badge: 'Rules' },
-    { id: 'ai', label: '3. Gemini AI Keys Pool', icon: Bot, badge: 'Pool' },
-    { id: 'paper', label: '4. SPH Letterhead & Paper', icon: FileText, badge: 'SPH' },
-    { id: 'quotation_settings', label: '5. Quotation Defaults & Fee', icon: Percent, badge: 'Fee' },
-    { id: 'invoice', label: '6. Invoice Format & Signatory', icon: Receipt, badge: 'Invoice' },
-    { id: 'cloud_sync', label: '7. Google Sheets Backup', icon: Cloud, badge: 'Sheets' },
-    { id: 'database', label: '8. MySQL Tables & Schema', icon: Database, badge: 'MySQL' },
+    { id: 'inbox_rules', label: '2. Aturan Filter & Cutoff', icon: Sliders, badge: 'Filter' },
+    { id: 'ai', label: '3. Pool API Key AI', icon: Bot, badge: 'Gemini' },
+    { id: 'paper', label: '4. Kop Surat SPH', icon: FileText, badge: 'SPH' },
+    { id: 'quotation_settings', label: '5. Standar Penawaran', icon: Percent, badge: 'Fee' },
+    { id: 'invoice', label: '6. Format Faktur & TTD', icon: Receipt, badge: 'Faktur' },
+    { id: 'cloud_sync', label: '7. Cadangan Google Sheets', icon: Cloud, badge: 'Sheets' },
+    { id: 'database', label: '8. Skema Tabel MySQL', icon: Database, badge: 'MySQL' },
   ];
 
   // Core MySQL Tables Registry
   const coreTables = [
-    { name: 'rfq_requests', label: 'RFQ Inquiries Registry', type: 'InnoDB', charset: 'utf8mb4', desc: 'Incoming RFQ inquiries and manual quotes.' },
-    { name: 'quotations', label: 'Quotation Documents (SPH)', type: 'InnoDB', charset: 'utf8mb4', desc: 'Header data, SPH numbers, grand totals, SST, and validity.' },
-    { name: 'quotation_items', label: 'Quotation Line Items', type: 'InnoDB', charset: 'utf8mb4', desc: 'Item rows, IMPA codes, quantities, and unit prices.' },
-    { name: 'invoices', label: 'Official Invoices', type: 'InnoDB', charset: 'utf8mb4', desc: 'Commercial invoices, numbers, due dates, and paid status.' },
-    { name: 'invoice_items', label: 'Invoice Line Items', type: 'InnoDB', charset: 'utf8mb4', desc: 'Itemized products/services billed in invoice.' },
-    { name: 'products', label: 'Master Product Catalog', type: 'InnoDB', charset: 'utf8mb4', desc: 'Standard catalog, IMPA/SKU, description, and supplier.' },
-    { name: 'product_categories', label: 'Product Categories', type: 'InnoDB', charset: 'utf8mb4', desc: 'Category structure and auto-classification rules.' },
-    { name: 'product_change_logs', label: 'Product Audit Logs', type: 'InnoDB', charset: 'utf8mb4', desc: 'Change history for pricing, specs, and supplier updates.' },
-    { name: 'spreadsheet_backups', label: 'Cloud Spreadsheet Targets', type: 'InnoDB', charset: 'utf8mb4', desc: 'Google Sheets IDs for automated catalog backup.' },
-    { name: 'gemini_api_keys', label: 'Gemini AI API Keys Pool', type: 'InnoDB', charset: 'utf8mb4', desc: 'API key pool for AI RFQ classification and OCR PDF scans.' },
-    { name: 'api_credentials', label: 'Configuration Key-Value Store', type: 'InnoDB', charset: 'utf8mb4', desc: 'SMTP settings, filter rules, and system fee parameters.' },
-    { name: 'system_paper_settings', label: 'SPH Letterhead Configuration', type: 'InnoDB', charset: 'utf8mb4', desc: 'Branding, logos, official stamps, and bank accounts.' },
-    { name: 'system_invoice_settings', label: 'Invoice Format Settings', type: 'InnoDB', charset: 'utf8mb4', desc: 'Invoice headers, SSM number, signatories, and payment terms.' },
-    { name: 'users', label: 'System User Accounts', type: 'InnoDB', charset: 'utf8mb4', desc: 'Logins, role-based permissions, and password hashes.' },
-    { name: 'user_activity_logs', label: 'Security & Activity Logs', type: 'InnoDB', charset: 'utf8mb4', desc: 'Audit record of user logins and system dispatches.' },
+    { name: 'rfq_requests', label: 'Registri Permintaan RFQ', type: 'InnoDB', charset: 'utf8mb4', desc: 'Permintaan penawaran masuk dari email dan penawaran manual.' },
+    { name: 'quotations', label: 'Dokumen Surat Penawaran (SPH)', type: 'InnoDB', charset: 'utf8mb4', desc: 'Header dokumen, nomor SPH resmi, total nilai, PPN/SST, dan masa berlaku.' },
+    { name: 'quotation_items', label: 'Baris Item Penawaran', type: 'InnoDB', charset: 'utf8mb4', desc: 'Daftar item produk, kode IMPA, kuantitas, harga satuan, dan diskon.' },
+    { name: 'invoices', label: 'Dokumen Faktur Resmi (Tax Invoice)', type: 'InnoDB', charset: 'utf8mb4', desc: 'Faktur komersial, nomor invoice, jatuh tempo, dan status pembayaran.' },
+    { name: 'invoice_items', label: 'Baris Item Faktur', type: 'InnoDB', charset: 'utf8mb4', desc: 'Rincian produk dan jasa yang ditagihkan dalam invoice.' },
+    { name: 'products', label: 'Katalog Master Produk', type: 'InnoDB', charset: 'utf8mb4', desc: 'Katalog standar marinir, kode IMPA/SKU, deskripsi, dan harga supplier.' },
+    { name: 'product_categories', label: 'Kategori Master Produk', type: 'InnoDB', charset: 'utf8mb4', desc: 'Struktur kategori produk marinir dan klasifikasi otomatis.' },
+    { name: 'product_change_logs', label: 'Log Audit Perubahan Produk', type: 'InnoDB', charset: 'utf8mb4', desc: 'Riwayat perubahan harga, spesifikasi, dan pemasok produk.' },
+    { name: 'spreadsheet_backups', label: 'Target Cadangan Google Sheets', type: 'InnoDB', charset: 'utf8mb4', desc: 'Daftar ID Google Spreadsheet untuk sinkronisasi otomatis katalog.' },
+    { name: 'gemini_api_keys', label: 'Pool API Key Gemini AI', type: 'InnoDB', charset: 'utf8mb4', desc: 'Kumpulan API key rotasi untuk klasifikasi RFQ dan OCR Vision scan.' },
+    { name: 'api_credentials', label: 'Penyimpanan Konfigurasi Sistem', type: 'InnoDB', charset: 'utf8mb4', desc: 'Pengaturan host SMTP, aturan filter email, dan parameter fee sistem.' },
+    { name: 'system_paper_settings', label: 'Pengaturan Kop Surat SPH', type: 'InnoDB', charset: 'utf8mb4', desc: 'Identitas perusahaan, logo, stempel resmi, rekening bank, dan margin.' },
+    { name: 'system_invoice_settings', label: 'Format Template Faktur', type: 'InnoDB', charset: 'utf8mb4', desc: 'Header faktur, nomor SSM, nama penandatangan resmi, dan syarat bayar.' },
+    { name: 'users', label: 'Akun Pengguna Sistem', type: 'InnoDB', charset: 'utf8mb4', desc: 'Login operator, role hak akses, departemen, dan hash kata sandi.' },
+    { name: 'user_activity_logs', label: 'Log Aktivitas & Keamanan', type: 'InnoDB', charset: 'utf8mb4', desc: 'Audit trail rekaman login, perubahan data, dan pengiriman surat.' },
   ];
 
   return (
@@ -866,7 +866,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             <CheckCircle2 className="w-4 h-4 text-emerald-200" />
             <span>{savedMessage}</span>
           </div>
-          <span className="text-[10px] bg-emerald-700/80 px-2.5 py-0.5 rounded-full text-emerald-100 font-mono">SQL Live Sync Active</span>
+          <span className="text-[10px] bg-emerald-700/80 px-2.5 py-0.5 rounded-full text-emerald-100 font-mono">Sinkronisasi Live Aktif</span>
         </div>
       )}
 
@@ -879,12 +879,12 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <span className="text-xs font-bold text-slate-900 uppercase tracking-tight">System Settings</span>
+                <span className="text-xs font-bold text-slate-900 uppercase tracking-tight">Pengaturan Sistem ERP</span>
                 <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.2 rounded border border-blue-200 font-mono">
                   MySQL 8.0 Live
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500">Configure email servers, AI keys, document letterheads, and database registries.</p>
+              <p className="text-[11px] text-slate-500">Konfigurasi server email, API keys AI, kop surat dokumen, dan skema database.</p>
             </div>
           </div>
 
@@ -916,7 +916,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
       <main className="w-full flex-1 max-w-[1600px] mx-auto p-4 md:p-6 space-y-6">
 
         {/* ════════════════════════════════════════════════════════════════════
-            TAB 1: EMAIL & SMTP SERVER
+            TAB 1: EMAIL & SERVER SMTP
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'credentials' && (
           <div className="w-full space-y-4 animate-in fade-in">
@@ -924,7 +924,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Key className="w-4 h-4 text-blue-600" />
-                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Outbound SMTP Server Configuration (MySQL: api_credentials)</span>
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Konfigurasi Server SMTP Keluar (MySQL: api_credentials)</span>
                 </div>
                 <span className="text-[11px] text-slate-500 font-mono">TLS Port 587</span>
               </div>
@@ -932,7 +932,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               <form onSubmit={handleSaveSmtp} className="p-5 space-y-4 text-xs">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">SMTP Host</label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Host SMTP</label>
                     <input
                       type="text"
                       value={formConfig.host}
@@ -944,7 +944,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">SMTP Port</label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Port SMTP</label>
                     <input
                       type="number"
                       value={formConfig.port}
@@ -956,7 +956,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Sender Email / Username</label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Email Pengirim / Username</label>
                     <input
                       type="email"
                       value={formConfig.from_email || formConfig.username}
@@ -968,7 +968,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">App Password (16 Characters)</label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Kata Sandi Aplikasi (16 Karakter)</label>
                     <div className="relative">
                       <input
                         type={showPassword ? 'text' : 'password'}
@@ -990,13 +990,13 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 </div>
 
                 <div className="pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-[11px] text-slate-500">Credentials are safely encrypted and stored in MySQL database table <code className="text-blue-600 font-mono">api_credentials</code>.</span>
+                  <span className="text-[11px] text-slate-500">Kredensial disimpan terenkripsi secara aman di tabel database MySQL <code className="text-blue-600 font-mono">api_credentials</code>.</span>
                   <button
                     type="submit"
                     className="inline-flex items-center space-x-1.5 px-4 py-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-lg shadow-xs text-xs transition-all cursor-pointer"
                   >
                     <Save className="w-3.5 h-3.5" />
-                    <span>Save Email Configuration</span>
+                    <span>Simpan Pengaturan SMTP</span>
                   </button>
                 </div>
               </form>
@@ -1005,7 +1005,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         )}
 
         {/* ════════════════════════════════════════════════════════════════════
-            TAB 2: INBOX RULES & INGEST DATE BOUNDARY
+            TAB 2: ATURAN FILTER KOTAK MASUK & CUTOFF DATE
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'inbox_rules' && (
           <div className="w-full space-y-4 animate-in fade-in">
@@ -1013,14 +1013,14 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Sliders className="w-4 h-4 text-purple-600" />
-                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Automated Ingestion Rules & Ingest Date Boundary</span>
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Aturan Penyaringan & Batas Tanggal Penarikan Email RFQ</span>
                 </div>
                 <button
                   onClick={handleSaveInboxRules}
                   className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-lg shadow-xs text-xs transition-all cursor-pointer"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  <span>Save Rules</span>
+                  <span>Simpan Aturan</span>
                 </button>
               </div>
 
@@ -1028,8 +1028,8 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 {/* Date Boundary Box */}
                 <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg flex flex-wrap items-center justify-between gap-3 text-xs">
                   <div>
-                    <span className="font-bold text-slate-900">Email Ingestion Date Cutoff</span>
-                    <p className="text-[11px] text-slate-500">Emails received before this date will be automatically ignored to speed up background sync.</p>
+                    <span className="font-bold text-slate-900">Batas Tanggal Awal Penarikan Email (Cutoff)</span>
+                    <p className="text-[11px] text-slate-500">Email yang masuk sebelum tanggal ini akan diabaikan secara otomatis untuk mempercepat proses sinkronisasi.</p>
                   </div>
                   <div className="flex items-center space-x-2">
                     <input
@@ -1043,7 +1043,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                       onClick={() => setInboxRules({ ...inboxRules, fetchStartDate: '' })}
                       className="px-2.5 py-1.5 text-xs text-slate-600 hover:text-rose-600 hover:bg-slate-200 rounded-lg cursor-pointer"
                     >
-                      Reset Date
+                      Reset Tanggal
                     </button>
                   </div>
                 </div>
@@ -1051,12 +1051,12 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 {/* Grouped Rules Rows */}
                 <div className="divide-y divide-slate-200 border border-slate-200 rounded-lg overflow-hidden bg-white text-xs">
                   {[
-                    { key: 'excludeNoreply', title: 'Exclude Automated No-Reply Emails', desc: 'Skip noreply@, notification@, and automated robotic messages.' },
-                    { key: 'excludeMedsos', title: 'Exclude Social Media & Promotional Newsletters', desc: 'Filter out social updates, LinkedIn notifications, and promotional circulars.' },
-                    { key: 'prioritizePdf', title: 'Prioritize Inquiries with PDF Documents', desc: 'Move inquiries containing technical RFQ attachments to the top of inbox.' },
-                    { key: 'requireAttachment', title: 'Require Attachments for RFQ Ingestion', desc: 'Only classify emails that contain at least one document as an RFQ.' },
-                    { key: 'autoLabelRfq', title: 'Automatic RFQ Tagging & Status Labeling', desc: 'Tag categories (Equipment, Spare Parts, General) automatically.' },
-                    { key: 'excludeSystemAlerts', title: 'Exclude System & IT Infrastructure Alerts', desc: 'Ignore server delivery reports, mailer-daemon, and system warnings.' },
+                    { key: 'excludeNoreply', title: 'Abaikan Email Otomatis No-Reply', desc: 'Lewati pesan otomatis noreply@, notification@, dan email bot.' },
+                    { key: 'excludeMedsos', title: 'Abaikan Media Sosial & Promosi Buletin', desc: 'Saring buletin pemasaran, notifikasi LinkedIn, dan promosi.' },
+                    { key: 'prioritizePdf', title: 'Prioritaskan Permintaan dengan Lampiran Dokumen PDF', desc: 'Tempatkan inquiry berlampiran dokumen RFQ di urutan paling atas.' },
+                    { key: 'requireAttachment', title: 'Wajib Ada Lampiran Dokumen untuk Masuk RFQ', desc: 'Hanya masukkan email yang memiliki setidaknya satu lampiran dokumen.' },
+                    { key: 'autoLabelRfq', title: 'Labeling Kategori RFQ Otomatis oleh AI', desc: 'Klasifikasi kategori (Peralatan, Suku Cadang, Umum) secara otomatis.' },
+                    { key: 'excludeSystemAlerts', title: 'Abaikan Notifikasi Sistem & Server Alert', desc: 'Abaikan laporan pengiriman server, mailer-daemon, dan alert cPanel.' },
                   ].map((rule) => (
                     <div key={rule.key} className="p-3.5 flex items-center justify-between hover:bg-slate-50 transition-all">
                       <div className="pr-4">
@@ -1081,7 +1081,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         )}
 
         {/* ════════════════════════════════════════════════════════════════════
-            TAB 3: GEMINI AI KEYS POOL
+            TAB 3: POOL API KEY GEMINI AI
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'ai' && (
           <div className="w-full space-y-4 animate-in fade-in">
@@ -1090,7 +1090,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Bot className="w-4 h-4 text-pink-600" />
-                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">RFQ Inbox Classification AI Pool (Gemini 2.5 Flash)</span>
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Pool AI Klasifikasi Kotak Masuk RFQ (Gemini 2.5 Flash)</span>
                 </div>
                 <button
                   onClick={() => {
@@ -1103,7 +1103,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   className="inline-flex items-center space-x-1 px-3 py-1 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 text-white font-bold rounded-lg text-xs shadow-xs cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add Key</span>
+                  <span>Tambah Kunci</span>
                 </button>
               </div>
 
@@ -1116,11 +1116,11 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                         <span className={`text-[10px] font-bold px-2 py-0.2 rounded-full ${
                           item.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
                         }`}>
-                          {item.status.toUpperCase()}
+                          {item.status === 'active' ? 'AKTIF' : 'NONAKTIF'}
                         </span>
                       </div>
                       <div className="font-mono text-slate-600">{maskKey(item.key)}</div>
-                      <div className="text-[11px] text-slate-500 font-medium">Model: {item.modelName} • Quota: {item.dailyLimit}</div>
+                      <div className="text-[11px] text-slate-500 font-medium">Model: {item.modelName} • Kuota: {item.dailyLimit}</div>
                     </div>
 
                     <div className="flex items-center space-x-1.5">
@@ -1130,7 +1130,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                           item.status === 'active' ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
                         }`}
                       >
-                        {item.status === 'active' ? 'Disable' : 'Enable'}
+                        {item.status === 'active' ? 'Nonaktifkan' : 'Aktifkan'}
                       </button>
                       <button
                         onClick={() => {
@@ -1161,7 +1161,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <ScanLine className="w-4 h-4 text-indigo-600" />
-                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Vision OCR Document Scan Pool (Gemini 2.5 Flash Vision)</span>
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Pool AI Vision OCR Scan Dokumen PDF (Gemini 2.5 Flash Vision)</span>
                 </div>
                 <button
                   onClick={() => {
@@ -1174,7 +1174,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   className="inline-flex items-center space-x-1 px-3 py-1 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 text-white font-bold rounded-lg text-xs shadow-xs cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add Key</span>
+                  <span>Tambah Kunci</span>
                 </button>
               </div>
 
@@ -1187,11 +1187,11 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                         <span className={`text-[10px] font-bold px-2 py-0.2 rounded-full ${
                           item.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
                         }`}>
-                          {item.status.toUpperCase()}
+                          {item.status === 'active' ? 'AKTIF' : 'NONAKTIF'}
                         </span>
                       </div>
                       <div className="font-mono text-slate-600">{maskKey(item.key)}</div>
-                      <div className="text-[11px] text-slate-500 font-medium">Model: {item.modelName} • Quota: {item.dailyLimit}</div>
+                      <div className="text-[11px] text-slate-500 font-medium">Model: {item.modelName} • Kuota: {item.dailyLimit}</div>
                     </div>
 
                     <div className="flex items-center space-x-1.5">
@@ -1201,7 +1201,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                           item.status === 'active' ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
                         }`}
                       >
-                        {item.status === 'active' ? 'Disable' : 'Enable'}
+                        {item.status === 'active' ? 'Nonaktifkan' : 'Aktifkan'}
                       </button>
                       <button
                         onClick={() => {
@@ -1232,20 +1232,23 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         {/* ════════════════════════════════════════════════════════════════════
             TAB 4: SPH LETTERHEAD & PAPER BRANDING
         ════════════════════════════════════════════════════════════════════ */}
+        {/* ════════════════════════════════════════════════════════════════════
+            TAB 4: KOP SURAT SPH & DOKUMEN
+        ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'paper' && (
           <div className="w-full space-y-4 animate-in fade-in">
             <div className="w-full bg-white border border-slate-300 rounded-xl shadow-xs overflow-hidden">
               <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <FileText className="w-4 h-4 text-amber-600" />
-                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Quotation Letterhead (SPH) & Company Branding</span>
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Kop Surat Penawaran (SPH) & Identitas Perusahaan</span>
                 </div>
                 <button
                   onClick={handleSavePaper}
                   className="inline-flex items-center space-x-1.5 px-4 py-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 text-white font-bold rounded-lg shadow-xs text-xs transition-all cursor-pointer"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  <span>Save SPH Settings</span>
+                  <span>Simpan Pengaturan Kop SPH</span>
                 </button>
               </div>
 
@@ -1253,10 +1256,10 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 {/* Visual Assets Upload Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
-                    { label: 'Company Logo', type: 'logo', val: paperSettings.logoUrl },
-                    { label: 'Official Stamp', type: 'stamp', val: paperSettings.stampUrl },
-                    { label: 'Digital Signature (TTD)', type: 'signature', val: paperSettings.signatureUrl },
-                    { label: 'Header Image Banner', type: 'header_image', val: paperSettings.headerImageUrl },
+                    { label: 'Logo Perusahaan', type: 'logo', val: paperSettings.logoUrl },
+                    { label: 'Stempel Resmi', type: 'stamp', val: paperSettings.stampUrl },
+                    { label: 'Tanda Tangan Digital (TTD)', type: 'signature', val: paperSettings.signatureUrl },
+                    { label: 'Banner Header Gambar', type: 'header_image', val: paperSettings.headerImageUrl },
                   ].map((item) => (
                     <div key={item.type} className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-col items-center justify-center space-y-1.5 text-center">
                       <span className="font-bold text-slate-700 text-[11px]">{item.label}</span>
@@ -1264,12 +1267,12 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                         <img src={item.val} alt={item.label} className="h-10 object-contain rounded border border-slate-200 bg-white p-0.5" />
                       ) : (
                         <div className="h-10 w-full flex items-center justify-center border border-dashed border-slate-300 rounded text-[10px] text-slate-400">
-                          No File
+                          Belum Ada File
                         </div>
                       )}
                       <label className="cursor-pointer inline-flex items-center space-x-1 text-[11px] font-bold text-blue-600 hover:text-blue-700">
                         <Upload className="w-3 h-3" />
-                        <span>Upload</span>
+                        <span>Unggah</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -1284,7 +1287,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 {/* Company Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Company Legal Name</label>
+                    <label className="block font-bold text-slate-700 mb-1">Nama Resmi Perusahaan</label>
                     <input
                       type="text"
                       value={paperSettings.companyName}
@@ -1294,7 +1297,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Official Telephone / Contact</label>
+                    <label className="block font-bold text-slate-700 mb-1">Nomor Telepon Resmi / Kontak</label>
                     <input
                       type="text"
                       value={paperSettings.phone}
@@ -1304,7 +1307,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="block font-bold text-slate-700 mb-1">Registered Address</label>
+                    <label className="block font-bold text-slate-700 mb-1">Alamat Resmi Kantor</label>
                     <textarea
                       rows={2}
                       value={paperSettings.companyAddress}
@@ -1316,10 +1319,10 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
 
                 {/* Bank Details */}
                 <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
-                  <span className="font-bold text-slate-900 block text-xs">Bank Account for Quotation Payments</span>
+                  <span className="font-bold text-slate-900 block text-xs">Rekening Bank untuk Pembayaran Penawaran</span>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">Bank Name</label>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">Nama Bank</label>
                       <input
                         type="text"
                         value={paperSettings.bankName}
@@ -1328,7 +1331,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">Account Number</label>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">Nomor Rekening</label>
                       <input
                         type="text"
                         value={paperSettings.bankAccountNumber}
@@ -1337,7 +1340,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">Account Beneficiary Name</label>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">Atas Nama Rekening (Beneficiary)</label>
                       <input
                         type="text"
                         value={paperSettings.bankAccountName}
@@ -1353,7 +1356,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         )}
 
         {/* ════════════════════════════════════════════════════════════════════
-            TAB 5: QUOTATION DEFAULTS & SOFTWARE FEE
+            TAB 5: STANDAR PENAWARAN & SOFTWARE FEE
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'quotation_settings' && (
           <div className="w-full space-y-4 animate-in fade-in">
@@ -1361,35 +1364,35 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Percent className="w-4 h-4 text-emerald-600" />
-                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Quotation Defaults & System Margin Fee Parameters</span>
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Standar Penawaran & Parameter Biaya Margin Sistem</span>
                 </div>
                 <button
                   onClick={handleSaveQuotationSettings}
                   className="inline-flex items-center space-x-1.5 px-4 py-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 text-white font-bold rounded-lg shadow-xs text-xs transition-all cursor-pointer"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  <span>Save Settings</span>
+                  <span>Simpan Pengaturan</span>
                 </button>
               </div>
 
               <div className="p-5 space-y-4 text-xs">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Currency Code</label>
+                    <label className="block font-bold text-slate-700 mb-1">Mata Uang Standar</label>
                     <select
                       value={quotationSettings.currency}
                       onChange={(e) => setQuotationSettings({ ...quotationSettings, currency: e.target.value })}
                       className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 font-bold focus:outline-hidden"
                     >
-                      <option value="MYR">MYR - Malaysian Ringgit (RM)</option>
-                      <option value="USD">USD - US Dollar ($)</option>
-                      <option value="SGD">SGD - Singapore Dollar (S$)</option>
-                      <option value="IDR">IDR - Indonesian Rupiah (Rp)</option>
+                      <option value="MYR">MYR - Ringgit Malaysia (RM)</option>
+                      <option value="USD">USD - Dolar Amerika Serikat ($)</option>
+                      <option value="SGD">SGD - Dolar Singapura (S$)</option>
+                      <option value="IDR">IDR - Rupiah Indonesia (Rp)</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Standard Tax Rate (%)</label>
+                    <label className="block font-bold text-slate-700 mb-1">Tarif Pajak Standar / SST (%)</label>
                     <input
                       type="number"
                       value={quotationSettings.taxPercent}
@@ -1400,12 +1403,12 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Default Quotation Validity</label>
+                    <label className="block font-bold text-slate-700 mb-1">Masa Berlaku Standar Penawaran</label>
                     <input
                       type="text"
                       value={quotationSettings.validUntil}
                       onChange={(e) => setQuotationSettings({ ...quotationSettings, validUntil: e.target.value })}
-                      placeholder="14 Days"
+                      placeholder="14 Hari"
                       className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-hidden"
                     />
                   </div>
@@ -1415,11 +1418,11 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl space-y-3">
                   <div className="flex items-center space-x-2">
                     <Percent className="w-4 h-4 text-blue-600" />
-                    <span className="font-bold text-slate-900 text-xs">Platform Software Fee Formula</span>
+                    <span className="font-bold text-slate-900 text-xs">Rumus Biaya Software Maintenance Sistem</span>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">Fee Percentage (%)</label>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">Persentase Fee (%)</label>
                       <input
                         type="number"
                         step="0.01"
@@ -1429,7 +1432,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">Maximum Safety Cap ({quotationSettings.currency})</label>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">Batas Maksimal Fee ({quotationSettings.currency})</label>
                       <input
                         type="number"
                         value={softwareFee.maxLimit}
@@ -1445,7 +1448,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         )}
 
         {/* ════════════════════════════════════════════════════════════════════
-            TAB 6: INVOICE TEMPLATE & SIGNATORY
+            TAB 6: FORMAT FAKTUR & PENANDATANGAN
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'invoice' && (
           <div className="w-full space-y-4 animate-in fade-in">
@@ -1453,14 +1456,14 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Receipt className="w-4 h-4 text-cyan-600" />
-                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Commercial Invoice Template & Legal Signatories</span>
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Template Faktur Komersial & Penandatangan Resmi</span>
                 </div>
                 <button
                   onClick={handleSaveInvoiceSettings}
                   className="inline-flex items-center space-x-1.5 px-4 py-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 text-white font-bold rounded-lg shadow-xs text-xs transition-all cursor-pointer"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  <span>Save Invoice Settings</span>
+                  <span>Simpan Pengaturan Faktur</span>
                 </button>
               </div>
 
@@ -1468,10 +1471,10 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 {/* Uploads Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
-                    { label: 'Invoice Logo', type: 'logo', val: invoiceSettings.logoUrl },
-                    { label: 'Official Stamp', type: 'stamp', val: invoiceSettings.stampUrl },
-                    { label: 'Signatory Signature', type: 'signature', val: invoiceSettings.signatureUrl },
-                    { label: 'Header Banner', type: 'header_image', val: invoiceSettings.headerImageUrl },
+                    { label: 'Logo Faktur', type: 'logo', val: invoiceSettings.logoUrl },
+                    { label: 'Stempel Resmi', type: 'stamp', val: invoiceSettings.stampUrl },
+                    { label: 'Tanda Tangan Penandatangan', type: 'signature', val: invoiceSettings.signatureUrl },
+                    { label: 'Banner Header', type: 'header_image', val: invoiceSettings.headerImageUrl },
                   ].map((item) => (
                     <div key={item.type} className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-col items-center justify-center space-y-1.5 text-center">
                       <span className="font-bold text-slate-700 text-[11px]">{item.label}</span>
@@ -1479,12 +1482,12 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                         <img src={item.val} alt={item.label} className="h-10 object-contain rounded border border-slate-200 bg-white p-0.5" />
                       ) : (
                         <div className="h-10 w-full flex items-center justify-center border border-dashed border-slate-300 rounded text-[10px] text-slate-400">
-                          No File
+                          Belum Ada File
                         </div>
                       )}
                       <label className="cursor-pointer inline-flex items-center space-x-1 text-[11px] font-bold text-blue-600 hover:text-blue-700">
                         <Upload className="w-3 h-3" />
-                        <span>Upload</span>
+                        <span>Unggah</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -1498,7 +1501,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">SSM Registration Number</label>
+                    <label className="block font-bold text-slate-700 mb-1">Nomor Registrasi SSM Perusahaan</label>
                     <input
                       type="text"
                       value={invoiceSettings.ssmNumber}
@@ -1509,7 +1512,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Signatory Full Name</label>
+                    <label className="block font-bold text-slate-700 mb-1">Nama Lengkap Penandatangan Faktur</label>
                     <input
                       type="text"
                       value={invoiceSettings.signatoryName}
@@ -1520,7 +1523,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Signatory Designation</label>
+                    <label className="block font-bold text-slate-700 mb-1">Jabatan Resmi Penandatangan</label>
                     <input
                       type="text"
                       value={invoiceSettings.signatoryTitle}
@@ -1531,7 +1534,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Bank SWIFT / BIC Code</label>
+                    <label className="block font-bold text-slate-700 mb-1">Kode SWIFT / BIC Bank</label>
                     <input
                       type="text"
                       value={invoiceSettings.bankSwiftCode}
@@ -1542,7 +1545,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="block font-bold text-slate-700 mb-1">Invoice Payment Terms & Bank Instructions</label>
+                    <label className="block font-bold text-slate-700 mb-1">Syarat Pembayaran Faktur & Petunjuk Transfer Bank</label>
                     <textarea
                       rows={2}
                       value={invoiceSettings.paymentTerms}
@@ -1557,7 +1560,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         )}
 
         {/* ════════════════════════════════════════════════════════════════════
-            TAB 7: GOOGLE SHEETS CLOUD SYNC
+            TAB 7: CADANGAN GOOGLE SHEETS CLOUD
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'cloud_sync' && (
           <div className="w-full space-y-4 animate-in fade-in">
@@ -1565,14 +1568,14 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Cloud className="w-4 h-4 text-sky-600" />
-                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Google Sheets Automated Master Catalog Backup</span>
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Sinkronisasi Otomatis Cadangan Google Sheets Master Produk</span>
                 </div>
                 <button
                   onClick={() => setIsAddBackupModalOpen(true)}
                   className="inline-flex items-center space-x-1 px-3 py-1 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 text-white font-bold rounded-lg text-xs shadow-xs cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add Target</span>
+                  <span>Tambah Target</span>
                 </button>
               </div>
 
@@ -1580,8 +1583,8 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 {/* Service Account Copy Box */}
                 <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <span className="font-bold text-slate-900 block">Google Cloud Service Account</span>
-                    <p className="text-[11px] text-slate-500">Share your target Google Spreadsheet with Editor permissions to:</p>
+                    <span className="font-bold text-slate-900 block">Akun Layanan Google Cloud (Service Account)</span>
+                    <p className="text-[11px] text-slate-500">Bagikan spreadsheet target Anda dengan hak akses Editor ke alamat:</p>
                     <code className="text-xs font-mono text-blue-600 font-bold block pt-0.5">
                       erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com
                     </code>
@@ -1591,7 +1594,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-100 cursor-pointer"
                   >
                     {isCopiedEmail ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{isCopiedEmail ? 'Copied!' : 'Copy Email'}</span>
+                    <span>{isCopiedEmail ? 'Tersalin!' : 'Salin Email'}</span>
                   </button>
                 </div>
 
@@ -1599,7 +1602,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 <div className="space-y-2">
                   {backupsList.length === 0 ? (
                     <div className="p-6 text-center text-slate-400 text-xs border border-dashed border-slate-300 rounded-lg">
-                      No Google Sheets backup targets configured. Click "Add Target" to connect.
+                      Belum ada target Google Sheets yang dikonfigurasi. Klik "Tambah Target" untuk menghubungkan.
                     </div>
                   ) : (
                     backupsList.map((target) => (
@@ -1609,12 +1612,12 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                             <span className="font-bold text-slate-900">{target.title}</span>
                             {target.is_primary === 1 && (
                               <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.2 rounded border border-blue-200">
-                                PRIMARY
+                                UTAMA
                               </span>
                             )}
                           </div>
                           <div className="font-mono text-slate-500 text-[11px]">ID: {target.spreadsheet_id}</div>
-                          <div className="text-[11px] text-slate-400">Sheet: <span className="font-semibold text-slate-700">{target.sheet_name || 'Sheet1'}</span> • Last Sync: {target.last_sync_at || 'Never'}</div>
+                          <div className="text-[11px] text-slate-400">Sheet: <span className="font-semibold text-slate-700">{target.sheet_name || 'Sheet1'}</span> • Sinkronisasi Terakhir: {target.last_sync_at || 'Belum Pernah'}</div>
                           
                           {connectionResultsMap[target.id] && (
                             <div className={`text-[11px] font-bold flex items-center space-x-1 pt-0.5 ${
@@ -1632,14 +1635,14 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                             disabled={testingConnectionId === target.id}
                             className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded text-xs font-semibold cursor-pointer"
                           >
-                            {testingConnectionId === target.id ? 'Testing...' : 'Test Connection'}
+                            {testingConnectionId === target.id ? 'Menguji...' : 'Uji Koneksi'}
                           </button>
                           <button
                             onClick={() => handleRunBackupNow(target.id)}
                             disabled={runningBackupId === target.id}
                             className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold shadow-2xs cursor-pointer"
                           >
-                            {runningBackupId === target.id ? 'Syncing...' : 'Sync Now'}
+                            {runningBackupId === target.id ? 'Sinkronisasi...' : 'Sinkronkan'}
                           </button>
                           <button
                             onClick={() => handleDeleteBackupTarget(target.id)}
@@ -1658,7 +1661,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         )}
 
         {/* ════════════════════════════════════════════════════════════════════
-            TAB 8: MYSQL DATABASE SCHEMA & ARCHITECTURE
+            TAB 8: SKEMA & ARSITEKTUR DATABASE MYSQL
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'database' && (
           <div className="w-full space-y-4 animate-in fade-in">
@@ -1666,7 +1669,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Database className="w-4 h-4 text-slate-700" />
-                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">MySQL Core Tables & Storage Engine Registry</span>
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Registri 15 Tabel Inti & Engine Database MySQL 8.0</span>
                 </div>
                 <a
                   href="/adminer.php"
@@ -1675,7 +1678,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   className="inline-flex items-center space-x-1.5 px-3 py-1 bg-slate-900 hover:bg-black text-white font-bold rounded-lg text-xs shadow-xs"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Open Database Manager</span>
+                  <span>Buka Database Manager</span>
                 </a>
               </div>
 
@@ -1707,7 +1710,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
           <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-300 overflow-hidden text-xs">
             <div className="px-5 py-3.5 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
               <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                {editingKeyItem ? 'Edit AI Key' : `Add ${modalKeyPool === 'inbox' ? 'Inbox RFQ' : 'Vision OCR'} Key`}
+                {editingKeyItem ? 'Edit Kunci API Gemini' : `Tambah Kunci API ${modalKeyPool === 'inbox' ? 'Kotak Masuk RFQ' : 'Vision OCR'}`}
               </h3>
               <button
                 onClick={() => setIsAiModalOpen(false)}
@@ -1719,18 +1722,18 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
 
             <form onSubmit={handleAddAiKeySubmit} className="p-5 space-y-4">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Key Description / Alias</label>
+                <label className="block font-bold text-slate-700 mb-1">Deskripsi Kunci / Alias</label>
                 <input
                   type="text"
                   value={modalAlias}
                   onChange={(e) => setModalAlias(e.target.value)}
-                  placeholder="e.g. Gemini 2.5 Flash Secondary Key"
+                  placeholder="mis. Kunci Gemini 2.5 Flash Sekunder"
                   className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">API Key String</label>
+                <label className="block font-bold text-slate-700 mb-1">String Kunci API (AIzaSy...)</label>
                 <input
                   type="text"
                   value={modalKeyString}
@@ -1747,13 +1750,13 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   onClick={() => setIsAiModalOpen(false)}
                   className="px-3.5 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg font-semibold cursor-pointer"
                 >
-                  Cancel
+                  Batal
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-xs cursor-pointer"
                 >
-                  {editingKeyItem ? 'Save Changes' : 'Add API Key'}
+                  {editingKeyItem ? 'Simpan Perubahan' : 'Tambah Kunci API'}
                 </button>
               </div>
             </form>
@@ -1766,7 +1769,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-300 overflow-hidden text-xs">
             <div className="px-5 py-3.5 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
-              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">Add Google Spreadsheet Target</h3>
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">Tambah Target Google Spreadsheet</h3>
               <button
                 onClick={() => setIsAddBackupModalOpen(false)}
                 className="p-1 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
@@ -1777,18 +1780,18 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
 
             <form onSubmit={handleAddBackupTarget} className="p-5 space-y-4">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Target Name / Title</label>
+                <label className="block font-bold text-slate-700 mb-1">Nama Target / Judul</label>
                 <input
                   type="text"
                   value={backupTitle}
                   onChange={(e) => setBackupTitle(e.target.value)}
-                  placeholder="Master Product Catalog 2026"
+                  placeholder="Master Katalog Produk 2026"
                   className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Google Spreadsheet ID</label>
+                <label className="block font-bold text-slate-700 mb-1">ID Google Spreadsheet</label>
                 <input
                   type="text"
                   value={backupSpreadsheetId}
@@ -1800,7 +1803,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Sheet / Tab Name</label>
+                <label className="block font-bold text-slate-700 mb-1">Nama Lembar Kerja (Sheet Name)</label>
                 <input
                   type="text"
                   value={backupSheetName}
@@ -1819,7 +1822,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   className="w-4 h-4 rounded text-blue-600 border-slate-300"
                 />
                 <label htmlFor="chkPrimary" className="font-bold text-slate-700 cursor-pointer">
-                  Set as Primary Catalog Target
+                  Jadikan Target Katalog Utama
                 </label>
               </div>
 
@@ -1829,14 +1832,14 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   onClick={() => setIsAddBackupModalOpen(false)}
                   className="px-3.5 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg font-semibold cursor-pointer"
                 >
-                  Cancel
+                  Batal
                 </button>
                 <button
                   type="submit"
                   disabled={isSavingBackup}
                   className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-xs cursor-pointer"
                 >
-                  {isSavingBackup ? 'Saving...' : 'Add Target'}
+                  {isSavingBackup ? 'Menyimpan...' : 'Tambah Target'}
                 </button>
               </div>
             </form>
