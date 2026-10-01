@@ -36,6 +36,8 @@ $create_sql = "CREATE TABLE IF NOT EXISTS system_invoice_settings (
     authorised_by_name VARCHAR(255) DEFAULT 'Muhammad Aimanuddin Bin Mohd Zaki',
     authorised_by_title VARCHAR(255) DEFAULT 'Procurement Manager / Head of Sales',
     received_by_label VARCHAR(255) DEFAULT 'Received by,',
+    received_by_name_label VARCHAR(255) DEFAULT 'Name / Designation: ______________________',
+    received_by_date_label VARCHAR(255) DEFAULT 'Date: ____ / ____ / ________',
     table_header_bg VARCHAR(50) DEFAULT '#0070c0',
     table_header_text_color VARCHAR(50) DEFAULT '#ffffff',
     layout_offsets LONGTEXT DEFAULT NULL,
@@ -54,12 +56,16 @@ $connection->query($create_sql);
 // Auto-check columns if table existed prior
 $chk_cols = [
     'company_reg_no' => "ALTER TABLE system_invoice_settings ADD COLUMN company_reg_no VARCHAR(100) DEFAULT '003320457-D' AFTER company_name",
+    'website' => "ALTER TABLE system_invoice_settings ADD COLUMN website VARCHAR(150) DEFAULT 'abmalaya.com' AFTER email",
     'header_image_url' => "ALTER TABLE system_invoice_settings ADD COLUMN header_image_url LONGTEXT DEFAULT NULL AFTER stamp_url",
     'signature_url' => "ALTER TABLE system_invoice_settings ADD COLUMN signature_url LONGTEXT DEFAULT NULL AFTER stamp_url",
     'remarks_text' => "ALTER TABLE system_invoice_settings ADD COLUMN remarks_text TEXT AFTER bank_email",
+    'footer_text' => "ALTER TABLE system_invoice_settings ADD COLUMN footer_text TEXT DEFAULT NULL AFTER remarks_text",
     'authorised_by_name' => "ALTER TABLE system_invoice_settings ADD COLUMN authorised_by_name VARCHAR(255) DEFAULT 'Muhammad Aimanuddin Bin Mohd Zaki' AFTER remarks_text",
     'authorised_by_title' => "ALTER TABLE system_invoice_settings ADD COLUMN authorised_by_title VARCHAR(255) DEFAULT 'Procurement Manager / Head of Sales' AFTER authorised_by_name",
     'received_by_label' => "ALTER TABLE system_invoice_settings ADD COLUMN received_by_label VARCHAR(255) DEFAULT 'Received by,' AFTER authorised_by_title",
+    'received_by_name_label' => "ALTER TABLE system_invoice_settings ADD COLUMN received_by_name_label VARCHAR(255) DEFAULT 'Name / Designation: ______________________' AFTER received_by_label",
+    'received_by_date_label' => "ALTER TABLE system_invoice_settings ADD COLUMN received_by_date_label VARCHAR(255) DEFAULT 'Date: ____ / ____ / ________' AFTER received_by_name_label",
     'table_header_bg' => "ALTER TABLE system_invoice_settings ADD COLUMN table_header_bg VARCHAR(50) DEFAULT '#0070c0'",
     'table_header_text_color' => "ALTER TABLE system_invoice_settings ADD COLUMN table_header_text_color VARCHAR(50) DEFAULT '#ffffff'",
     'layout_offsets' => "ALTER TABLE system_invoice_settings ADD COLUMN layout_offsets LONGTEXT DEFAULT NULL AFTER table_header_text_color",
@@ -266,6 +272,7 @@ if ($method === 'POST') {
     $c_addr = trim($input['company_address'] ?? '');
     $phone = trim($input['phone'] ?? '');
     $email = trim($input['email'] ?? '');
+    $website = trim($input['website'] ?? 'abmalaya.com');
     $logo_url = trim($input['logo_url'] ?? '');
     $stamp_url = trim($input['stamp_url'] ?? '');
     $sig_url = trim($input['signature_url'] ?? '');
@@ -276,9 +283,12 @@ if ($method === 'POST') {
     $b_holder = trim($input['bank_account_name'] ?? 'AB MALAYA INDUSTRY');
     $b_email = trim($input['bank_email'] ?? 'abmalayaindustry@gmail.com');
     $remarks = trim($input['remarks_text'] ?? '');
+    $footer_text = trim($input['footer_text'] ?? 'abmalayaindustry@gmail.com, +60 3-8000 1234, abmalaya.com');
     $auth_name = trim($input['authorised_by_name'] ?? 'Muhammad Aimanuddin Bin Mohd Zaki');
     $auth_title = trim($input['authorised_by_title'] ?? 'Procurement Manager / Head of Sales');
     $recv_label = trim($input['received_by_label'] ?? 'Received by,');
+    $recv_name_label = trim($input['received_by_name_label'] ?? 'Name / Designation: ______________________');
+    $recv_date_label = trim($input['received_by_date_label'] ?? 'Date: ____ / ____ / ________');
     $t_bg = trim($input['table_header_bg'] ?? '#0070c0');
     $t_txt = trim($input['table_header_text_color'] ?? '#ffffff');
 
@@ -290,10 +300,11 @@ if ($method === 'POST') {
     $font_size = (int)($input['font_size'] ?? 9);
 
     $stmt = $connection->prepare("UPDATE system_invoice_settings SET 
-        company_name = ?, company_reg_no = ?, company_address = ?, phone = ?, email = ?, 
+        company_name = ?, company_reg_no = ?, company_address = ?, phone = ?, email = ?, website = ?,
         logo_url = ?, stamp_url = ?, signature_url = ?, header_image_url = ?, invoice_title = ?,
         bank_name = ?, bank_account_number = ?, bank_account_name = ?, bank_email = ?,
-        remarks_text = ?, authorised_by_name = ?, authorised_by_title = ?, received_by_label = ?,
+        remarks_text = ?, footer_text = ?, authorised_by_name = ?, authorised_by_title = ?, 
+        received_by_label = ?, received_by_name_label = ?, received_by_date_label = ?,
         table_header_bg = ?, table_header_text_color = ?,
         paper_size = ?, margin_top = ?, margin_bottom = ?, margin_left = ?, margin_right = ?, font_size = ?
         WHERE id = 1");
@@ -304,11 +315,12 @@ if ($method === 'POST') {
         exit;
     }
 
-    $stmt->bind_param("sssssssssssssssssssssiiiii", 
-        $c_name, $c_reg, $c_addr, $phone, $email, 
+    $stmt->bind_param("sssssssssssssssssssssssssiiiii", 
+        $c_name, $c_reg, $c_addr, $phone, $email, $website,
         $logo_url, $stamp_url, $sig_url, $hdr_img_url, $inv_title,
         $b_name, $b_acc, $b_holder, $b_email,
-        $remarks, $auth_name, $auth_title, $recv_label,
+        $remarks, $footer_text, $auth_name, $auth_title, 
+        $recv_label, $recv_name_label, $recv_date_label,
         $t_bg, $t_txt,
         $paper_size, $margin_top, $margin_bottom, $margin_left, $margin_right, $font_size
     );

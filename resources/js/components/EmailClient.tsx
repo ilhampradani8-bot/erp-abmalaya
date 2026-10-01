@@ -3,9 +3,20 @@ import { Quotation, RFQ } from '../types/erp';
 import { 
   Send, CheckCircle2, X, Loader2, Sparkles, Clock, ArrowLeft,
   FileType, FileText, Search, Plus, Edit3, Building, Mail, Info, MapPin,
-  Paperclip, CheckCheck, Menu, CornerUpLeft, Eye, MoreVertical, Maximize2, Save
+  Paperclip, CheckCheck, Menu, CornerUpLeft, Eye, MoreVertical, Maximize2, Save,
+  UserCheck, UserPlus, Star, Trash2
 } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
+
+export interface Signatory {
+  id?: number;
+  client_id?: number;
+  company_name: string;
+  name: string;
+  designation: string;
+  is_default?: number | boolean;
+  created_at?: string;
+}
 
 export interface ClientData {
   id?: number;
@@ -22,6 +33,9 @@ export interface ClientData {
   tax_id?: string;
   logo_url?: string;
   notes?: string;
+  received_by_name?: string;
+  received_by_designation?: string;
+  signatories?: Signatory[];
 }
 
 export interface EmailClientProps {
@@ -301,23 +315,39 @@ export const EmailClient: React.FC<EmailClientProps> = ({
   const companyGroups = React.useMemo(() => {
     const companyGroupsMap = new Map<string, CompanyGroup>();
 
+    // Helper map of client emails -> dbClients for instant exact match lookup
+    const emailToDbClientMap = new Map<string, ClientData>();
+    dbClients.forEach((dbC) => {
+      parseEmails(dbC.email).forEach((e) => {
+        if (e) emailToDbClientMap.set(e.toLowerCase().trim(), dbC);
+      });
+    });
+
     // Step 1: Strictly create company groups from Quotations List ONLY (Only include companies in Quotation List)
     effectiveQuotationsList.forEach((q) => {
       const qAny = q as any;
       const qEmails = parseEmails(q.client_email);
       const primaryEmail = qEmails[0] || '';
-      const { companyKey, companyName } = extractCompanyInfoFromEmail(primaryEmail, q.company_name);
 
-      // Check if an existing group matches by domain (for corporate domains) or exact company name
+      // Check if an existing dbClient matches by email or quotation company_name
+      const matchedDbClient = emailToDbClientMap.get(primaryEmail.toLowerCase().trim());
+      const effectiveCompName = (matchedDbClient?.company_name && matchedDbClient.company_name.trim() !== '') 
+        ? matchedDbClient.company_name 
+        : q.company_name;
+
+      const { companyKey, companyName } = extractCompanyInfoFromEmail(primaryEmail, effectiveCompName);
+
+      // Check if an existing group matches by domain (for corporate domains), DB ID, or exact company name
       let targetKey = companyKey;
       if (!companyGroupsMap.has(targetKey)) {
         for (const [gKey, gObj] of companyGroupsMap.entries()) {
+          const isIdMatch = Boolean(matchedDbClient?.id && gObj.dbClientId && matchedDbClient.id === gObj.dbClientId);
           const domain1 = primaryEmail.includes('@') ? primaryEmail.split('@')[1].toLowerCase().trim() : '';
           const domain2 = gObj.primaryEmail.includes('@') ? gObj.primaryEmail.split('@')[1].toLowerCase().trim() : '';
-          const isCorporateDomainMatch = domain1 && domain2 && !PUBLIC_DOMAINS.has(domain1) && domain1 === domain2;
-          const isNameMatch = q.company_name && gObj.companyName.toLowerCase().trim() === q.company_name.toLowerCase().trim() && q.company_name.trim() !== '';
+          const isCorporateDomainMatch = Boolean(domain1 && domain2 && !PUBLIC_DOMAINS.has(domain1) && domain1 === domain2);
+          const isNameMatch = Boolean(effectiveCompName && gObj.companyName.toLowerCase().trim() === effectiveCompName.toLowerCase().trim() && effectiveCompName.trim() !== '');
 
-          if (isCorporateDomainMatch || isNameMatch) {
+          if (isIdMatch || isCorporateDomainMatch || isNameMatch) {
             targetKey = gKey;
             break;
           }
@@ -327,19 +357,20 @@ export const EmailClient: React.FC<EmailClientProps> = ({
       if (!companyGroupsMap.has(targetKey)) {
         companyGroupsMap.set(targetKey, {
           companyKey: targetKey,
-          companyName: q.company_name || companyName,
-          primaryClientName: q.client_name || 'Client',
+          companyName: effectiveCompName || companyName,
+          primaryClientName: matchedDbClient?.client_name || q.client_name || 'Client',
           primaryEmail,
           emailList: qEmails,
-          phone: q.client_phone || '',
-          addressLine1: qAny?.address_line1 || '',
-          addressLine2: qAny?.address_line2 || '',
-          city: qAny?.city || '',
-          state: qAny?.state || '',
-          postalCode: qAny?.postal_code || '',
-          country: qAny?.country || 'Malaysia',
-          taxId: qAny?.tax_id || '',
-          notes: qAny?.notes || '',
+          phone: matchedDbClient?.phone || q.client_phone || '',
+          addressLine1: matchedDbClient?.address_line1 || qAny?.address_line1 || '',
+          addressLine2: matchedDbClient?.address_line2 || qAny?.address_line2 || '',
+          city: matchedDbClient?.city || qAny?.city || '',
+          state: matchedDbClient?.state || qAny?.state || '',
+          postalCode: matchedDbClient?.postal_code || qAny?.postal_code || '',
+          country: matchedDbClient?.country || qAny?.country || 'Malaysia',
+          taxId: matchedDbClient?.tax_id || qAny?.tax_id || '',
+          notes: matchedDbClient?.notes || qAny?.notes || '',
+          dbClientId: matchedDbClient?.id,
           lastActivity: q.date_issued || 'Recent',
           quotations: [q],
           rfqs: [],
@@ -347,7 +378,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
         });
       } else {
         const group = companyGroupsMap.get(targetKey)!;
-        if (q.company_name && !group.companyName) group.companyName = q.company_name;
+        if (effectiveCompName && (!group.companyName || group.companyName.trim() === '')) group.companyName = effectiveCompName;
         if (q.client_name && !group.primaryClientName) group.primaryClientName = q.client_name;
         if (q.client_phone && !group.phone) group.phone = q.client_phone;
         if (qEmails.length > 0) {
@@ -370,24 +401,34 @@ export const EmailClient: React.FC<EmailClientProps> = ({
       const { companyKey } = extractCompanyInfoFromEmail(primaryEmail, dbC.company_name);
 
       let targetKey = companyKey;
-      if (!companyGroupsMap.has(targetKey)) {
+      let foundMatchingKey: string | null = null;
+
+      if (companyGroupsMap.has(targetKey)) {
+        foundMatchingKey = targetKey;
+      } else {
         for (const [gKey, gObj] of companyGroupsMap.entries()) {
+          const isIdMatch = Boolean(dbC.id && gObj.dbClientId && dbC.id === gObj.dbClientId);
+          const isEmailMatch = parsed.some((e) => e && (gObj.emailList.includes(e) || cleanSingleEmail(gObj.primaryEmail) === e));
+          
           const domain1 = primaryEmail.includes('@') ? primaryEmail.split('@')[1].toLowerCase().trim() : '';
           const domain2 = gObj.primaryEmail.includes('@') ? gObj.primaryEmail.split('@')[1].toLowerCase().trim() : '';
-          const isCorporateDomainMatch = domain1 && domain2 && !PUBLIC_DOMAINS.has(domain1) && domain1 === domain2;
-          const isNameMatch = dbC.company_name && gObj.companyName.toLowerCase().trim() === dbC.company_name.toLowerCase().trim();
+          const isCorporateDomainMatch = Boolean(domain1 && domain2 && !PUBLIC_DOMAINS.has(domain1) && domain1 === domain2);
+          const isNameMatch = Boolean(dbC.company_name && gObj.companyName.toLowerCase().trim() === dbC.company_name.toLowerCase().trim() && dbC.company_name.trim() !== '');
 
-          if (isCorporateDomainMatch || isNameMatch) {
-            targetKey = gKey;
+          if (isIdMatch || isEmailMatch || isCorporateDomainMatch || isNameMatch) {
+            foundMatchingKey = gKey;
             break;
           }
         }
       }
 
-      if (companyGroupsMap.has(targetKey)) {
-        const existing = companyGroupsMap.get(targetKey)!;
+      if (foundMatchingKey && companyGroupsMap.has(foundMatchingKey)) {
+        const existing = companyGroupsMap.get(foundMatchingKey)!;
         existing.dbClientId = dbC.id;
-        if (dbC.company_name) existing.companyName = dbC.company_name;
+        // ALWAYS prioritize user's saved DB company_name over raw email prefix/username fallback!
+        if (dbC.company_name && dbC.company_name.trim() !== '') {
+          existing.companyName = dbC.company_name;
+        }
         if (dbC.client_name) existing.primaryClientName = dbC.client_name;
         if (dbC.logo_url) existing.logoUrl = dbC.logo_url;
         if (parsed.length > 0) {
@@ -496,6 +537,10 @@ export const EmailClient: React.FC<EmailClientProps> = ({
   // Clean Email Preview Modal State
   const [previewEmailData, setPreviewEmailData] = useState<RFQ | null>(null);
 
+  // Document PDF Preview Popup Modal State
+  const [pdfPreviewModalData, setPdfPreviewModalData] = useState<{ id: string; title: string } | null>(null);
+  const [emailPdfViewerMode, setEmailPdfViewerMode] = useState<'doc' | 'pdf'>('doc');
+
   // Bubble Info Popup Modal State
   const [infoModalData, setInfoModalData] = useState<{ rfq?: RFQ; quotation?: Quotation } | null>(null);
 
@@ -538,7 +583,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
   const activeQuotation = selectedReplyQuotation || selectedGroup.quotations[0] || quotation || undefined;
   const activeRfq = selectedGroup.rfqs[0] || rfq || undefined;
 
-  // Memoized RFQ Email ↔ SPH Quotation Correlation Pairing for Right Panel Table
+  // Memoized RFQ Email ↔ SPH Quotation Correlation Pairing for Right Panel Table (Strict RFQ Matching with DB ID & RFQ Number Support)
   const correlatedPairs = React.useMemo(() => {
     const pairs: Array<{
       rfq?: RFQ;
@@ -547,29 +592,54 @@ export const EmailClient: React.FC<EmailClientProps> = ({
 
     const matchedQuoIds = new Set<string>();
 
-    // 1. Pair each RFQ Email with its matching Quotations
+    const checkMatch = (qRfqId: string, r: RFQ) => {
+      if (!qRfqId || qRfqId === '0' || qRfqId === 'null') return false;
+      const rId = String(r.id || '').trim();
+      const rNum = String(r.rfq_number || '').trim();
+      const rDbId = String(r.db_id || '').trim();
+      const rLiveClean = rId.replace(/^GMAIL-LIVE-|^RFQ-/i, '');
+
+      return (
+        qRfqId === rId ||
+        (rDbId !== '' && qRfqId === rDbId) ||
+        (rNum !== '' && (qRfqId === rNum || qRfqId === rNum.replace(/^RFQ-/i, ''))) ||
+        qRfqId === `RFQ-${rId}` ||
+        qRfqId === `GMAIL-LIVE-${rId}` ||
+        (rLiveClean !== '' && (qRfqId === rLiveClean || qRfqId === `RFQ-${rLiveClean}` || qRfqId === `GMAIL-LIVE-${rLiveClean}`))
+      );
+    };
+
+    // 1. Pair each RFQ in selectedGroup STRICTLY with its matching Quotations
     selectedGroup.rfqs.forEach((r) => {
       const matchedQuos = selectedGroup.quotations.filter((q) => {
         const qRfqId = String(q.rfq_id || '').trim();
-        const rId = String(r.id || '').trim();
-        const rNum = String(r.rfq_number || '').trim();
-        const isRfqIdMatch = qRfqId !== '' && (qRfqId === rId || qRfqId === rNum || qRfqId === `RFQ-${rId}` || qRfqId === `GMAIL-LIVE-${rId}`);
-        const isEmailMatch = Boolean(q.client_email && r.sender_email && cleanSingleEmail(q.client_email) === cleanSingleEmail(r.sender_email));
-        return isRfqIdMatch || isEmailMatch;
+        return checkMatch(qRfqId, r);
       });
 
       matchedQuos.forEach((q) => matchedQuoIds.add(String(q.id)));
       pairs.push({ rfq: r, quotations: matchedQuos });
     });
 
-    // 2. Append unmatched Manual / Direct Quotations
+    // 2. For remaining SPHs, check if their rfq_id points to an RFQ in the wider rfqList (e.g. from previous days or same client)
     const orphanQuos = selectedGroup.quotations.filter((q) => !matchedQuoIds.has(String(q.id)));
     orphanQuos.forEach((q) => {
-      pairs.push({ rfq: undefined, quotations: [q] });
+      const qRfqId = String(q.rfq_id || '').trim();
+      let matchedGlobalRfq: RFQ | undefined = undefined;
+
+      if (qRfqId && qRfqId !== '0' && qRfqId !== 'null') {
+        matchedGlobalRfq = rfqList.find((r) => checkMatch(qRfqId, r));
+      }
+
+      if (matchedGlobalRfq) {
+        matchedQuoIds.add(String(q.id));
+        pairs.push({ rfq: matchedGlobalRfq, quotations: [q] });
+      } else {
+        pairs.push({ rfq: undefined, quotations: [q] });
+      }
     });
 
     return pairs;
-  }, [selectedGroup]);
+  }, [selectedGroup, rfqList]);
 
   // Client Modal Form State (+ Add / Edit Company)
   const [showClientModal, setShowClientModal] = useState<boolean>(false);
@@ -637,27 +707,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
 
     setMessageText(draftBody);
 
-    // 4. Sync Status directly to MySQL DB via api_quotations.php
-    fetch(getApiUrl('/api_quotations.php'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: targetQuo.id,
-        status: 'penawaran_terkirim',
-        action: 'status_update',
-        user_name: 'AB Malaya Sales Team (Direct Send)',
-        user_email: fromEmail,
-      }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.status === 'success') {
-          fetchQuotationsData();
-        }
-      })
-      .catch((err) => console.error('Error updating quotation status to penawaran_terkirim:', err));
-
-    // 5. Close fullscreen popup modal & focus composer textarea
+    // 4. Direct into Chat: Close popup modal & focus composer textarea (Status is preserved as-is until email is actually sent)
     setShowFullTableModal(false);
     setTimeout(() => {
       if (textareaRef.current) {
@@ -993,6 +1043,8 @@ export const EmailClient: React.FC<EmailClientProps> = ({
 
   // Inline Editing for Right Panel Paper Drawer (Tab 2: Company Profile)
   const [isEditingRightProfile, setIsEditingRightProfile] = useState<boolean>(false);
+  const [rightProfileEmailList, setRightProfileEmailList] = useState<string[]>([]);
+  const [rightProfileNewEmailInput, setRightProfileNewEmailInput] = useState<string>('');
   const [rightProfileData, setRightProfileData] = useState<ClientData>({
     company_name: '',
     client_name: '',
@@ -1014,20 +1066,35 @@ export const EmailClient: React.FC<EmailClientProps> = ({
   }, [selectedGroup.companyKey]);
 
   const handleStartEditingRightProfile = () => {
+    // Strictly find matching dbClient record by ID, email, or company name
+    const matchedDbClient = dbClients.find(
+      (c) =>
+        (selectedGroup.dbClientId && c.id === selectedGroup.dbClientId) ||
+        (c.company_name && c.company_name.toLowerCase().trim() === selectedGroup.companyName.toLowerCase().trim()) ||
+        parseEmails(c.email).some((e) => e && (selectedGroup.emailList.includes(e) || cleanSingleEmail(selectedGroup.primaryEmail) === e))
+    );
+
+    const activeDbId = matchedDbClient?.id || selectedGroup.dbClientId;
+    const rawEmailStr = matchedDbClient?.email || selectedGroup.emailList.join(', ') || selectedGroup.primaryEmail || '';
+    const parsedList = parseEmails(rawEmailStr);
+    const initialEmails = parsedList.length > 0 ? parsedList : (selectedGroup.emailList.length > 0 ? [...selectedGroup.emailList] : [cleanSingleEmail(selectedGroup.primaryEmail) || '']);
+    setRightProfileEmailList(initialEmails);
+    setRightProfileNewEmailInput('');
+
     setRightProfileData({
-      id: selectedGroup.dbClientId,
-      company_name: selectedGroup.companyName || '',
-      client_name: selectedGroup.primaryClientName || '',
-      email: selectedGroup.emailList.join(', ') || selectedGroup.primaryEmail || '',
-      phone: selectedGroup.phone || '',
-      address_line1: selectedGroup.addressLine1 || '',
-      address_line2: selectedGroup.addressLine2 || '',
-      city: selectedGroup.city || '',
-      state: selectedGroup.state || '',
-      postal_code: selectedGroup.postalCode || '',
-      country: selectedGroup.country || 'Malaysia',
-      tax_id: selectedGroup.taxId || '',
-      notes: selectedGroup.notes || '',
+      id: activeDbId,
+      company_name: matchedDbClient?.company_name || selectedGroup.companyName || '',
+      client_name: matchedDbClient?.client_name || selectedGroup.primaryClientName || '',
+      email: initialEmails.filter(Boolean).join(', '),
+      phone: matchedDbClient?.phone || selectedGroup.phone || '',
+      address_line1: matchedDbClient?.address_line1 || selectedGroup.addressLine1 || '',
+      address_line2: matchedDbClient?.address_line2 || selectedGroup.addressLine2 || '',
+      city: matchedDbClient?.city || selectedGroup.city || '',
+      state: matchedDbClient?.state || selectedGroup.state || '',
+      postal_code: matchedDbClient?.postal_code || selectedGroup.postalCode || '',
+      country: matchedDbClient?.country || selectedGroup.country || 'Malaysia',
+      tax_id: matchedDbClient?.tax_id || selectedGroup.taxId || '',
+      notes: matchedDbClient?.notes || selectedGroup.notes || '',
     });
     setIsEditingRightProfile(true);
   };
@@ -1040,9 +1107,23 @@ export const EmailClient: React.FC<EmailClientProps> = ({
     }
     setIsSavingRightProfile(true);
 
+    const targetDbClient = dbClients.find(
+      (c) =>
+        (rightProfileData.id && c.id === rightProfileData.id) ||
+        (selectedGroup.dbClientId && c.id === selectedGroup.dbClientId) ||
+        (c.company_name && c.company_name.toLowerCase().trim() === selectedGroup.companyName.toLowerCase().trim()) ||
+        parseEmails(c.email).some((e) => e && (selectedGroup.emailList.includes(e) || cleanSingleEmail(selectedGroup.primaryEmail) === e))
+    );
+
+    const activeDbId = rightProfileData.id || targetDbClient?.id || selectedGroup.dbClientId || 0;
+    const cleanList = rightProfileEmailList.map(e => e.trim()).filter(Boolean);
+    const joinedEmails = cleanList.join(', ');
+
     const payload = {
       ...rightProfileData,
-      id: selectedGroup.dbClientId || 0,
+      email: joinedEmails,
+      id: activeDbId,
+      old_company_name: targetDbClient?.company_name || selectedGroup.companyName || '',
     };
 
     fetch(getApiUrl('/api_clients.php'), {
@@ -1054,7 +1135,10 @@ export const EmailClient: React.FC<EmailClientProps> = ({
       .then((resData) => {
         setIsSavingRightProfile(false);
         if (resData.status === 'success') {
+          const newKey = extractCompanyInfoFromEmail(selectedGroup.primaryEmail, payload.company_name).companyKey;
+          if (newKey) setSelectedCompanyKey(newKey);
           fetchDbClients();
+          fetchQuotationsData();
           setIsEditingRightProfile(false);
           alert(`Profil perusahaan "${payload.company_name}" berhasil diperbarui!`);
         } else {
@@ -1065,6 +1149,142 @@ export const EmailClient: React.FC<EmailClientProps> = ({
         setIsSavingRightProfile(false);
         alert(`Save profile error: ${err.message || err}`);
       });
+  };
+
+  // ── SIGNATORY & RECEIVED-BY MANAGEMENT ─────────────────────────────────────
+  const [companySignatories, setCompanySignatories] = useState<Signatory[]>([]);
+  const [isLoadingSignatories, setIsLoadingSignatories] = useState<boolean>(false);
+  const [isAddingSignatory, setIsAddingSignatory] = useState<boolean>(false);
+  const [newSigName, setNewSigName] = useState<string>('');
+  const [newSigDesignation, setNewSigDesignation] = useState<string>('');
+  const [newSigIsDefault, setNewSigIsDefault] = useState<boolean>(false);
+  const [isSavingSignatory, setIsSavingSignatory] = useState<boolean>(false);
+  const [signatorySuccessNotice, setSignatorySuccessNotice] = useState<string | null>(null);
+
+  // Fetch signatories for selected company
+  const fetchSignatoriesForCompany = (compName: string, clientId?: number) => {
+    if (!compName && !clientId) {
+      setCompanySignatories([]);
+      return;
+    }
+    setIsLoadingSignatories(true);
+    const url = clientId && clientId > 0 
+      ? `/api_clients.php?action=signatories&client_id=${clientId}&company_name=${encodeURIComponent(compName || '')}`
+      : `/api_clients.php?action=signatories&company_name=${encodeURIComponent(compName || '')}`;
+
+    fetch(getApiUrl(url))
+      .then((res) => res.json())
+      .then((data) => {
+        setIsLoadingSignatories(false);
+        if (data.status === 'success' && Array.isArray(data.data)) {
+          setCompanySignatories(data.data);
+        }
+      })
+      .catch((err) => {
+        setIsLoadingSignatories(false);
+        console.error('Error fetching signatories:', err);
+      });
+  };
+
+  useEffect(() => {
+    fetchSignatoriesForCompany(selectedGroup.companyName, selectedGroup.dbClientId);
+  }, [selectedGroup.companyKey, selectedGroup.companyName, selectedGroup.dbClientId]);
+
+  // Add / Save Signatory
+  const handleSaveNewSignatory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSigName.trim()) {
+      alert('Nama PIC / Signatory wajib diisi!');
+      return;
+    }
+    const targetComp = selectedGroup.companyName || editingClientData.company_name || 'Client Company';
+    setIsSavingSignatory(true);
+
+    try {
+      const res = await fetch(getApiUrl('/api_clients.php'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'add_signatory',
+          client_id: selectedGroup.dbClientId || 0,
+          company_name: targetComp,
+          name: newSigName.trim(),
+          designation: newSigDesignation.trim(),
+          is_default: newSigIsDefault || companySignatories.length === 0 ? 1 : 0,
+        }),
+      });
+      const data = await res.json();
+      setIsSavingSignatory(false);
+      if (data.status === 'success') {
+        setNewSigName('');
+        setNewSigDesignation('');
+        setNewSigIsDefault(false);
+        setIsAddingSignatory(false);
+        setSignatorySuccessNotice('PIC Signatory berhasil disimpan ke database!');
+        setTimeout(() => setSignatorySuccessNotice(null), 3000);
+        fetchSignatoriesForCompany(targetComp, selectedGroup.dbClientId);
+        fetchDbClients();
+      } else {
+        alert(data.message || 'Gagal menyimpan signatory');
+      }
+    } catch (err: any) {
+      setIsSavingSignatory(false);
+      alert('Gagal menyimpan signatory: ' + (err?.message || 'Network error'));
+    }
+  };
+
+  // Set Signatory as Default
+  const handleSetDefaultSignatory = async (sig: Signatory) => {
+    if (!sig.id) return;
+    try {
+      const res = await fetch(getApiUrl('/api_clients.php'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save_signatory',
+          id: sig.id,
+          client_id: sig.client_id || selectedGroup.dbClientId || 0,
+          company_name: sig.company_name || selectedGroup.companyName,
+          name: sig.name,
+          designation: sig.designation,
+          is_default: 1,
+        }),
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        setSignatorySuccessNotice(`"${sig.name}" sekarang dijadikan Default Signatory!`);
+        setTimeout(() => setSignatorySuccessNotice(null), 3000);
+        fetchSignatoriesForCompany(selectedGroup.companyName, selectedGroup.dbClientId);
+        fetchDbClients();
+      }
+    } catch (err: any) {
+      console.error('Error setting default signatory:', err);
+    }
+  };
+
+  // Delete Signatory
+  const handleDeleteSignatory = async (sigId?: number) => {
+    if (!sigId) return;
+    if (!confirm('Hapus data PIC Signatory ini?')) return;
+    try {
+      const res = await fetch(getApiUrl('/api_clients.php'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete_signatory',
+          id: sigId,
+        }),
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        setSignatorySuccessNotice('Signatory berhasil dihapus!');
+        setTimeout(() => setSignatorySuccessNotice(null), 3000);
+        fetchSignatoriesForCompany(selectedGroup.companyName, selectedGroup.dbClientId);
+        fetchDbClients();
+      }
+    } catch (err: any) {
+      console.error('Error deleting signatory:', err);
+    }
   };
 
   // Send Email Handler
@@ -1507,8 +1727,19 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                         selectedGroup.rfqs.forEach((r) => {
                           const linkedQuo = selectedGroup.quotations.find((q) => {
                             const qRfqId = String(q.rfq_id || '').trim();
+                            if (!qRfqId || qRfqId === '0' || qRfqId === 'null') return false;
                             const rId = String(r.id || '').trim();
-                            return qRfqId !== '' && (qRfqId === rId || qRfqId === `RFQ-${rId}` || qRfqId === `GMAIL-LIVE-${rId}`);
+                            const rNum = String(r.rfq_number || '').trim();
+                            const rDbId = String(r.db_id || '').trim();
+                            const rLiveClean = rId.replace(/^GMAIL-LIVE-|^RFQ-/i, '');
+                            return (
+                              qRfqId === rId ||
+                              (rDbId !== '' && qRfqId === rDbId) ||
+                              (rNum !== '' && (qRfqId === rNum || qRfqId === rNum.replace(/^RFQ-/i, ''))) ||
+                              qRfqId === `RFQ-${rId}` ||
+                              qRfqId === `GMAIL-LIVE-${rId}` ||
+                              (rLiveClean !== '' && (qRfqId === rLiveClean || qRfqId === `RFQ-${rLiveClean}`))
+                            );
                           }) || selectedGroup.quotations[0];
 
                           list.push({
@@ -1973,244 +2204,219 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                     </div>
                   )}
 
-                  {/* TAB 1: CORRELATION TABLE (Daftar Email & Nomor SPH Quotation) */}
+                  {/* TAB 1: CORRELATION TABLE (Full Width Table) */}
                   {activeRightTab === 'table' && (
-                    <div className="space-y-3">
-                      <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-xs space-y-2 text-xs">
-                        <div className="font-bold text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-100 pb-1.5 flex items-center justify-between gap-1">
-                          <span className="flex items-center gap-1.5 text-slate-800">
-                            <FileText className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Email ↔ Quotation Table</span>
-                          </span>
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowCompanyDetailPanel(false);
-                                setShowFullTableModal(true);
-                              }}
-                              className="bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-700 border border-slate-200 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 transition cursor-pointer shrink-0"
-                              title="Open Fullscreen View Modal"
-                            >
-                              <Maximize2 className="w-3 h-3 text-blue-600" />
-                              <span>View Full</span>
-                            </button>
-                            <span className="bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded font-mono text-[9px] font-bold shrink-0">
-                              {selectedGroup.rfqs.length} Email | {selectedGroup.quotations.length} SPH
-                            </span>
-                          </div>
-                        </div>
+                    <div className="w-full overflow-x-auto border border-slate-200 bg-white">
+                      <table className="w-full text-left border-collapse text-[11px]">
+                        <thead>
+                          <tr className="bg-slate-100 border-b border-slate-200 text-[10px] uppercase font-extrabold text-slate-600">
+                            <th className="p-2 border-r border-slate-200 w-2/5">Email Message (RFQ)</th>
+                            <th className="p-2 border-r border-slate-200 w-3/5">SPH Quotation & Action Workflow</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200 font-sans">
+                          {correlatedPairs.length === 0 ? (
+                            <tr>
+                              <td colSpan={2} className="p-4 text-center text-slate-400 italic">
+                                No email messages or quotations found for this company.
+                              </td>
+                            </tr>
+                          ) : (
+                            correlatedPairs.map((pair, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50/80 transition">
+                                {/* Column 1: Pesan Email */}
+                                <td className="p-2 border-r border-slate-200 align-top">
+                                  {pair.rfq ? (
+                                    <div className="space-y-1">
+                                      <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                                        <Mail className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                        <span className="font-mono text-blue-700 text-[10px] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-bold">
+                                          {pair.rfq.rfq_number || `#${pair.rfq.id}`}
+                                        </span>
+                                      </div>
+                                      <p className="font-bold text-slate-900 text-[11px] truncate max-w-[130px]" title={pair.rfq.subject}>
+                                        {pair.rfq.subject || 'RFQ Email'}
+                                      </p>
+                                      <p className="text-[10px] font-mono text-slate-600 truncate max-w-[130px]">
+                                        {cleanSingleEmail(pair.rfq.sender_email)}
+                                      </p>
+                                      {pair.rfq.date_received && (
+                                        <span className="text-[9px] text-slate-400 block font-mono">{pair.rfq.date_received}</span>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => setPreviewEmailData(pair.rfq!)}
+                                        className="mt-1 px-1.5 py-0.5 bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-700 rounded transition border border-slate-200 cursor-pointer text-[9px] font-bold inline-flex items-center gap-1"
+                                        title="Preview Raw Email Message"
+                                      >
+                                        <Eye className="w-3 h-3 text-blue-600" />
+                                        <span>Preview</span>
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-slate-400 italic text-[10px] font-mono block p-1">
+                                      Direct / Manual SPH
+                                    </span>
+                                  )}
+                                </td>
 
-                        <div className="overflow-x-auto pt-1">
-                          <table className="w-full text-left border-collapse text-[11px]">
-                            <thead>
-                              <tr className="bg-slate-100 border-b border-slate-200 text-[10px] uppercase font-extrabold text-slate-600">
-                                <th className="p-2 border-r border-slate-200 w-2/5">Email Message (RFQ)</th>
-                                <th className="p-2 border-r border-slate-200 w-3/5">SPH Quotation & Action Workflow</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200 font-sans">
-                              {correlatedPairs.length === 0 ? (
-                                <tr>
-                                  <td colSpan={2} className="p-4 text-center text-slate-400 italic">
-                                    No email messages or quotations found for this company.
-                                  </td>
-                                </tr>
-                              ) : (
-                                correlatedPairs.map((pair, idx) => (
-                                  <tr key={idx} className="hover:bg-slate-50/80 transition">
-                                    {/* Column 1: Pesan Email */}
-                                    <td className="p-2 border-r border-slate-200 align-top">
-                                      {pair.rfq ? (
-                                        <div className="space-y-1">
-                                          <div className="flex items-center gap-1.5 font-bold text-slate-900">
-                                            <Mail className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                                            <span className="font-mono text-blue-700 text-[10px] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-bold">
-                                              {pair.rfq.rfq_number || `#${pair.rfq.id}`}
-                                            </span>
-                                          </div>
-                                          <p className="font-bold text-slate-900 text-[11px] truncate max-w-[130px]" title={pair.rfq.subject}>
-                                            {pair.rfq.subject || 'RFQ Email'}
-                                          </p>
-                                          <p className="text-[10px] font-mono text-slate-600 truncate max-w-[130px]">
-                                            {cleanSingleEmail(pair.rfq.sender_email)}
-                                          </p>
-                                          {pair.rfq.date_received && (
-                                            <span className="text-[9px] text-slate-400 block font-mono">{pair.rfq.date_received}</span>
-                                          )}
-                                          <button
-                                            type="button"
-                                            onClick={() => setPreviewEmailData(pair.rfq!)}
-                                            className="mt-1 px-1.5 py-0.5 bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-700 rounded transition border border-slate-200 cursor-pointer text-[9px] font-bold inline-flex items-center gap-1"
-                                            title="Preview Raw Email Message"
+                                {/* Column 2: Aligned SPH Quotation Details & Action Buttons */}
+                                <td className="p-1.5 align-top">
+                                  {pair.quotations.length > 0 ? (
+                                    <div className="space-y-2">
+                                      {pair.quotations.map((q, qIdx) => {
+                                        const isDone = isDoneStatus(q);
+                                        const isReady = isReadySendStatus(q);
+                                        const pdfReady = Boolean(q.quotation_file) || q.pdf_created === 1;
+                                        const ocrDone = q.ocr_scan_status === 'done' || q.ocr_scan_status === 'skipped';
+                                        const isScanning = scanningOcrId === q.id || q.ocr_scan_status === 'processing';
+                                        const isGeneratingPdf = generatingPdfId === q.id;
+
+                                        return (
+                                          <div
+                                            key={q.id}
+                                            className={`p-1.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between gap-1.5 shadow-2xs ${
+                                              qIdx > 0 ? 'border-t-2 border-t-slate-300 pt-2 mt-2' : ''
+                                            }`}
                                           >
-                                            <Eye className="w-3 h-3 text-blue-600" />
-                                            <span>Preview</span>
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <span className="text-slate-400 italic text-[10px] font-mono block p-1">
-                                          Direct / Manual SPH
-                                        </span>
-                                      )}
-                                    </td>
-
-                                    {/* Column 2: Aligned SPH Quotation Details & Action Buttons */}
-                                    <td className="p-1.5 align-top">
-                                      {pair.quotations.length > 0 ? (
-                                        <div className="space-y-2">
-                                          {pair.quotations.map((q, qIdx) => {
-                                            const isDone = isDoneStatus(q);
-                                            const isReady = isReadySendStatus(q);
-                                            const pdfReady = Boolean(q.quotation_file) || q.pdf_created === 1;
-                                            const ocrDone = q.ocr_scan_status === 'done' || q.ocr_scan_status === 'skipped';
-                                            const isScanning = scanningOcrId === q.id || q.ocr_scan_status === 'processing';
-                                            const isGeneratingPdf = generatingPdfId === q.id;
-
-                                            return (
-                                              <div
-                                                key={q.id}
-                                                className={`p-1.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between gap-1.5 shadow-2xs ${
-                                                  qIdx > 0 ? 'border-t-2 border-t-slate-300 pt-2 mt-2' : ''
-                                                }`}
-                                              >
-                                                {/* SPH Info */}
-                                                <div className="flex-1 space-y-1 text-left min-w-0">
-                                                  <div className="flex items-center justify-between gap-1">
-                                                    <span className="font-mono font-black text-blue-900 text-[10px] truncate">
-                                                      {q.quotation_number || q.id}
+                                            {/* SPH Info */}
+                                            <div className="flex-1 space-y-1 text-left min-w-0">
+                                              <div className="flex items-center justify-between gap-1">
+                                                <span className="font-mono font-black text-blue-900 text-[10px] truncate">
+                                                  {q.quotation_number || q.id}
+                                                </span>
+                                                {(() => {
+                                                  const badgeClass = isDone
+                                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                                    : isReady
+                                                    ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                                    : 'bg-amber-100 text-amber-800 border border-amber-300';
+                                                  const badgeLabel = isDone ? 'Done' : isReady ? 'Siap Kirim' : 'Draft';
+                                                  return (
+                                                    <span className={`px-1 py-0.2 rounded text-[8px] font-extrabold uppercase tracking-tight shrink-0 ${badgeClass}`}>
+                                                      {badgeLabel}
                                                     </span>
-                                                    {(() => {
-                                                      const badgeClass = isDone
-                                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                                        : isReady
-                                                        ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                                                        : 'bg-amber-100 text-amber-800 border border-amber-300';
-                                                      const badgeLabel = isDone ? 'Done' : isReady ? 'Siap Kirim' : 'Draft';
-                                                      return (
-                                                        <span className={`px-1 py-0.2 rounded text-[8px] font-extrabold uppercase tracking-tight shrink-0 ${badgeClass}`}>
-                                                          {badgeLabel}
-                                                        </span>
-                                                      );
-                                                    })()}
-                                                  </div>
-                                                  <div className="text-[9px] text-slate-600 font-mono pt-0.5 border-t border-slate-200/80 flex items-center justify-between gap-1">
-                                                    <span>Total:</span>
-                                                    <span className="font-extrabold text-slate-900">
-                                                      RM {Number(q.grand_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                                    </span>
-                                                  </div>
-                                                </div>
-
-                                                {/* Vertical Divider */}
-                                                <div className="w-[1px] bg-slate-300 self-stretch shrink-0" />
-
-                                                {/* Action Buttons */}
-                                                <div className="w-24 shrink-0 flex flex-col items-center justify-center gap-1">
-                                                  {!ocrDone && !isDone && (
-                                                    <button
-                                                      type="button"
-                                                      disabled={isScanning}
-                                                      onClick={() => handleTriggerOcrScan(q)}
-                                                      className={`px-1 py-0.5 text-white rounded transition border cursor-pointer flex items-center justify-center gap-1 text-[8px] font-extrabold shadow-2xs w-full ${
-                                                        isScanning
-                                                          ? 'bg-purple-400 border-purple-500 cursor-not-allowed'
-                                                          : q.ocr_scan_status === 'waiting_ai_limit' || q.ocr_scan_status === 'waiting'
-                                                          ? 'bg-amber-600 hover:bg-amber-700 border-amber-700'
-                                                          : 'bg-purple-600 hover:bg-purple-700 border-purple-700'
-                                                      }`}
-                                                      title="Run AI OCR Item Scanning"
-                                                    >
-                                                      {isScanning ? (
-                                                        <>
-                                                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                                                          <span>Scanning...</span>
-                                                        </>
-                                                      ) : (
-                                                        <>
-                                                          <Sparkles className="w-2.5 h-2.5 text-amber-300" />
-                                                          <span>{q.ocr_scan_status === 'waiting_ai_limit' ? 'Waiting AI' : 'Scan AI'}</span>
-                                                        </>
-                                                      )}
-                                                    </button>
-                                                  )}
-
-                                                  {!pdfReady && !isDone && (
-                                                    <button
-                                                      type="button"
-                                                      disabled={isGeneratingPdf}
-                                                      onClick={() => handleCreatePdfBackground(q)}
-                                                      className="px-1 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded transition border border-blue-700 cursor-pointer flex items-center justify-center gap-1 text-[8px] font-extrabold shadow-2xs w-full disabled:opacity-75"
-                                                      title="Generate PDF SPH Document"
-                                                    >
-                                                      {isGeneratingPdf ? (
-                                                        <>
-                                                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                                                          <span>Generating...</span>
-                                                        </>
-                                                      ) : (
-                                                        <>
-                                                          <FileType className="w-2.5 h-2.5" />
-                                                          <span>Create PDF</span>
-                                                        </>
-                                                      )}
-                                                    </button>
-                                                  )}
-
-                                                  {pdfReady && (
-                                                    <a
-                                                      href={getApiUrl(`view_doc.php?id=${encodeURIComponent(q.quotation_number || q.id)}`)}
-                                                      target="_blank"
-                                                      rel="noreferrer"
-                                                      className="px-1 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded text-[8px] font-extrabold flex items-center justify-center gap-1 border border-blue-200 transition shadow-2xs w-full cursor-pointer"
-                                                      title={`View Quotation Doc ${q.quotation_number || q.id}`}
-                                                    >
-                                                      <Eye className="w-2.5 h-2.5 text-blue-600" />
-                                                      <span>View Doc</span>
-                                                    </a>
-                                                  )}
-
-                                                  {!isDone && (isReady || pdfReady) && (
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => handleSendQuotationDirect(q)}
-                                                      className="px-1 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded transition border border-emerald-700 cursor-pointer flex items-center justify-center gap-1 text-[8px] font-extrabold shadow-2xs w-full"
-                                                      title={`Send SPH ${q.quotation_number || q.id}`}
-                                                    >
-                                                      <Send className="w-2.5 h-2.5" />
-                                                      <span>Siap Kirim</span>
-                                                    </button>
-                                                  )}
-
-                                                  {isDone && (
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => handleGenerateInvoiceFromQuotation(q)}
-                                                      className="px-1 py-0.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded transition border border-emerald-800 cursor-pointer flex items-center justify-center gap-1 text-[8px] font-extrabold shadow-2xs w-full"
-                                                      title="Generate & View Automatic Invoice"
-                                                    >
-                                                      <FileText className="w-2.5 h-2.5" />
-                                                      <span>Auto Invoice</span>
-                                                    </button>
-                                                  )}
-                                                </div>
+                                                  );
+                                                })()}
                                               </div>
-                                            );
-                                          })}
-                                        </div>
-                                      ) : (
-                                        <span className="text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] font-bold block text-center mt-1">
-                                          No Quotation
-                                        </span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                ))
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
+                                              <div className="text-[9px] text-slate-600 font-mono pt-0.5 border-t border-slate-200/80 flex items-center justify-between gap-1">
+                                                <span>Total:</span>
+                                                <span className="font-extrabold text-slate-900">
+                                                  RM {Number(q.grand_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                                </span>
+                                              </div>
+                                            </div>
+
+                                            {/* Vertical Divider */}
+                                            <div className="w-[1px] bg-slate-300 self-stretch shrink-0" />
+
+                                            {/* Action Buttons */}
+                                            <div className="w-24 shrink-0 flex flex-col items-center justify-center gap-1">
+                                              {!ocrDone && !isDone && (
+                                                <button
+                                                  type="button"
+                                                  disabled={isScanning}
+                                                  onClick={() => handleTriggerOcrScan(q)}
+                                                  className={`px-1 py-0.5 text-white rounded transition border cursor-pointer flex items-center justify-center gap-1 text-[8px] font-extrabold shadow-2xs w-full ${
+                                                    isScanning
+                                                      ? 'bg-purple-400 border-purple-500 cursor-not-allowed'
+                                                      : q.ocr_scan_status === 'waiting_ai_limit' || q.ocr_scan_status === 'waiting'
+                                                      ? 'bg-amber-600 hover:bg-amber-700 border-amber-700'
+                                                      : 'bg-purple-600 hover:bg-purple-700 border-purple-700'
+                                                  }`}
+                                                  title="Run AI OCR Item Scanning"
+                                                >
+                                                  {isScanning ? (
+                                                    <>
+                                                      <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                                      <span>Scanning...</span>
+                                                    </>
+                                                  ) : (
+                                                    <>
+                                                      <Sparkles className="w-2.5 h-2.5 text-amber-300" />
+                                                      <span>{q.ocr_scan_status === 'waiting_ai_limit' ? 'Waiting AI' : 'Scan AI'}</span>
+                                                    </>
+                                                  )}
+                                                </button>
+                                              )}
+
+                                              {!pdfReady && !isDone && (
+                                                <button
+                                                  type="button"
+                                                  disabled={isGeneratingPdf}
+                                                  onClick={() => handleCreatePdfBackground(q)}
+                                                  className="px-1 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded transition border border-blue-700 cursor-pointer flex items-center justify-center gap-1 text-[8px] font-extrabold shadow-2xs w-full disabled:opacity-75"
+                                                  title="Generate PDF SPH Document"
+                                                >
+                                                  {isGeneratingPdf ? (
+                                                    <>
+                                                      <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                                      <span>Generating...</span>
+                                                    </>
+                                                  ) : (
+                                                    <>
+                                                      <FileType className="w-2.5 h-2.5" />
+                                                      <span>Create PDF</span>
+                                                    </>
+                                                  )}
+                                                </button>
+                                              )}
+
+                                              {pdfReady ? (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setPdfPreviewModalData({ id: q.quotation_number || q.id, title: q.quotation_number || q.id })}
+                                                  className="px-1 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded text-[8px] font-extrabold flex items-center justify-center gap-1 border border-blue-200 transition shadow-2xs w-full cursor-pointer"
+                                                  title={`Preview Quotation Doc ${q.quotation_number || q.id}`}
+                                                >
+                                                  <Eye className="w-2.5 h-2.5 text-blue-600" />
+                                                  <span>View Doc</span>
+                                                </button>
+                                              ) : (
+                                                <span className="px-1 py-0.5 bg-slate-100 border border-slate-200 text-slate-400 text-[8px] font-extrabold rounded flex items-center justify-center gap-1 w-full text-center">
+                                                  Belum ada file
+                                                </span>
+                                              )}
+
+                                              {!isDone && (isReady || pdfReady) && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleSendQuotationDirect(q)}
+                                                  className="px-1 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded transition border border-emerald-700 cursor-pointer flex items-center justify-center gap-1 text-[8px] font-extrabold shadow-2xs w-full"
+                                                  title={`Send SPH ${q.quotation_number || q.id}`}
+                                                >
+                                                  <Send className="w-2.5 h-2.5" />
+                                                  <span>Siap Kirim</span>
+                                                </button>
+                                              )}
+
+                                              {isDone && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleGenerateInvoiceFromQuotation(q)}
+                                                  className="px-1 py-0.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded transition border border-emerald-800 cursor-pointer flex items-center justify-center gap-1 text-[8px] font-extrabold shadow-2xs w-full"
+                                                  title="Generate & View Automatic Invoice"
+                                                >
+                                                  <FileText className="w-2.5 h-2.5" />
+                                                  <span>Auto Invoice</span>
+                                                </button>
+                                              )}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <span className="text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] font-bold block text-center mt-1">
+                                      No Quotation
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   )}
 
@@ -2267,14 +2473,115 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                             </div>
 
                             <div>
-                              <label className="block text-[11px] font-bold text-slate-700 mb-1">Daftar Email (Dipisah koma)</label>
-                              <input
-                                type="text"
-                                value={rightProfileData.email || ''}
-                                onChange={(e) => setRightProfileData({ ...rightProfileData, email: e.target.value })}
-                                className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs font-mono text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
-                                placeholder="sales@company.com, info@company.com"
-                              />
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block text-[11px] font-bold text-slate-700">Daftar Email Kontak (Dropdown & List)</label>
+                                <span className="text-[10px] text-blue-700 font-extrabold font-mono bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                                  {rightProfileEmailList.length} Email
+                                </span>
+                              </div>
+
+                              {/* Quick Dropdown Selector for Connected Domain Emails */}
+                              {selectedGroup.emailList && selectedGroup.emailList.length > 0 && (
+                                <div className="mb-2">
+                                  <select
+                                    value=""
+                                    onChange={(e) => {
+                                      const val = e.target.value.trim();
+                                      if (val && !rightProfileEmailList.includes(val)) {
+                                        const updated = [...rightProfileEmailList, val];
+                                        setRightProfileEmailList(updated);
+                                        setRightProfileData(prev => ({ ...prev, email: updated.join(', ') }));
+                                      }
+                                    }}
+                                    className="w-full bg-blue-50/90 border border-blue-300 text-blue-900 rounded px-2 py-1 text-xs font-mono focus:bg-white focus:border-blue-600 focus:outline-none cursor-pointer"
+                                  >
+                                    <option value="">+ Pilih & Tambah dari Email Terhubung ({selectedGroup.emailList.length})...</option>
+                                    {selectedGroup.emailList.map((em, idx) => (
+                                      <option key={idx} value={em} disabled={rightProfileEmailList.includes(em)}>
+                                        {em} {rightProfileEmailList.includes(em) ? '(Sudah Ada)' : ''}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
+
+                              {/* Interactive Email List */}
+                              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 bg-slate-50 p-2 rounded border border-slate-200">
+                                {rightProfileEmailList.length === 0 ? (
+                                  <p className="text-slate-400 italic text-[11px] text-center py-2">
+                                    Belum ada email kontak. Pilih dari dropdown atau ketik di bawah.
+                                  </p>
+                                ) : (
+                                  rightProfileEmailList.map((em, idx) => (
+                                    <div key={idx} className="flex items-center gap-1.5 bg-white border border-slate-200 px-2 py-1 rounded shadow-2xs">
+                                      <Mail className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                      <input
+                                        type="email"
+                                        value={em}
+                                        onChange={(e) => {
+                                          const updated = [...rightProfileEmailList];
+                                          updated[idx] = e.target.value;
+                                          setRightProfileEmailList(updated);
+                                          setRightProfileData(prev => ({ ...prev, email: updated.filter(Boolean).join(', ') }));
+                                        }}
+                                        placeholder="nama@perusahaan.com"
+                                        className="flex-1 text-xs font-mono text-slate-800 bg-transparent focus:outline-none"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const updated = rightProfileEmailList.filter((_, i) => i !== idx);
+                                          setRightProfileEmailList(updated);
+                                          setRightProfileData(prev => ({ ...prev, email: updated.filter(Boolean).join(', ') }));
+                                        }}
+                                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                                        title="Hapus email ini"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+
+                              {/* Add New Email Input Row */}
+                              <div className="flex items-center gap-1.5 mt-2">
+                                <input
+                                  type="email"
+                                  value={rightProfileNewEmailInput}
+                                  onChange={(e) => setRightProfileNewEmailInput(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      const val = rightProfileNewEmailInput.trim();
+                                      if (val && !rightProfileEmailList.includes(val)) {
+                                        const updated = [...rightProfileEmailList, val];
+                                        setRightProfileEmailList(updated);
+                                        setRightProfileData(prev => ({ ...prev, email: updated.join(', ') }));
+                                        setRightProfileNewEmailInput('');
+                                      }
+                                    }
+                                  }}
+                                  placeholder="Ketik email baru lalu tekan Tambah..."
+                                  className="flex-1 bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs font-mono text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const val = rightProfileNewEmailInput.trim();
+                                    if (val && !rightProfileEmailList.includes(val)) {
+                                      const updated = [...rightProfileEmailList, val];
+                                      setRightProfileEmailList(updated);
+                                      setRightProfileData(prev => ({ ...prev, email: updated.join(', ') }));
+                                      setRightProfileNewEmailInput('');
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold transition flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>Tambah</span>
+                                </button>
+                              </div>
                             </div>
 
                             <div>
@@ -2419,23 +2726,213 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                               <span className="text-slate-500 font-medium text-[11px]">Quotation Reg:</span>
                               <div className="flex flex-wrap gap-1.5 mt-1">
                                 {selectedGroup.quotations.length > 0 ? (
-                                  selectedGroup.quotations.map((q) => (
-                                    <a
-                                      key={q.id}
-                                      href={getApiUrl(`view_doc.php?id=${encodeURIComponent(q.quotation_number || q.id)}`)}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[10px] font-mono font-bold transition shadow-2xs cursor-pointer"
-                                      title={`Buka Dokumen SPH ${q.quotation_number || q.id}`}
-                                    >
-                                      <FileType className="w-3 h-3 text-blue-600" />
-                                      <span>View Doc ({q.quotation_number || `#${q.id}`})</span>
-                                    </a>
-                                  ))
+                                  selectedGroup.quotations.map((q) => {
+                                    const qPdfReady = Boolean(q.quotation_file) || q.pdf_created === 1;
+                                    return qPdfReady ? (
+                                      <button
+                                        key={q.id}
+                                        type="button"
+                                        onClick={() => setPdfPreviewModalData({ id: q.quotation_number || q.id, title: q.quotation_number || q.id })}
+                                        className="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[10px] font-mono font-bold transition shadow-2xs cursor-pointer"
+                                        title={`Preview Dokumen SPH ${q.quotation_number || q.id}`}
+                                      >
+                                        <FileType className="w-3 h-3 text-blue-600" />
+                                        <span>View Doc ({q.quotation_number || `#${q.id}`})</span>
+                                      </button>
+                                    ) : (
+                                      <span
+                                        key={q.id}
+                                        className="inline-flex items-center gap-1 bg-slate-100 text-slate-400 border border-slate-200 px-2 py-0.5 rounded text-[10px] font-mono font-bold"
+                                      >
+                                        Belum ada file ({q.quotation_number || `#${q.id}`})
+                                      </span>
+                                    );
+                                  })
                                 ) : (
                                   <span className="text-slate-400 italic font-mono text-[11px]">No Quotations Registered</span>
                                 )}
                               </div>
+                            </div>
+                          </div>
+
+                          {/* Section 1.5: PIC Tanda Terima & Signatories Management */}
+                          <div className="bg-white border border-blue-200 rounded-lg p-3.5 shadow-xs space-y-2.5 text-xs">
+                            <div className="font-bold text-slate-800 uppercase text-[10px] tracking-wider border-b border-blue-100 pb-1.5 flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 text-blue-700 font-extrabold">
+                                <UserCheck className="w-3.5 h-3.5 text-blue-600" />
+                                <span>PIC Tanda Terima (Received by)</span>
+                                <span className="bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-mono text-[9px] font-bold ml-1">
+                                  {companySignatories.length} PIC
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setIsAddingSignatory(!isAddingSignatory)}
+                                className="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded cursor-pointer transition shadow-2xs"
+                              >
+                                <UserPlus className="w-3 h-3 text-blue-600" />
+                                <span>{isAddingSignatory ? 'Tutup Form' : '+ Add PIC'}</span>
+                              </button>
+                            </div>
+
+                            {/* Success Notice */}
+                            {signatorySuccessNotice && (
+                              <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 px-2.5 py-1.5 rounded text-[11px] font-bold flex items-center gap-1.5 animate-in fade-in">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span>{signatorySuccessNotice}</span>
+                              </div>
+                            )}
+
+                            {/* Inline Add Signatory Form */}
+                            {isAddingSignatory && (
+                              <form onSubmit={handleSaveNewSignatory} className="bg-blue-50/70 border border-blue-200 p-2.5 rounded-lg space-y-2 text-xs animate-in fade-in">
+                                <div className="font-bold text-blue-900 text-[11px] flex items-center gap-1">
+                                  <UserPlus className="w-3.5 h-3.5 text-blue-700" />
+                                  <span>Tambah PIC Baru untuk {selectedGroup.companyName}</span>
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-slate-700 mb-0.5">Nama Lengkap PIC *</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    placeholder="Contoh: Ahmad Fauzi"
+                                    value={newSigName}
+                                    onChange={(e) => setNewSigName(e.target.value)}
+                                    className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-blue-600"
+                                    autoFocus
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-slate-700 mb-0.5">Jabatan / Designation</label>
+                                  <input
+                                    type="text"
+                                    placeholder="Contoh: Warehouse & Logistics PIC"
+                                    value={newSigDesignation}
+                                    onChange={(e) => setNewSigDesignation(e.target.value)}
+                                    className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-blue-600"
+                                  />
+                                  <div className="flex flex-wrap gap-1 mt-1.5">
+                                    {[
+                                      'Warehouse PIC',
+                                      'Logistics PIC',
+                                      'Finance & Admin',
+                                      'Purchasing Staff',
+                                      'Receiver',
+                                    ].map((desig) => (
+                                      <button
+                                        key={desig}
+                                        type="button"
+                                        onClick={() => setNewSigDesignation(desig)}
+                                        className="bg-white hover:bg-blue-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] cursor-pointer transition font-medium"
+                                      >
+                                        + {desig}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 pt-1">
+                                  <input
+                                    type="checkbox"
+                                    id="sig_default_chk"
+                                    checked={newSigIsDefault}
+                                    onChange={(e) => setNewSigIsDefault(e.target.checked)}
+                                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                  />
+                                  <label htmlFor="sig_default_chk" className="text-[11px] font-bold text-slate-700 cursor-pointer">
+                                    Jadikan Default untuk Perusahaan Ini
+                                  </label>
+                                </div>
+                                <div className="flex justify-end gap-1.5 pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setIsAddingSignatory(false)}
+                                    className="px-2.5 py-1 bg-white border border-slate-300 text-slate-700 font-bold rounded text-[11px] hover:bg-slate-50"
+                                  >
+                                    Batal
+                                  </button>
+                                  <button
+                                    type="submit"
+                                    disabled={isSavingSignatory || !newSigName.trim()}
+                                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-[11px] flex items-center gap-1 shadow-2xs cursor-pointer disabled:opacity-50"
+                                  >
+                                    {isSavingSignatory ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                    <span>Simpan PIC</span>
+                                  </button>
+                                </div>
+                              </form>
+                            )}
+
+                            {/* Signatories List */}
+                            <div className="space-y-2">
+                              {isLoadingSignatories ? (
+                                <div className="py-3 flex items-center justify-center gap-2 text-slate-400 text-xs">
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                                  <span>Memuat data PIC...</span>
+                                </div>
+                              ) : companySignatories.length === 0 ? (
+                                <div className="bg-slate-50 border border-dashed border-slate-300 rounded p-3 text-center text-slate-400 text-[11px]">
+                                  <UserCheck className="w-5 h-5 text-slate-300 mx-auto mb-1" />
+                                  <p>Belum ada PIC tanda terima terdaftar.</p>
+                                  <button
+                                    type="button"
+                                    onClick={() => setIsAddingSignatory(true)}
+                                    className="text-blue-600 hover:underline font-bold mt-1 inline-block"
+                                  >
+                                    + Tambah PIC Sekarang
+                                  </button>
+                                </div>
+                              ) : (
+                                companySignatories.map((sig) => {
+                                  const isDefault = Number(sig.is_default) === 1 || sig.is_default === true;
+                                  return (
+                                    <div
+                                      key={sig.id}
+                                      className={`p-2.5 rounded-lg border transition flex items-center justify-between gap-2 shadow-2xs ${
+                                        isDefault
+                                          ? 'bg-gradient-to-r from-amber-50/80 to-amber-100/60 border-amber-300'
+                                          : 'bg-slate-50/90 border-slate-200 hover:bg-white'
+                                      }`}
+                                    >
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <p className="font-extrabold text-slate-900 text-xs truncate">{sig.name}</p>
+                                          {isDefault && (
+                                            <span className="inline-flex items-center gap-0.5 bg-amber-500 text-white font-extrabold px-1.5 py-0.2 rounded-full text-[9px] uppercase tracking-wider shadow-2xs">
+                                              <Star className="w-2.5 h-2.5 fill-white" />
+                                              <span>Default</span>
+                                            </span>
+                                          )}
+                                        </div>
+                                        <p className="text-slate-600 font-mono text-[10px] mt-0.5 uppercase tracking-wide">
+                                          {sig.designation || 'PIC Tanda Terima'}
+                                        </p>
+                                      </div>
+
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        {!isDefault && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSetDefaultSignatory(sig)}
+                                            className="px-2 py-0.5 bg-white hover:bg-amber-50 text-slate-600 hover:text-amber-700 border border-slate-200 hover:border-amber-300 rounded text-[10px] font-bold transition shadow-2xs cursor-pointer flex items-center gap-1"
+                                            title="Jadikan default untuk invoice"
+                                          >
+                                            <Star className="w-2.5 h-2.5 text-amber-500" />
+                                            <span>Set Default</span>
+                                          </button>
+                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteSignatory(sig.id)}
+                                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                                          title="Hapus signatory ini"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              )}
                             </div>
                           </div>
 
@@ -2692,6 +3189,30 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                         <span>Add Email</span>
                       </button>
                     </div>
+                    {/* Quick Dropdown Picker for Connected Domain Emails */}
+                    {selectedGroup.emailList && selectedGroup.emailList.length > 0 && (
+                      <div className="mb-2">
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            const val = e.target.value.trim();
+                            if (val && !clientEmailList.includes(val)) {
+                              const updated = [...clientEmailList.filter(Boolean), val];
+                              setClientEmailList(updated);
+                              setEditingClientData({ ...editingClientData, email: updated.join(', ') });
+                            }
+                          }}
+                          className="w-full bg-blue-50/90 border border-blue-300 text-blue-900 rounded p-1.5 text-xs font-mono focus:bg-white focus:border-blue-600 focus:outline-none cursor-pointer"
+                        >
+                          <option value="">+ Pilih & Tambah dari Email Terhubung ({selectedGroup.emailList.length})...</option>
+                          {selectedGroup.emailList.map((em, idx) => (
+                            <option key={idx} value={em} disabled={clientEmailList.includes(em)}>
+                              {em} {clientEmailList.includes(em) ? '(Sudah Ada)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
 
                     <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
                       {clientEmailList.map((emailVal, idx) => (
@@ -3240,15 +3761,26 @@ export const EmailClient: React.FC<EmailClientProps> = ({
             <div className="bg-slate-50 border-t border-slate-200 p-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
               <div className="flex items-center gap-2">
                 {infoModalData.quotation && (
-                  <a
-                    href={getApiUrl(`view_doc.php?id=${encodeURIComponent(infoModalData.quotation.quotation_number || infoModalData.quotation.id)}`)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded border border-blue-700 text-xs flex items-center gap-1 cursor-pointer shadow-xs"
-                  >
-                    <Eye className="w-3.5 h-3.5 text-white" />
-                    <span>View Quotation Doc ({infoModalData.quotation.quotation_number || infoModalData.quotation.id})</span>
-                  </a>
+                  (() => {
+                    const infoPdfReady = Boolean(infoModalData.quotation.quotation_file) || infoModalData.quotation.pdf_created === 1;
+                    return infoPdfReady ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const quoId = infoModalData.quotation!.quotation_number || infoModalData.quotation!.id;
+                          setPdfPreviewModalData({ id: quoId, title: quoId });
+                        }}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded border border-blue-700 text-xs flex items-center gap-1 cursor-pointer shadow-xs"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-white" />
+                        <span>View Quotation Doc ({infoModalData.quotation.quotation_number || infoModalData.quotation.id})</span>
+                      </button>
+                    ) : (
+                      <span className="px-3 py-1.5 bg-slate-100 text-slate-400 border border-slate-200 font-extrabold rounded text-xs">
+                        Belum ada file
+                      </span>
+                    );
+                  })()
                 )}
                 {infoModalData.quotation && (
                   <button
@@ -3273,6 +3805,83 @@ export const EmailClient: React.FC<EmailClientProps> = ({
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DOCUMENT PREVIEW POPUP MODAL */}
+      {pdfPreviewModalData && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center z-50 p-3 sm:p-6 font-sans animate-in fade-in">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden border border-slate-700">
+            {/* Modal Header */}
+            <div className="bg-slate-900 text-white px-4 py-3 flex items-center justify-between shrink-0 border-b border-slate-800">
+              <div className="flex items-center gap-2 font-extrabold text-sm min-w-0">
+                <FileText className="w-4 h-4 text-blue-400 shrink-0" />
+                <span className="truncate">Dokumen SPH Quotation #{pdfPreviewModalData.title}</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {/* View Mode Toggle */}
+                <div className="bg-slate-800 p-0.5 rounded border border-slate-700 flex items-center gap-0.5 text-[10px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setEmailPdfViewerMode('doc')}
+                    className={`px-2 py-0.5 rounded transition ${emailPdfViewerMode === 'doc' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    Doc View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEmailPdfViewerMode('pdf')}
+                    className={`px-2 py-0.5 rounded transition ${emailPdfViewerMode === 'pdf' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    PDF Stream
+                  </button>
+                </div>
+
+                <a
+                  href={emailPdfViewerMode === 'doc' 
+                    ? getApiUrl(`view_doc.php?id=${encodeURIComponent(pdfPreviewModalData.id)}`) 
+                    : getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${encodeURIComponent(pdfPreviewModalData.id)}`)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 rounded text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  title="Buka di Tab Baru Browser"
+                >
+                  <Maximize2 className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="hidden sm:inline">Buka Tab Baru</span>
+                </a>
+                <a
+                  href={getApiUrl(`/api_pdf.php?action=download&type=quotation&id=${encodeURIComponent(pdfPreviewModalData.id)}`)}
+                  target="_blank"
+                  rel="noreferrer"
+                  download={`${String(pdfPreviewModalData.title).replace(/[^A-Za-z0-9_\-]/g, '_')}.pdf`}
+                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-extrabold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  title="Download PDF File"
+                >
+                  <FileType className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Download PDF</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPdfPreviewModalData(null)}
+                  className="p-1 text-slate-400 hover:text-white hover:bg-rose-600 rounded transition cursor-pointer"
+                  title="Close Preview Modal"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Iframe Body */}
+            <div className="flex-1 bg-slate-100 relative w-full h-full">
+              <iframe
+                src={emailPdfViewerMode === 'doc'
+                  ? getApiUrl(`view_doc.php?id=${encodeURIComponent(pdfPreviewModalData.id)}`)
+                  : getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${encodeURIComponent(pdfPreviewModalData.id)}`)}
+                className="w-full h-full border-0"
+                title={`Quotation Preview ${pdfPreviewModalData.title}`}
+              />
             </div>
           </div>
         </div>

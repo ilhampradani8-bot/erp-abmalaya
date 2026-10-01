@@ -126,7 +126,8 @@ if ($method === 'POST') {
     }
 
     // Single Add/Edit or Batch Save
-    if ($action === 'save_batch' && isset($input['items']) && is_array($input['items'])) {
+    $batch_items = isset($input['items']) && is_array($input['items']) ? $input['items'] : (isset($input['keys']) && is_array($input['keys']) ? $input['keys'] : null);
+    if (($action === 'save_batch' || $batch_items !== null) && $batch_items !== null) {
         $pool = ($input['pool_type'] ?? 'inbox') === 'ocr' ? 'ocr' : 'inbox';
         
         // Clear existing for this pool to maintain exact order
@@ -136,19 +137,21 @@ if ($method === 'POST') {
         $del_stmt->close();
 
         $stmt = $connection->prepare("INSERT INTO gemini_api_keys (key_alias, api_key, pool_type, status) VALUES (?, ?, ?, ?)");
-        foreach ($input['items'] as $idx => $item) {
-            $alias = !empty($item['key_alias']) ? trim($item['key_alias']) : (($pool === 'ocr' ? 'Gemini OCR Key ' : 'Gemini Inbox Key ') . ($idx + 1));
-            $k_val = trim($item['api_key'] ?? '');
+        $saved_keys = 0;
+        foreach ($batch_items as $idx => $item) {
+            $alias = !empty($item['alias']) ? trim($item['alias']) : (!empty($item['key_alias']) ? trim($item['key_alias']) : (($pool === 'ocr' ? 'Gemini OCR Key ' : 'Gemini Inbox Key ') . ($idx + 1)));
+            $k_val = trim($item['api_key'] ?? ($item['key'] ?? ''));
             $st = ($item['status'] ?? 'active') === 'disabled' ? 'disabled' : 'active';
             if (!empty($k_val)) {
                 $stmt->bind_param("ssss", $alias, $k_val, $pool, $st);
                 $stmt->execute();
+                $saved_keys++;
             }
         }
         $stmt->close();
 
         ob_end_clean();
-        echo json_encode(['status' => 'success', 'message' => "Dedicated Gemini API keys table updated for {$pool} pool!"]);
+        echo json_encode(['status' => 'success', 'message' => "Dedicated Gemini API keys table updated ({$saved_keys} keys) for {$pool} pool!"]);
         exit;
     }
 

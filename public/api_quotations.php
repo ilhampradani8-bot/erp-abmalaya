@@ -46,6 +46,7 @@ try {
                 $user_name = isset($_GET['user_name']) ? $_GET['user_name'] : 'Admin';
                 $user_email = isset($_GET['user_email']) ? $_GET['user_email'] : 'admin@abmalaya.com';
                 appendQuotationHistoryLog($db_conn, $id, 'Move to Junk', $user_name, $user_email, "User moved SPH quotation to Trash (Junk status).");
+                addSystemNotification($db_conn, "SPH Dipindahkan ke Sampah ({$id})", "{$user_name} memindahkan SPH {$id} ke folder sampah (Trash).", 'warning', 'sph', 'quotations_list');
             }
         }
 
@@ -102,8 +103,7 @@ try {
 
         $all_rfqs = [];
         $all_rfqs_by_email = [];
-        // Omit large message_body in summary list view to keep JSON payload lightweight (< 50KB vs > 5MB)
-        $rfq_q = $db_conn->query("SELECT id, rfq_number, client_name AS sender_name, client_email AS sender_email, subject, attachment_url, created_at FROM rfq_requests");
+        $rfq_q = $db_conn->query("SELECT id, rfq_number, client_name AS sender_name, client_email AS sender_email, recipient_email, subject, attachment_url, created_at FROM rfq_requests");
         if ($rfq_q) {
             while ($rfq = $rfq_q->fetch_assoc()) {
                 $all_rfqs[$rfq['id']] = $rfq;
@@ -127,7 +127,7 @@ try {
                 $unregistered_count = 0;
                 $total_items = count($items_arr);
 
-                foreach ($items_arr as $item) {
+                foreach ($items_arr as &$item) {
                     $desc = strtolower(trim($item['description'] ?? ''));
                     $pcode = strtolower(trim($item['product_code'] ?? ''));
                     $matched = false;
@@ -136,10 +136,13 @@ try {
                     } else if (!empty($desc) && isset($master_products[$desc])) {
                         $matched = true;
                     }
+                    $item['is_registered'] = $matched;
+                    $item['in_master_product'] = $matched;
                     if (!$matched) {
                         $unregistered_count++;
                     }
                 }
+                unset($item);
                 
                 $row['total_items_count'] = $total_items;
                 $row['unregistered_items_count'] = $unregistered_count;
@@ -203,6 +206,7 @@ try {
                 $upd = $db_conn->prepare("UPDATE quotations SET approved_by = ?, status = 'ready_send' WHERE id = ?");
                 if ($upd) { $upd->bind_param('ss', $new_json, $quo_id); $upd->execute(); $upd->close(); }
                 appendQuotationHistoryLog($db_conn, $quo_id, 'ACC Approval', $user_name, $user_email, "User memberikan ACC approval dan mengubah status ke Siap Kirim (ready_send). Note: {$note}");
+                addSystemNotification($db_conn, "ACC Approval SPH ({$quo_id})", "{$user_name} menyetujui SPH {$quo_id} dan siap untuk dikirim ke klien.", 'success', 'sph', 'quotations_list');
             }
             ob_end_clean();
             echo json_encode(['status' => 'success', 'message' => 'Approval recorded and status moved to ready_send.']);
@@ -219,6 +223,7 @@ try {
                 $upd = $db_conn->prepare("UPDATE quotations SET status = ? WHERE id = ?");
                 if ($upd) { $upd->bind_param('ss', $newStatus, $quo_id); $upd->execute(); $upd->close(); }
                 appendQuotationHistoryLog($db_conn, $quo_id, 'Status Update', $user_name, $user_email, "Status diubah menjadi: {$newStatus}");
+                addSystemNotification($db_conn, "Status SPH Berubah ({$quo_id})", "{$user_name} mengubah status SPH {$quo_id} menjadi '{$newStatus}'.", 'info', 'sph', 'quotations_list');
             }
             ob_end_clean();
             echo json_encode(['status' => 'success', 'message' => "Status updated to {$newStatus}"]);
@@ -234,6 +239,7 @@ try {
                 $upd = $db_conn->prepare("UPDATE quotations SET status = 'draft' WHERE id = ?");
                 if ($upd) { $upd->bind_param('s', $quo_id); $upd->execute(); $upd->close(); }
                 appendQuotationHistoryLog($db_conn, $quo_id, 'Restore from Trash', $user_name, $user_email, "User memulihkan SPH dari Trash ke status Draft.");
+                addSystemNotification($db_conn, "SPH Dipulihkan dari Sampah ({$quo_id})", "{$user_name} memulihkan SPH {$quo_id} kembali ke status Draft.", 'info', 'sph', 'quotations_list');
             }
             ob_end_clean();
             echo json_encode(['status' => 'success', 'message' => 'Restored to Draft']);
@@ -334,11 +340,18 @@ try {
         }
 
         $status = isset($input['status']) && !empty($input['status']) ? $input['status'] : 'draft';
+        $company_address = isset($input['company_address']) ? trim($input['company_address']) : '';
+        $footer_text = isset($input['footer_text']) ? trim($input['footer_text']) : null;
 
-        $stmt = $db_conn->prepare("INSERT INTO quotations (id, rfq_id, quotation_number, client_name, client_email, client_phone, company_name, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, source_file, quotation_file, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE quotation_number=VALUES(quotation_number), client_name=VALUES(client_name), client_email=VALUES(client_email), client_phone=VALUES(client_phone), company_name=VALUES(company_name), date_issued=VALUES(date_issued), valid_until=VALUES(valid_until), subtotal=VALUES(subtotal), discount_total=VALUES(discount_total), tax_percent=VALUES(tax_percent), tax_amount=VALUES(tax_amount), grand_total=VALUES(grand_total), notes=VALUES(notes), source_file=COALESCE(VALUES(source_file), source_file), quotation_file=COALESCE(VALUES(quotation_file), quotation_file), status=VALUES(status), created_by=VALUES(created_by)");
+        $chk_ftr = $db_conn->query("SHOW COLUMNS FROM quotations LIKE 'footer_text'");
+        if ($chk_ftr && $chk_ftr->num_rows === 0) {
+            $db_conn->query("ALTER TABLE quotations ADD COLUMN footer_text TEXT DEFAULT NULL AFTER notes");
+        }
+
+        $stmt = $db_conn->prepare("INSERT INTO quotations (id, rfq_id, quotation_number, client_name, client_email, client_phone, company_name, company_address, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, footer_text, source_file, quotation_file, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE rfq_id=VALUES(rfq_id), quotation_number=VALUES(quotation_number), client_name=VALUES(client_name), client_email=VALUES(client_email), client_phone=VALUES(client_phone), company_name=VALUES(company_name), company_address=VALUES(company_address), date_issued=VALUES(date_issued), valid_until=VALUES(valid_until), subtotal=VALUES(subtotal), discount_total=VALUES(discount_total), tax_percent=VALUES(tax_percent), tax_amount=VALUES(tax_amount), grand_total=VALUES(grand_total), notes=VALUES(notes), footer_text=VALUES(footer_text), source_file=COALESCE(VALUES(source_file), source_file), quotation_file=COALESCE(VALUES(quotation_file), quotation_file), status=VALUES(status), created_by=VALUES(created_by)");
         
         if ($stmt) {
-            $stmt->bind_param("sissssssdddddssssss", $id, $rfq_id_val, $quo_num, $client_name, $client_email, $client_phone, $company_name, $date_issued, $valid_until, $subtotal, $discount_total, $tax_percent, $tax_amount, $grand_total, $notes, $source_file, $quotation_file, $status, $created_by);
+            $stmt->bind_param("sisssssssdddddsssssss", $id, $rfq_id_val, $quo_num, $client_name, $client_email, $client_phone, $company_name, $company_address, $date_issued, $valid_until, $subtotal, $discount_total, $tax_percent, $tax_amount, $grand_total, $notes, $footer_text, $source_file, $quotation_file, $status, $created_by);
             $stmt->execute();
             $stmt->close();
         } else {
@@ -352,6 +365,7 @@ try {
         $action_log = $is_update ? 'Update SPH' : 'Create SPH';
         $details_log = $is_update ? "User updated SPH details (Grand Total: RM {$grand_total})." : "User created SPH (Grand Total: RM {$grand_total}).";
         appendQuotationHistoryLog($db_conn, $id, $action_log, $user_name, $user_email, $details_log);
+        addSystemNotification($db_conn, ($is_update ? "SPH Diperbarui ({$quo_num})" : "SPH Baru Dibuat ({$quo_num})"), "{$user_name} ({$user_email}) " . ($is_update ? "memperbarui data SPH" : "membuat penawaran SPH baru") . " untuk klien {$client_name} senilai RM " . number_format($grand_total, 2) . ".", 'success', 'sph', 'quotations_list');
 
         if (isset($input['items']) && is_array($input['items'])) {
             $db_conn->query("DELETE FROM quotation_items WHERE quotation_id = '" . $db_conn->real_escape_string($id) . "'");

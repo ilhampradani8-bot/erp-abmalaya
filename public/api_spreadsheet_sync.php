@@ -253,6 +253,7 @@ try {
         echo json_encode([
             'status' => 'success',
             'message' => "Koneksi Terverifikasi & Safe! Terhubung ke file: '{$docTitle}'",
+            'doc_title' => $docTitle,
             'document_title' => $docTitle,
             'service_account' => 'erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com',
             'sheets' => $sheetsList
@@ -261,10 +262,10 @@ try {
     }
 
     // 1G. RUN BACKUP NOW (MANUAL TRIGGER)
-    if ($action === 'run_backup_now') {
+    if ($action === 'run_backup_now' || $action === 'run_backup') {
         $raw = file_get_contents('php://input');
         $input = json_decode($raw, true) ?: $_REQUEST;
-        $targetId = (int)($input['id'] ?? 0);
+        $targetId = (int)($input['id'] ?? ($input['backup_id'] ?? 0));
 
         require_once __DIR__ . '/../daemon/backup_products_sheets.php';
         $res = runProductSpreadsheetBackup(true, $targetId > 0 ? $targetId : null);

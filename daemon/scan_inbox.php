@@ -11,7 +11,7 @@ date_default_timezone_set('Asia/Kuala_Lumpur');
 
 define('DAEMON_MODE', true);
 define('LOG_FILE', __DIR__ . '/logs/scan_inbox_' . date('Y-m-d') . '.log');
-define('SCAN_LIMIT', 1); // Murni 1 per 1 email gantian per siklus
+define('SCAN_LIMIT', 10); // Process up to 10 emails per run with intelligent key rotation
 
 function daemon_log(string $msg): void {
     $dir = dirname(LOG_FILE);
@@ -109,10 +109,11 @@ function classifyEmail(string $subject, string $body, string $sender, array $key
         return ['classification' => 'abort_cycle', 'item_requested' => null, 'items' => [], 'verified' => 0, 'error' => 'all_keys_exhausted'];
     }
 
-    $inbox_models = [
+    $inbox_models = function_exists('getGeminiActiveModels') ? getGeminiActiveModels($active_keys) : [
+        'gemini-flash-latest',
+        'gemini-3.8-flash',
         'gemini-3.6-flash',
-        'gemini-3.5-flash',
-        'gemini-flash-latest'
+        'gemini-3.5-flash'
     ];
 
     // Coba setiap kunci aktif (yang belum cooldown) satu kali saja
@@ -392,7 +393,7 @@ while ($row = $res->fetch_assoc()) {
     $rfq_status = 'masuk';
     if ($verified) {
         if ($classification === 'client_rfq') {
-            $rfq_status = 'in_progress';
+            $rfq_status = 'diproses';
             autoGenerateQuotation($db_conn, $row, $items, $item_requested);
         } else {
             $rfq_status = 'junk';

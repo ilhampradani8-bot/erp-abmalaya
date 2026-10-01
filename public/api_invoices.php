@@ -44,6 +44,10 @@ try {
         `bank_account_name` VARCHAR(255) DEFAULT 'AB MALAYA INDUSTRY',
         `bank_email` VARCHAR(100) DEFAULT 'abmalayaindustry@gmail.com',
         `notes` TEXT DEFAULT NULL,
+        `footer_text` TEXT DEFAULT NULL,
+        `received_by_name` VARCHAR(255) DEFAULT NULL,
+        `received_by_designation` VARCHAR(255) DEFAULT NULL,
+        `received_by_date` VARCHAR(50) DEFAULT NULL,
         `status` VARCHAR(50) NOT NULL DEFAULT 'unpaid',
         `invoice_file` TEXT DEFAULT NULL,
         `pdf_created` TINYINT(1) DEFAULT 0,
@@ -70,6 +74,11 @@ try {
         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (`invoice_id`) REFERENCES `invoices`(`id`) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $chk_inv_ftr = $conn->query("SHOW COLUMNS FROM invoices LIKE 'footer_text'");
+    if ($chk_inv_ftr && $chk_inv_ftr->num_rows === 0) {
+        $conn->query("ALTER TABLE invoices ADD COLUMN footer_text TEXT DEFAULT NULL AFTER notes");
+    }
 
     $method = $_SERVER['REQUEST_METHOD'];
 
@@ -190,6 +199,10 @@ try {
         $bank_holder = trim($data['bank_account_name'] ?? 'AB MALAYA INDUSTRY');
         $bank_email = trim($data['bank_email'] ?? 'abmalayaindustry@gmail.com');
         $notes = trim($data['notes'] ?? '');
+        $footer_text = trim($data['footer_text'] ?? '');
+        $received_by_name = isset($data['received_by_name']) ? trim($data['received_by_name']) : null;
+        $received_by_designation = isset($data['received_by_designation']) ? trim($data['received_by_designation']) : null;
+        $received_by_date = isset($data['received_by_date']) ? trim($data['received_by_date']) : null;
         $status = trim($data['status'] ?? 'unpaid');
         $created_by = trim($data['created_by'] ?? 'Admin');
 
@@ -207,15 +220,15 @@ try {
                 delivery_company = ?, delivery_address = ?, delivery_pic = ?, delivery_phone = ?, 
                 subtotal = ?, discount_total = ?, tax_percent = ?, tax_amount = ?, grand_total = ?, 
                 bank_name = ?, bank_account_number = ?, bank_account_name = ?, bank_email = ?, 
-                notes = ?, status = ?, created_by = ? WHERE id = ?");
+                notes = ?, footer_text = ?, received_by_name = ?, received_by_designation = ?, received_by_date = ?, status = ?, created_by = ? WHERE id = ?");
 
-            $stmt->bind_param("ssssssssssssssddddsssssssss", 
+            $stmt->bind_param("ssssssssssssssddddsssssssssssss", 
                 $inv_num, $quo_id, $po_num, $inv_date, $due_date, 
                 $client_name, $client_email, $client_phone, $comp_name, $bill_addr, 
                 $del_comp, $del_addr, $del_pic, $del_phone, 
                 $subtotal, $disc_total, $tax_pct, $tax_amt, $grand_total, 
                 $bank_name, $bank_acc, $bank_holder, $bank_email, 
-                $notes, $status, $created_by, $id);
+                $notes, $footer_text, $received_by_name, $received_by_designation, $received_by_date, $status, $created_by, $id);
             $stmt->execute();
             $stmt->close();
         } else {
@@ -225,16 +238,16 @@ try {
                 delivery_company, delivery_address, delivery_pic, delivery_phone, 
                 subtotal, discount_total, tax_percent, tax_amount, grand_total, 
                 bank_name, bank_account_number, bank_account_name, bank_email, 
-                notes, status, created_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                notes, footer_text, received_by_name, received_by_designation, received_by_date, status, created_by
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
-            $stmt->bind_param("ssssssssssssssssddddsssssss", 
+            $stmt->bind_param("ssssssssssssssssddddsssssssssss", 
                 $id, $inv_num, $quo_id, $po_num, $inv_date, $due_date, 
                 $client_name, $client_email, $client_phone, $comp_name, $bill_addr, 
                 $del_comp, $del_addr, $del_pic, $del_phone, 
                 $subtotal, $disc_total, $tax_pct, $tax_amt, $grand_total, 
                 $bank_name, $bank_acc, $bank_holder, $bank_email, 
-                $notes, $status, $created_by);
+                $notes, $footer_text, $received_by_name, $received_by_designation, $received_by_date, $status, $created_by);
             $stmt->execute();
             $stmt->close();
         }

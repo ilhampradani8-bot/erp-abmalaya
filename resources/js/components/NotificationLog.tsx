@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, CheckCircle2, AlertTriangle, Info, Trash2, Check, RefreshCw, Filter, Search, Calendar } from 'lucide-react';
+import { Bell, CheckCircle2, AlertTriangle, Info, Trash2, Check, RefreshCw, Filter, Search, Calendar, X } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
 export interface NotificationItem {
@@ -27,6 +27,7 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
   const [filterType, setFilterType] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [selectedNotification, setSelectedNotification] = useState<NotificationItem | null>(null);
 
   const fetchNotificationsFromMySQL = () => {
     setIsLoading(true);
@@ -80,16 +81,14 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'mark_as_read', id: item.id }),
-      }).then(() => fetchNotificationsFromMySQL());
+      }).then(() => {
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === item.id ? { ...n, is_read: 1 } : n))
+        );
+        setUnreadCount((c) => Math.max(0, c - 1));
+      });
     }
-
-    if (item.category === 'sync' || item.title.toLowerCase().includes('sync') || item.title.toLowerCase().includes('gdrive')) {
-      if (onOpenSyncConflictModal) onOpenSyncConflictModal();
-    } else if (item.category === 'rfq' && onNavigateView) {
-      onNavigateView('rfq_inbox');
-    } else if (item.category === 'sph' && onNavigateView) {
-      onNavigateView('quotations_list');
-    }
+    setSelectedNotification(item);
   };
 
   const filteredNotifications = notifications.filter((item) => {
@@ -297,13 +296,129 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
             </table>
           </div>
         )}
-
-        <footer className="bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] border-t border-b border-[#7b7b7b] text-center py-1.5 text-[11px] text-[#3d3d3d] font-semibold w-full shrink-0">
-          <span>{filteredNotifications.length} Notifications Logged • MySQL Database (abmalaya_erp.system_notifications)</span>
-        </footer>
-
       </div>
 
+      {/* RIGHT SLIDE-OUT DRAWER FOR NOTIFICATION DETAILS */}
+      {selectedNotification && (
+        <div
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex justify-end z-50 transition-opacity duration-300 font-sans"
+          onClick={() => setSelectedNotification(null)}
+        >
+          <style>{`
+            @keyframes slideInRight {
+              from { transform: translateX(100%); }
+              to { transform: translateX(0); }
+            }
+            .animate-slide-in-right {
+              animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            }
+          `}</style>
+          <div
+            className="bg-white border-l-2 border-slate-700 w-full sm:w-[480px] max-w-[95vw] shadow-2xl flex flex-col h-screen overflow-hidden animate-slide-in-right"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Drawer Header */}
+            <div className="bg-slate-900 text-white px-4 py-3 flex items-center justify-between shrink-0 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Bell className="w-4 h-4 text-blue-400 shrink-0" />
+                <h3 className="font-extrabold text-xs">Notification Details</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedNotification(null)}
+                className="p-1 text-slate-400 hover:text-white hover:bg-rose-600 rounded transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Drawer Body */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 text-xs">
+              {/* Type & Time Badge Card */}
+              <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>{getTypeBadge(selectedNotification.type)}</div>
+                  <span className="font-mono text-[11px] text-slate-500">{selectedNotification.created_at}</span>
+                </div>
+                <h4 className="font-extrabold text-sm text-slate-900 pt-1">{selectedNotification.title}</h4>
+              </div>
+
+              {/* Message Details Box */}
+              <div className="bg-white border border-slate-200 p-4 rounded-lg shadow-2xs space-y-2">
+                <span className="font-extrabold text-[10px] text-slate-400 uppercase tracking-wider block">Message & Log Details:</span>
+                <p className="text-slate-800 text-xs leading-relaxed whitespace-pre-wrap font-sans">{selectedNotification.message}</p>
+              </div>
+
+              {/* Category & Status Info Grid */}
+              <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-2xs grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="font-bold text-slate-400 text-[10px] block uppercase">Category</span>
+                  <span className="font-mono font-bold text-slate-800 uppercase">{selectedNotification.category || 'System'}</span>
+                </div>
+                <div>
+                  <span className="font-bold text-slate-400 text-[10px] block uppercase">Read Status</span>
+                  <span className={`font-bold font-mono ${selectedNotification.is_read === 1 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {selectedNotification.is_read === 1 ? 'Read' : 'Unread'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Shortcuts */}
+              <div className="space-y-2 pt-2">
+                {(selectedNotification.category === 'sph' || selectedNotification.title.toLowerCase().includes('quotation') || selectedNotification.title.toLowerCase().includes('sph')) && onNavigateView && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedNotification(null);
+                      onNavigateView('quotations_list');
+                    }}
+                    className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-lg transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Buka Daftar Quotation SPH →</span>
+                  </button>
+                )}
+
+                {(selectedNotification.category === 'rfq' || selectedNotification.title.toLowerCase().includes('rfq') || selectedNotification.title.toLowerCase().includes('email')) && onNavigateView && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedNotification(null);
+                      onNavigateView('rfq_inbox');
+                    }}
+                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-lg transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Buka Live RFQ Inbox →</span>
+                  </button>
+                )}
+
+                {(selectedNotification.category === 'sync' || selectedNotification.title.toLowerCase().includes('sync') || selectedNotification.title.toLowerCase().includes('gdrive')) && onOpenSyncConflictModal && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedNotification(null);
+                      onOpenSyncConflictModal();
+                    }}
+                    className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs rounded-lg transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Buka Sync Conflict Manager →</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="bg-white border-t border-slate-200 p-3 flex items-center justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setSelectedNotification(null)}
+                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded cursor-pointer"
+              >
+                Close Panel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

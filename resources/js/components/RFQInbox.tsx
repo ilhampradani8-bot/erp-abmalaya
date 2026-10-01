@@ -247,18 +247,18 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
         setDownloadingAttachmentId(null);
         if (data.status === 'success') {
           setNotificationText(`Successfully downloaded: ${att.filename}!`);
-          
+
           if (onRefreshLiveEmails) {
             onRefreshLiveEmails();
           }
-          
+
           setPreviewAttachment({
             ...att,
             downloaded: true,
             filesize: 'Downloaded',
             url: data.url
           });
-          
+
           setTimeout(() => setShowNotificationBanner(false), 3000);
         } else {
           setNotificationText(`Download failed: ${data.message}`);
@@ -517,7 +517,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
   const getAttachmentLabelText = (att: EmailAttachment) => {
     if (att.is_gdrive) {
       if ((att as any).is_folder) return `drive: folder`;
-      return att.downloaded 
+      return att.downloaded
         ? `file: ${att.filename}`
         : `drive: file`;
     }
@@ -631,7 +631,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
   return (
     <div className="w-full h-full bg-slate-100 flex flex-col font-sans overflow-hidden p-0 m-0">
-      
+
       {/* Dynamic Processing Status Banner */}
       {showNotificationBanner && (
         <div className="bg-emerald-50 border-b border-emerald-300 px-4 py-2 text-xs text-emerald-950 font-bold flex items-center justify-between animate-in fade-in shrink-0">
@@ -647,10 +647,10 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
       {/* Edge-to-Edge Split View Area */}
       <div className="flex-1 flex overflow-hidden w-full h-full">
-        
+
         {/* LEFT COLUMN: LIST OF RFQs */}
         <div className="w-full md:w-96 border-r border-slate-200 bg-white flex flex-col h-full shrink-0">
-          
+
           {/* Header Bar */}
           <div className="p-3 border-b border-slate-200 bg-slate-50 space-y-2 shrink-0">
             <div className="flex items-center justify-between">
@@ -738,16 +738,15 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
             {/* Filter Tabs: To Dropdown | Status Dropdown */}
             <div className="flex gap-1.5 border-b border-slate-200 pb-1.5 text-xs pt-1 items-center w-full justify-between">
-              
+
               {/* FILTER TO DROP-DOWN */}
               <div className="relative">
                 <button
                   onClick={() => setIsToFilterOpen(!isToFilterOpen)}
-                  className={`px-2.5 py-1 font-bold text-[11px] rounded-md transition cursor-pointer flex items-center gap-1 border ${
-                    selectedToFilter !== 'all'
+                  className={`px-2.5 py-1 font-bold text-[11px] rounded-md transition cursor-pointer flex items-center gap-1 border ${selectedToFilter !== 'all'
                       ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                       : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-                  }`}
+                    }`}
                   style={{ fontFamily: "'Eurostile', 'Microgramma D OT', 'Euro Stile', monospace" }}
                   title="Filter by recipient email alias / domain"
                 >
@@ -766,9 +765,8 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                             setSelectedToFilter(rec);
                             setIsToFilterOpen(false);
                           }}
-                          className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 transition truncate cursor-pointer font-bold ${
-                            selectedToFilter === rec ? 'text-blue-600 bg-blue-50/50' : 'text-slate-700'
-                          }`}
+                          className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 transition truncate cursor-pointer font-bold ${selectedToFilter === rec ? 'text-blue-600 bg-blue-50/50' : 'text-slate-700'
+                            }`}
                         >
                           {rec === 'all' ? '✓ All Recipient Domains' : rec}
                         </button>
@@ -782,11 +780,10 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
               <div className="relative ml-auto shrink-0">
                 <button
                   onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
-                  className={`px-2.5 py-1 font-bold text-[11px] rounded-md transition cursor-pointer flex items-center gap-1 border ${
-                    activeMainTab === 'received'
+                  className={`px-2.5 py-1 font-bold text-[11px] rounded-md transition cursor-pointer flex items-center gap-1 border ${activeMainTab === 'received'
                       ? 'bg-blue-600 text-white shadow-2xs'
                       : 'bg-indigo-600 text-white shadow-2xs'
-                  }`}
+                    }`}
                   style={{ fontFamily: "'Eurostile', 'Microgramma D OT', 'Euro Stile', monospace" }}
                   title="Filter by status: Received, In Progress, Sent, Done"
                 >
@@ -794,10 +791,10 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                     {activeMainTab === 'received'
                       ? 'Status: Received'
                       : activeMainTab === 'diproses'
-                      ? 'Status: In Progress'
-                      : activeMainTab === 'siap_kirim'
-                      ? 'Status: Sent / Replied'
-                      : 'Status: Done'}
+                        ? 'Status: In Progress'
+                        : activeMainTab === 'siap_kirim'
+                          ? 'Status: Sent / Replied'
+                          : 'Status: Done'}
                   </span>
                   <ChevronDown className="w-3 h-3 text-white/80" />
                 </button>
@@ -818,9 +815,8 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                             setActiveMainTab(st.id);
                             setIsStatusDropdownOpen(false);
                           }}
-                          className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 transition cursor-pointer font-bold flex items-center justify-between ${
-                            activeMainTab === st.id ? 'text-blue-600 bg-blue-50/50' : 'text-slate-700'
-                          }`}
+                          className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 transition cursor-pointer font-bold flex items-center justify-between ${activeMainTab === st.id ? 'text-blue-600 bg-blue-50/50' : 'text-slate-700'
+                            }`}
                         >
                           <span>{st.label}</span>
                           {activeMainTab === st.id && <span className="text-blue-600 font-extrabold">✓</span>}
@@ -838,11 +834,10 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveSubTab('detected')}
-                className={`flex-1 py-1.5 px-2 text-[10px] font-extrabold border text-center transition cursor-pointer flex items-center justify-center gap-1.5 rounded-md shadow-2xs ${
-                  activeSubTab === 'detected'
+                className={`flex-1 py-1.5 px-2 text-[10px] font-extrabold border text-center transition cursor-pointer flex items-center justify-center gap-1.5 rounded-md shadow-2xs ${activeSubTab === 'detected'
                     ? 'bg-gradient-to-b from-[#2e2e2e] to-[#121212] text-white border-[#111]'
                     : 'bg-gradient-to-b from-[#ffffff] to-[#f5f5f5] text-slate-700 border-slate-200 hover:from-[#fcfcfc] hover:to-[#ebebeb]'
-                }`}
+                  }`}
                 style={{ fontFamily: "'Eurostile', monospace" }}
               >
                 <ShieldCheck className={`w-3.5 h-3.5 ${activeSubTab === 'detected' ? 'text-emerald-400' : 'text-emerald-600'}`} />
@@ -852,11 +847,10 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveSubTab('unrecognized')}
-                className={`flex-1 py-1.5 px-2 text-[10px] font-extrabold border text-center transition cursor-pointer flex items-center justify-center gap-1.5 rounded-md shadow-2xs ${
-                  activeSubTab === 'unrecognized'
+                className={`flex-1 py-1.5 px-2 text-[10px] font-extrabold border text-center transition cursor-pointer flex items-center justify-center gap-1.5 rounded-md shadow-2xs ${activeSubTab === 'unrecognized'
                     ? 'bg-gradient-to-b from-[#2e2e2e] to-[#121212] text-white border-[#111]'
                     : 'bg-gradient-to-b from-[#ffffff] to-[#f5f5f5] text-slate-700 border-slate-200 hover:from-[#fcfcfc] hover:to-[#ebebeb]'
-                }`}
+                  }`}
                 style={{ fontFamily: "'Eurostile', monospace" }}
               >
                 <AlertTriangle className={`w-3.5 h-3.5 ${activeSubTab === 'unrecognized' ? 'text-amber-400' : 'text-amber-600'}`} />
@@ -941,19 +935,18 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                       onSelectRfq(item);
                       setShowNotificationBanner(false);
                     }}
-                    className={`p-3 transition-all cursor-pointer border-l-4 relative ${
-                      isSelected
+                    className={`p-3 transition-all cursor-pointer border-l-4 relative ${isSelected
                         ? 'bg-blue-50/80 border-blue-600'
                         : !isDetected
-                        ? 'bg-amber-50/30 hover:bg-amber-50/60 border-transparent'
-                        : 'hover:bg-slate-50 border-transparent'
-                    }`}
+                          ? 'bg-amber-50/30 hover:bg-amber-50/60 border-transparent'
+                          : 'hover:bg-slate-50 border-transparent'
+                      }`}
                   >
                     <div className="flex items-start justify-between gap-1 mb-1">
                       <h3 className="font-bold text-xs text-slate-900 truncate pr-4">
                         {item.company || item.sender_name}
                       </h3>
-                      
+
                       <div className="flex items-center gap-1 shrink-0">
                         <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">
                           {(item.date_received || '').split(' ')[0]}
@@ -1080,24 +1073,36 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                         );
                       })()}
 
-                      {item.labels && item.labels.filter(l => l !== 'Primary RFQ' && l !== 'AI Verified').map((lbl, lIdx) => (
-                        <span
-                          key={lIdx}
-                          className={`px-1.5 py-0.2 text-[9px] font-bold rounded-sm border ${
-                            lbl === 'Primary RFQ' || lbl === 'AI Verified' || lbl === 'AI: Permintaan Klien' || lbl === 'AI: Requisition'
-                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                              : lbl === 'Waiting AI Detection' || lbl === 'Pending AI Scan'
-                              ? 'bg-amber-50 text-amber-800 border-amber-300 animate-pulse font-extrabold'
-                              : lbl === 'AI Junk' || lbl === 'AI: Spam / Junk' || lbl === 'AI: Iklan / Sampah' || lbl === 'AI: Notifikasi / Iklan'
-                              ? 'bg-rose-50 text-rose-800 border-rose-350'
-                              : lbl === 'Has File'
-                              ? 'bg-blue-50 text-blue-700 border-blue-300'
-                              : 'bg-slate-50 text-slate-700 border-slate-350'
-                          }`}
-                        >
-                          {lbl}
+                      {/* AI Classification & Detection Status Badge */}
+                      {(() => {
+                        const isWaiting = item.ai_verified === 0 || (!item.ai_verified && item.ai_verified !== 1) || item.labels?.includes('Waiting AI Detection') || item.labels?.includes('Pending AI Scan');
+                        if (isWaiting) {
+                          return (
+                            <span className="px-1.5 py-0.2 text-[9px] font-extrabold rounded-sm border bg-amber-50 text-amber-800 border-amber-300 animate-pulse">
+                              Waiting AI Detection
+                            </span>
+                          );
+                        }
+                        if (item.ai_classification === 'client_rfq' || item.labels?.includes('AI: Requisition') || item.labels?.includes('AI: Permintaan Klien')) {
+                          return (
+                            <span className="px-1.5 py-0.2 text-[9px] font-bold rounded-sm border bg-emerald-50 text-emerald-800 border-emerald-300">
+                              AI: Requisition
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="px-1.5 py-0.2 text-[9px] font-bold rounded-sm border bg-rose-50 text-rose-800 border-rose-300">
+                            AI: Other / Junk
+                          </span>
+                        );
+                      })()}
+
+                      {/* Attachment Has File Badge */}
+                      {item.attachments && item.attachments.length > 0 && (
+                        <span className="px-1.5 py-0.2 text-[9px] font-bold rounded-sm border bg-blue-50 text-blue-700 border-blue-300">
+                          Has File ({item.attachments.length})
                         </span>
-                      ))}
+                      )}
                     </div>
 
                     <p className="text-[11px] text-slate-500 line-clamp-2 mb-2 leading-tight">
@@ -1191,24 +1196,36 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                     <span className="bg-slate-200 text-slate-800 font-extrabold text-[10px] px-2 py-0.5">
                       {selectedRfq.company || selectedRfq.sender_name}
                     </span>
-                    {selectedRfq.labels && selectedRfq.labels.filter(l => l !== 'Primary RFQ' && l !== 'AI Verified').map((lbl, lIdx) => (
-                      <span
-                        key={lIdx}
-                        className={`text-[9px] font-bold px-2 py-0.5 rounded-sm border ${
-                          lbl === 'Primary RFQ' || lbl === 'AI Verified' || lbl === 'AI: Permintaan Klien' || lbl === 'AI: Requisition'
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                            : lbl === 'Waiting AI Detection' || lbl === 'Pending AI Scan'
-                            ? 'bg-amber-50 text-amber-800 border-amber-300 animate-pulse font-extrabold'
-                            : lbl === 'AI Junk' || lbl === 'AI: Spam / Junk' || lbl === 'AI: Iklan / Sampah' || lbl === 'AI: Notifikasi / Iklan'
-                            ? 'bg-rose-50 text-rose-800 border-rose-350'
-                            : lbl === 'Has File'
-                            ? 'bg-blue-50 text-blue-700 border-blue-300'
-                            : 'bg-slate-50 text-slate-700 border-slate-350'
-                        }`}
-                      >
-                        {lbl}
+                    {/* AI Classification & Detection Status Badge */}
+                    {(() => {
+                      const isWaiting = selectedRfq.ai_verified === 0 || (!selectedRfq.ai_verified && selectedRfq.ai_verified !== 1) || selectedRfq.labels?.includes('Waiting AI Detection') || selectedRfq.labels?.includes('Pending AI Scan');
+                      if (isWaiting) {
+                        return (
+                          <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-sm border bg-amber-50 text-amber-800 border-amber-300 animate-pulse">
+                            Waiting AI Detection
+                          </span>
+                        );
+                      }
+                      if (selectedRfq.ai_classification === 'client_rfq' || selectedRfq.labels?.includes('AI: Requisition') || selectedRfq.labels?.includes('AI: Permintaan Klien')) {
+                        return (
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-sm border bg-emerald-50 text-emerald-800 border-emerald-300">
+                            AI: Requisition
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-sm border bg-rose-50 text-rose-800 border-rose-300">
+                          AI: Other / Junk
+                        </span>
+                      );
+                    })()}
+
+                    {/* Has File Attachment Badge */}
+                    {selectedRfq.attachments && selectedRfq.attachments.length > 0 && (
+                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-sm border bg-blue-50 text-blue-700 border-blue-300">
+                        Has File ({selectedRfq.attachments.length})
                       </span>
-                    ))}
+                    )}
                   </div>
 
                   <h2 className="font-extrabold text-sm sm:text-base text-slate-900 truncate">
@@ -1217,7 +1234,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0 relative">
-                  
+
                   {/* Process RFQ to SPH Button */}
                   <button
                     onClick={() => handleProcessRfqClick(selectedRfq)}
@@ -1333,7 +1350,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
               {/* Right Column Content View */}
               <div className="flex-1 overflow-y-auto space-y-4 w-full bg-white h-full">
-                
+
                 <div className="p-5 space-y-4 w-full bg-white">
                   <div className="flex items-center justify-between pb-2 border-b border-slate-200">
                     <h3 className="font-extrabold text-xs text-slate-900 flex items-center gap-2">
@@ -1426,7 +1443,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
       {previewAttachment && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in font-sans">
           <div className="bg-white border border-slate-300 w-full max-w-4xl h-[90vh] flex flex-col shadow-2xl overflow-hidden rounded-md">
-            
+
             {/* Modal Header */}
             <div className="p-3 bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] text-[#3d3d3d] flex items-center justify-between border-b border-[#7b7b7b] shrink-0">
               <div className="flex items-center gap-2">
@@ -1503,7 +1520,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                       ? 'This is a Google Drive folder link shared in the email. Folders cannot be downloaded directly — click below to open it in Google Drive.'
                       : 'This file is linked from the email body. It has not been cached on our server yet. You can copy the original link or download it to the server.'}
                   </p>
-                  
+
                   <div className="flex flex-wrap gap-3 items-center justify-center w-full pt-2">
                     {/* Copy Link Button */}
                     <button
@@ -1518,7 +1535,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                       <Copy className="w-3.5 h-3.5" />
                       <span>Copy Google Drive Link</span>
                     </button>
-                    
+
                     {/* Open in Drive (always) or Download to Server (only for files) */}
                     {previewAttachment.is_folder ? (
                       <a
@@ -1751,7 +1768,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-5 space-y-4 text-xs">
               <div className="space-y-1">
                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Target Email subject</span>
@@ -1760,11 +1777,10 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
               <div className="space-y-1">
                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">AI Classification Result</span>
-                <span className={`inline-block px-2.5 py-0.5 rounded-sm font-bold border text-[10px] ${
-                  aiSummaryModalData.ai_classification === 'client_rfq'
+                <span className={`inline-block px-2.5 py-0.5 rounded-sm font-bold border text-[10px] ${aiSummaryModalData.ai_classification === 'client_rfq'
                     ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                     : 'bg-rose-50 text-rose-800 border-rose-300'
-                }`}>
+                  }`}>
                   {aiSummaryModalData.ai_classification === 'client_rfq' ? 'AI: Requisition' : 'AI: Iklan / Sampah (Junk/Alert)'}
                 </span>
               </div>
@@ -1836,7 +1852,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-5 space-y-4 text-xs">
               <div className="space-y-1">
                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Target Email subject</span>
@@ -1845,11 +1861,10 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
               <div className="space-y-1">
                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Verification Status</span>
-                <span className={`inline-block px-2.5 py-0.5 rounded-sm font-bold border text-[10px] ${
-                  aiErrorModalData.ai_verified === 1
+                <span className={`inline-block px-2.5 py-0.5 rounded-sm font-bold border text-[10px] ${aiErrorModalData.ai_verified === 1
                     ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                     : 'bg-amber-50 text-amber-800 border-amber-300 animate-pulse'
-                }`}>
+                  }`}>
                   {aiErrorModalData.ai_verified === 1 ? 'AI Scan Success (Verified)' : 'AI Scan Pending / Failed (Waiting Scan)'}
                 </span>
               </div>
@@ -1890,7 +1905,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-5 space-y-4">
               <div className="overflow-x-auto">
                 <table className="w-full text-xs text-left border-collapse">
@@ -2029,11 +2044,10 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
             <div className="bg-slate-950/60 px-5 py-2 border-b border-slate-800/80 flex items-center gap-2 overflow-x-auto scrollbar-none">
               <button
                 onClick={() => setActiveLogTab('all')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                  activeLogTab === 'all'
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${activeLogTab === 'all'
                     ? 'bg-emerald-600 text-white shadow-sm'
                     : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
+                  }`}
               >
                 <FileText className="w-3.5 h-3.5" />
                 <span>All Log Files ({logFiles.length})</span>
@@ -2043,11 +2057,10 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 <button
                   key={lf.file}
                   onClick={() => setActiveLogTab(lf.file)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                    activeLogTab === lf.file
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${activeLogTab === lf.file
                       ? 'bg-blue-600 text-white shadow-sm'
                       : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800 hover:text-white'
-                  }`}
+                    }`}
                 >
                   <Terminal className="w-3 h-3 text-blue-400" />
                   <span>{lf.file}</span>
@@ -2056,11 +2069,10 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
               <button
                 onClick={() => setActiveLogTab('db_errors')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ml-auto ${
-                  activeLogTab === 'db_errors'
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ml-auto ${activeLogTab === 'db_errors'
                     ? 'bg-rose-600 text-white shadow-sm'
                     : 'bg-rose-950/40 text-rose-300 hover:bg-rose-900/60 border border-rose-800/50'
-                }`}
+                  }`}
               >
                 <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
                 <span>Database Errors ({dbErrors.length})</span>

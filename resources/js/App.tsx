@@ -14,8 +14,8 @@ import { AccountSettings } from './components/AccountSettings';
 import { SystemSettings } from './components/SystemSettings';
 import { NotificationLog } from './components/NotificationLog';
 import { Trash } from './components/Trash';
-import { ElectronDownloads } from './components/ElectronDownloads';
-import { encryptData } from './utils/crypto';
+import { LoginScreen } from './components/LoginScreen';
+import { SwitchUserModal } from './components/SwitchUserModal';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { getApiUrl } from './utils/api';
 
@@ -84,14 +84,17 @@ export const App: React.FC = () => {
   }, [isAttachmentPreviewOpen]);
 
   const [users, setUsers] = useState<UserAccount[]>([]);
-  const [currentUser, setCurrentUser] = useState<UserAccount>({
-    id: 'USR-101',
-    name: 'Aiman Zaki',
-    email: 'aimanzaki@abmalaya.com',
-    role: 'Admin',
-    department: 'Sales & Business Development',
-    status: 'Active',
-    created_at: new Date().toISOString().split('T')[0],
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
+    const cachedUser = localStorage.getItem('abmalaya_user_session');
+    if (cachedUser) {
+      try {
+        const parsed = JSON.parse(cachedUser);
+        if (parsed && parsed.email && !parsed.email.toLowerCase().includes('purchasing')) {
+          return parsed;
+        }
+      } catch (e) {}
+    }
+    return null;
   });
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
@@ -103,32 +106,102 @@ export const App: React.FC = () => {
     port: 587,
     encryption: 'tls',
     username: 'abmalayaindustry@gmail.com',
-    app_password: encryptData('tbsq icqa kece qaoz'),
+    app_password: '',
     from_name: 'ABMALAYA.COM (Malaysia)',
     from_email: 'abmalayaindustry@gmail.com',
     is_connected: true,
   });
 
+  // Master Passphrase Authentication Gate State
+  // Synchronously initialize from localStorage: requires valid token AND valid user session
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    const token = localStorage.getItem('erp_auth_token');
+    const userSession = localStorage.getItem('abmalaya_user_session');
+    return Boolean(token && token.length >= 20 && userSession);
+  });
+
+  // Verify session in background silently
   useEffect(() => {
-    // 1. Try loading cached user session from LocalStorage first
-    const cachedUser = localStorage.getItem('abmalaya_user_session');
-    if (cachedUser) {
-      try {
-        setCurrentUser(JSON.parse(cachedUser));
-      } catch (e) {
-        console.error('Error parsing user session:', e);
-      }
+    const token = localStorage.getItem('erp_auth_token');
+    const userSession = localStorage.getItem('abmalaya_user_session');
+
+    // If no token or no cached user session, MUST force login
+    if (!token || !userSession) {
+      localStorage.removeItem('erp_auth_token');
+      localStorage.removeItem('erp_token_expires');
+      localStorage.removeItem('erp_auth_active');
+      localStorage.removeItem('abmalaya_user_session');
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      return;
     }
 
+    fetch(getApiUrl(`/api_auth.php?action=verify_session&token=${encodeURIComponent(token)}`))
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.valid === false) {
+          // Token invalid -> force login
+          localStorage.removeItem('erp_auth_token');
+          localStorage.removeItem('erp_token_expires');
+          localStorage.removeItem('erp_auth_active');
+          localStorage.removeItem('abmalaya_user_session');
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+        }
+      })
+      .catch((err) => {
+        console.warn('Background auth session verification check:', err);
+      });
+  }, []);
+
+  const handleLoginSuccess = (_token: string, _expiresAt: string, user?: any) => {
+    setIsAuthenticated(true);
+    if (user) {
+      setCurrentUser(user);
+      localStorage.setItem('abmalaya_user_session', JSON.stringify(user));
+    }
+  };
+
+  const handleLogout = () => {
+    const token = localStorage.getItem('erp_auth_token');
+    if (token) {
+      fetch(getApiUrl('/api_auth.php?action=logout'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      }).catch(() => {});
+    }
+    localStorage.removeItem('erp_auth_token');
+    localStorage.removeItem('erp_token_expires');
+    localStorage.removeItem('erp_auth_active');
+    localStorage.removeItem('abmalaya_user_session');
+    setCurrentUser(null);
+    setIsAuthenticated(false);
+  };
+
+  useEffect(() => {
     fetch(getApiUrl('/api_users.php'))
       .then((res) => res.json())
       .then((resData) => {
-        if (resData.status === 'success' && resData.data && resData.data.length > 0) {
+        if (resData.status === 'success' && Array.isArray(resData.data)) {
           setUsers(resData.data);
-          // If no cached user exists in localStorage, fallback to first user
-          if (!localStorage.getItem('abmalaya_user_session')) {
-            setCurrentUser(resData.data[0]);
-            localStorage.setItem('abmalaya_user_session', JSON.stringify(resData.data[0]));
+          
+          const rawCached = localStorage.getItem('abmalaya_user_session');
+          if (rawCached) {
+            try {
+              const parsed = JSON.parse(rawCached);
+              const matchedUser = resData.data.find((u: UserAccount) => u.email.toLowerCase() === parsed.email?.toLowerCase());
+              if (matchedUser) {
+                setCurrentUser(matchedUser);
+                localStorage.setItem('abmalaya_user_session', JSON.stringify(matchedUser));
+              } else {
+                // If user no longer exists in MySQL -> FORCE RE-LOGIN immediately!
+                console.warn('User session not found in active database users. Requiring re-login.');
+                handleLogout();
+              }
+            } catch (e) {
+              handleLogout();
+            }
           }
         }
       })
@@ -186,20 +259,22 @@ export const App: React.FC = () => {
         fetchLiveEmails(true);
         fetchQuotationsList();
       }
-    }, 180000); // 3 minutes interval
+    }, 15000); // Fast 15 seconds sync interval
 
     return () => {
       clearInterval(interval);
     };
   }, []);
 
-  const [viewMode, setViewModeState] = useState<'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads' | 'client_chat'>('inbox');
+  const [viewMode, setViewModeState] = useState<'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'client_chat'>('inbox');
   const [showEmailModal, setShowEmailModal] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const setViewMode = (mode: 'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads' | 'client_chat') => {
+  const setViewMode = (mode: 'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'client_chat') => {
     setViewModeState(mode);
+    // Instant fetch from MySQL whenever user switches views to ensure 100% fresh data
+    fetchQuotationsList();
   };
 
   const selectedRfq = rfqs.find((r) => r.id === selectedRfqId) || null;
@@ -246,11 +321,12 @@ export const App: React.FC = () => {
 
   const handleCreateQuotationFromRfq = (rfq: RFQ) => {
     setIsLoading(true);
+    const uniqueQuoId = `QUO-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
     const newQuo: Quotation = {
       ...sampleQuotation,
-      id: `QUO-${Date.now().toString().slice(-4)}`,
+      id: uniqueQuoId,
       rfq_id: rfq.id,
-      quotation_number: `SPH-ABM/MY/2026/0${Math.floor(Math.random() * 900 + 100)}`,
+      quotation_number: `SPH-ABM/MY/${new Date().getFullYear()}/${Math.floor(1000 + Math.random() * 9000)}`,
       client_name: rfq.sender_name,
       client_email: rfq.sender_email,
       company_name: rfq.company,
@@ -316,12 +392,17 @@ export const App: React.FC = () => {
     setViewMode('inbox');
   };
 
-  const handleAddUser = (newUser: Omit<UserAccount, 'id' | 'created_at'>) => {
+  const handleAddUser = (newUser: any) => {
     setIsLoading(true);
+    const userId = newUser.id || `USR-${Date.now()}`;
     const user: UserAccount = {
-      ...newUser,
-      id: `USR-${Date.now().toString().slice(-4)}`,
-      created_at: new Date().toISOString().split('T')[0],
+      id: userId,
+      name: newUser.name || 'Team Member',
+      email: newUser.email || 'user@abmalaya.com',
+      role: newUser.role || 'Karyawan',
+      department: newUser.department || 'Sales Executive',
+      status: newUser.status || 'Active',
+      created_at: newUser.created_at || new Date().toISOString().split('T')[0],
     };
 
     fetch(getApiUrl('/api_users.php'), {
@@ -330,7 +411,13 @@ export const App: React.FC = () => {
       body: JSON.stringify(user),
     })
       .then(() => {
-        setUsers((prev) => [...prev, user]);
+        setUsers((prev) => {
+          const exists = prev.some((u) => u.id === user.id);
+          if (exists) {
+            return prev.map((u) => (u.id === user.id ? user : u));
+          }
+          return [...prev, user];
+        });
       })
       .catch((err) => console.log('Save user MySQL error:', err))
       .finally(() => setIsLoading(false));
@@ -338,9 +425,20 @@ export const App: React.FC = () => {
 
   const handleDeleteUser = (userId: string) => {
     setIsLoading(true);
-    setUsers((prev) => prev.filter((u) => u.id !== userId));
-    setTimeout(() => setIsLoading(false), 300);
+    fetch(getApiUrl('/api_users.php?action=delete'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: userId }),
+    })
+      .then(() => {
+        setUsers((prev) => prev.filter((u) => u.id !== userId));
+      })
+      .catch((err) => console.log('Delete user MySQL error:', err))
+      .finally(() => setIsLoading(false));
   };
+
+  const [pendingSwitchUser, setPendingSwitchUser] = useState<UserAccount | null>(null);
+  const [isSwitchModalOpen, setIsSwitchModalOpen] = useState<boolean>(false);
 
   const handleSwitchUser = (user: UserAccount) => {
     setIsLoading(true);
@@ -362,10 +460,19 @@ export const App: React.FC = () => {
     setTimeout(() => setIsLoading(false), 300);
   };
 
+  const handlePromptSwitchUser = (targetUser: UserAccount) => {
+    if (currentUser && targetUser.id === currentUser.id) return;
+    setPendingSwitchUser(targetUser);
+    setIsSwitchModalOpen(true);
+  };
 
   const pendingCount = rfqs.filter((r) => r.status === 'masuk').length;
   const sentCount = rfqs.filter((r) => r.status === 'penawaran_terkirim').length;
   const dealCount = rfqs.filter((r) => r.status === 'deal').length;
+
+  if (!isAuthenticated) {
+    return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
+  }
 
   return (
     <ErrorBoundary>
@@ -386,9 +493,10 @@ export const App: React.FC = () => {
           pendingCount={pendingCount}
           sentCount={sentCount}
           dealCount={dealCount}
-          currentUser={currentUser}
+          currentUser={currentUser || undefined}
           users={users}
-          onSwitchUser={handleSwitchUser}
+          onSwitchUser={handlePromptSwitchUser}
+          onLogout={handleLogout}
           isMobileOpen={isMobileSidebarOpen}
           setIsMobileOpen={setIsMobileSidebarOpen}
           isCollapsed={isSidebarCollapsed}
@@ -433,7 +541,7 @@ export const App: React.FC = () => {
                   dealCount={dealCount}
                   pendingCount={pendingCount}
                   onNavigateView={(mode) => setViewMode(mode)}
-                  currentUser={currentUser}
+                  currentUser={currentUser || undefined}
                 />
               )}
 
@@ -473,7 +581,7 @@ export const App: React.FC = () => {
                   }}
                   hasFetched={hasFetchedQuotations}
                   setIsGlobalLoading={setIsLoading}
-                  currentUser={currentUser}
+                  currentUser={currentUser || undefined}
                 />
               )}
 
@@ -489,10 +597,6 @@ export const App: React.FC = () => {
                 />
               )}
 
-              {viewMode === 'downloads' && (
-                <ElectronDownloads />
-              )}
-
               {viewMode === 'builder' && (
                 <QuotationBuilder
                   initialQuotation={currentQuotation}
@@ -506,7 +610,7 @@ export const App: React.FC = () => {
                   }}
                   onCancel={() => setViewMode('inbox')}
                   onNavigateView={(mode) => setViewMode(mode)}
-                  currentUser={currentUser}
+                  currentUser={currentUser || undefined}
                 />
               )}
 
@@ -523,7 +627,7 @@ export const App: React.FC = () => {
               {viewMode === 'doc_preview' && (
                 <QuotationDoc
                   quotation={currentQuotation}
-                  currentUser={currentUser}
+                  currentUser={currentUser || undefined}
                   onBackToBuilder={() => setViewMode('builder')}
                   onSendEmail={() => setShowEmailModal(true)}
                 />
@@ -535,7 +639,7 @@ export const App: React.FC = () => {
                   currentUser={currentUser}
                   onAddUser={handleAddUser}
                   onDeleteUser={handleDeleteUser}
-                  onSwitchUser={handleSwitchUser}
+                  onSwitchUser={handlePromptSwitchUser}
                 />
               )}
 
@@ -573,6 +677,21 @@ export const App: React.FC = () => {
             onSuccessSend={handleSuccessEmailSend}
           />
         )}
+
+        {/* User Switch Passphrase Confirmation Modal */}
+        <SwitchUserModal
+          isOpen={isSwitchModalOpen}
+          targetUser={pendingSwitchUser}
+          onClose={() => {
+            setIsSwitchModalOpen(false);
+            setPendingSwitchUser(null);
+          }}
+          onSuccess={(targetUser) => {
+            handleSwitchUser(targetUser);
+            setIsSwitchModalOpen(false);
+            setPendingSwitchUser(null);
+          }}
+        />
       </div>
     </ErrorBoundary>
   );

@@ -258,7 +258,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
                   rows={4}
                   value={aiPrompt}
                   onChange={(e) => setAiPrompt(e.target.value)}
-                  placeholder='e.g., "Request client to specify local port shipping date details, and thank them for choosing PT Abmalaya nusa sejahtera."'
+                  placeholder='e.g., "Request client to specify local port shipping date details, and thank them for choosing AB Malaya Sdn. Bhd."'
                   className="w-full bg-white border border-slate-300 rounded-md p-2.5 text-xs text-slate-800 leading-relaxed focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
               </div>

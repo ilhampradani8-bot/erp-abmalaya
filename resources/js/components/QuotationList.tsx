@@ -174,6 +174,25 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
   const [selectedPdfViewerQuotation, setSelectedPdfViewerQuotation] = useState<Quotation | null>(null);
   const [isPdfViewerModalOpen, setIsPdfViewerModalOpen] = useState<boolean>(false);
+  const [pdfViewerMode, setPdfViewerMode] = useState<'doc' | 'pdf'>('doc');
+
+  const pdfDocUrl = React.useMemo(() => {
+    if (!selectedPdfViewerQuotation) return '';
+    return getApiUrl(`/view_doc.php?type=quotation&id=${encodeURIComponent(selectedPdfViewerQuotation.id)}`);
+  }, [selectedPdfViewerQuotation?.id]);
+
+  const pdfStreamUrl = React.useMemo(() => {
+    if (!selectedPdfViewerQuotation) return '';
+    if (selectedPdfViewerQuotation.quotation_file) {
+      return getApiUrl(selectedPdfViewerQuotation.quotation_file);
+    }
+    return getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${encodeURIComponent(selectedPdfViewerQuotation.id)}`);
+  }, [selectedPdfViewerQuotation?.id, selectedPdfViewerQuotation?.quotation_file]);
+
+  const pdfDownloadUrl = React.useMemo(() => {
+    if (!selectedPdfViewerQuotation) return '';
+    return getApiUrl(`/api_pdf.php?action=download&type=quotation&id=${encodeURIComponent(selectedPdfViewerQuotation.id)}`);
+  }, [selectedPdfViewerQuotation?.id]);
 
   // Send Confirmation Popup Modal State
   const [sendConfirmQuotation, setSendConfirmQuotation] = useState<Quotation | null>(null);
@@ -759,8 +778,8 @@ export const QuotationList: React.FC<QuotationListProps> = ({
         id: id,
         status: 'junk',
         action: 'delete',
-        user_name: 'Admin',
-        user_email: 'admin@abmalaya.com'
+        user_name: currentUserRef.current?.name || currentUserRef.current?.email || 'Admin',
+        user_email: currentUserRef.current?.email || 'admin@abmalaya.com'
       };
       return fetch(getApiUrl('/api_quotations.php'), {
         method: 'POST',
@@ -1741,33 +1760,43 @@ export const QuotationList: React.FC<QuotationListProps> = ({
       </div>
 
 
-      {/* HISTORY AUDIT TRAIL LOG MODAL */}
+      {/* HISTORY AUDIT TRAIL LOG MODAL (SLIDE-OUT DRAWER FROM RIGHT) */}
       {isHistoryModalOpen && selectedHistoryQuotation && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white border-2 border-[#7b7b7b] rounded-lg w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden font-sans">
+        <div 
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex justify-end z-50 transition-opacity duration-300 font-sans"
+          onClick={() => {
+            setIsHistoryModalOpen(false);
+            setSelectedHistoryQuotation(null);
+          }}
+        >
+          <div 
+            className="bg-white border-l-2 border-slate-700 w-full sm:w-[500px] max-w-[95vw] shadow-2xl flex flex-col h-screen overflow-hidden animate-slide-in-right"
+            onClick={(e) => e.stopPropagation()}
+          >
             
-            {/* Modal Header */}
-            <div className="bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] px-4 py-3 border-b border-[#7b7b7b] flex items-center justify-between">
+            {/* Drawer Header */}
+            <div className="bg-slate-900 text-white px-4 py-3 border-b border-slate-800 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
-                <History className="w-5 h-5 text-amber-600 animate-pulse" />
+                <History className="w-5 h-5 text-amber-400" />
                 <div>
-                  <h3 className="font-extrabold text-sm text-[#3d3d3d]">Quotation Audit Trail History</h3>
-                  <p className="text-[10px] text-slate-500 font-mono">SPH ID: {selectedHistoryQuotation.quotation_number}</p>
+                  <h3 className="font-extrabold text-xs text-white">Quotation Audit Trail History</h3>
+                  <p className="text-[10px] text-slate-400 font-mono">SPH ID: {selectedHistoryQuotation.quotation_number}</p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => {
                   setIsHistoryModalOpen(false);
                   setSelectedHistoryQuotation(null);
                 }}
-                className="p-1 hover:bg-rose-600 hover:text-white rounded-md transition text-slate-600 cursor-pointer"
+                className="p-1 hover:bg-rose-600 hover:text-white rounded-md transition text-slate-400 cursor-pointer"
               >
                 <CloseIcon className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Modal Body: Timeline */}
-            <div className="flex-1 p-4 overflow-y-auto bg-[#fafafa]">
+            {/* Drawer Body: Timeline */}
+            <div className="flex-1 p-4 overflow-y-auto bg-slate-50">
               {(() => {
                 let logs = [];
                 try {
@@ -1780,26 +1809,26 @@ export const QuotationList: React.FC<QuotationListProps> = ({
 
                 if (!Array.isArray(logs) || logs.length === 0) {
                   return (
-                    <div className="py-12 text-center text-slate-400 text-xs font-bold space-y-1">
-                      <Clock className="w-6 h-6 mx-auto text-slate-300 animate-bounce" />
-                      <p>No history trail recorded for this SPH quotation.</p>
+                    <div className="py-16 text-center text-slate-400 text-xs font-bold space-y-2">
+                      <Clock className="w-8 h-8 mx-auto text-slate-300" />
+                      <p>Belum ada rekaman audit trail / log perubahan untuk SPH ini.</p>
                     </div>
                   );
                 }
 
                 return (
-                  <div className="relative border-l-2 border-slate-300 ml-3 pl-6 space-y-5">
+                  <div className="relative border-l-2 border-amber-500/40 ml-3 pl-5 space-y-4">
                     {logs.map((log: any, idx: number) => (
                       <div key={idx} className="relative">
                         {/* Dot */}
-                        <div className="absolute -left-[31px] top-1 w-4 h-4 rounded-full border-2 border-amber-600 bg-white flex items-center justify-center">
-                          <div className="w-1.5 h-1.5 rounded-full bg-amber-600"></div>
+                        <div className="absolute -left-[27px] top-1.5 w-3.5 h-3.5 rounded-full border-2 border-amber-500 bg-white flex items-center justify-center">
+                          <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
                         </div>
 
                         {/* Event Content */}
-                        <div className="bg-white p-3 border border-[#d2d2d2] rounded-md shadow-xs flex flex-col gap-1.5">
+                        <div className="bg-white p-3 border border-slate-200 rounded-lg shadow-2xs flex flex-col gap-1.5">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                            <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-sm uppercase tracking-wider self-start sm:self-auto">
+                            <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black px-2 py-0.5 rounded-sm uppercase tracking-wider self-start sm:self-auto">
                               {log.action}
                             </span>
                             <span className="text-[10px] text-slate-500 font-mono font-bold">
@@ -1821,16 +1850,17 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               })()}
             </div>
 
-            {/* Modal Footer */}
-            <div className="bg-gradient-to-b from-[#fcfcfc] to-[#e1e1e1] px-4 py-2 border-t border-[#7b7b7b] text-right">
+            {/* Drawer Footer */}
+            <div className="bg-white border-t border-slate-200 p-3 flex items-center justify-end shrink-0">
               <button
+                type="button"
                 onClick={() => {
                   setIsHistoryModalOpen(false);
                   setSelectedHistoryQuotation(null);
                 }}
-                className="bg-gradient-to-b from-[#fafafa] to-[#eaeaea] text-[#3d3d3d] font-bold text-xs px-4 py-1.5 rounded border border-[#a0a0a0] hover:bg-[#e6e6e6] shadow-inner transition cursor-pointer"
+                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded cursor-pointer"
               >
-                Close View
+                Close History
               </button>
             </div>
 
@@ -2281,7 +2311,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                               {activeQuotation.quotation_file || activeQuotation.pdf_created === 1 ? (
                                 <div className="flex items-center justify-between gap-1">
                                   <a
-                                    href={activeQuotation.quotation_file || `/uploads/pdf/${activeQuotation.quotation_number || activeQuotation.id}.pdf`}
+                                    href={activeQuotation.quotation_file ? getApiUrl(activeQuotation.quotation_file) : getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${encodeURIComponent(activeQuotation.id)}`)}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="font-bold text-emerald-700 hover:underline flex items-center gap-1 font-mono text-[10px] truncate"
@@ -2322,16 +2352,6 @@ export const QuotationList: React.FC<QuotationListProps> = ({
 
                     {/* Unified Items Table (Combined SPH & AI OCR Extracted Items with Full Specification Columns) */}
                     <div className="pt-3 space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">Line Items Specification & Details</span>
-                        {activeQuotation.unregistered_items_count && activeQuotation.unregistered_items_count > 0 ? (
-                          <span className="bg-amber-100 text-amber-800 text-[9px] font-black px-1.5 py-0.5 rounded-sm flex items-center gap-0.5 border border-amber-300">
-                            <AlertTriangle className="w-3 h-3 text-amber-600" />
-                            <span>{activeQuotation.unregistered_items_count} Unregistered</span>
-                          </span>
-                        ) : null}
-                      </div>
-
                       {(() => {
                         let ocrItems: any[] = [];
                         if (activeQuotation.ocr_scan_result) {
@@ -2343,118 +2363,163 @@ export const QuotationList: React.FC<QuotationListProps> = ({
 
                         const hasSphItems = Array.isArray(activeQuotation.items_details) && activeQuotation.items_details.length > 0;
                         const displayItems = hasSphItems ? activeQuotation.items_details! : [];
+                        
+                        const unregCount = hasSphItems
+                          ? displayItems.filter(it => it.is_registered === false).length
+                          : (activeQuotation.unregistered_items_count ?? ocrItems.length);
 
                         return (
-                          <div className="border-t border-b border-slate-200 overflow-x-auto">
-                            <table className="w-full text-left text-[10px] font-sans border-collapse">
-                              <thead className="border-b border-slate-300 bg-slate-50 text-slate-500 font-bold uppercase tracking-wider">
-                                <tr>
-                                  <th className="py-2 px-2 text-center w-8">#</th>
-                                  <th className="py-2 px-2 text-center w-12">Photo</th>
-                                  <th className="py-2 px-2 w-28 font-mono">Part / IMPA Code</th>
-                                  <th className="py-2 px-2">Item Name (Description)</th>
-                                  <th className="py-2 px-2">Specification / Technical Details</th>
-                                  <th className="py-2 px-2 w-24">Supplier / Seller</th>
-                                  <th className="py-2 px-2 text-center w-16">Qty</th>
-                                  <th className="py-2 px-2 text-right w-24">Unit Price (MYR)</th>
-                                  <th className="py-2 px-2 text-center w-16">Disc (%)</th>
-                                  <th className="py-2 px-2 text-right w-24">Total Amount</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-100">
-                                {hasSphItems ? (
-                                  displayItems.map((item, idx) => (
-                                    <tr key={idx} className="hover:bg-slate-50">
-                                      <td className="py-2 px-2 text-center font-mono text-slate-400">{idx + 1}</td>
-                                      <td className="py-1 px-2 text-center">
-                                        {item.image_url ? (
-                                          <img src={item.image_url} alt="Photo" className="w-8 h-8 object-cover rounded border border-slate-200 mx-auto" />
-                                        ) : (
-                                          <div className="w-8 h-8 bg-slate-100 border border-slate-200 rounded mx-auto flex items-center justify-center text-slate-400 text-[8px]">
-                                            <ImageIcon className="w-3.5 h-3.5 opacity-40" />
-
-                                          </div>
-
-                                        )}
-                                      </td>
-                                      <td className="py-2 px-2 font-mono text-slate-700 font-bold">
-                                        <div>{item.product_code || '—'}</div>
-                                        {item.impa_code || item.category_code || activeQuotation.impa_code ? (
-                                          <span className="mt-0.5 bg-indigo-50 text-indigo-800 border border-indigo-200 font-extrabold px-1.5 py-0.5 rounded text-[8px] inline-flex items-center gap-1">
-                                            <span>🏷 IMPA {item.impa_code || item.category_code || activeQuotation.impa_code}</span>
-                                          </span>
-                                        ) : null}
-                                      </td>
-                                      <td className="py-2 px-2 font-bold text-slate-800">{item.description}</td>
-                                      <td className="py-2 px-2 text-slate-600 italic leading-snug">{item.specification || 'Standard specification'}</td>
-                                      <td className="py-2 px-2 font-mono text-[9px] text-slate-600">
-                                        {(item as any).supplier_name ? (
-                                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold px-1.5 py-0.5 rounded">
-                                            {(item as any).supplier_name}
-                                          </span>
-                                        ) : (
-                                          <span className="text-slate-400 italic">—</span>
-                                        )}
-                                      </td>
-                                      <td className="py-2 px-2 text-center font-mono font-bold">{item.quantity} {item.unit}</td>
-                                      <td className="py-2 px-2 text-right font-mono text-slate-600">{formatCurrency(item.unit_price || 0)}</td>
-                                      <td className="py-2 px-2 text-center font-mono text-rose-600">{item.discount_percent ? `${item.discount_percent}%` : '0%'}</td>
-                                      <td className="py-2 px-2 text-right font-mono font-extrabold text-slate-900">{formatCurrency(item.total)}</td>
-                                    </tr>
-                                  ))
-                                ) : ocrItems.length > 0 ? (
-                                  ocrItems.map((it: any, idx: number) => (
-                                    <tr key={idx} className="hover:bg-slate-50">
-                                      <td className="py-2 px-2 text-center font-mono text-slate-400">{idx + 1}</td>
-                                      <td className="py-1 px-2 text-center">
-                                        {it.image_url ? (
-                                          <img src={it.image_url} alt="Photo" className="w-8 h-8 object-cover rounded border border-slate-200 mx-auto" />
-                                        ) : (
-                                          <div className="w-8 h-8 bg-slate-100 border border-slate-200 rounded mx-auto flex items-center justify-center text-slate-400 text-[8px]">
-                                            <ImageIcon className="w-3.5 h-3.5 opacity-40" />
-
-                                          </div>
-
-                                        )}
-                                      </td>
-                                      <td className="py-2 px-2 font-mono text-slate-700 font-bold">
-                                        <div>{it.product_code || '—'}</div>
-                                        {it.impa_code || it.category_code || activeQuotation.impa_code ? (
-                                          <span className="mt-0.5 bg-indigo-50 text-indigo-800 border border-indigo-200 font-extrabold px-1.5 py-0.5 rounded text-[8px] inline-flex items-center gap-1">
-                                            <span>🏷 IMPA {it.impa_code || it.category_code || activeQuotation.impa_code}</span>
-                                          </span>
-                                        ) : null}
-                                      </td>
-                                      <td className="py-2 px-2 font-bold text-slate-800 flex items-center gap-1.5">
-                                        <span>{it.description || '—'}</span>
-                                        <span className="bg-blue-50 text-blue-700 text-[8px] font-bold px-1 rounded border border-blue-200">OCR</span>
-                                      </td>
-                                      <td className="py-2 px-2 text-slate-600 italic leading-snug">{it.specification || 'Extracted via Vision AI'}</td>
-                                      <td className="py-2 px-2 font-mono text-[9px] text-slate-600">
-                                        {it.supplier_name ? (
-                                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold px-1.5 py-0.5 rounded">
-                                            {it.supplier_name}
-                                          </span>
-                                        ) : (
-                                          <span className="text-slate-400 italic">—</span>
-                                        )}
-                                      </td>
-                                      <td className="py-2 px-2 text-center font-mono font-bold">{it.qty ?? 1} {it.unit || 'pcs'}</td>
-                                      <td className="py-2 px-2 text-right font-mono text-slate-600">{it.unit_price != null ? formatCurrency(it.unit_price) : '—'}</td>
-                                      <td className="py-2 px-2 text-center font-mono text-rose-600">{it.discount_percent != null ? `${it.discount_percent}%` : '—'}</td>
-                                      <td className="py-2 px-2 text-right font-mono font-extrabold text-slate-900">{it.total != null ? formatCurrency(it.total) : '—'}</td>
-                                    </tr>
-                                  ))
-                                ) : (
-                                  <tr>
-                                    <td colSpan={10} className="py-6 text-center text-slate-400 font-bold">No line items specified.</td>
-                                  </tr>
+                          <>
+                            <div className="flex flex-wrap justify-between items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">Line Items Specification & Details</span>
+                                {unregCount > 0 && (
+                                  <span className="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded border border-rose-300 flex items-center gap-1 shadow-2xs animate-pulse">
+                                    <AlertTriangle className="w-3 h-3 text-rose-600" />
+                                    <span>{unregCount} Unregistered Item{unregCount > 1 ? 's' : ''}</span>
+                                  </span>
                                 )}
+                              </div>
+                            </div>
 
-
-                              </tbody>
-                            </table>
-                          </div>
+                            <div className="border border-slate-200 rounded-md overflow-x-auto shadow-2xs">
+                              <table className="w-full text-left text-[10px] font-sans border-collapse">
+                                <thead className="border-b bg-slate-100 text-slate-700 font-bold uppercase tracking-wider border-slate-300">
+                                  <tr>
+                                    <th className="py-2.5 px-2.5 text-center w-8">#</th>
+                                    <th className="py-2.5 px-2 text-center w-12">Photo</th>
+                                    <th className="py-2.5 px-2 w-28 font-mono">Part / IMPA Code</th>
+                                    <th className="py-2.5 px-2">Item Name (Description)</th>
+                                    <th className="py-2.5 px-2">Specification / Technical Details</th>
+                                    <th className="py-2.5 px-2 w-24">Supplier / Seller</th>
+                                    <th className="py-2.5 px-2 text-center w-16">Qty</th>
+                                    <th className="py-2.5 px-2 text-right w-24">Unit Price (MYR)</th>
+                                    <th className="py-2.5 px-2 text-center w-16">Disc (%)</th>
+                                    <th className="py-2.5 px-2 text-right w-24">Total Amount</th>
+                                    <th className="py-2.5 px-2 text-center w-24">Catalog Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {hasSphItems ? (
+                                    displayItems.map((item, idx) => {
+                                      const isRegistered = item.is_registered === true;
+                                      return (
+                                        <tr 
+                                          key={idx} 
+                                          className={`transition-colors ${
+                                            isRegistered 
+                                              ? 'hover:bg-slate-50' 
+                                              : 'bg-rose-50/60 hover:bg-rose-100/70 border-l-4 border-l-rose-500'
+                                          }`}
+                                        >
+                                          <td className="py-2 px-2.5 text-center font-mono text-slate-400 font-bold">{idx + 1}</td>
+                                          <td className="py-1 px-2 text-center">
+                                            {item.image_url ? (
+                                              <img src={item.image_url} alt="Photo" className="w-8 h-8 object-cover rounded border border-slate-200 mx-auto" />
+                                            ) : (
+                                              <div className="w-8 h-8 bg-slate-100 border border-slate-200 rounded mx-auto flex items-center justify-center text-slate-400 text-[8px]">
+                                                <ImageIcon className="w-3.5 h-3.5 opacity-40" />
+                                              </div>
+                                            )}
+                                          </td>
+                                          <td className="py-2 px-2 font-mono text-slate-700 font-bold">
+                                            <div>{item.product_code || '—'}</div>
+                                            {item.impa_code || item.category_code || activeQuotation.impa_code ? (
+                                              <span className="mt-0.5 bg-indigo-50 text-indigo-800 border border-indigo-200 font-extrabold px-1.5 py-0.5 rounded text-[8px] inline-flex items-center gap-1">
+                                                <span>🏷 IMPA {item.impa_code || item.category_code || activeQuotation.impa_code}</span>
+                                              </span>
+                                            ) : null}
+                                          </td>
+                                          <td className="py-2 px-2 font-bold text-slate-800">
+                                            {item.description}
+                                          </td>
+                                          <td className="py-2 px-2 text-slate-600 italic leading-snug">{item.specification || 'Standard specification'}</td>
+                                          <td className="py-2 px-2 font-mono text-[9px] text-slate-600">
+                                            {(item as any).supplier_name ? (
+                                              <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold px-1.5 py-0.5 rounded">
+                                                {(item as any).supplier_name}
+                                              </span>
+                                            ) : (
+                                              <span className="text-slate-400 italic">—</span>
+                                            )}
+                                          </td>
+                                          <td className="py-2 px-2 text-center font-mono font-bold">{item.quantity} {item.unit}</td>
+                                          <td className="py-2 px-2 text-right font-mono text-slate-600">{formatCurrency(item.unit_price || 0)}</td>
+                                          <td className="py-2 px-2 text-center font-mono text-rose-600">{item.discount_percent ? `${item.discount_percent}%` : '0%'}</td>
+                                          <td className="py-2 px-2 text-right font-mono font-extrabold text-slate-900">{formatCurrency(item.total)}</td>
+                                          <td className="py-2 px-2 text-center">
+                                            {isRegistered ? (
+                                              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-[8px] px-1.5 py-0.5 rounded inline-flex items-center gap-0.5">
+                                                <span>✓</span>
+                                                <span>Registered</span>
+                                              </span>
+                                            ) : (
+                                              <span className="bg-rose-100 text-rose-800 border border-rose-300 font-bold text-[8px] px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 shadow-2xs whitespace-nowrap">
+                                                <span>⚠️</span>
+                                                <span>Unregistered</span>
+                                              </span>
+                                            )}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })
+                                  ) : ocrItems.length > 0 ? (
+                                    ocrItems.map((it: any, idx: number) => (
+                                      <tr key={idx} className="bg-amber-50/50 hover:bg-amber-100/60 border-l-4 border-l-amber-500 transition-colors">
+                                        <td className="py-2 px-2.5 text-center font-mono text-amber-700 font-bold">{idx + 1}</td>
+                                        <td className="py-1 px-2 text-center">
+                                          {it.image_url ? (
+                                            <img src={it.image_url} alt="Photo" className="w-8 h-8 object-cover rounded border border-amber-200 mx-auto" />
+                                          ) : (
+                                            <div className="w-8 h-8 bg-amber-100/60 border border-amber-200 rounded mx-auto flex items-center justify-center text-amber-500 text-[8px]">
+                                              <ImageIcon className="w-3.5 h-3.5 opacity-60" />
+                                            </div>
+                                          )}
+                                        </td>
+                                        <td className="py-2 px-2 font-mono text-slate-700 font-bold">
+                                          <div>{it.product_code || '—'}</div>
+                                          {it.impa_code || it.category_code || activeQuotation.impa_code ? (
+                                            <span className="mt-0.5 bg-indigo-50 text-indigo-800 border border-indigo-200 font-extrabold px-1.5 py-0.5 rounded text-[8px] inline-flex items-center gap-1">
+                                              <span>🏷 IMPA {it.impa_code || it.category_code || activeQuotation.impa_code}</span>
+                                            </span>
+                                          ) : null}
+                                        </td>
+                                        <td className="py-2 px-2 font-bold text-slate-900">
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span>{it.description || '—'}</span>
+                                            <span className="bg-blue-100 text-blue-800 text-[8px] font-black px-1.5 py-0.2 rounded border border-blue-300">OCR</span>
+                                          </div>
+                                        </td>
+                                        <td className="py-2 px-2 text-slate-700 italic leading-snug">{it.specification || 'Extracted via Vision AI'}</td>
+                                        <td className="py-2 px-2 font-mono text-[9px] text-slate-600">
+                                          {it.supplier_name ? (
+                                            <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold px-1.5 py-0.5 rounded">
+                                              {it.supplier_name}
+                                            </span>
+                                          ) : (
+                                            <span className="text-slate-400 italic">—</span>
+                                          )}
+                                        </td>
+                                        <td className="py-2 px-2 text-center font-mono font-bold text-amber-900">{it.qty ?? 1} {it.unit || 'pcs'}</td>
+                                        <td className="py-2 px-2 text-right font-mono font-bold text-amber-900">{it.unit_price != null ? formatCurrency(it.unit_price) : '—'}</td>
+                                        <td className="py-2 px-2 text-center font-mono text-rose-600">{it.discount_percent != null ? `${it.discount_percent}%` : '—'}</td>
+                                        <td className="py-2 px-2 text-right font-mono font-extrabold text-amber-950">{it.total != null ? formatCurrency(it.total) : '—'}</td>
+                                        <td className="py-2 px-2 text-center">
+                                          <span className="bg-amber-100 text-amber-950 border border-amber-300 font-bold text-[8px] px-1.5 py-0.5 rounded shadow-2xs whitespace-nowrap">
+                                            ⚠️ Draft OCR
+                                          </span>
+                                        </td>
+                                      </tr>
+                                    ))
+                                  ) : (
+                                    <tr>
+                                      <td colSpan={11} className="py-6 text-center text-slate-400 font-bold">No line items specified.</td>
+                                    </tr>
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          </>
                         );
                       })()}
                     </div>
@@ -3241,23 +3306,41 @@ onClick={() => {
               <div className="flex items-center gap-2">
                 <FileType className="w-4 h-4 text-blue-400" />
                 <h3 className="font-extrabold text-xs">
-                  PDF Preview — {selectedPdfViewerQuotation.quotation_number || selectedPdfViewerQuotation.id}
+                  Quotation Preview — {selectedPdfViewerQuotation.quotation_number || selectedPdfViewerQuotation.id}
                 </h3>
               </div>
               <div className="flex items-center gap-2">
+                {/* View Mode Toggle */}
+                <div className="bg-slate-800 p-0.5 rounded border border-slate-700 flex items-center gap-0.5 text-[10px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setPdfViewerMode('doc')}
+                    className={`px-2 py-0.5 rounded transition ${pdfViewerMode === 'doc' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    Doc View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPdfViewerMode('pdf')}
+                    className={`px-2 py-0.5 rounded transition ${pdfViewerMode === 'pdf' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    PDF Stream
+                  </button>
+                </div>
+
                 <a
-                  href={getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${selectedPdfViewerQuotation.id}&t=${Date.now()}`)}
+                  href={pdfViewerMode === 'doc' ? pdfDocUrl : pdfStreamUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-[11px] rounded transition flex items-center gap-1"
-                  title="Open PDF stream in new browser tab"
+                  title="Open preview in new browser tab"
                 >
                   <ExternalLink className="w-3.5 h-3.5 text-white" />
-                  <span>Open in New Tab ↗</span>
+                  <span>Open in Tab ↗</span>
                 </a>
 
                 <a
-                  href={getApiUrl(`/api_pdf.php?action=download&type=quotation&id=${selectedPdfViewerQuotation.id}&t=${Date.now()}`)}
+                  href={pdfDownloadUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] rounded transition flex items-center gap-1"
@@ -3275,11 +3358,11 @@ onClick={() => {
                 </button>
               </div>
             </div>
-            <div className="flex-1 bg-slate-100 relative">
+            <div className="flex-1 bg-slate-100 relative w-full h-full">
               <iframe
-                src={getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${selectedPdfViewerQuotation.id}&t=${Date.now()}`)}
+                src={pdfViewerMode === 'doc' ? pdfDocUrl : pdfStreamUrl}
                 className="w-full h-full border-0"
-                title={`PDF Preview ${selectedPdfViewerQuotation.id}`}
+                title={`Preview ${selectedPdfViewerQuotation.id}`}
               />
             </div>
           </div>

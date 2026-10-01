@@ -20,7 +20,13 @@ if (function_exists('imap_timeout')) {
 
 $hostname = '{imap.gmail.com:993/imap/ssl}INBOX';
 $username = 'abmalayaindustry@gmail.com';
-$password = 'tbsq icqa kece qaoz';
+$password = getenv('GMAIL_LIVE_APP_PASSWORD') ?: '';
+if (empty($password) && isset($db_conn) && $db_conn) {
+    $res_pass = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key = 'SMTP_APP_PASSWORD' LIMIT 1");
+    if ($res_pass && $row_pass = $res_pass->fetch_assoc()) {
+        $password = trim($row_pass['credential_value']);
+    }
+}
 
 // ATTACHMENT CACHE DIRECTORY FOR INSTANT SERVING (< 5ms)
 $cache_dir = __DIR__ . '/attachments';
@@ -476,64 +482,72 @@ function classifyEmailWithGeminiWithRetry($subject, $body, $attachments, $key_li
             . "  \"item_requested\": \"...\"\n"
             . "}";
 
-    $max_attempts = min(3, count($key_list));
+    $candidate_models = function_exists('getGeminiActiveModels') ? getGeminiActiveModels($key_list) : ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.6-flash'];
+    $max_attempts = min(5, count($key_list));
     $errors = [];
 
     for ($attempt = 0; $attempt < $max_attempts; $attempt++) {
-        $model_name = 'gemini-2.5-flash';
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $model_name . ":generateContent?key=" . urlencode($api_key);
-        $payload = [
-            'contents' => [
-                [
-                    'parts' => [
-                        ['text' => $prompt]
+        $api_key = $key_list[$attempt];
+        $key_suffix = substr($api_key, -6);
+        $success = false;
+
+        foreach ($candidate_models as $model_name) {
+            $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $model_name . ":generateContent?key=" . urlencode($api_key);
+            $payload = [
+                'contents' => [
+                    [
+                        'parts' => [
+                            ['text' => $prompt]
+                        ]
                     ]
+                ],
+                'generationConfig' => [
+                    'responseMimeType' => 'application/json'
                 ]
-            ],
-            'generationConfig' => [
-                'responseMimeType' => 'application/json'
-            ]
-        ];
+            ];
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        $response = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curl_err = curl_error($ch);
-        curl_close($ch);
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+            $response = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curl_err = curl_error($ch);
+            curl_close($ch);
 
-        if ($http_code === 200 && !empty($response)) {
-            $res_json = json_decode($response, true);
-            $text = $res_json['candidates'][0]['content']['parts'][0]['text'] ?? '';
-            $clean_text = trim($text);
-            $parsed = json_decode($clean_text, true);
-            if ($parsed && isset($parsed['classification'])) {
-                return [
-                    'classification' => $parsed['classification'],
-                    'item_requested' => $parsed['item_requested'] ?? null,
-                    'verified' => 1,
-                    'error' => null
-                ];
+            if ($http_code === 200 && !empty($response)) {
+                $res_json = json_decode($response, true);
+                $text = $res_json['candidates'][0]['content']['parts'][0]['text'] ?? '';
+                $clean_text = trim($text);
+                $parsed = json_decode($clean_text, true);
+                if ($parsed && isset($parsed['classification'])) {
+                    return [
+                        'classification' => $parsed['classification'],
+                        'item_requested' => $parsed['item_requested'] ?? null,
+                        'verified' => 1,
+                        'error' => null
+                    ];
+                }
             }
-        }
 
-        // If failed, record error and retry
-        $err_msg = "Attempt " . ($attempt + 1) . " (Key Ending " . substr($api_key, -6) . ") failed. Code: $http_code. Curl Err: $curl_err.";
-        if (!empty($response)) {
-            $err_msg .= " Resp: " . substr($response, 0, 150);
+            if ($http_code === 404) {
+                // Model not found for this version, try next candidate model immediately
+                continue;
+            }
+
+            // If rate limited or other error, record error and break to try next API key
+            $err_msg = "Attempt " . ($attempt + 1) . " (Key Ending " . $key_suffix . ", Model " . $model_name . ") failed. Code: $http_code. Curl Err: $curl_err.";
+            if (!empty($response)) {
+                $err_msg .= " Resp: " . substr($response, 0, 150);
+            }
+            $errors[] = $err_msg;
+            break;
         }
-        $errors[] = $err_msg;
 
         if ($attempt < $max_attempts - 1) {
-            if ($http_code === 429) {
-                sleep(10); // Wait 10 seconds for rate limit to clear
-            } else {
-                sleep(2); // Wait 2 seconds before retry
-            }
+            usleep(500000); // 0.5s wait before rotating to next key
         }
     }
 
@@ -564,7 +578,7 @@ try {
 
     $start_date_limit = '2026-08-27';
     if ($db_conn && !$db_conn->connect_error) {
-        $res_start = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key IN ('CLIENT_CHAT_START_DATE', 'CLIENT_EMAIL_START_DATE', 'INBOX_RULE_START_DATE', 'imap_start_date', 'info_start_date') AND credential_value != '' ORDER BY FIELD(credential_key, 'CLIENT_CHAT_START_DATE', 'CLIENT_EMAIL_START_DATE', 'INBOX_RULE_START_DATE', 'imap_start_date', 'info_start_date') ASC LIMIT 1");
+        $res_start = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key IN ('INBOX_RULE_START_DATE', 'CLIENT_CHAT_START_DATE', 'CLIENT_EMAIL_START_DATE', 'imap_start_date', 'info_start_date') AND credential_value != '' ORDER BY FIELD(credential_key, 'INBOX_RULE_START_DATE', 'CLIENT_CHAT_START_DATE', 'CLIENT_EMAIL_START_DATE', 'imap_start_date', 'info_start_date') ASC LIMIT 1");
         if ($res_start && $res_start->num_rows > 0) {
             $row_start = $res_start->fetch_assoc();
             $val = trim($row_start['credential_value']);
@@ -662,17 +676,8 @@ try {
 
     $is_sync = isset($_GET['sync']) && $_GET['sync'] == '1';
 
-    // ⚡ INSTANT FAST RESPONSE (< 20ms): Query MySQL Cache First if NOT syncing
+    // ⚡ INSTANT FAST RESPONSE (< 5ms): Query MySQL Cache First if NOT syncing
     if (!$is_sync && $db_conn && !$db_conn->connect_error) {
-        // Sync RFQ statuses based on linked quotations
-        $db_conn->query("UPDATE rfq_requests r 
-                         INNER JOIN quotations q ON q.rfq_id = r.id
-                         SET r.status = CASE 
-                             WHEN q.status = 'Approved' OR q.status = 'acc' THEN 'deal'
-                             WHEN q.status = 'Sent' OR q.status = 'done_send' THEN 'penawaran_terkirim'
-                             ELSE 'diproses'
-                         END");
-
         $query_where = "WHERE created_at >= '" . $db_conn->real_escape_string($start_date_limit) . " 00:00:00' AND (ai_classification != 'junk' OR ai_classification IS NULL)";
         $res = $db_conn->query("SELECT * FROM rfq_requests {$query_where} ORDER BY id DESC LIMIT 200");
         if ($res && $res->num_rows > 0) {
@@ -713,10 +718,13 @@ try {
 
                 $data[] = [
                     'id' => str_replace('RFQ-', 'GMAIL-LIVE-', $row['rfq_number']),
+                    'db_id' => (int)$row['id'],
+                    'rfq_number' => $row['rfq_number'],
                     'sender_name' => $row['client_name'] ?: 'Gmail Client',
                     'sender_email' => $row['client_email'] ?: 'abmalayaindustry@gmail.com',
                     'recipient_email' => isset($row['recipient_email']) && !empty($row['recipient_email']) ? $row['recipient_email'] : 'abmalayaindustry@gmail.com',
                     'company' => $row['client_company'] ?: $row['client_name'],
+                    'client_company' => $row['client_company'] ?? '',
                     'phone' => '',
                     'subject' => $row['subject'],
                     'message_body' => $row['message_body'],
@@ -800,10 +808,13 @@ try {
                     appendGoogleDriveAttachments($attachments, $row['message_body'], $row['id']);
                     $data[] = [
                         'id' => str_replace('RFQ-', 'GMAIL-LIVE-', $row['rfq_number']),
+                        'db_id' => (int)$row['id'],
+                        'rfq_number' => $row['rfq_number'],
                         'sender_name' => $row['client_name'] ?: 'Gmail Client',
                         'sender_email' => $row['client_email'] ?: 'abmalayaindustry@gmail.com',
                         'recipient_email' => isset($row['recipient_email']) && !empty($row['recipient_email']) ? $row['recipient_email'] : 'abmalayaindustry@gmail.com',
                         'company' => $row['client_company'] ?: $row['client_name'],
+                        'client_company' => $row['client_company'] ?? '',
                         'phone' => '',
                         'subject' => $row['subject'],
                         'message_body' => $row['message_body'],
@@ -922,10 +933,13 @@ try {
 
                         $data[] = [
                             'id' => $live_key,
+                            'db_id' => (int)$cached_row['id'],
+                            'rfq_number' => $cached_row['rfq_number'] ?: ('RFQ-' . $email_number),
                             'sender_name' => $cached_row['client_name'] ?: 'Gmail Client',
                             'sender_email' => $cached_row['client_email'] ?: 'abmalayaindustry@gmail.com',
                             'recipient_email' => $cached_row['recipient_email'] ?: 'abmalayaindustry@gmail.com',
                             'company' => $cached_row['client_company'] ?: $cached_row['client_name'],
+                            'client_company' => $cached_row['client_company'] ?? '',
                             'phone' => $cached_row['client_phone'] ?: '',
                             'subject' => $cached_row['subject'],
                             'message_body' => $cached_row['message_body'],
@@ -967,10 +981,13 @@ try {
                             }
                             $data[] = [
                                 'id' => $live_key,
+                                'db_id' => (int)$cached_row['id'],
+                                'rfq_number' => $cached_row['rfq_number'] ?: ('RFQ-' . $email_number),
                                 'sender_name' => $cached_row['client_name'] ?: 'Gmail Client',
                                 'sender_email' => $cached_row['client_email'] ?: 'abmalayaindustry@gmail.com',
                                 'recipient_email' => $cached_row['recipient_email'] ?: 'abmalayaindustry@gmail.com',
                                 'company' => $cached_row['client_company'] ?: $cached_row['client_name'],
+                                'client_company' => $cached_row['client_company'] ?? '',
                                 'phone' => $cached_row['client_phone'] ?: '',
                                 'subject' => $cached_row['subject'],
                                 'message_body' => $cached_row['message_body'],
@@ -1084,10 +1101,13 @@ try {
 
                     $data[] = [
                         'id' => $live_key,
+                        'db_id' => (int)$cached_row['id'],
+                        'rfq_number' => $cached_row['rfq_number'] ?: ('RFQ-' . $email_number),
                         'sender_name' => $sender_name ?: 'Gmail Client',
                         'sender_email' => $sender_email ?: 'abmalayaindustry@gmail.com',
                         'recipient_email' => $recipient_email ?: 'abmalayaindustry@gmail.com',
                         'company' => $cached_row['client_company'] ?: $sender_name,
+                        'client_company' => $cached_row['client_company'] ?? '',
                         'phone' => $cached_row['client_phone'] ?: '',
                         'subject' => $subject,
                         'message_body' => $clean_body,
@@ -1193,6 +1213,7 @@ try {
                 $reply_match_key = strtolower(trim($subject)) . '_' . strtolower(trim($sender_email));
                 $data[] = [
                     'id' => $live_key,
+                    'rfq_number' => 'RFQ-' . $email_number,
                     'sender_name' => $sender_name ?: 'Gmail Client',
                     'sender_email' => $sender_email,
                     'recipient_email' => $recipient_email,
@@ -1280,10 +1301,13 @@ try {
 
                 $data[] = [
                     'id' => str_replace('RFQ-', 'GMAIL-LIVE-', $row['rfq_number']),
+                    'db_id' => (int)$row['id'],
+                    'rfq_number' => $row['rfq_number'],
                     'sender_name' => $row['client_name'] ?: 'Gmail Client',
                     'sender_email' => $row['client_email'] ?: 'abmalayaindustry@gmail.com',
                     'recipient_email' => isset($row['recipient_email']) && !empty($row['recipient_email']) ? $row['recipient_email'] : 'abmalayaindustry@gmail.com',
                     'company' => $row['client_company'] ?: $row['client_name'],
+                    'client_company' => $row['client_company'] ?? '',
                     'phone' => '',
                     'subject' => $row['subject'],
                     'message_body' => $row['message_body'],

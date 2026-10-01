@@ -16,10 +16,12 @@ export interface EmailAttachment {
 
 export interface RFQ {
   id: string;
+  db_id?: number | string;
   rfq_number?: string;
   sender_name: string;
   sender_email: string;
   company: string;
+  client_company?: string;
   phone?: string;
   subject: string;
   message_body: string;
@@ -52,6 +54,8 @@ export interface QuotationItem {
   image_url?: string;
   item_code?: string;
   qty?: number;
+  is_registered?: boolean;
+  in_master_product?: boolean;
 }
 
 
@@ -103,6 +107,7 @@ export interface Quotation {
   approved_by?: string | null; // JSON string — array of approval entries
   category_name?: string | null;
   impa_code?: string | null;
+  footer_text?: string;
 }
 
 
@@ -158,6 +163,7 @@ export interface Invoice {
   bank_account_name?: string;
   bank_email?: string;
   notes?: string;
+  footer_text?: string;
   status: InvoiceStatus;
   created_by?: string;
   created_at?: string;
@@ -173,6 +179,8 @@ export interface UserAccount {
   department: string;
   status: 'Active' | 'Inactive';
   created_at: string;
+  password?: string;
+  has_custom_password?: boolean;
 }
 
 export interface SMTPConfig {
@@ -185,4 +193,13 @@ export interface SMTPConfig {
   from_email: string;
   is_connected: boolean;
   email?: string;
+}
+
+export interface ActivityLog {
+  id: string;
+  user_name: string;
+  user_email: string;
+  action: string;
+  details: string;
+  created_at: string;
 }

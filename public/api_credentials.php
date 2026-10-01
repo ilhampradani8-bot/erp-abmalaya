@@ -125,8 +125,9 @@ if ($method === 'POST') {
     }
 
     // Support Batch Save
-    if (isset($input['action']) && $input['action'] === 'save_batch' && isset($input['items']) && is_array($input['items'])) {
+    if ((isset($input['action']) && $input['action'] === 'save_batch') || (isset($input['items']) && is_array($input['items']))) {
         $stmt = $connection->prepare("INSERT INTO api_credentials (credential_key, credential_value, service_name) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE credential_value = VALUES(credential_value), service_name = VALUES(service_name)");
+        $saved_count = 0;
         foreach ($input['items'] as $item) {
             $k = isset($item['credential_key']) ? trim($item['credential_key']) : '';
             $v = isset($item['credential_value']) ? trim($item['credential_value']) : '';
@@ -134,6 +135,7 @@ if ($method === 'POST') {
             if (!empty($k)) {
                 $stmt->bind_param("sss", $k, $v, $s);
                 $stmt->execute();
+                $saved_count++;
             }
         }
         $stmt->close();
@@ -141,7 +143,7 @@ if ($method === 'POST') {
         ob_end_clean();
         echo json_encode([
             'status' => 'success',
-            'message' => 'Batch settings saved successfully to MySQL database!'
+            'message' => "Batch settings ({$saved_count} items) saved successfully to MySQL database!"
         ]);
         exit;
     }

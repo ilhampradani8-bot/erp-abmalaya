@@ -37,15 +37,18 @@ if (empty($id)) {
 // 1. Resolve Document Ref No / Filename
 $refNo = 'DOC-' . time();
 if ($type === 'invoice') {
-    $stmt = $connection->prepare("SELECT invoice_number FROM invoices WHERE id = ? OR invoice_number = ? LIMIT 1");
+    $stmt = $connection->prepare("SELECT invoice_number FROM invoices WHERE id = ? OR invoice_number = ? OR quotation_id = ? LIMIT 1");
     if ($stmt) {
-        $stmt->bind_param("ss", $id, $id);
+        $stmt->bind_param("sss", $id, $id, $id);
         $stmt->execute();
         $r = $stmt->get_result();
         if ($r && $row = $r->fetch_assoc()) {
             if (!empty($row['invoice_number'])) $refNo = $row['invoice_number'];
         }
         $stmt->close();
+    }
+    if ($refNo === ('DOC-' . time()) && strpos($id, 'ABM/INV') !== false) {
+        $refNo = $id;
     }
 } else {
     $stmt = $connection->prepare("SELECT quotation_number FROM quotations WHERE id = ? OR quotation_number = ? LIMIT 1");
@@ -76,9 +79,8 @@ $host = $_SERVER['HTTP_HOST'] ?? '127.0.0.1:8000';
 // If running locally or on server port 8000
 $targetViewUrl = "http://127.0.0.1:8000/view_doc.php?type=" . urlencode($type) . "&id=" . urlencode($id);
 
-$force = (isset($_GET['force']) && $_GET['force'] === '1') || (isset($_POST['force']) && $_POST['force'] === '1') || $action === 'recreate';
-$fileAge = file_exists($pdfPath) ? (time() - filemtime($pdfPath)) : 9999;
-$shouldGenerate = $force || !file_exists($pdfPath) || filesize($pdfPath) < 500 || $fileAge > 5;
+$force = (isset($_GET['force']) && $_GET['force'] === '1') || (isset($_POST['force']) && $_POST['force'] === '1') || $action === 'recreate' || $action === 'stream' || isset($_GET['t']);
+$shouldGenerate = $force || !file_exists($pdfPath) || filesize($pdfPath) < 500;
 
 if ($shouldGenerate) {
     // Execute Puppeteer Headless Chrome script

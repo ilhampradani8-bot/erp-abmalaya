@@ -72,47 +72,26 @@ if (!fs.existsSync(dir)) {
         const page = await browser.newPage();
         
         if (htmlContent && htmlContent.includes('<html')) {
-            await page.setContent(htmlContent, { waitUntil: ['domcontentloaded', 'networkidle0'] });
+            await page.setContent(htmlContent, { waitUntil: 'domcontentloaded' });
         } else {
-            await page.goto(targetUrl, { waitUntil: 'networkidle0', timeout: 30000 });
+            await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
         }
 
-        // Extract branding info for native Puppeteer header and footer templates
-        const branding = await page.evaluate(() => {
-            const logoImg = document.querySelector('.logo-box img') || document.querySelector('.footer-logo-row img');
-            const logoUrl = logoImg ? logoImg.src : '';
-            return {
-                logoUrl: logoUrl,
-                companyName: 'AB MALAYA SDN. BHD.',
-                companyAddress: '2-2-40, 2nd Floor Wisma Rampai, Jalan 34/26, Taman Sri Rampai, 53300 Kuala Lumpur.',
-                email: 'sales@abmalaya.com',
-                phone: '+60 3-8000 1234',
-                website: 'abmalaya.com'
-            };
-        });
-
-        const headerTemplate = `<div></div>`;
-
-        const footerTemplate = `
-            <div style="font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; font-size: 8px; font-weight: 700; width: 100%; margin: 0 8mm; display: flex; justify-content: flex-end; align-items: center; color: #475569; -webkit-print-color-adjust: exact;">
-                <div>
-                    Halaman <span class="pageNumber"></span> dari <span class="totalPages"></span>
-                </div>
-            </div>
-        `;
+        // Wait for all fonts and images to be fully rendered
+        try {
+            await page.evaluateHandle('document.fonts.ready');
+        } catch (e) {}
 
         await page.pdf({
             path: outputPath,
-            format: 'A4',
             printBackground: true,
-            displayHeaderFooter: true,
-            headerTemplate: headerTemplate,
-            footerTemplate: footerTemplate,
+            preferCSSPageSize: true,
+            displayHeaderFooter: false,
             margin: {
-                top: '6mm',
-                bottom: '10mm',
-                left: '6mm',
-                right: '6mm'
+                top: '0px',
+                bottom: '0px',
+                left: '0px',
+                right: '0px'
             }
         });
 

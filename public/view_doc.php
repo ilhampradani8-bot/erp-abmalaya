@@ -135,7 +135,27 @@ if ($type === 'invoice') {
         }
         $stmt->close();
     }
-    // Fallback: If no dedicated invoice record found, load quotation and render as Invoice automatically
+    
+    // Fallback 1: Search by suffix (e.g., /205 or 205)
+    if (!$doc && strpos($id, '/') !== false) {
+        $parts = explode('/', $id);
+        $suffix = end($parts);
+        if (!empty($suffix)) {
+            $stmtLike = $connection->prepare("SELECT * FROM invoices WHERE invoice_number LIKE ? OR quotation_id LIKE ? LIMIT 1");
+            if ($stmtLike) {
+                $likeParam = '%' . $suffix;
+                $stmtLike->bind_param("ss", $likeParam, $likeParam);
+                $stmtLike->execute();
+                $rLike = $stmtLike->get_result();
+                if ($rLike && $rowLike = $rLike->fetch_assoc()) {
+                    $doc = $rowLike;
+                }
+                $stmtLike->close();
+            }
+        }
+    }
+
+    // Fallback 2: If no dedicated invoice record found, load quotation and render as Invoice automatically
     if (!$doc) {
         $stmtQ = $connection->prepare("SELECT * FROM quotations WHERE id = ? OR quotation_number = ? LIMIT 1");
         if ($stmtQ) {
@@ -144,12 +164,38 @@ if ($type === 'invoice') {
             $rQ = $stmtQ->get_result();
             if ($rQ && $rowQ = $rQ->fetch_assoc()) {
                 $doc = $rowQ;
-                $doc['invoice_number'] = 'ABM/INV/' . date('Ymd') . '/' . ($doc['quotation_number'] ?? $doc['id']);
+                $doc['invoice_number'] = strpos($id, 'ABM/INV') !== false ? $id : ('ABM/INV/' . date('Ymd') . '/' . ($doc['quotation_number'] ?? $doc['id']));
                 $doc['invoice_date'] = date('Y-m-d');
                 $doc['due_date'] = date('Y-m-d', strtotime('+14 days'));
             }
             $stmtQ->close();
         }
+    }
+
+    // Fallback 3: Create live draft document object if not yet saved in DB
+    if (!$doc) {
+        $doc = [
+            'id' => $id,
+            'invoice_number' => strpos($id, 'ABM/INV') !== false ? $id : 'ABM/INV/' . date('Ymd') . '/' . rand(100, 999),
+            'client_name' => 'Valued Client',
+            'client_email' => 'client@abmalaya.com',
+            'client_phone' => '+60 3-8000 1234',
+            'company_name' => 'Client Company Sdn Bhd',
+            'billing_address' => 'Kuala Lumpur, Malaysia',
+            'delivery_company' => 'Client Warehouse',
+            'delivery_address' => 'Kuala Lumpur, Malaysia',
+            'date_issued' => date('Y-m-d'),
+            'invoice_date' => date('Y-m-d'),
+            'due_date' => date('Y-m-d', strtotime('+14 days')),
+            'subtotal' => 0.00,
+            'discount_total' => 0.00,
+            'tax_percent' => 11.00,
+            'tax_amount' => 0.00,
+            'grand_total' => 0.00,
+            'notes' => "1. Please make all payment crossed & payable to: PUBLIC BANK (3818192115)\n2. Payment terms: Net 14 days upon receipt.",
+            'status' => 'unpaid',
+            'created_by' => 'Muhammad Aimanuddin Bin Mohd Zaki'
+        ];
     }
 } else {
     $stmt = $connection->prepare("SELECT * FROM quotations WHERE id = ? OR quotation_number = ? LIMIT 1");
@@ -282,6 +328,12 @@ $companyEmail = !empty($activeSettings['email']) ? $activeSettings['email'] : 's
 $companyWebsite = !empty($activeSettings['website']) ? $activeSettings['website'] : 'abmalaya.com';
 $tableHeaderBg = !empty($activeSettings['table_header_bg']) ? $activeSettings['table_header_bg'] : '#0070c0';
 
+$footerText = !empty($doc['footer_text']) 
+    ? trim($doc['footer_text']) 
+    : (!empty($activeSettings['footer_text']) 
+        ? trim($activeSettings['footer_text']) 
+        : "$companyEmail, $companyPhone, $companyWebsite");
+
 $mTop = (int)($activeSettings['margin_top'] ?: 6);
 $mBot = (int)($activeSettings['margin_bottom'] ?: 6);
 $mLeft = (int)($activeSettings['margin_left'] ?: 6);
@@ -297,6 +349,9 @@ if (!empty($activeSettings['layout_offsets'])) {
 
 $logoOffsets = ($type === 'invoice') ? ($layoutOffsets['invoice_logo'] ?? []) : ($layoutOffsets['header_logo'] ?? []);
 $addrOffsets = ($type === 'invoice') ? ($layoutOffsets['invoice_address'] ?? []) : ($layoutOffsets['header_address'] ?? []);
+$titleOffsets = ($type === 'invoice') ? ($layoutOffsets['invoice_title'] ?? []) : [];
+$toAddrOffsets = ($type === 'invoice') ? ($layoutOffsets['invoice_to_address'] ?? []) : [];
+$metaOffsets = ($type === 'invoice') ? ($layoutOffsets['invoice_meta'] ?? []) : [];
 
 $logoX = intval($logoOffsets['x'] ?? 0);
 $logoY = intval($logoOffsets['y'] ?? 0);
@@ -305,6 +360,15 @@ if ($logoScale <= 0) $logoScale = 1.0;
 
 $addrX = intval($addrOffsets['x'] ?? 0);
 $addrY = intval($addrOffsets['y'] ?? 0);
+
+$titleX = intval($titleOffsets['x'] ?? 0);
+$titleY = intval($titleOffsets['y'] ?? 0);
+
+$toAddrX = intval($toAddrOffsets['x'] ?? 0);
+$toAddrY = intval($toAddrOffsets['y'] ?? 0);
+
+$metaX = intval($metaOffsets['x'] ?? 0);
+$metaY = intval($metaOffsets['y'] ?? 0);
 
 function clean_email_str($emailRaw) {
     if (empty($emailRaw)) return '';
@@ -332,8 +396,18 @@ $clientName = $doc['client_name'] ?? $doc['customer_name'] ?? $doc['contact_pers
 $clientCompany = $doc['company_name'] ?? $doc['client_company'] ?? '';
 $clientEmail = clean_email_str($doc['client_email'] ?? $doc['customer_email'] ?? '');
 $clientPhone = $doc['client_phone'] ?? $doc['customer_phone'] ?? $doc['phone'] ?? '';
-$createdBy = (!empty($doc['created_by']) && trim($doc['created_by']) !== '') ? trim($doc['created_by']) : (!empty($activeSettings['authorised_by_name']) ? $activeSettings['authorised_by_name'] : 'Muhammad Aimanuddin Bin Mohd Zaki');
-$docNotes = !empty($doc['notes']) ? $doc['notes'] : ($activeSettings['footer_terms'] ?? $activeSettings['default_notes']);
+if ($type === 'invoice') {
+    $docNotes = !empty($doc['notes']) ? $doc['notes'] : (!empty($activeSettings['remarks_text']) ? $activeSettings['remarks_text'] : "1. Please make all payment crossed & payable to: " . ($activeSettings['bank_name'] ?? 'PUBLIC BANK') . "; " . ($activeSettings['bank_account_number'] ?? '3818192115') . " (" . ($activeSettings['bank_account_name'] ?? 'AB MALAYA INDUSTRY') . ")\n2. PLEASE EMAIL ALL RELEVANT DOCUMENTS TO: " . ($activeSettings['bank_email'] ?? 'abmalayaindustry@gmail.com') . "\nKindly contact us should you have further enquiries.");
+} else {
+    $docNotes = !empty($doc['notes']) ? $doc['notes'] : ($activeSettings['footer_terms'] ?? $activeSettings['default_notes']);
+}
+
+$receivedByLabel = !empty($activeSettings['received_by_label']) ? $activeSettings['received_by_label'] : 'Received by,';
+$receivedByNameLabel = !empty($activeSettings['received_by_name_label']) ? $activeSettings['received_by_name_label'] : 'Name / Designation: ______________________';
+$receivedByDateLabel = !empty($activeSettings['received_by_date_label']) ? $activeSettings['received_by_date_label'] : 'Date: ____ / ____ / ________';
+
+$authorisedByName = !empty($doc['authorised_by_name']) ? $doc['authorised_by_name'] : (!empty($activeSettings['authorised_by_name']) ? $activeSettings['authorised_by_name'] : (!empty($doc['created_by']) ? $doc['created_by'] : 'Muhammad Aimanuddin Bin Mohd Zaki'));
+$authorisedByTitle = !empty($doc['authorised_by_title']) ? $doc['authorised_by_title'] : (!empty($activeSettings['authorised_by_title']) ? $activeSettings['authorised_by_title'] : 'Procurement Manager / Head of Sales');
 
 // Financial Summaries Calculation
 $grossSubtotal = 0;
@@ -396,18 +470,69 @@ ob_end_clean();
     <style>
         * {
             box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
         }
         @page {
-            size: A4 portrait;
-            margin: 4mm;
+            size: <?= htmlspecialchars($pSize) ?> portrait;
+            margin: <?= $mTop ?>mm <?= $mRight ?>mm <?= $mBot ?>mm <?= $mLeft ?>mm;
         }
         html, body {
             width: 100%;
             margin: 0;
             padding: 0;
-            background: #ffffff !important;
             color: #0f172a;
+            font-size: <?= $fSize ?>pt;
             font-family: 'Segoe UI', system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        @media screen {
+            html {
+                background: #475569;
+            }
+            body {
+                background: transparent !important;
+                display: flex;
+                justify-content: center;
+                align-items: flex-start;
+                padding: 24px 12px;
+                min-height: 100vh;
+            }
+            .doc-screen-wrapper {
+                width: 210mm;
+                min-height: 297mm;
+                background: #ffffff !important;
+                box-shadow: 0 12px 36px rgba(0,0,0,0.3);
+                padding: <?= $mTop ?>mm <?= $mRight ?>mm <?= $mBot ?>mm <?= $mLeft ?>mm;
+                box-sizing: border-box;
+            }
+        }
+
+        @media print {
+            html, body {
+                background: #ffffff !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                width: 100% !important;
+            }
+            .doc-screen-wrapper {
+                width: 100% !important;
+                min-height: auto !important;
+                box-shadow: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                background: transparent !important;
+            }
+            .items-table tr {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+            .bottom-grid, .signatures-grid {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
         }
 
         .page-layout-table {
@@ -432,17 +557,6 @@ ob_end_clean();
             padding: 0;
             border: none;
             vertical-align: top;
-        }
-
-        @media print {
-            .items-table tr {
-                page-break-inside: avoid !important;
-                break-inside: avoid !important;
-            }
-            .bottom-grid, .signatures-grid {
-                page-break-inside: avoid !important;
-                break-inside: avoid !important;
-            }
         }
 
         /* 1. LETTERHEAD BANNER HEADER */
@@ -537,12 +651,12 @@ ob_end_clean();
             background-color: <?= htmlspecialchars($tableHeaderBg) ?>;
             color: #ffffff;
             font-weight: 800;
-            font-size: 9.5pt;
-            padding: 6px 12px;
+            font-size: 9pt;
+            padding: 4px 10px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             text-align: center;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
         .intro-text {
             font-size: 8.5pt;
@@ -696,39 +810,51 @@ ob_end_clean();
         /* 6. DUAL AUTHORIZATION SIGNATURE BLOCK */
         .signatures-grid {
             display: flex;
-            justify-content: space-between;
+            justify-content: <?= ($type === 'invoice') ? 'space-between' : 'flex-end' ?>;
             align-items: flex-end;
+            width: 100%;
             border-top: 1px solid #cbd5e1;
-            padding-top: 12px;
-            margin-top: 16px;
+            padding-top: 10px;
+            margin-top: 14px;
             font-size: 8pt;
             gap: 16px;
             page-break-inside: avoid;
             break-inside: avoid;
         }
         .sig-client-box {
-            flex: 1;
+            width: 240px;
+            max-width: 260px;
+            text-align: right;
+            margin-left: auto;
         }
         .sig-client-line {
-            height: 55px;
-            border-bottom: 1px solid #94a3b8;
+            height: 50px;
+            border-bottom: 2px solid #0f172a;
             width: 180px;
             margin-bottom: 4px;
+            margin-left: auto;
         }
         .sig-issuer-box {
-            flex: 1;
-            text-align: right;
+            width: 250px;
+            max-width: 280px;
+            text-align: <?= ($type === 'invoice') ? 'left' : 'right' ?>;
+            margin-left: <?= ($type === 'invoice') ? '0' : 'auto' ?>;
+            margin-right: <?= ($type === 'invoice') ? 'auto' : '0' ?>;
+            display: flex;
+            flex-direction: column;
+            align-items: <?= ($type === 'invoice') ? 'flex-start' : 'flex-end' ?>;
         }
         .sig-img-container {
-            height: 60px;
+            height: 55px;
             display: flex;
             align-items: center;
-            justify-content: flex-end;
+            justify-content: <?= ($type === 'invoice') ? 'flex-start' : 'flex-end' ?>;
             gap: 6px;
             margin: 3px 0;
+            width: 100%;
         }
         .sig-img-container img {
-            max-height: 55px;
+            max-height: 52px;
             max-width: 130px;
             object-fit: contain;
         }
@@ -763,38 +889,44 @@ ob_end_clean();
     </style>
 </head>
 <body>
+<div class="doc-screen-wrapper">
 <table class="page-layout-table">
     <!-- REPEATING TOP LETTERHEAD HEADER ON EVERY PAGE -->
     <thead class="page-layout-header">
         <tr>
             <td style="padding: 0; border: none; background: #ffffff;">
-                <div style="width: 100%; border-bottom: 2px solid #004f8b; padding-bottom: 4px; margin-bottom: 6px; background: #ffffff;">
+                <div style="width: 100%; border-bottom: 2px solid #004f8b; padding-bottom: 4px; margin-bottom: 6px; background: #ffffff; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
                     <?php if (!empty($hdrImgUrl)): ?>
                         <div style="width: 100%; margin-bottom: 4px; margin-top: -2px;">
                             <img src="<?= $hdrImgUrl ?>" alt="Header Banner" style="width: 100%; height: auto; max-height: 90px; object-fit: cover; object-position: top center; display: block;">
                         </div>
                     <?php else: ?>
-                        <div style="width: 100%; height: 4px; background: linear-gradient(to right, #004f8b, #0070c0, #0080d0); margin-bottom: 4px;"></div>
+                        <div style="width: 100%; height: 4px; background-color: #004f8b; background: linear-gradient(to right, #004f8b, #0070c0, #0080d0); border-top: 2px solid #004f8b; border-bottom: 1px solid #0070c0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; margin-bottom: 4px;"></div>
                     <?php endif; ?>
 
                     <table style="width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0; padding: 0;">
                         <tr>
                             <!-- Logo Left -->
                             <td style="width: 55%; vertical-align: bottom; text-align: left; padding: 0; border: none;">
-                                <div style="margin-left: <?= $logoX ?>px; margin-top: <?= $logoY ?>px;">
+                                <div style="transform: translate(<?= $logoX ?>px, <?= $logoY ?>px); transform-origin: left bottom;">
                                     <?php if (!empty($logoUrl)): ?>
-                                        <img src="<?= $logoUrl ?>" alt="<?= htmlspecialchars($companyName) ?>" style="height: <?= round(48 * $logoScale) ?>px; max-width: 240px; object-fit: contain; display: block;">
+                                        <img src="<?= $logoUrl ?>" alt="<?= htmlspecialchars($companyName) ?>" style="height: <?= round(44 * $logoScale) ?>px; max-width: 220px; object-fit: contain; display: block;">
                                     <?php else: ?>
-                                        <div style="font-weight:900; font-size:16pt; color:#004f8b; text-transform:uppercase;">
-                                            <?= htmlspecialchars($companyName) ?>
+                                        <div>
+                                            <div style="font-weight: 900; font-size: 15pt; color: #004f8b; text-transform: uppercase;">
+                                                <?= htmlspecialchars($companyName) ?>
+                                            </div>
+                                            <?php if (!empty($activeSettings['company_reg_no'])): ?>
+                                                <span style="font-size: 10px; font-weight: 700; color: #0070c0; font-family: monospace; display: block;">(<?= htmlspecialchars($activeSettings['company_reg_no']) ?>)</span>
+                                            <?php endif; ?>
                                         </div>
                                     <?php endif; ?>
                                 </div>
                             </td>
 
                             <!-- Company Address Right -->
-                            <td style="width: 45%; vertical-align: bottom; text-align: right; padding: 0; border: none; font-size: 8pt; line-height: 1.3; color: #1e293b;">
-                                <div style="margin-right: <?= $addrX ?>px; margin-top: <?= $addrY ?>px;">
+                            <td style="width: 45%; vertical-align: bottom; text-align: right; padding: 0; border: none; font-size: 7.5pt; line-height: 1.25; color: #1e293b;">
+                                <div style="transform: translate(<?= $addrX ?>px, <?= $addrY ?>px); transform-origin: right bottom;">
                                     <?= render_dynamic_address($companyAddress) ?>
                                 </div>
                             </td>
@@ -820,8 +952,8 @@ ob_end_clean();
                             </td>
                         </tr>
                     </table>
-                    <p style="margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
-                        <?php echo htmlspecialchars($companyEmail); ?>, <?php echo htmlspecialchars($companyPhone); ?>, <?php echo htmlspecialchars($companyWebsite); ?>
+                    <p style="margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space: pre-line;">
+                        <?php echo htmlspecialchars($footerText); ?>
                     </p>
                 </footer>
             </td>
@@ -835,39 +967,96 @@ ob_end_clean();
                 <div style="box-sizing: border-box;">
                     <div>
                         <?php if ($type === 'invoice'): ?>
-                            <!-- 2-COLUMN BILLING & DELIVERY ADDRESS LAYOUT (INVOICE ONLY) -->
-                            <div style="display: flex; gap: 12px; font-size: 8pt; margin-bottom: 8px;">
-                                <!-- TO (BILLING ADDRESS) -->
-                                <div style="flex: 1; background: #f8fafc; padding: 6px; border: 1px solid #cbd5e1;">
-                                    <div style="font-weight: 900; color: #0070c0; text-transform: uppercase; font-size: 7.5pt; border-bottom: 1px solid #cbd5e1; padding-bottom: 2px; margin-bottom: 4px;">
-                                        TO (BILLING ADDRESS):
-                                    </div>
-                                    <p style="font-weight: 800; color: #0f172a; margin: 0 0 2px 0; font-size: 8.5pt;"><?= htmlspecialchars($doc['company_name'] ?? $clientCompany ?? '—') ?></p>
-                                    <p style="color: #334155; margin: 0 0 4px 0; white-space: pre-line; line-height: 1.25;"><?= htmlspecialchars($doc['billing_address'] ?? '—') ?></p>
-                                    <p style="margin: 0; font-size: 7.5pt; color: #475569;">
-                                        <strong>Attention:</strong> <?= htmlspecialchars($doc['client_name'] ?? $clientName ?? '—') ?> | <strong>Email:</strong> <?= htmlspecialchars($clientEmail ?: '—') ?>
-                                    </p>
-                                </div>
-
-                                <!-- DELIVERY (SHIPPING ADDRESS) -->
-                                <div style="flex: 1; background: #f8fafc; padding: 6px; border: 1px solid #cbd5e1;">
-                                    <div style="font-weight: 900; color: #0070c0; text-transform: uppercase; font-size: 7.5pt; border-bottom: 1px solid #cbd5e1; padding-bottom: 2px; margin-bottom: 4px;">
-                                        DELIVERY (SHIPPING ADDRESS):
-                                    </div>
-                                    <p style="font-weight: 800; color: #0f172a; margin: 0 0 2px 0; font-size: 8.5pt;"><?= htmlspecialchars($doc['delivery_company'] ?? $doc['company_name'] ?? '—') ?></p>
-                                    <p style="color: #334155; margin: 0 0 4px 0; white-space: pre-line; line-height: 1.25;"><?= htmlspecialchars($doc['delivery_address'] ?? $doc['billing_address'] ?? '—') ?></p>
-                                    <p style="margin: 0; font-size: 7.5pt; color: #475569;">
-                                        <strong>Delivery PIC:</strong> <?= htmlspecialchars($doc['delivery_pic'] ?? $clientName ?? '—') ?> | <strong>Contact:</strong> <?= htmlspecialchars($doc['delivery_phone'] ?? $clientPhone ?? '—') ?>
-                                    </p>
+                            <!-- 1. TITLE STRIP BANNER FOR INVOICE -->
+                            <div style="transform: translate(<?= $titleX ?>px, <?= $titleY ?>px);">
+                                <div class="title-strip-banner">
+                                    <?= htmlspecialchars($headerTitle) ?>
                                 </div>
                             </div>
 
-                            <!-- INVOICE METADATA STRIP -->
-                            <div style="display: flex; justify-content: space-between; background: #f1f5f9; padding: 6px 10px; border: 1px solid #cbd5e1; margin-bottom: 8px; font-family: monospace; font-size: 8pt;">
-                                <div><strong>Invoice No. :</strong> <span style="font-weight: 800; color: #0f172a;"><?= htmlspecialchars($docRefNo) ?></span></div>
-                                <div><strong>Invoice Date :</strong> <?= htmlspecialchars($docDate) ?></div>
-                                <div><strong>PO Numb (Client PO) :</strong> <span style="font-weight: 800; color: #004f8b;"><?= htmlspecialchars($doc['po_number'] ?? '—') ?></span></div>
-                            </div>
+                            <!-- 2. 2-COLUMN ADDRESS & METADATA SECTION (MATCHING EXACT INVOICEBUILDER LAYOUT) -->
+                            <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 8pt; color: #0f172a; border-bottom: 1px solid #cbd5e1; padding-bottom: 12px;">
+                                <tr>
+                                    <!-- LEFT COLUMN: TO (BILLING ADDRESS) -->
+                                    <td style="width: 58%; vertical-align: top; padding: 0 16px 8px 0; border: none;">
+                                        <div style="transform: translate(<?= $toAddrX ?>px, <?= $toAddrY ?>px); line-height: 1.4;">
+                                            <div style="margin-bottom: 2px;">
+                                                <span style="font-weight: 700; text-transform: uppercase;">TO: </span>
+                                                <span style="font-weight: 800; text-transform: uppercase;"><?= htmlspecialchars($doc['company_name'] ?? $clientCompany ?? '—') ?></span>
+                                            </div>
+                                            <?php if (!empty($doc['billing_address'])): ?>
+                                                <div style="color: #1e293b; white-space: pre-line; margin-bottom: 3px; font-size: 7.5pt; line-height: 1.25;">
+                                                    <?= htmlspecialchars($doc['billing_address']) ?>
+                                                </div>
+                                            <?php endif; ?>
+                                            <?php if (!empty($doc['client_name'] ?? $clientName)): ?>
+                                                <div style="margin-top: 2px;">
+                                                    <span style="font-weight: 700;">Attention: </span>
+                                                    <span style="font-weight: 500;"><?= htmlspecialchars($doc['client_name'] ?? $clientName) ?></span>
+                                                </div>
+                                            <?php endif; ?>
+                                            <?php if (!empty($clientEmail)): ?>
+                                                <div>
+                                                    <span style="font-weight: 700;">Email: </span>
+                                                    <span style="color: #004f8b; text-decoration: underline;"><?= htmlspecialchars($clientEmail) ?></span>
+                                                </div>
+                                            <?php endif; ?>
+                                            <?php if (!empty($doc['client_phone'] ?? $clientPhone)): ?>
+                                                <div>
+                                                    <span style="font-weight: 700;">Cont. Numb : </span>
+                                                    <span style="font-family: monospace;"><?= htmlspecialchars($doc['client_phone'] ?? $clientPhone) ?></span>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    </td>
+
+                                    <!-- RIGHT COLUMN: INVOICE METADATA & DELIVERY (SHIPPING ADDRESS) -->
+                                    <td style="width: 42%; vertical-align: top; padding: 0 0 8px 0; border: none;">
+                                        <div style="transform: translate(<?= $metaX ?>px, <?= $metaY ?>px); line-height: 1.35;">
+                                            <!-- INVOICE METADATA -->
+                                            <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 8pt; border: none;">
+                                                <tr>
+                                                    <td style="font-weight: 700; width: 38%; padding: 1px 0; border: none;">Invoice No. :</td>
+                                                    <td style="font-weight: 800; font-family: monospace; padding: 1px 0; border: none;"><?= htmlspecialchars($docRefNo) ?></td>
+                                                </tr>
+                                                <tr>
+                                                    <td style="font-weight: 700; padding: 1px 0; border: none;">Invoice Date :</td>
+                                                    <td style="padding: 1px 0; border: none;"><?= htmlspecialchars($docDate) ?></td>
+                                                </tr>
+                                                <tr>
+                                                    <td style="font-weight: 700; padding: 1px 0; border: none;">PO Numb :</td>
+                                                    <td style="font-weight: 800; font-family: monospace; padding: 1px 0; border: none;"><?= htmlspecialchars($doc['po_number'] ?? '—') ?></td>
+                                                </tr>
+                                            </table>
+
+                                            <!-- DELIVERY (SHIPPING ADDRESS) -->
+                                            <div style="margin-top: 4px;">
+                                                <div style="margin-bottom: 2px;">
+                                                    <span style="font-weight: 700; text-transform: uppercase;">DELIVERY: </span>
+                                                    <span style="font-weight: 800;"><?= htmlspecialchars($doc['delivery_company'] ?? $doc['company_name'] ?? $clientCompany ?? '—') ?></span>
+                                                </div>
+                                                <?php if (!empty($doc['delivery_address'] ?? $doc['billing_address'])): ?>
+                                                    <div style="color: #1e293b; white-space: pre-line; margin-bottom: 3px; font-size: 7.5pt; line-height: 1.25;">
+                                                        <?= htmlspecialchars($doc['delivery_address'] ?? $doc['billing_address']) ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <?php if (!empty($doc['delivery_pic'] ?? $clientName)): ?>
+                                                    <div style="margin-top: 2px;">
+                                                        <span style="font-weight: 700;">PIC – </span>
+                                                        <span><?= htmlspecialchars($doc['delivery_pic'] ?? $clientName) ?></span>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <?php if (!empty($doc['delivery_phone'] ?? $clientPhone)): ?>
+                                                    <div>
+                                                        <span style="font-weight: 700;">Contact No. : </span>
+                                                        <span style="font-family: monospace;"><?= htmlspecialchars($doc['delivery_phone'] ?? $clientPhone) ?></span>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
                         <?php else: ?>
                             <!-- 2. METADATA SECTION (QUOTATION) -->
                             <section class="metadata-section">
@@ -906,14 +1095,12 @@ ob_end_clean();
                                     </tr>
                                 </table>
                             </section>
-                        <?php endif; ?>
 
-                        <!-- 3. TITLE STRIP BANNER -->
-                        <div class="title-strip-banner">
-                            <?= htmlspecialchars($headerTitle) ?>
-                        </div>
+                            <!-- 3. TITLE STRIP BANNER FOR QUOTATION -->
+                            <div class="title-strip-banner">
+                                <?= htmlspecialchars($headerTitle) ?>
+                            </div>
 
-                        <?php if ($type !== 'invoice'): ?>
                             <p class="intro-text">
                                 We would like to submit the following commercial quotation and specification list for your review and pricing:
                             </p>
@@ -1026,13 +1213,13 @@ ob_end_clean();
                         </div>
 
                         <!-- AUTHORIZATION SIGNATURE BLOCK -->
-                        <div class="signatures-grid" style="justify-content: flex-end;">
+                        <div class="signatures-grid" style="display: flex; justify-content: space-between; align-items: flex-end; width: 100%; gap: 16px;">
                             <!-- Issuer Signatory -->
-                            <div class="sig-issuer-box">
+                            <div class="sig-issuer-box" style="<?= ($type === 'invoice') ? 'text-align: left;' : 'text-align: right; margin-left: auto;' ?>">
                                 <p style="color:#475569; font-weight:700; text-transform:uppercase; font-size:7.5pt; letter-spacing:0.5px;">Yours faithfully,</p>
                                 <p style="font-weight:800; color:#0f172a; text-transform:uppercase; font-size:8.5pt; margin-top:1px;"><?= htmlspecialchars($companyName) ?></p>
 
-                                <div class="sig-img-container" style="display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-left: auto; text-align: right;">
+                                <div class="sig-img-container" style="display: flex; align-items: center; <?= ($type === 'invoice') ? 'justify-content: flex-start;' : 'justify-content: flex-end;' ?> gap: 12px; margin: 4px 0;">
                                     <?php if (!empty($stampUrl)): ?>
                                         <img src="<?php echo $stampUrl; ?>" alt="Company Stamp" style="max-height: 52px; max-width: 130px; object-fit: contain;">
                                     <?php endif; ?>
@@ -1046,9 +1233,27 @@ ob_end_clean();
                                     <?php endif; ?>
                                 </div>
 
-                                <p style="font-weight:800; color:#0f172a; margin-top:2px;"><u><?php echo htmlspecialchars($createdBy); ?></u></p>
-                                <p class="font-mono" style="color:#64748b; font-size:7.5pt; text-transform:uppercase;">HEAD OF SALES & LOGISTICS</p>
+                                <p style="font-weight:800; color:#0f172a; margin-top:2px;"><u><?= htmlspecialchars($authorisedByName); ?></u></p>
+                                <p class="font-mono" style="color:#64748b; font-size:7.5pt; text-transform:uppercase;"><?= htmlspecialchars($authorisedByTitle); ?></p>
                             </div>
+
+                            <?php if ($type === 'invoice'): ?>
+                            <!-- Client Receiver Signatory (Received by, Name / Designation, Date) -->
+                            <div class="sig-client-box" style="text-align: right; margin-left: auto;">
+                                <p style="font-weight:700; color:#334155; text-transform:uppercase; font-size:7.5pt; letter-spacing:0.5px;"><?= htmlspecialchars($receivedByLabel) ?></p>
+                                <div style="height: 48px; border-bottom: 2px solid #0f172a; width: 190px; margin: 4px 0 4px auto;"></div>
+                                <?php if (!empty($doc['received_by_name'])): ?>
+                                    <p style="font-weight:700; color:#0f172a; font-size:8pt; margin-top:2px;"><u><?= htmlspecialchars($doc['received_by_name']) ?></u></p>
+                                    <?php if (!empty($doc['received_by_designation'])): ?>
+                                        <p class="font-mono" style="color:#64748b; font-size:7.5pt; text-transform:uppercase;"><?= htmlspecialchars($doc['received_by_designation']) ?></p>
+                                    <?php endif; ?>
+                                    <p class="font-mono" style="color:#64748b; font-size:7.5pt; margin-top:2px;">Date: <?= htmlspecialchars(!empty($doc['received_by_date']) ? $doc['received_by_date'] : '____ / ____ / ________') ?></p>
+                                <?php else: ?>
+                                    <p style="font-weight:700; color:#0f172a; font-size:7.5pt;"><?= htmlspecialchars($receivedByNameLabel) ?></p>
+                                    <p class="font-mono" style="color:#64748b; font-size:7.5pt;"><?= htmlspecialchars($receivedByDateLabel) ?></p>
+                                <?php endif; ?>
+                            </div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -1056,5 +1261,20 @@ ob_end_clean();
         </tr>
     </tbody>
 </table>
+</div>
+<?php if (isset($_GET['print']) && ($_GET['print'] == '1' || $_GET['print'] === 'direct')): ?>
+<script>
+window.addEventListener('load', function() {
+    setTimeout(function() {
+        try {
+            window.focus();
+            window.print();
+        } catch (e) {
+            console.error('Auto-print error:', e);
+        }
+    }, 350);
+});
+</script>
+<?php endif; ?>
 </body>
 </html>

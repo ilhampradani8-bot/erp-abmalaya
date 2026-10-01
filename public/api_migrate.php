@@ -151,7 +151,26 @@ $connection->query("CREATE TABLE IF NOT EXISTS clients (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
 $connection->query("ALTER TABLE clients MODIFY email TEXT DEFAULT NULL");
-$results['clients'][] = "Ensured clients table exists with multi-email TEXT column";
+$connection->query("ALTER TABLE clients ADD COLUMN IF NOT EXISTS received_by_name VARCHAR(255) NULL");
+$connection->query("ALTER TABLE clients ADD COLUMN IF NOT EXISTS received_by_designation VARCHAR(255) NULL");
+
+$connection->query("CREATE TABLE IF NOT EXISTS client_signatories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    client_id INT NULL,
+    company_name VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    designation VARCHAR(255) NOT NULL,
+    is_default TINYINT(1) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX (client_id),
+    INDEX (company_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+$connection->query("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS received_by_name VARCHAR(255) NULL");
+$connection->query("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS received_by_designation VARCHAR(255) NULL");
+$connection->query("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS received_by_date VARCHAR(50) NULL");
+$results['clients'][] = "Ensured clients table, client_signatories, and invoices received_by columns exist";
 
 ob_end_clean();
 echo json_encode([

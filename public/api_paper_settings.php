@@ -63,6 +63,26 @@ if ($chk_layout && $chk_layout->num_rows === 0) {
     $connection->query("ALTER TABLE system_paper_settings ADD COLUMN layout_offsets LONGTEXT DEFAULT NULL AFTER table_header_text_color");
 }
 
+$chk_ftr_text = $connection->query("SHOW COLUMNS FROM system_paper_settings LIKE 'footer_text'");
+if ($chk_ftr_text && $chk_ftr_text->num_rows === 0) {
+    $connection->query("ALTER TABLE system_paper_settings ADD COLUMN footer_text TEXT DEFAULT NULL AFTER footer_terms");
+}
+
+$chk_paper_cols = [
+    'paper_size' => "ALTER TABLE system_paper_settings ADD COLUMN paper_size VARCHAR(50) DEFAULT 'A4'",
+    'margin_top' => "ALTER TABLE system_paper_settings ADD COLUMN margin_top INT DEFAULT 18",
+    'margin_bottom' => "ALTER TABLE system_paper_settings ADD COLUMN margin_bottom INT DEFAULT 18",
+    'margin_left' => "ALTER TABLE system_paper_settings ADD COLUMN margin_left INT DEFAULT 14",
+    'margin_right' => "ALTER TABLE system_paper_settings ADD COLUMN margin_right INT DEFAULT 14",
+    'font_size' => "ALTER TABLE system_paper_settings ADD COLUMN font_size INT DEFAULT 9"
+];
+foreach ($chk_paper_cols as $col => $alter_sql) {
+    $c_res = $connection->query("SHOW COLUMNS FROM system_paper_settings LIKE '{$col}'");
+    if ($c_res && $c_res->num_rows === 0) {
+        $connection->query($alter_sql);
+    }
+}
+
 // Auto-update legacy company address in database to official Wisma Rampai address
 $connection->query("UPDATE system_paper_settings SET company_address = '2-2-40, 2nd Floor Wisma Rampai, Jalan 34/26, Taman Sri Rampai, 53300 Kuala Lumpur.' WHERE id = 1 AND (company_address LIKE '%No. 12%' OR company_address IS NULL OR company_address = '')");
 
@@ -286,6 +306,7 @@ if ($method === 'POST') {
     $b_email = trim($input['bank_email'] ?? 'abmalayaindustry@gmail.com');
     $h_title = trim($input['header_title'] ?? '');
     $f_terms = trim($input['footer_terms'] ?? '');
+    $f_text = trim($input['footer_text'] ?? 'sales@abmalaya.com, +60 3-8000 1234, abmalaya.com');
     $h_color = trim($input['header_color'] ?? '#0080d0');
     $d_notes = trim($input['default_notes'] ?? '');
     $h_template = trim($input['header_template'] ?? 'default');
@@ -303,7 +324,7 @@ if ($method === 'POST') {
         company_name = ?, company_address = ?, phone = ?, email = ?, 
         logo_url = ?, stamp_url = ?, signature_url = ?, header_image_url = ?,
         bank_name = ?, bank_account_number = ?, bank_account_name = ?, bank_email = ?,
-        header_title = ?, footer_terms = ?, 
+        header_title = ?, footer_terms = ?, footer_text = ?,
         header_color = ?, default_notes = ?, header_template = ?, 
         table_header_bg = ?, table_header_text_color = ?,
         paper_size = ?, margin_top = ?, margin_bottom = ?, margin_left = ?, margin_right = ?, font_size = ?
@@ -315,11 +336,11 @@ if ($method === 'POST') {
         exit;
     }
 
-    $stmt->bind_param("ssssssssssssssssssssiiiii", 
+    $stmt->bind_param("sssssssssssssssssssssiiiii", 
         $c_name, $c_addr, $phone, $email, 
         $logo_url, $stamp_url, $sig_url, $hdr_img_url,
         $b_name, $b_acc, $b_holder, $b_email,
-        $h_title, $f_terms, 
+        $h_title, $f_terms, $f_text,
         $h_color, $d_notes, $h_template, 
         $t_bg, $t_txt,
         $paper_size, $margin_top, $margin_bottom, $margin_left, $margin_right, $font_size

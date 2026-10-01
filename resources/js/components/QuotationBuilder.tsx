@@ -20,6 +20,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
   initialQuotation,
   onSaveAndPreviewDoc,
   onSaveAndSendEmail,
+  onCancel,
   onNavigateView,
   currentUser,
 }) => {
@@ -984,11 +985,57 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                   </span>
                   <span className="text-[10px] text-slate-500 font-mono font-bold">Official Provider</span>
                 </div>
-                <div className="space-y-1 text-slate-700">
-                  <p className="font-bold text-slate-900 text-sm">{paperSettings?.company_name || 'AB MALAYA SDN. BHD.'} (Reg: 202601001234)</p>
-                  <p className="text-slate-600">{paperSettings?.company_address || 'No. 12, Jalan Industrial Park, 50000 Kuala Lumpur, Malaysia'}</p>
-                  <p className="font-mono text-xs text-slate-700">Email: {paperSettings?.email || 'sales@abmalaya.com'} | Tel: {paperSettings?.phone || '+60 3-8000 1234'}</p>
-                  <p className="text-slate-500 text-[11px] pt-1">Created By: <strong className="text-slate-800">{quotation?.created_by || currentUser?.name || 'Aiman Zaki'}</strong></p>
+                <div className="space-y-2 text-slate-700">
+                  <p className="font-bold text-slate-900 text-sm">
+                    {paperSettings?.company_name || 'AB MALAYA SDN. BHD.'}
+                    {paperSettings?.company_reg ? ` (Reg: ${paperSettings.company_reg})` : ''}
+                  </p>
+                  <p className="text-slate-600 leading-relaxed">
+                    {paperSettings?.company_address || '2-2-40, 2nd Floor Wisma Rampai, Jalan 34/26, Taman Sri Rampai, 53300 Kuala Lumpur.'}
+                  </p>
+                  
+                  {/* Dynamic Provider Email Selection (Detected Inbox vs Official Email) */}
+                  <div className="bg-slate-50 border border-slate-200 p-2 rounded space-y-1">
+                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-600 uppercase">
+                      <span>Provider Email / Receiving Inbox:</span>
+                      {(quotation as any)?.email_source?.recipient_email && (
+                        <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded font-mono lowercase">
+                          detected: {(quotation as any).email_source.recipient_email}
+                        </span>
+                      )}
+                    </div>
+                    <select
+                      value={(quotation as any)?.provider_email || (quotation as any)?.email_source?.recipient_email || paperSettings?.email || 'sales@abmalaya.com'}
+                      onChange={(e) => setQuotation({ ...quotation, provider_email: e.target.value } as any)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-blue-500 cursor-pointer"
+                    >
+                      {(quotation as any)?.email_source?.recipient_email && (
+                        <option value={(quotation as any).email_source.recipient_email}>
+                          {(quotation as any).email_source.recipient_email} (Target Inbox yang Menerima RFQ)
+                        </option>
+                      )}
+                      <option value={paperSettings?.email || 'sales@abmalaya.com'}>
+                        {paperSettings?.email || 'sales@abmalaya.com'} (Official Primary Email)
+                      </option>
+                      <option value="abmalayaindustry@gmail.com">abmalayaindustry@gmail.com (Gmail Live Inbox)</option>
+                      <option value="procurement@abmalaya.com">procurement@abmalaya.com (Procurement)</option>
+                      <option value="info@abmalaya.com">info@abmalaya.com (General Info)</option>
+                    </select>
+                    <p className="font-mono text-[11px] text-slate-600 pt-0.5">
+                      Tel: <span className="font-bold text-slate-900">{paperSettings?.phone || '+60 3-8000 1234'}</span>
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 text-slate-500 text-[11px] pt-1 border-t border-slate-100">
+                    <span className="shrink-0 font-medium">Created By:</span>
+                    <input
+                      type="text"
+                      value={quotation?.created_by || ''}
+                      placeholder={currentUser?.name || 'System Automation Daemon'}
+                      onChange={(e) => setQuotation({ ...quotation, created_by: e.target.value })}
+                      className="font-bold text-slate-800 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded text-xs focus:bg-white focus:border-blue-500 focus:outline-none flex-1 max-w-xs"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1124,6 +1171,27 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
               />
             </div>
 
+            {/* Custom Footer Running Text for Quotation */}
+            <div className="bg-white border border-slate-200 rounded-md p-4 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                <label className="block text-xs font-extrabold text-slate-900 flex items-center gap-1.5 uppercase tracking-wide">
+                  <Sliders className="w-4 h-4 text-purple-600" />
+                  <span>Custom Footer Running Text (Kop Footer Bawah SPH):</span>
+                </label>
+                <span className="text-[10px] text-slate-500 font-mono">
+                  Default dari Setting Paper jika dikosongkan
+                </span>
+              </div>
+              <textarea
+                rows={2}
+                value={quotation?.footer_text || ''}
+                onChange={(e) => setQuotation({ ...quotation, footer_text: e.target.value })}
+                placeholder={paperSettings?.footer_text || 'sales@abmalaya.com, +60 3-8000 1234, abmalaya.com'}
+                className="w-full bg-slate-50 border border-slate-300 p-2.5 text-xs text-slate-900 rounded focus:ring-2 focus:ring-purple-500 focus:outline-none font-mono leading-relaxed"
+              />
+              <p className="text-[10px] text-slate-400">Teks ini akan dicetak di bagian paling bawah lembar dokumen preview dan PDF SPH.</p>
+            </div>
+
           </div>
         )}
 
@@ -1139,7 +1207,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                 <span className="font-extrabold text-xs text-[#3d3d3d] uppercase tracking-wider">
                   Line Items Specifications Table
                 </span>
-                {isSelectingDropdownQuo || isLoadingQuotations ? (
+                {isSelectingDropdownQuo ? (
                   <span className="text-xs text-blue-700 font-bold font-mono flex items-center gap-1.5 animate-pulse bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
                     <span>Loading items from MySQL...</span>
@@ -1174,7 +1242,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
             </div>
 
             {/* Scrollable Table View OR Loading Spinner Overlay */}
-            {isSelectingDropdownQuo || isLoadingQuotations ? (
+            {isSelectingDropdownQuo ? (
               <div className="flex-1 flex flex-col items-center justify-center py-20 bg-white space-y-3.5 animate-in fade-in min-h-[350px]">
                 <div className="relative flex items-center justify-center">
                   <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>

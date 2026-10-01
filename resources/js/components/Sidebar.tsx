@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserAccount } from '../types/erp';
-import { Mail, FileText, FileCheck, Users, Settings, ChevronRight, Check, PanelLeftClose, PanelLeft, FileSpreadsheet, Package, Bell, Trash2, Download, Receipt, MessageSquare } from 'lucide-react';
+import { Mail, FileText, FileCheck, Users, Settings, ChevronRight, Check, PanelLeftClose, PanelLeft, FileSpreadsheet, Package, Bell, Trash2, Receipt, MessageSquare, LogOut } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
 interface SidebarProps {
-  viewMode: 'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads' | 'client_chat';
+  viewMode: 'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'client_chat';
   setViewMode: (mode: any) => void;
   onNewQuotation: () => void;
   pendingCount: number;
@@ -13,6 +13,7 @@ interface SidebarProps {
   currentUser?: UserAccount;
   users?: UserAccount[];
   onSwitchUser?: (user: UserAccount) => void;
+  onLogout?: () => void;
   isMobileOpen?: boolean;
   setIsMobileOpen?: (open: boolean) => void;
   isCollapsed?: boolean;
@@ -23,11 +24,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   viewMode,
   setViewMode,
   pendingCount,
-  sentCount: _sentCount,
-  dealCount: _dealCount,
   currentUser,
   users = [],
   onSwitchUser,
+  onLogout,
   isMobileOpen = false,
   setIsMobileOpen,
   isCollapsed = false,
@@ -38,15 +38,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [dbUsers, setDbUsers] = useState<UserAccount[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const activeUser = currentUser || (dbUsers.length > 0 ? dbUsers[0] : {
-    id: 'USR-101',
-    name: 'Aiman Zaki',
-    email: 'aimanzaki@abmalaya.com',
+  const activeUser = currentUser || {
+    id: '',
+    name: 'Pengguna Sistem',
+    email: '',
     role: 'Admin' as const,
-    department: 'Sales',
+    department: '',
     status: 'Active' as const,
-    created_at: '2026-01-10',
-  });
+    created_at: '',
+  };
 
   const isAdmin = activeUser.role === 'Admin';
 
@@ -69,7 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }
       })
       .catch((err) => console.log('Sidebar MySQL users fetch error:', err));
-  }, [viewMode]);
+  }, []);
 
   const userList = (users && users.length > 0) ? users : (dbUsers.length > 0 ? dbUsers : [activeUser]);
 
@@ -84,6 +84,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, []);
 
   const navItems = [
+    // ── Komunikasi & Inbox ──
     {
       id: 'inbox',
       label: 'RFQ Inbox',
@@ -99,6 +100,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: '',
     },
     {
+      id: 'notification_log',
+      label: 'Notifications',
+      icon: Bell,
+      badge: unreadNotificationCount > 0 ? unreadNotificationCount : null,
+      badgeColor: 'backdrop-blur-md bg-rose-600/90 text-white border border-rose-300/50 shadow-xs font-black',
+    },
+    // ── Penawaran & Dokumen Niaga ──
+    {
       id: 'product_catalog',
       label: 'Products Catalog',
       icon: Package,
@@ -113,32 +122,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: 'bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold',
     },
     {
-      id: 'trash',
-      label: 'Trash',
-      icon: Trash2,
-      badge: 'Junk',
-      badgeColor: 'bg-rose-100 text-rose-800 border border-rose-200 font-bold',
-    },
-    {
       id: 'builder',
-      label: 'Quotation Builder',
+      label: 'Quotation Builder (SPH)',
       icon: FileText,
       badge: null,
       badgeColor: '',
-    },
-    {
-      id: 'notification_log',
-      label: 'Notifications',
-      icon: Bell,
-      badge: unreadNotificationCount > 0 ? unreadNotificationCount : null,
-      badgeColor: 'backdrop-blur-md bg-rose-600/90 text-white border border-rose-300/50 shadow-xs font-black',
-    },
-    {
-      id: 'doc_preview',
-      label: 'Document Preview',
-      icon: FileCheck,
-      badge: 'PDF',
-      badgeColor: 'backdrop-blur-md bg-blue-500/15 text-blue-800 border border-blue-300/60 font-bold',
     },
     {
       id: 'invoice_builder',
@@ -148,6 +136,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: 'bg-[#0070c0] text-white font-bold',
     },
     {
+      id: 'doc_preview',
+      label: 'Document Preview',
+      icon: FileCheck,
+      badge: 'PDF',
+      badgeColor: 'backdrop-blur-md bg-blue-500/15 text-blue-800 border border-blue-300/60 font-bold',
+    },
+    {
+      id: 'trash',
+      label: 'Trash & Junk',
+      icon: Trash2,
+      badge: 'Junk',
+      badgeColor: 'bg-rose-100 text-rose-800 border border-rose-200 font-bold',
+    },
+    // ── Pengaturan Sistem ──
+    {
       id: 'account_settings',
       label: 'Account & Users',
       icon: Users,
@@ -155,18 +158,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: isAdmin ? 'backdrop-blur-md bg-purple-500/15 text-purple-800 border border-purple-300/60 font-bold' : 'bg-slate-200 text-slate-600',
     },
     {
-      id: 'downloads',
-      label: 'ERP Desktop (Electron)',
-      icon: Download,
-      badge: 'v2.4',
-      badgeColor: 'bg-indigo-100 text-indigo-800 border border-indigo-300 font-extrabold',
-    },
-    {
       id: 'system_settings',
       label: 'System Settings',
       icon: Settings,
-      badge: null,
-      badgeColor: '',
+      badge: 'Core',
+      badgeColor: 'bg-slate-800 text-slate-100 font-bold',
     },
   ];
 
@@ -314,6 +310,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </button>
             );
           })}
+
+          {/* Logout / Lock ERP Access Button */}
+          {onLogout && (
+            <div className="pt-3 mt-2 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={onLogout}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition cursor-pointer ${
+                  isCollapsed ? 'justify-center px-2' : ''
+                }`}
+                title={isCollapsed ? 'Lock ERP Access (Logout)' : undefined}
+              >
+                <LogOut className="w-4 h-4 shrink-0 text-rose-500" />
+                {!isCollapsed && <span>Lock ERP Access</span>}
+              </button>
+            </div>
+          )}
         </nav>
       </aside>
     </>

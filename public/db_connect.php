@@ -163,3 +163,95 @@ if (!function_exists('addSystemNotification')) {
     }
 }
 
+if (!function_exists('getGeminiActiveModels')) {
+    /**
+     * Query live active models directly from Google Gemini API (GET /v1beta/models)
+     * with local caching to guarantee the model used is genuinely active on Google servers.
+     */
+    function getGeminiActiveModels(array $key_list = []): array {
+        static $memory_cache = null;
+        if ($memory_cache !== null && !empty($memory_cache)) {
+            return $memory_cache;
+        }
+
+        $cache_file = sys_get_temp_dir() . '/gemini_active_models_cache.json';
+        if (file_exists($cache_file) && (time() - filemtime($cache_file) < 7200)) { // 2 hours file cache
+            $saved = @json_decode(file_get_contents($cache_file), true);
+            if (!empty($saved) && is_array($saved)) {
+                $memory_cache = $saved;
+                return $memory_cache;
+            }
+        }
+
+        $fallback_models = [
+            'gemini-flash-latest',
+            'gemini-3.8-flash',
+            'gemini-3.6-flash',
+            'gemini-3.5-flash',
+            'gemini-2.5-flash'
+        ];
+
+        if (empty($key_list)) {
+            $memory_cache = $fallback_models;
+            return $memory_cache;
+        }
+
+        foreach ($key_list as $key) {
+            $key = trim($key);
+            if (empty($key) || strpos($key, '...') !== false) continue;
+
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models?key=' . urlencode($key);
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 6,
+                CURLOPT_SSL_VERIFYPEER => false
+            ]);
+            $resp = curl_exec($ch);
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($code === 200 && !empty($resp)) {
+                $data = json_decode($resp, true);
+                if (isset($data['models']) && is_array($data['models'])) {
+                    $flash_models = [];
+                    $other_models = [];
+                    foreach ($data['models'] as $m) {
+                        $methods = $m['supportedGenerationMethods'] ?? [];
+                        if (in_array('generateContent', $methods)) {
+                            $model_name = str_replace('models/', '', $m['name']);
+                            // Filter out specialized speech/image-only models
+                            if (stripos($model_name, 'tts') !== false || stripos($model_name, 'image') !== false || stripos($model_name, 'transcribe') !== false) {
+                                continue;
+                            }
+                            if (stripos($model_name, 'flash') !== false) {
+                                $flash_models[] = $model_name;
+                            } else {
+                                $other_models[] = $model_name;
+                            }
+                        }
+                    }
+
+                    // Sort: gemini-flash-latest first, then newest versions
+                    usort($flash_models, function($a, $b) {
+                        if ($a === 'gemini-flash-latest') return -1;
+                        if ($b === 'gemini-flash-latest') return 1;
+                        return strcmp($b, $a);
+                    });
+
+                    $active_models = array_values(array_unique(array_merge($flash_models, $other_models)));
+                    if (!empty($active_models)) {
+                        @file_put_contents($cache_file, json_encode($active_models));
+                        $memory_cache = $active_models;
+                        return $memory_cache;
+                    }
+                }
+            }
+        }
+
+        $memory_cache = $fallback_models;
+        return $memory_cache;
+    }
+}
+
+

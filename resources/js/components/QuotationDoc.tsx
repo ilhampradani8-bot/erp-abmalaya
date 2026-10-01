@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Quotation, QuotationItem } from '../types/erp';
 import { 
   Printer, Send, ArrowLeft, ChevronDown, Settings, Loader2, 
-  Move, Save, CheckCircle2, Edit3, Plus, Trash2, X, SlidersHorizontal, MoreVertical, FileType, ExternalLink, FileText
+  Move, Save, CheckCircle2, Edit3, Plus, Trash2, X, SlidersHorizontal, MoreVertical, FileType, ExternalLink, FileText, RotateCcw
 } from 'lucide-react';
+import { getApiUrl } from '../utils/api';
 
 interface QuotationDocProps {
   quotation: Quotation;
@@ -255,7 +256,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
 
   // Drag Mode & Element Offsets State
   const [isDragMode, setIsDragMode] = useState<boolean>(false);
-  const [offsets, setOffsets] = useState<Record<string, { x: number; y: number }>>({});
+  const [offsets, setOffsets] = useState<Record<string, OffsetData>>({});
   const [isSavingLayout, setIsSavingLayout] = useState<boolean>(false);
   const [layoutSaveNotice, setLayoutSaveNotice] = useState<string | null>(null);
 
@@ -399,14 +400,59 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
     };
   }, [docItems, docTaxPercent]);
 
-  // Smart Pagination Algorithm (Fills A4 Sheets densely before moving to next page)
+  // Helper to compute visual height weight of a quotation item based on text length & photos
+  const getItemHeightWeight = (item: any): number => {
+    let w = 1.0; // base row height
+    const desc = String(item.description || '');
+    const spec = String(item.specification || '');
+    const offer = String(item.offer || item.offered_item || '');
+    
+    // Description line count
+    const descLines = desc.split('\n').reduce((acc, l) => acc + Math.max(1, Math.ceil(l.length / 42)), 0);
+    w += Math.max(0, (descLines - 1) * 0.45);
+
+    // Specification line count
+    if (spec) {
+      const specLines = spec.split('\n').reduce((acc, l) => acc + Math.max(1, Math.ceil(l.length / 48)), 0);
+      w += specLines * 0.4;
+    }
+
+    // Offered item line count
+    if (offer) {
+      const offerLines = offer.split('\n').reduce((acc, l) => acc + Math.max(1, Math.ceil(l.length / 32)), 0);
+      w += Math.max(0, (offerLines - 1) * 0.35);
+    }
+
+    // Product Photo
+    if (item.image_url) {
+      w += 3.2;
+    }
+
+    return Math.max(1.0, w);
+  };
+
+  // Smart Dynamic Pagination Algorithm (Fills A4 Sheets densely before moving to next page)
   const pageChunks: PageChunk[] = useMemo(() => {
-    const totalItems = docItems.length;
-    
-    // Page 1 capacity: 6 items if single-page (fits terms & signature), 8 items if multi-page
-    // Subsequent page capacity: 10 items if middle page, 8 items if last page with terms/signature
-    
-    if (totalItems <= 6) {
+    if (!docItems || docItems.length === 0) {
+      return [{
+        pageNumber: 1,
+        totalPages: 1,
+        items: [],
+        startIndex: 0,
+        isFirstPage: true,
+        isLastPage: true,
+      }];
+    }
+
+    const itemWeights = docItems.map(getItemHeightWeight);
+    const totalWeight = itemWeights.reduce((a, b) => a + b, 0);
+
+    const SINGLE_PAGE_MAX_WEIGHT = 6.0;
+    const PAGE1_MULTIPAGE_MAX_WEIGHT = 11.0;
+    const MIDDLE_PAGE_MAX_WEIGHT = 16.5;
+    const LAST_PAGE_MAX_WEIGHT = 8.0;
+
+    if (totalWeight <= SINGLE_PAGE_MAX_WEIGHT && docItems.length <= 6) {
       return [{
         pageNumber: 1,
         totalPages: 1,
@@ -418,48 +464,52 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
     }
 
     const pages: PageChunk[] = [];
-    // Page 1: Take up to 7 items max if multi-page
-    const page1Count = Math.min(7, totalItems);
-    pages.push({
-      pageNumber: 1,
-      totalPages: 0,
-      items: docItems.slice(0, page1Count),
-      startIndex: 0,
-      isFirstPage: true,
-      isLastPage: page1Count === totalItems,
-    });
+    let currentIdx = 0;
+    let pageNum = 1;
 
-    let remaining = docItems.slice(page1Count);
-    let currentIndex = page1Count;
-    let pNum = 2;
+    while (currentIdx < docItems.length) {
+      const isFirst = pageNum === 1;
+      const remainingItems = docItems.slice(currentIdx);
+      const remainingWeight = itemWeights.slice(currentIdx).reduce((a, b) => a + b, 0);
 
-    while (remaining.length > 0) {
-      // If remaining items fit on last page with terms & signature (up to 8 items)
-      if (remaining.length <= 8) {
+      const currentMaxWeightAsLast = isFirst ? SINGLE_PAGE_MAX_WEIGHT : LAST_PAGE_MAX_WEIGHT;
+      if (remainingWeight <= currentMaxWeightAsLast) {
         pages.push({
-          pageNumber: pNum,
+          pageNumber: pageNum,
           totalPages: 0,
-          items: remaining,
-          startIndex: currentIndex,
-          isFirstPage: false,
+          items: remainingItems,
+          startIndex: currentIdx,
+          isFirstPage: isFirst,
           isLastPage: true,
         });
         break;
-      } else {
-        // Middle page capacity: 10 items
-        const chunk = remaining.slice(0, 10);
-        remaining = remaining.slice(10);
-        pages.push({
-          pageNumber: pNum,
-          totalPages: 0,
-          items: chunk,
-          startIndex: currentIndex,
-          isFirstPage: false,
-          isLastPage: remaining.length === 0,
-        });
-        currentIndex += chunk.length;
-        pNum++;
       }
+
+      const currentMaxWeight = isFirst ? PAGE1_MULTIPAGE_MAX_WEIGHT : MIDDLE_PAGE_MAX_WEIGHT;
+      let accumWeight = 0;
+      let count = 0;
+
+      while (currentIdx + count < docItems.length) {
+        const nextWeight = itemWeights[currentIdx + count];
+        if (count > 0 && accumWeight + nextWeight > currentMaxWeight) {
+          break;
+        }
+        accumWeight += nextWeight;
+        count++;
+      }
+
+      const pageItems = docItems.slice(currentIdx, currentIdx + count);
+      pages.push({
+        pageNumber: pageNum,
+        totalPages: 0,
+        items: pageItems,
+        startIndex: currentIdx,
+        isFirstPage: isFirst,
+        isLastPage: currentIdx + count >= docItems.length,
+      });
+
+      currentIdx += count;
+      pageNum++;
     }
 
     const total = pages.length;
@@ -619,10 +669,10 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
     }));
   };
 
-  const handleSaveLayout = (targetOffsets?: Record<string, { x: number; y: number }>) => {
+  const handleSaveLayout = (targetOffsets?: Record<string, OffsetData>) => {
     const toSave = targetOffsets !== undefined ? targetOffsets : offsets;
     setIsSavingLayout(true);
-    fetch('/api_paper_settings.php', {
+    fetch(getApiUrl('/api_paper_settings.php'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -637,14 +687,19 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
           const updatedSettings = { ...(paperSettings || {}), layout_offsets: toSave };
           setPaperSettings(updatedSettings);
           memoizedPaperSettingsDoc = updatedSettings;
-          setLayoutSaveNotice('Layout positions saved permanently!');
-          setTimeout(() => setLayoutSaveNotice(null), 3000);
+          setLayoutSaveNotice('✓ Layout & posisi ukuran dokumen berhasil disimpan permanen!');
+          setTimeout(() => setLayoutSaveNotice(null), 3500);
         }
       })
       .catch((err) => {
         setIsSavingLayout(false);
         console.error('Error saving layout offsets:', err);
       });
+  };
+
+  const handleDoneDragMode = () => {
+    setIsDragMode(false);
+    handleSaveLayout(offsets);
   };
 
   const handleResetLayout = () => {
@@ -779,8 +834,64 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
     return rawDate;
   };
 
-  const handlePrint = () => {
-    window.print();
+  const [isPrintingDirect, setIsPrintingDirect] = useState<boolean>(false);
+
+  const handlePrint = async () => {
+    setIsPrintingDirect(true);
+    // 1. Auto-save current quotation edits to MySQL
+    try {
+      if (isEditDocMode) {
+        await handleSaveQuotation();
+      }
+    } catch (e) {
+      console.warn('Auto-save before print warning:', e);
+    }
+
+    const docId = quotation?.id || quotation?.quotation_number || selectedQuoId;
+    const printUrl = getApiUrl(`/view_doc.php?type=quotation&id=${encodeURIComponent(docId)}&print=1&t=${Date.now()}`);
+
+    // 2. Print via isolated hidden iframe loading exact preview mode template (view_doc.php)
+    let printIframe = document.getElementById('direct-quotation-print-frame') as HTMLIFrameElement;
+    if (!printIframe) {
+      printIframe = document.createElement('iframe');
+      printIframe.id = 'direct-quotation-print-frame';
+      printIframe.style.position = 'fixed';
+      printIframe.style.right = '0';
+      printIframe.style.bottom = '0';
+      printIframe.style.width = '0';
+      printIframe.style.height = '0';
+      printIframe.style.border = '0';
+      printIframe.style.visibility = 'hidden';
+      document.body.appendChild(printIframe);
+    }
+
+    printIframe.onload = () => {
+      setIsPrintingDirect(false);
+      try {
+        printIframe.contentWindow?.focus();
+        printIframe.contentWindow?.print();
+      } catch (err) {
+        window.open(printUrl, '_blank');
+      }
+    };
+
+    printIframe.src = printUrl;
+
+    setTimeout(() => {
+      setIsPrintingDirect(false);
+    }, 4000);
+  };
+
+  // Helper to format asset URLs with environment prefix & cache buster
+  const formatAssetUrl = (url?: string) => {
+    if (!url || !url.trim()) return '';
+    const clean = url.trim();
+    if (clean.startsWith('data:') || clean.startsWith('http://') || clean.startsWith('https://')) {
+      return clean;
+    }
+    const apiPath = getApiUrl(clean);
+    const timestamp = paperSettings?.updated_at ? new Date(paperSettings.updated_at).getTime() : '';
+    return timestamp ? `${apiPath}?v=${timestamp}` : apiPath;
   };
 
   // Dynamic extractors from system_paper_settings database
@@ -921,38 +1032,39 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
           }
           .signatures-grid {
             display: flex !important;
-            justify-content: space-between !important;
+            justify-content: flex-end !important;
             align-items: flex-end !important;
             width: 100% !important;
+            margin-left: auto !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
           }
-          .sig-client-box {
-            flex: 1 !important;
-            text-align: left !important;
-          }
           .sig-issuer-box {
-            flex: 1 !important;
-            text-align: right !important;
+            width: 250px !important;
+            max-width: 280px !important;
             margin-left: auto !important;
+            margin-right: 0 !important;
+            text-align: right !important;
             display: flex !important;
             flex-direction: column !important;
             align-items: flex-end !important;
             justify-content: flex-end !important;
           }
           .sig-img-container {
-            height: 50px !important;
+            height: 55px !important;
             display: flex !important;
             justify-content: flex-end !important;
             align-items: center !important;
             margin-left: auto !important;
+            margin-right: 0 !important;
             width: 100% !important;
             text-align: right !important;
           }
           .sig-img-container img {
             display: inline-block !important;
             margin-left: auto !important;
-            max-height: 48px !important;
+            margin-right: 0 !important;
+            max-height: 50px !important;
             max-width: 120px !important;
             object-fit: contain !important;
           }
@@ -1214,10 +1326,15 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                     setIsLeftQuoDropdownOpen(false);
                     handlePrint();
                   }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-slate-50 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
+                  disabled={isPrintingDirect}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-slate-50 font-semibold cursor-pointer text-left border-t border-slate-100 transition disabled:opacity-60"
                 >
-                  <Printer className="w-3.5 h-3.5 text-slate-600" />
-                  <span>Direct Print (Browser PDF)</span>
+                  {isPrintingDirect ? (
+                    <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                  ) : (
+                    <Printer className="w-3.5 h-3.5 text-slate-600" />
+                  )}
+                  <span>{isPrintingDirect ? 'Menyiapkan Cetak...' : 'Direct Print (Exact Preview)'}</span>
                 </button>
 
                 <button
@@ -1388,11 +1505,16 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
 
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-4 py-1.5 transition cursor-pointer shadow-md rounded border border-emerald-800"
+            disabled={isPrintingDirect}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-4 py-1.5 transition cursor-pointer shadow-md rounded border border-emerald-800 disabled:opacity-60"
             title="Print entire document to printer / browser PDF dialog"
           >
-            <Printer className="w-4 h-4 text-white" />
-            <span>Direct Print (PDF)</span>
+            {isPrintingDirect ? (
+              <Loader2 className="w-4 h-4 text-white animate-spin" />
+            ) : (
+              <Printer className="w-4 h-4 text-white" />
+            )}
+            <span>{isPrintingDirect ? 'Menyiapkan...' : 'Direct Print (PDF)'}</span>
           </button>
         </div>
 
@@ -1414,15 +1536,52 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
 
       {/* DRAG MODE ACTIVE BANNER NOTICE */}
       {isDragMode && (
-        <div className="no-print bg-blue-600 text-white text-xs font-bold px-4 py-2 text-center shadow-md flex items-center justify-center gap-2 sticky top-[49px] z-30 animate-in fade-in">
-          <Move className="w-4 h-4 animate-bounce" />
-          <span>DRAG MODE ACTIVE: Click & drag any logo, text, table, photo, signature, or stamp on the paper to reposition freely!</span>
-          <button
-            onClick={() => setIsDragMode(false)}
-            className="ml-3 bg-white text-blue-800 px-2 py-0.5 rounded text-[11px] font-black uppercase hover:bg-blue-50 transition cursor-pointer"
-          >
-            Done
-          </button>
+        <div className="no-print bg-blue-700 text-white text-xs font-bold px-4 py-2.5 text-center shadow-lg flex flex-wrap items-center justify-between gap-3 sticky top-[49px] z-30 animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <Move className="w-4 h-4 text-blue-200 animate-bounce shrink-0" />
+            <span>DRAG & RESIZE MODE AKTIF: Geser elemen atau atur ukuran (scale) logo & teks pada penawaran harga!</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleSaveLayout()}
+              disabled={isSavingLayout}
+              className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white px-3 py-1.5 rounded text-xs font-bold uppercase transition flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-60"
+              title="Simpan posisi layout saat ini ke database"
+            >
+              {isSavingLayout ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              <span>{isSavingLayout ? 'Menyimpan...' : 'Simpan Layout'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleDoneDragMode}
+              disabled={isSavingLayout}
+              className="bg-white hover:bg-slate-100 active:scale-95 text-blue-900 px-3.5 py-1.5 rounded text-xs font-extrabold uppercase transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+              title="Selesai dan simpan posisi otomatis"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Selesai & Simpan (Done)</span>
+            </button>
+            {Object.keys(offsets).length > 0 && (
+              <button
+                type="button"
+                onClick={handleResetLayout}
+                className="bg-rose-500/80 hover:bg-rose-600 active:scale-95 text-white px-2.5 py-1.5 rounded text-xs font-bold uppercase transition flex items-center gap-1 cursor-pointer"
+                title="Reset semua posisi ke default"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING SUCCESS NOTIFICATION TOAST */}
+      {layoutSaveNotice && (
+        <div className="no-print fixed bottom-6 right-6 z-50 bg-slate-900 text-white border border-emerald-500 shadow-2xl px-4 py-3 rounded-lg flex items-center gap-3 animate-in slide-in-from-bottom-5">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span className="text-xs font-bold">{layoutSaveNotice}</span>
         </div>
       )}
 
@@ -1450,16 +1609,13 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                 width: '210mm',
                 minWidth: '210mm',
                 maxWidth: '210mm',
-                height: '297mm',
                 minHeight: '297mm',
-                maxHeight: '297mm',
                 boxSizing: 'border-box',
                 paddingTop: `${modalMarginTop}mm`,
                 paddingBottom: `${modalMarginBottom}mm`,
                 paddingLeft: `${modalMarginLeft}mm`,
                 paddingRight: `${modalMarginRight}mm`,
                 fontSize: `${modalFontSize}pt`,
-                overflow: 'hidden',
               }}
             >
               {/* TOP HEADER BLOCK (Synchronized across all sheets) */}
@@ -1920,16 +2076,22 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                         <div className="sig-img-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', marginLeft: 'auto', textAlign: 'right', width: 'auto', margin: '4px 0 4px auto' }}>
                           {stampUrl && (
                             <img
-                              src={stampUrl}
+                              src={formatAssetUrl(stampUrl)}
                               alt="Company Stamp"
                               style={{ display: 'inline-block', maxHeight: '52px', maxWidth: '130px', objectFit: 'contain' }}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                              }}
                             />
                           )}
                           {signatureUrl && (
                             <img
-                              src={signatureUrl}
+                              src={formatAssetUrl(signatureUrl)}
                               alt="Digital Signature"
                               style={{ display: 'inline-block', maxHeight: '52px', maxWidth: '130px', objectFit: 'contain' }}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                              }}
                             />
                           )}
                           {!signatureUrl && !stampUrl && (
@@ -2132,11 +2294,16 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
         <button
           type="button"
           onClick={handlePrint}
-          className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-3.5 py-1.5 rounded-xl shadow-lg transition cursor-pointer hover:scale-105 active:scale-95"
+          disabled={isPrintingDirect}
+          className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-3.5 py-1.5 rounded-xl shadow-lg transition cursor-pointer hover:scale-105 active:scale-95 disabled:opacity-60"
           title="Print entire document to printer or save as PDF"
         >
-          <Printer className="w-4 h-4 text-white" />
-          <span>Direct Print (PDF)</span>
+          {isPrintingDirect ? (
+            <Loader2 className="w-4 h-4 text-white animate-spin" />
+          ) : (
+            <Printer className="w-4 h-4 text-white" />
+          )}
+          <span>{isPrintingDirect ? 'Menyiapkan...' : 'Direct Print (PDF)'}</span>
         </button>
 
         <a

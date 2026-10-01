@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Quotation, InvoiceItem } from '../types/erp';
 import { 
-  Printer, Send, ArrowLeft, ChevronDown, FileText, Settings, Loader2, Save, CheckCircle2, Building2, Truck, Move, RotateCcw, Plus, Download, ExternalLink, Eye, SlidersHorizontal, X, MoreVertical
+  Printer, Send, ArrowLeft, ChevronDown, FileText, Settings, Loader2, Save, CheckCircle2, Building2, Move, RotateCcw, Plus, Download, ExternalLink, Eye, SlidersHorizontal, X, Trash2, UserPlus
 } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
@@ -240,7 +240,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
   onBack,
   onSendEmail,
   onNavigateView,
-  paperSettings: propInvoiceSettings,
+  paperSettings: _propInvoiceSettings,
 }) => {
   const [completedQuotations, setCompletedQuotations] = useState<Quotation[]>(memoizedCompletedQuotationsInv);
   const [isLoadingQuotations, setIsLoadingQuotations] = useState<boolean>(memoizedCompletedQuotationsInv.length === 0);
@@ -250,24 +250,24 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
   const [isLoadingInvoices, setIsLoadingInvoices] = useState<boolean>(memoizedSavedInvoicesInv.length === 0);
   const [selectedSavedInvoiceId, setSelectedSavedInvoiceId] = useState<string>(initialInvoice?.id || '');
 
-  const [invoiceSettings, setInvoiceSettings] = useState<any>(propInvoiceSettings || memoizedInvoiceSettingsInv || null);
-  const [isLoadingInvoiceSettings, setIsLoadingInvoiceSettings] = useState<boolean>(!propInvoiceSettings && !memoizedInvoiceSettingsInv);
+  const [invoiceSettings, setInvoiceSettings] = useState<any>(memoizedInvoiceSettingsInv || null);
+  const [isLoadingInvoiceSettings, setIsLoadingInvoiceSettings] = useState<boolean>(!memoizedInvoiceSettingsInv);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
-  const [isLeftQuoDropdownOpen, setIsLeftQuoDropdownOpen] = useState<boolean>(false);
+  const [isRightActionsDropdownOpen, setIsRightActionsDropdownOpen] = useState<boolean>(false);
   const [isDocPreviewMode, setIsDocPreviewMode] = useState<boolean>(false);
 
   // Drag Mode & Element Offsets State
   const [isDragMode, setIsDragMode] = useState<boolean>(false);
-  const [offsets, setOffsets] = useState<Record<string, { x: number; y: number }>>({});
+  const [offsets, setOffsets] = useState<Record<string, OffsetData>>({});
   const [isSavingLayout, setIsSavingLayout] = useState<boolean>(false);
   const [layoutSaveNotice, setLayoutSaveNotice] = useState<string | null>(null);
 
-  const handleOffsetChange = (id: string, newOffset: { x: number; y: number }) => {
+  const handleOffsetChange = (id: string, newOffset: OffsetData) => {
     setOffsets((prev) => ({ ...prev, [id]: newOffset }));
   };
 
-  const handleSaveLayout = (targetOffsets?: Record<string, { x: number; y: number }>) => {
+  const handleSaveLayout = (targetOffsets?: Record<string, OffsetData>) => {
     const toSave = targetOffsets !== undefined ? targetOffsets : offsets;
     setIsSavingLayout(true);
     fetch(getApiUrl('/api_invoice_settings.php'), {
@@ -285,14 +285,19 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
           const updatedSettings = { ...(invoiceSettings || {}), layout_offsets: toSave };
           setInvoiceSettings(updatedSettings);
           memoizedInvoiceSettingsInv = updatedSettings;
-          setLayoutSaveNotice('Invoice layout positions saved permanently!');
-          setTimeout(() => setLayoutSaveNotice(null), 3000);
+          setLayoutSaveNotice('✓ Invoice layout & element positions saved permanently!');
+          setTimeout(() => setLayoutSaveNotice(null), 3500);
         }
       })
       .catch((err) => {
         setIsSavingLayout(false);
         console.error('Error saving invoice layout offsets:', err);
       });
+  };
+
+  const handleDoneDragMode = () => {
+    setIsDragMode(false);
+    handleSaveLayout(offsets);
   };
 
   const handleResetLayout = () => {
@@ -322,9 +327,11 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
   
   // Modal States
   const [isPdfModalOpen, setIsPdfModalOpen] = useState<boolean>(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string>('');
+  const [isGeneratingPdfPreview, setIsGeneratingPdfPreview] = useState<boolean>(false);
   const [isPaperSetupModalOpen, setIsPaperSetupModalOpen] = useState<boolean>(false);
 
-  // Paper Setup Modal Form Fields
+  // Paper & Header Setup Modal Form Fields
   const [modalPaperSize, setModalPaperSize] = useState<string>('A4');
   const [modalMarginTop, setModalMarginTop] = useState<number>(18);
   const [modalMarginBottom, setModalMarginBottom] = useState<number>(18);
@@ -332,6 +339,14 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
   const [modalMarginRight, setModalMarginRight] = useState<number>(14);
   const [modalFontSize, setModalFontSize] = useState<number>(9);
   const [modalTableHeaderBg, setModalTableHeaderBg] = useState<string>('#0070c0');
+  const [modalCompanyName, setModalCompanyName] = useState<string>('AB MALAYA INDUSTRY');
+  const [modalCompanyRegNo, setModalCompanyRegNo] = useState<string>('003320457-D');
+  const [modalCompanyAddress, setModalCompanyAddress] = useState<string>('2-2-40, 2nd Floor Wisma Rampai, Jalan 34/26, Taman Sri Rampai, 53300 Kuala Lumpur.');
+  const [modalPhone, setModalPhone] = useState<string>('+60 3-8000 1234');
+  const [modalEmail, setModalEmail] = useState<string>('abmalayaindustry@gmail.com');
+  const [modalWebsite, setModalWebsite] = useState<string>('abmalaya.com');
+  const [modalInvoiceTitle, setModalInvoiceTitle] = useState<string>('OFFICIAL INVOICE');
+  const [modalFooterText, setModalFooterText] = useState<string>('');
   const [isSavingPaperSetup, setIsSavingPaperSetup] = useState<boolean>(false);
   const [quotationId, setQuotationId] = useState<string>(initialInvoice?.quotation_id || '');
   const [poNumber, setPoNumber] = useState<string>(initialInvoice?.po_number || '');
@@ -362,16 +377,239 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
   const [taxAmount, setTaxAmount] = useState<number>(initialInvoice?.tax_amount || 0);
   const [grandTotal, setGrandTotal] = useState<number>(initialInvoice?.grand_total || 0);
   const [notes] = useState<string>(initialInvoice?.notes || '');
+  const [footerText, setFooterText] = useState<string>(initialInvoice?.footer_text || '');
   const [status] = useState<string>(initialInvoice?.status || 'unpaid');
 
-  // Smart Pagination Algorithm (Fills A4 Sheets densely before moving to next page)
+  // Received By (Client Signatory) State
+  const [receivedByName, setReceivedByName] = useState<string>(initialInvoice?.received_by_name || '');
+  const [receivedByDesignation, setReceivedByDesignation] = useState<string>(initialInvoice?.received_by_designation || '');
+  const [receivedByDate, setReceivedByDate] = useState<string>(initialInvoice?.received_by_date || '');
+  const [companySignatories, setCompanySignatories] = useState<any[]>([]);
+  const [isAddSignatoryModalOpen, setIsAddSignatoryModalOpen] = useState<boolean>(false);
+  const [sigTargetCompany, setSigTargetCompany] = useState<string>('');
+  const [allClientCompanies, setAllClientCompanies] = useState<Array<{ id?: number; company_name: string; client_name?: string }>>([]);
+  const [newSigName, setNewSigName] = useState<string>('');
+  const [newSigDesignation, setNewSigDesignation] = useState<string>('');
+  const [isNewSigDefault, setIsNewSigDefault] = useState<boolean>(true);
+  const [isSavingNewSig, setIsSavingNewSig] = useState<boolean>(false);
+  const [isCustomSigMode, setIsCustomSigMode] = useState<boolean>(false);
+
+  // Auto-fetch signatories for current company
+  const fetchCompanySignatories = (comp: string) => {
+    if (!comp || comp.trim() === '') {
+      setCompanySignatories([]);
+      return;
+    }
+    fetch(getApiUrl(`/api_clients.php?action=signatories&company_name=${encodeURIComponent(comp.trim())}`))
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.status === 'success' && Array.isArray(data.data)) {
+          setCompanySignatories(data.data);
+        }
+      })
+      .catch((err) => {
+        console.error('Error fetching company signatories:', err);
+      });
+  };
+
+  // Fetch all registered companies for dropdown selection in modal
+  const fetchAllCompanies = () => {
+    fetch(getApiUrl('/api_clients.php'))
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.status === 'success' && Array.isArray(data.data)) {
+          const comps: Array<{ id?: number; company_name: string; client_name?: string }> = [];
+          const seen = new Set<string>();
+          data.data.forEach((c: any) => {
+            const comp = String(c.company_name || '').trim();
+            if (comp && !seen.has(comp.toLowerCase())) {
+              seen.add(comp.toLowerCase());
+              comps.push({ id: c.id, company_name: comp, client_name: c.client_name });
+            }
+          });
+          setAllClientCompanies(comps);
+        }
+      })
+      .catch((err) => {
+        console.error('Error fetching client companies:', err);
+      });
+  };
+
+  useEffect(() => {
+    fetchAllCompanies();
+  }, []);
+
+  useEffect(() => {
+    if (companyName) {
+      fetchCompanySignatories(companyName);
+    } else {
+      setCompanySignatories([]);
+    }
+  }, [companyName]);
+
+  const openAddSignatoryModal = () => {
+    const currentComp = companyName.trim() || clientName.trim() || '';
+    setSigTargetCompany(currentComp);
+    setIsNewSigDefault(companySignatories.length === 0);
+    setIsAddSignatoryModalOpen(true);
+    fetchAllCompanies();
+  };
+
+  const handleAddNewSignatory = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newSigName.trim()) {
+      alert('Nama PIC / Signatory wajib diisi!');
+      return;
+    }
+    const targetComp = sigTargetCompany.trim() || companyName.trim() || clientName.trim() || 'Client Company';
+    setIsSavingNewSig(true);
+    try {
+      const res = await fetch(getApiUrl('/api_clients.php'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'add_signatory',
+          company_name: targetComp,
+          name: newSigName.trim(),
+          designation: newSigDesignation.trim(),
+          is_default: isNewSigDefault ? 1 : 0
+        }),
+      });
+      const data = await res.json();
+      setIsSavingNewSig(false);
+      if (data.status === 'success') {
+        const savedSig = data.data || { name: newSigName.trim(), designation: newSigDesignation.trim(), company_name: targetComp };
+        
+        // If saved signatory belongs to current invoice company, set active & update local dropdown list
+        const activeInvoiceComp = (companyName.trim() || clientName.trim()).toLowerCase();
+        if (targetComp.toLowerCase().trim() === activeInvoiceComp) {
+          setReceivedByName(savedSig.name);
+          setReceivedByDesignation(savedSig.designation || '');
+          setIsCustomSigMode(false);
+          setCompanySignatories((prev) => [...prev.filter((s) => s.id !== savedSig.id), savedSig]);
+        }
+        
+        setNewSigName('');
+        setNewSigDesignation('');
+        setIsAddSignatoryModalOpen(false);
+        fetchAllCompanies();
+        if (companyName) {
+          fetchCompanySignatories(companyName);
+        }
+      } else {
+        alert(data.message || 'Gagal menyimpan signatory');
+      }
+    } catch (err: any) {
+      setIsSavingNewSig(false);
+      alert('Gagal menyimpan: ' + (err?.message || 'Network error'));
+    }
+  };
+
+  // Auto-recalculate subtotal, tax amount, and grand total whenever items, tax, or discount change
+  useEffect(() => {
+    const newSub = items.reduce((acc, item) => {
+      const qty = Number(item.quantity) || 0;
+      const price = Number(item.unit_price) || 0;
+      const itemTot = item.total !== undefined ? Number(item.total) : (qty * price);
+      return acc + itemTot;
+    }, 0);
+    setSubtotal(newSub);
+    const newTax = (newSub * (taxPercent || 0)) / 100;
+    setTaxAmount(newTax);
+    setGrandTotal(newSub - (discountTotal || 0) + newTax);
+  }, [items, taxPercent, discountTotal]);
+
+  // Item Table Handlers
+  const handleItemChange = (index: number, field: string, value: any) => {
+    setItems((prevItems) => {
+      const updated = [...prevItems];
+      const currentItem = { ...updated[index], [field]: value };
+      if (field === 'quantity' || field === 'unit_price') {
+        const qty = field === 'quantity' ? Number(value) : (Number(currentItem.quantity) || 0);
+        const price = field === 'unit_price' ? Number(value) : (Number(currentItem.unit_price) || 0);
+        currentItem.total = qty * price;
+      }
+      updated[index] = currentItem;
+      return updated;
+    });
+  };
+
+  const handleAddItem = () => {
+    setItems((prev) => [
+      ...prev,
+      {
+        description: 'New Product / Item Description',
+        specification: '',
+        quantity: 1,
+        unit: 'Unit',
+        unit_price: 0,
+        total: 0,
+      },
+    ]);
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Helper to compute visual height weight of an invoice item based on text length & photos
+  const getItemHeightWeight = (item: any): number => {
+    let w = 1.0; // base row height
+    const desc = String(item.description || '');
+    const spec = String(item.specification || '');
+    const offer = String(item.offer || item.offered_item || '');
+    
+    // Description line count
+    const descLines = desc.split('\n').reduce((acc, l) => acc + Math.max(1, Math.ceil(l.length / 42)), 0);
+    w += Math.max(0, (descLines - 1) * 0.45);
+
+    // Specification line count
+    if (spec) {
+      const specLines = spec.split('\n').reduce((acc, l) => acc + Math.max(1, Math.ceil(l.length / 48)), 0);
+      w += specLines * 0.4;
+    }
+
+    // Offered item line count
+    if (offer) {
+      const offerLines = offer.split('\n').reduce((acc, l) => acc + Math.max(1, Math.ceil(l.length / 32)), 0);
+      w += Math.max(0, (offerLines - 1) * 0.35);
+    }
+
+    // Product Photo
+    if (item.image_url) {
+      w += 3.2;
+    }
+
+    return Math.max(1.0, w);
+  };
+
+  // Smart Dynamic Pagination Algorithm (Fills A4 Sheets densely before moving to next page)
   const pageChunks: PageChunk[] = useMemo(() => {
-    const totalItems = items.length;
-    
-    // Page 1 capacity: 6 items if single-page, 7 items if multi-page
-    // Subsequent page capacity: 10 items if middle page, 8 items if last page with bank/signatures
-    
-    if (totalItems <= 6) {
+    if (!items || items.length === 0) {
+      return [{
+        pageNumber: 1,
+        totalPages: 1,
+        items: [],
+        startIndex: 0,
+        isFirstPage: true,
+        isLastPage: true,
+      }];
+    }
+
+    const itemWeights = items.map(getItemHeightWeight);
+    const totalWeight = itemWeights.reduce((a, b) => a + b, 0);
+
+    // Capacity thresholds in weight units (1 unit ≈ 1 regular single-line row):
+    // - Single page: Header + 2-Column Addresses + Items + Bank Remarks + Totals + Signatures + Footer
+    const SINGLE_PAGE_MAX_WEIGHT = 6.0;
+    // - Page 1 of multi-page: Header + 2-Column Addresses + Items (NO bottom bank/signatures)
+    const PAGE1_MULTIPAGE_MAX_WEIGHT = 11.0;
+    // - Middle continuation page: Header + Items only
+    const MIDDLE_PAGE_MAX_WEIGHT = 16.5;
+    // - Last page of multi-page: Header + Items + Bank Remarks + Totals + Signatures + Footer
+    const LAST_PAGE_MAX_WEIGHT = 8.0;
+
+    if (totalWeight <= SINGLE_PAGE_MAX_WEIGHT && items.length <= 6) {
       return [{
         pageNumber: 1,
         totalPages: 1,
@@ -383,45 +621,54 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
     }
 
     const pages: PageChunk[] = [];
-    const page1Count = Math.min(7, totalItems);
-    pages.push({
-      pageNumber: 1,
-      totalPages: 0,
-      items: items.slice(0, page1Count),
-      startIndex: 0,
-      isFirstPage: true,
-      isLastPage: page1Count === totalItems,
-    });
+    let currentIdx = 0;
+    let pageNum = 1;
 
-    let remaining = items.slice(page1Count);
-    let currentIndex = page1Count;
-    let pNum = 2;
+    while (currentIdx < items.length) {
+      const isFirst = pageNum === 1;
+      const remainingItems = items.slice(currentIdx);
+      const remainingWeight = itemWeights.slice(currentIdx).reduce((a, b) => a + b, 0);
 
-    while (remaining.length > 0) {
-      if (remaining.length <= 8) {
+      // Check if all remaining items fit comfortably on the current page as the LAST page
+      const currentMaxWeightAsLast = isFirst ? SINGLE_PAGE_MAX_WEIGHT : LAST_PAGE_MAX_WEIGHT;
+      if (remainingWeight <= currentMaxWeightAsLast) {
         pages.push({
-          pageNumber: pNum,
+          pageNumber: pageNum,
           totalPages: 0,
-          items: remaining,
-          startIndex: currentIndex,
-          isFirstPage: false,
+          items: remainingItems,
+          startIndex: currentIdx,
+          isFirstPage: isFirst,
           isLastPage: true,
         });
         break;
-      } else {
-        const chunk = remaining.slice(0, 10);
-        remaining = remaining.slice(10);
-        pages.push({
-          pageNumber: pNum,
-          totalPages: 0,
-          items: chunk,
-          startIndex: currentIndex,
-          isFirstPage: false,
-          isLastPage: remaining.length === 0,
-        });
-        currentIndex += chunk.length;
-        pNum++;
       }
+
+      // Otherwise, pack items up to page capacity (as a non-last page)
+      const currentMaxWeight = isFirst ? PAGE1_MULTIPAGE_MAX_WEIGHT : MIDDLE_PAGE_MAX_WEIGHT;
+      let accumWeight = 0;
+      let count = 0;
+
+      while (currentIdx + count < items.length) {
+        const nextWeight = itemWeights[currentIdx + count];
+        if (count > 0 && accumWeight + nextWeight > currentMaxWeight) {
+          break;
+        }
+        accumWeight += nextWeight;
+        count++;
+      }
+
+      const pageItems = items.slice(currentIdx, currentIdx + count);
+      pages.push({
+        pageNumber: pageNum,
+        totalPages: 0,
+        items: pageItems,
+        startIndex: currentIdx,
+        isFirstPage: isFirst,
+        isLastPage: currentIdx + count >= items.length,
+      });
+
+      currentIdx += count;
+      pageNum++;
     }
 
     const total = pages.length;
@@ -429,28 +676,42 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
     return pages;
   }, [items]);
 
-  // Fetch invoice settings from dedicated MySQL table (system_invoice_settings) (cached)
+  // Always fetch fresh invoice settings from dedicated MySQL table (system_invoice_settings) on mount & reload
+  const fetchLiveInvoiceSettings = () => {
+    setIsLoadingInvoiceSettings(true);
+    fetch(getApiUrl(`/api_invoice_settings.php?t=${Date.now()}`))
+      .then((res) => res.json())
+      .then((data) => {
+        setIsLoadingInvoiceSettings(false);
+        if (data.status === 'success' && data.data) {
+          memoizedInvoiceSettingsInv = data.data;
+          setInvoiceSettings(data.data);
+          if (data.data.company_name) setModalCompanyName(data.data.company_name);
+          if (data.data.company_reg_no) setModalCompanyRegNo(data.data.company_reg_no);
+          if (data.data.company_address) setModalCompanyAddress(data.data.company_address);
+          if (data.data.phone) setModalPhone(data.data.phone);
+          if (data.data.email) setModalEmail(data.data.email);
+          if (data.data.website) setModalWebsite(data.data.website);
+          if (data.data.invoice_title) setModalInvoiceTitle(data.data.invoice_title);
+          if (data.data.footer_text) setModalFooterText(data.data.footer_text);
+          if (data.data.paper_size) setModalPaperSize(data.data.paper_size);
+          if (data.data.margin_top !== undefined) setModalMarginTop(Number(data.data.margin_top));
+          if (data.data.margin_bottom !== undefined) setModalMarginBottom(Number(data.data.margin_bottom));
+          if (data.data.margin_left !== undefined) setModalMarginLeft(Number(data.data.margin_left));
+          if (data.data.margin_right !== undefined) setModalMarginRight(Number(data.data.margin_right));
+          if (data.data.font_size !== undefined) setModalFontSize(Number(data.data.font_size));
+          if (data.data.table_header_bg) setModalTableHeaderBg(data.data.table_header_bg);
+        }
+      })
+      .catch((err) => {
+        setIsLoadingInvoiceSettings(false);
+        console.error('Error fetching live invoice settings:', err);
+      });
+  };
+
   useEffect(() => {
-    if (!invoiceSettings) {
-      if (!memoizedInvoiceSettingsInv) setIsLoadingInvoiceSettings(true);
-      fetch(getApiUrl('/api_invoice_settings.php'))
-        .then((res) => res.json())
-        .then((data) => {
-          setIsLoadingInvoiceSettings(false);
-          if (data.status === 'success' && data.data) {
-            memoizedInvoiceSettingsInv = data.data;
-            setInvoiceSettings(data.data);
-          }
-        })
-        .catch((err) => {
-          setIsLoadingInvoiceSettings(false);
-          console.error('Error fetching invoice settings:', err);
-        });
-    } else {
-      memoizedInvoiceSettingsInv = invoiceSettings;
-      setIsLoadingInvoiceSettings(false);
-    }
-  }, [invoiceSettings]);
+    fetchLiveInvoiceSettings();
+  }, []);
 
   // Fetch saved invoices from MySQL database (/api_invoices.php)
   const fetchSavedInvoicesList = () => {
@@ -534,6 +795,12 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
     setDeliveryPic(inv.delivery_pic || '');
     setDeliveryPhone(inv.delivery_phone || '');
 
+    setReceivedByName(inv.received_by_name || '');
+    setReceivedByDesignation(inv.received_by_designation || '');
+    setReceivedByDate(inv.received_by_date || '');
+    setFooterText(inv.footer_text || '');
+    setIsCustomSigMode(false);
+
     const rawItems = inv.items || [];
     setItems(rawItems.map((it: any) => ({
       product_code: it.product_code || '',
@@ -574,6 +841,10 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
     setDeliveryAddress('');
     setDeliveryPic('');
     setDeliveryPhone('');
+    setReceivedByName('');
+    setReceivedByDesignation('');
+    setReceivedByDate('');
+    setIsCustomSigMode(false);
     setItems([]);
     setSubtotal(0);
     setDiscountTotal(0);
@@ -621,6 +892,37 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
     setDeliveryPic(quo.client_name || '');
     setDeliveryPhone(quo.client_phone || '');
 
+    // Fallback: If quotation does not have company_address, auto-lookup from clients database
+    if (!quo.company_address && quo.company_name) {
+      fetch(getApiUrl(`/api_clients.php?search=${encodeURIComponent(quo.company_name.trim())}`))
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.status === 'success' && Array.isArray(data.data) && data.data.length > 0) {
+            const matchedClient = data.data.find(
+              (c: any) => c.company_name && c.company_name.toLowerCase().trim() === quo.company_name?.toLowerCase().trim()
+            ) || data.data[0];
+            
+            const fullAddress = [
+              matchedClient.address_line1,
+              matchedClient.address_line2,
+              [matchedClient.postal_code, matchedClient.city].filter(Boolean).join(' '),
+              [matchedClient.state, matchedClient.country].filter(Boolean).join(', ')
+            ].filter(Boolean).join('\n');
+            
+            if (fullAddress) {
+              setBillingAddress((prev) => prev || fullAddress);
+              setDeliveryAddress((prev) => prev || fullAddress);
+            }
+          }
+        })
+        .catch(() => {});
+    }
+
+    setReceivedByName((quo as any).received_by_name || '');
+    setReceivedByDesignation((quo as any).received_by_designation || '');
+    setReceivedByDate('');
+    setIsCustomSigMode(false);
+
     const rawItems = quo.items || (quo as any).items_details || [];
     const mappedItems: InvoiceItem[] = rawItems.map((it: any) => ({
       product_code: it.product_code || it.item_code || '',
@@ -653,29 +955,54 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
     }).format(num);
   };
 
-  const handlePrint = () => {
-    window.print();
+  const [isPrintingDirect, setIsPrintingDirect] = useState<boolean>(false);
+
+  const handlePrint = async () => {
+    setIsPrintingDirect(true);
+    // 1. Auto-save current invoice to MySQL so all live inputs, items, remarks, and PIC are completely up to date
+    try {
+      await saveInvoicePayload(true);
+    } catch (e) {
+      console.warn('Auto-save before print warning:', e);
+    }
+
+    const docId = invoiceId || invoiceNumber || quotationId;
+    const printUrl = getApiUrl(`/view_doc.php?type=invoice&id=${encodeURIComponent(docId)}&print=1&t=${Date.now()}`);
+
+    // 2. Print via isolated hidden iframe loading exact preview mode template (view_doc.php)
+    let printIframe = document.getElementById('direct-invoice-print-frame') as HTMLIFrameElement;
+    if (!printIframe) {
+      printIframe = document.createElement('iframe');
+      printIframe.id = 'direct-invoice-print-frame';
+      printIframe.style.position = 'fixed';
+      printIframe.style.right = '0';
+      printIframe.style.bottom = '0';
+      printIframe.style.width = '0';
+      printIframe.style.height = '0';
+      printIframe.style.border = '0';
+      printIframe.style.visibility = 'hidden';
+      document.body.appendChild(printIframe);
+    }
+
+    printIframe.onload = () => {
+      setIsPrintingDirect(false);
+      try {
+        printIframe.contentWindow?.focus();
+        printIframe.contentWindow?.print();
+      } catch (err) {
+        window.open(printUrl, '_blank');
+      }
+    };
+
+    printIframe.src = printUrl;
+
+    setTimeout(() => {
+      setIsPrintingDirect(false);
+    }, 4000);
   };
 
-  const handleDownloadPdfDirect = () => {
-    const targetId = invoiceId || invoiceNumber;
-    const downloadUrl = `/api_pdf.php?type=invoice&id=${encodeURIComponent(targetId)}&action=download`;
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = `${invoiceNumber || 'INV-ABM'}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handlePreviewPdfInTab = () => {
-    const targetId = invoiceId || invoiceNumber;
-    const previewUrl = `/api_pdf.php?type=invoice&id=${encodeURIComponent(targetId)}&action=stream`;
-    window.open(previewUrl, '_blank');
-  };
-
-  const handleSaveInvoice = () => {
-    setIsSaving(true);
+  const saveInvoicePayload = async (silent = false): Promise<boolean> => {
+    if (!silent) setIsSaving(true);
     const payload = {
       id: invoiceId,
       invoice_number: invoiceNumber,
@@ -702,42 +1029,99 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
       bank_account_name: invoiceSettings?.bank_account_name || 'AB MALAYA INDUSTRY',
       bank_email: invoiceSettings?.bank_email || 'abmalayaindustry@gmail.com',
       notes: notes,
+      footer_text: footerText,
+      received_by_name: receivedByName,
+      received_by_designation: receivedByDesignation,
+      received_by_date: receivedByDate,
       status: status,
       items: items,
     };
 
-    fetch(getApiUrl('/api_invoices.php'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-      .then((res) => res.json())
-      .then((resData) => {
-        setIsSaving(false);
-        if (resData.status === 'success') {
+    try {
+      const res = await fetch(getApiUrl('/api_invoices.php'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const resData = await res.json();
+      if (!silent) setIsSaving(false);
+      if (resData.status === 'success') {
+        if (!silent) {
           setSaveSuccessMessage(`Invoice ${invoiceNumber} saved successfully to MySQL database!`);
-          fetchSavedInvoicesList();
           setTimeout(() => setSaveSuccessMessage(null), 4000);
-        } else {
-          alert('Failed to save invoice: ' + (resData.message || 'Error'));
         }
-      })
-      .catch((err) => {
+        fetchSavedInvoicesList();
+        return true;
+      } else {
+        if (!silent) alert('Failed to save invoice: ' + (resData.message || 'Error'));
+        return false;
+      }
+    } catch (err: any) {
+      if (!silent) {
         setIsSaving(false);
         console.error('Save invoice error:', err);
-        alert('Save invoice error: ' + err.message);
-      });
+        alert('Save invoice error: ' + (err?.message || 'Network error'));
+      }
+      return false;
+    }
   };
 
-  const logoUrl = invoiceSettings?.logo_url || invoiceSettings?.logoUrl;
+  const handleSaveInvoice = () => {
+    saveInvoicePayload(false);
+  };
+
+  const handleOpenPdfModal = async () => {
+    setIsPdfModalOpen(true);
+    setIsGeneratingPdfPreview(true);
+    setPdfPreviewUrl('');
+    await saveInvoicePayload(true);
+    const targetId = invoiceId || invoiceNumber;
+    const stableUrl = getApiUrl(`/api_pdf.php?type=invoice&id=${encodeURIComponent(targetId)}&action=stream&force=1&t=${Date.now()}#toolbar=1`);
+    setPdfPreviewUrl(stableUrl);
+  };
+
+  const handleDownloadPdfDirect = async () => {
+    await saveInvoicePayload(true);
+    const targetId = invoiceId || invoiceNumber;
+    const downloadUrl = getApiUrl(`/api_pdf.php?type=invoice&id=${encodeURIComponent(targetId)}&action=download&force=1`);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `${invoiceNumber || 'INV-ABM'}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handlePreviewPdfInTab = async () => {
+    await saveInvoicePayload(true);
+    const targetId = invoiceId || invoiceNumber;
+    const previewUrl = getApiUrl(`/api_pdf.php?type=invoice&id=${encodeURIComponent(targetId)}&action=stream&force=1`);
+    window.open(previewUrl, '_blank');
+  };
+
+  const formatAssetUrl = (url?: string) => {
+    if (!url || !url.trim()) return '';
+    const clean = url.trim();
+    if (clean.startsWith('data:') || clean.startsWith('http://') || clean.startsWith('https://')) {
+      return clean;
+    }
+    const apiPath = getApiUrl(clean);
+    const timestamp = invoiceSettings?.updated_at ? new Date(invoiceSettings.updated_at).getTime() : '';
+    return timestamp ? `${apiPath}?v=${timestamp}` : apiPath;
+  };
+
+  const logoUrl = invoiceSettings?.logo_url || invoiceSettings?.logoUrl || '/favicon.png';
   const stampUrl = invoiceSettings?.stamp_url || invoiceSettings?.stampUrl;
   const signatureUrl = invoiceSettings?.signature_url || invoiceSettings?.signatureUrl;
   const headerImageUrl = invoiceSettings?.header_image_url || invoiceSettings?.headerImageUrl;
   const companyNameSetting = invoiceSettings?.company_name || invoiceSettings?.companyName || 'AB MALAYA INDUSTRY';
   const companyRegNoSetting = invoiceSettings?.company_reg_no || invoiceSettings?.companyRegNo || '003320457-D';
-  const companyAddressSetting = invoiceSettings?.company_address || invoiceSettings?.companyAddress || 'No 3. Jalan Melati Utama 1, Taman Melati Utama, 53100 Setapak, Kuala Lumpur';
+  const companyAddressSetting = (invoiceSettings?.company_address && invoiceSettings.company_address.trim())
+    || (invoiceSettings?.companyAddress && invoiceSettings.companyAddress.trim())
+    || '2-2-40, 2nd Floor Wisma Rampai, Jalan 34/26, Taman Sri Rampai, 53300 Kuala Lumpur.';
   const companyEmailSetting = invoiceSettings?.email || invoiceSettings?.companyEmail || 'abmalayaindustry@gmail.com';
   const companyPhoneSetting = invoiceSettings?.phone || invoiceSettings?.companyPhone || '+60 3-8000 1234';
+  const companyWebsiteSetting = invoiceSettings?.website || invoiceSettings?.companyWebsite || 'abmalaya.com';
   const invoiceTitleSetting = invoiceSettings?.invoice_title || invoiceSettings?.invoiceTitle || 'OFFICIAL INVOICE';
 
   const bankName = invoiceSettings?.bank_name || invoiceSettings?.bankName || 'PUBLIC BANK';
@@ -749,158 +1133,51 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
   const authSignatoryName = invoiceSettings?.authorised_by_name || invoiceSettings?.authorisedByName || 'Muhammad Aimanuddin Bin Mohd Zaki';
   const authSignatoryTitle = invoiceSettings?.authorised_by_title || invoiceSettings?.authorisedByTitle || 'Procurement Manager / Head of Sales';
   const receivedByLabel = invoiceSettings?.received_by_label || invoiceSettings?.receivedByLabel || 'Received by,';
+  const receivedByNameLabel = invoiceSettings?.received_by_name_label || invoiceSettings?.receivedByNameLabel || 'Name / Designation: ______________________';
+  const receivedByDateLabel = invoiceSettings?.received_by_date_label || invoiceSettings?.receivedByDateLabel || 'Date: ____ / ____ / ________';
 
   const tableHeaderBg = invoiceSettings?.table_header_bg || invoiceSettings?.tableHeaderBg || '#0070c0';
   const tableHeaderTextColor = invoiceSettings?.table_header_text_color || invoiceSettings?.tableHeaderTextColor || '#ffffff';
 
+  const renderDynamicAddress = (addrRaw?: string) => {
+    const defaultAddress = '2-2-40, 2nd Floor Wisma Rampai, Jalan 34/26, Taman Sri Rampai, 53300 Kuala Lumpur.';
+    const clean = (addrRaw && addrRaw.trim()) ? addrRaw.trim() : defaultAddress;
+
+    if (clean.includes('\n')) {
+      const lines = clean.split('\n').map((l) => l.trim()).filter(Boolean);
+      return lines.map((line, idx) => (
+        <p key={idx} style={{ margin: 0, fontWeight: idx === 0 ? 700 : 400, color: idx === 0 ? '#0f172a' : '#1e293b', fontSize: idx === 0 ? '8.5pt' : '8pt' }}>
+          {line}
+        </p>
+      ));
+    }
+
+    const parts = clean.split(',').map((s) => s.trim()).filter(Boolean);
+    if (parts.length >= 3) {
+      const line1 = parts.slice(0, 2).join(', ') + ',';
+      const line2 = parts.slice(2, parts.length - 1).join(', ') + ',';
+      const line3 = parts[parts.length - 1];
+      return (
+        <>
+          <p style={{ margin: 0, fontWeight: 700, color: '#0f172a', fontSize: '8.5pt' }}>{line1}</p>
+          <p style={{ margin: 0, color: '#1e293b', fontSize: '8pt' }}>{line2}</p>
+          <p style={{ margin: 0, fontWeight: 600, color: '#0f172a', fontSize: '8pt' }}>{line3}</p>
+        </>
+      );
+    }
+
+    return <p style={{ margin: 0, fontWeight: 600, color: '#0f172a', fontSize: '8pt' }}>{clean}</p>;
+  };
+
   return (
     <div className="w-full h-full bg-[#f0f0f0] flex flex-col font-sans p-0 m-0 overflow-y-auto">
       
-      {/* FROZEN STICKY TOP NAVBAR (MATCHING BUILDER STYLE) */}
+      {/* FROZEN STICKY TOP NAVBAR (MATCHING QUOTATION DOC STYLE) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] px-3 py-2 border-b border-[#7b7b7b] shrink-0 w-full shadow-xs sticky top-0 z-30 print:hidden">
         
-        {/* LEFT SECTION: Options Dropdown + Completed Quotations Selector */}
+        {/* LEFT SECTION: Options Dropdown + Selectors */}
         <div className="flex items-center gap-2 text-xs flex-wrap">
           
-          {/* OPTIONS DROPDOWN */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setIsLeftQuoDropdownOpen(!isLeftQuoDropdownOpen)}
-              className="flex items-center gap-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-white border border-[#a0a0a0] text-[#3d3d3d] font-bold text-xs px-2.5 py-1 rounded shadow-inner cursor-pointer transition"
-              title="Options, PDF Preview & Paper Setup (...)"
-            >
-              <MoreVertical className="w-4 h-4 text-[#0099ec]" />
-              <span>Options (...)</span>
-              <ChevronDown className="w-3 h-3 text-slate-600" />
-            </button>
-
-            {isLeftQuoDropdownOpen && (
-              <div className="absolute left-0 top-8 w-60 bg-white border border-slate-300 shadow-2xl py-1 z-50 animate-in fade-in slide-in-from-top-1 text-xs font-sans rounded-md">
-                <button
-                  onClick={() => {
-                    setIsLeftQuoDropdownOpen(false);
-                    handleCreateNewInvoice();
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-blue-700 hover:bg-blue-50 font-bold cursor-pointer text-left transition"
-                >
-                  <Plus className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Create New Blank Invoice</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsLeftQuoDropdownOpen(false);
-                    handleSaveInvoice();
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-blue-50 hover:text-blue-700 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
-                >
-                  <Save className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Save Invoice to MySQL</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsLeftQuoDropdownOpen(false);
-                    setIsPdfModalOpen(true);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-blue-800 hover:bg-blue-50 font-bold cursor-pointer text-left transition"
-                >
-                  <Eye className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Preview PDF Live (Web Viewer)</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsLeftQuoDropdownOpen(false);
-                    handleDownloadPdfDirect();
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-emerald-800 hover:bg-emerald-50 font-bold cursor-pointer text-left border-t border-slate-100 transition"
-                >
-                  <Download className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Download Full PDF (Puppeteer Engine)</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsLeftQuoDropdownOpen(false);
-                    setIsPaperSetupModalOpen(true);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-purple-800 hover:bg-purple-50 font-bold cursor-pointer text-left border-t border-slate-100 transition"
-                >
-                  <SlidersHorizontal className="w-3.5 h-3.5 text-purple-600" />
-                  <span>Paper & Margins Setup</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsLeftQuoDropdownOpen(false);
-                    handlePreviewPdfInTab();
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-blue-50 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 text-slate-600" />
-                  <span>Preview PDF in New Tab</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsLeftQuoDropdownOpen(false);
-                    handlePrint();
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-blue-50 hover:text-blue-700 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
-                >
-                  <Printer className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Print / Export Invoice PDF</span>
-                </button>
-
-                {onSendEmail && (
-                  <button
-                    onClick={() => {
-                      setIsLeftQuoDropdownOpen(false);
-                      onSendEmail({
-                        id: invoiceId,
-                        invoice_number: invoiceNumber,
-                        client_email: clientEmail,
-                        company_name: companyName,
-                        grand_total: grandTotal,
-                      });
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-emerald-50 hover:text-emerald-700 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
-                  >
-                    <Send className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Send Invoice via Email</span>
-                  </button>
-                )}
-
-                {onNavigateView && (
-                  <button
-                    onClick={() => {
-                      setIsLeftQuoDropdownOpen(false);
-                      onNavigateView('quotation_list');
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-slate-50 hover:text-slate-900 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
-                  >
-                    <FileText className="w-3.5 h-3.5 text-slate-600" />
-                    <span>View Quotation List</span>
-                  </button>
-                )}
-
-                {onNavigateView && (
-                  <button
-                    onClick={() => {
-                      setIsLeftQuoDropdownOpen(false);
-                      onNavigateView('system_settings');
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-purple-50 hover:text-purple-700 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
-                  >
-                    <Settings className="w-3.5 h-3.5 text-purple-600" />
-                    <span>Invoice & Bank Settings</span>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
 
           {/* SAVED INVOICES SELECTOR DROPDOWN */}
           <div className="flex items-center gap-1.5">
@@ -957,8 +1234,8 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
           )}
         </div>
 
-        {/* RIGHT SECTION: Action Buttons & 3-Dots Options Dropdown */}
-        <div className="flex items-center gap-2">
+        {/* RIGHT SECTION: Standardized Action Buttons (Matching QuotationDoc) */}
+        <div className="flex items-center gap-2 flex-wrap">
           
           {layoutSaveNotice && (
             <div className="flex items-center gap-1.5 text-emerald-800 bg-emerald-50 border border-emerald-300 px-2.5 py-0.5 rounded font-bold text-xs animate-in fade-in">
@@ -979,52 +1256,93 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
             title="Toggle Read-Only Document Preview mode without input borders/boxes"
           >
             <Eye className={`w-3.5 h-3.5 ${isDocPreviewMode ? 'text-white' : 'text-emerald-600'}`} />
-            <span>{isDocPreviewMode ? 'Exit Doc Preview' : 'Doc Preview (Read-Only)'}</span>
+            <span>{isDocPreviewMode ? 'Exit Doc Preview' : 'Doc Preview'}</span>
           </button>
 
-          {/* PRIMARY QUICK CTA: SAVE INVOICE */}
+          {/* PRIMARY SAVE INVOICE BUTTON */}
           <button
             onClick={handleSaveInvoice}
             disabled={isSaving}
-            className="flex items-center gap-1.5 bg-gradient-to-b from-[#0284c7] to-[#0369a1] hover:from-[#0369a1] hover:to-[#075985] text-white font-bold text-xs px-3.5 py-1 shadow-xs transition cursor-pointer rounded border border-sky-800 disabled:opacity-60"
+            className="flex items-center gap-1.5 bg-gradient-to-b from-[#0284c7] to-[#0369a1] hover:from-[#0369a1] hover:to-[#075985] text-white font-bold text-xs px-3 py-1 shadow-xs transition cursor-pointer rounded border border-sky-800 disabled:opacity-60"
             title="Save Invoice directly to MySQL database"
           >
             {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-white" />}
             <span>{isSaving ? 'Saving...' : 'Save Invoice'}</span>
           </button>
 
-          {/* 3-DOTS (...) OPTIONS DROPDOWN MENU */}
+          {/* DRAG & MOVE TOGGLE BUTTON */}
+          <button
+            type="button"
+            onClick={() => setIsDragMode(!isDragMode)}
+            className={`flex items-center gap-1.5 font-bold text-xs px-3 py-1 transition cursor-pointer rounded border shadow-xs ${
+              isDragMode
+                ? 'bg-blue-600 text-white border-blue-700 ring-2 ring-blue-400 animate-pulse'
+                : 'bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-white text-slate-800 border-[#a0a0a0] shadow-inner'
+            }`}
+            title="Toggle Drag & Reposition Mode to move elements freely"
+          >
+            <Move className={`w-3.5 h-3.5 ${isDragMode ? 'text-white' : 'text-blue-600'}`} />
+            <span>{isDragMode ? 'Exit Drag' : 'Drag & Move'}</span>
+          </button>
+
+          {/* DOWNLOAD FULL PDF BUTTON (PUPPETEER ENGINE) */}
+          <button
+            type="button"
+            onClick={handleDownloadPdfDirect}
+            className="flex items-center gap-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-extrabold text-xs px-3.5 py-1.5 transition cursor-pointer shadow-md rounded border border-blue-900"
+            title="Download Full PDF generated by Puppeteer daemon engine"
+          >
+            <Download className="w-4 h-4 text-white" />
+            <span>Download PDF</span>
+          </button>
+
+          {/* DIRECT PRINT BUTTON */}
+          <button
+            onClick={handlePrint}
+            disabled={isPrintingDirect}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-4 py-1.5 transition cursor-pointer shadow-md rounded border border-emerald-800 disabled:opacity-60"
+            title="Print entire document to printer / browser PDF dialog"
+          >
+            {isPrintingDirect ? (
+              <Loader2 className="w-4 h-4 text-white animate-spin" />
+            ) : (
+              <Printer className="w-4 h-4 text-white" />
+            )}
+            <span>{isPrintingDirect ? 'Preparing...' : 'Direct Print (PDF)'}</span>
+          </button>
+
+          {/* ACTIONS & SETTINGS DROPDOWN MENU WITH GEAR SVG */}
           <div className="relative">
             <button
               type="button"
-              onClick={() => setIsLeftQuoDropdownOpen(!isLeftQuoDropdownOpen)}
-              className="flex items-center gap-1 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-white border border-[#a0a0a0] text-[#3d3d3d] font-bold text-xs px-2.5 py-1 rounded shadow-inner cursor-pointer transition"
-              title="More Actions & Options (...)"
+              onClick={() => setIsRightActionsDropdownOpen(!isRightActionsDropdownOpen)}
+              className="flex items-center gap-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-white border border-[#a0a0a0] text-[#3d3d3d] font-bold text-xs px-2.5 py-1 rounded shadow-inner cursor-pointer transition"
+              title="Actions, Invoice Settings & Setup"
             >
-              <MoreVertical className="w-4 h-4 text-[#0099ec]" />
-              <span>Actions (...)</span>
+              <Settings className="w-4 h-4 text-purple-600" />
+              <span>Actions</span>
               <ChevronDown className="w-3 h-3 text-slate-600" />
             </button>
 
-            {isLeftQuoDropdownOpen && (
+            {isRightActionsDropdownOpen && (
               <div className="absolute right-0 top-8 w-64 bg-white border border-slate-300 shadow-2xl py-1 z-50 animate-in fade-in slide-in-from-top-1 text-xs font-sans rounded-md">
                 <button
                   onClick={() => {
-                    setIsLeftQuoDropdownOpen(false);
-                    setIsDocPreviewMode(!isDocPreviewMode);
+                    setIsRightActionsDropdownOpen(false);
+                    handleCreateNewInvoice();
                   }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-emerald-800 hover:bg-emerald-50 font-bold cursor-pointer text-left transition"
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-blue-700 hover:bg-blue-50 font-bold cursor-pointer text-left transition"
                 >
-                  <Eye className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{isDocPreviewMode ? 'Exit Doc Preview Mode' : 'Doc Preview Mode (Read-Only)'}</span>
+                  <Plus className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Create New Blank Invoice</span>
                 </button>
 
                 <button
                   onClick={() => {
-                    setIsLeftQuoDropdownOpen(false);
+                    setIsRightActionsDropdownOpen(false);
                     handleSaveInvoice();
                   }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-blue-800 hover:bg-blue-50 font-bold cursor-pointer text-left border-t border-slate-100 transition"
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-blue-50 hover:text-blue-700 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
                 >
                   <Save className="w-3.5 h-3.5 text-blue-600" />
                   <span>Save Invoice to MySQL</span>
@@ -1032,40 +1350,70 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
 
                 <button
                   onClick={() => {
-                    setIsLeftQuoDropdownOpen(false);
-                    setIsPdfModalOpen(true);
+                    setIsRightActionsDropdownOpen(false);
+                    setIsPaperSetupModalOpen(true);
                   }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-indigo-800 hover:bg-indigo-50 font-bold cursor-pointer text-left border-t border-slate-100 transition"
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-purple-800 hover:bg-purple-50 font-bold cursor-pointer text-left border-t border-slate-100 transition"
                 >
-                  <Eye className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>PDF Preview (Live Modal)</span>
+                  <Settings className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Invoice & Header Settings (Setup)</span>
                 </button>
 
                 <button
                   onClick={() => {
-                    setIsLeftQuoDropdownOpen(false);
+                    setIsRightActionsDropdownOpen(false);
+                    handleOpenPdfModal();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-blue-800 hover:bg-blue-50 font-bold cursor-pointer text-left border-t border-slate-100 transition"
+                >
+                  <Eye className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Preview PDF Live (Puppeteer Modal)</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsRightActionsDropdownOpen(false);
+                    handlePreviewPdfInTab();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-blue-50 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Preview PDF in New Tab</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsRightActionsDropdownOpen(false);
                     handleDownloadPdfDirect();
                   }}
                   className="w-full flex items-center gap-2 px-3 py-1.5 text-emerald-800 hover:bg-emerald-50 font-bold cursor-pointer text-left border-t border-slate-100 transition"
                 >
                   <Download className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Download PDF (Dompdf Engine)</span>
+                  <span>Download Full PDF (Puppeteer)</span>
                 </button>
+
+                {onSendEmail && (
+                  <button
+                    onClick={() => {
+                      setIsRightActionsDropdownOpen(false);
+                      onSendEmail({
+                        id: invoiceId,
+                        invoice_number: invoiceNumber,
+                        client_email: clientEmail,
+                        company_name: companyName,
+                        grand_total: grandTotal,
+                      });
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-emerald-50 hover:text-emerald-700 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
+                  >
+                    <Send className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Send Invoice via Email</span>
+                  </button>
+                )}
 
                 <button
                   onClick={() => {
-                    setIsLeftQuoDropdownOpen(false);
-                    handlePrint();
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-slate-100 font-bold cursor-pointer text-left border-t border-slate-100 transition"
-                >
-                  <Printer className="w-3.5 h-3.5 text-slate-700" />
-                  <span>Print Invoice (Direct)</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsLeftQuoDropdownOpen(false);
+                    setIsRightActionsDropdownOpen(false);
                     handleSaveLayout();
                   }}
                   disabled={isSavingLayout}
@@ -1078,7 +1426,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                 {Object.keys(offsets).length > 0 && (
                   <button
                     onClick={() => {
-                      setIsLeftQuoDropdownOpen(false);
+                      setIsRightActionsDropdownOpen(false);
                       handleResetLayout();
                     }}
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-rose-700 hover:bg-rose-50 font-bold cursor-pointer text-left border-t border-slate-100 transition"
@@ -1088,21 +1436,36 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                   </button>
                 )}
 
-                <button
-                  onClick={() => {
-                    setIsLeftQuoDropdownOpen(false);
-                    setIsDragMode(!isDragMode);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-blue-800 hover:bg-blue-50 font-bold cursor-pointer text-left border-t border-slate-100 transition"
-                >
-                  <Move className="w-3.5 h-3.5 text-blue-600" />
-                  <span>{isDragMode ? 'Exit Drag Mode' : 'Toggle Drag & Move'}</span>
-                </button>
+                {onNavigateView && (
+                  <button
+                    onClick={() => {
+                      setIsRightActionsDropdownOpen(false);
+                      onNavigateView('quotation_list');
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-slate-50 hover:text-slate-900 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-slate-600" />
+                    <span>View Quotation List</span>
+                  </button>
+                )}
+
+                {onNavigateView && (
+                  <button
+                    onClick={() => {
+                      setIsRightActionsDropdownOpen(false);
+                      onNavigateView('system_settings');
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-purple-50 hover:text-purple-700 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-purple-600" />
+                    <span>System Settings</span>
+                  </button>
+                )}
 
                 {onBack && (
                   <button
                     onClick={() => {
-                      setIsLeftQuoDropdownOpen(false);
+                      setIsRightActionsDropdownOpen(false);
                       onBack();
                     }}
                     className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-700 hover:bg-slate-100 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
@@ -1135,15 +1498,52 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
 
       {/* DRAG MODE ACTIVE BANNER NOTICE (Shown when in Drag Mode) */}
       {isDragMode && (
-        <div className="no-print bg-blue-600 text-white text-xs font-bold px-4 py-2 text-center shadow-md flex items-center justify-center gap-2 sticky top-[49px] z-30 animate-in fade-in">
-          <Move className="w-4 h-4 animate-bounce" />
-          <span>DRAG MODE ACTIVE: Click & drag any logo, text, address, table, photo, signature, or stamp on the invoice to reposition freely!</span>
-          <button
-            onClick={() => setIsDragMode(false)}
-            className="ml-3 bg-white text-blue-800 px-2 py-0.5 rounded text-[11px] font-black uppercase hover:bg-blue-50 transition"
-          >
-            Done
-          </button>
+        <div className="no-print bg-blue-700 text-white text-xs font-bold px-4 py-2.5 text-center shadow-lg flex flex-wrap items-center justify-between gap-3 sticky top-[49px] z-30 animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <Move className="w-4 h-4 text-blue-200 animate-bounce shrink-0" />
+            <span>DRAG & RESIZE MODE ACTIVE: Drag elements or scale logo & text on the invoice sheet!</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleSaveLayout()}
+              disabled={isSavingLayout}
+              className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white px-3 py-1.5 rounded text-xs font-bold uppercase transition flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-60"
+              title="Save current layout positions to database"
+            >
+              {isSavingLayout ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              <span>{isSavingLayout ? 'Saving...' : 'Save Layout'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleDoneDragMode}
+              disabled={isSavingLayout}
+              className="bg-white hover:bg-slate-100 active:scale-95 text-blue-900 px-3.5 py-1.5 rounded text-xs font-extrabold uppercase transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+              title="Finish and save positions automatically"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Done & Save Layout</span>
+            </button>
+            {Object.keys(offsets).length > 0 && (
+              <button
+                type="button"
+                onClick={handleResetLayout}
+                className="bg-rose-500/80 hover:bg-rose-600 active:scale-95 text-white px-2.5 py-1.5 rounded text-xs font-bold uppercase transition flex items-center gap-1 cursor-pointer"
+                title="Reset all positions to default"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING SUCCESS NOTIFICATION TOAST */}
+      {layoutSaveNotice && (
+        <div className="no-print fixed bottom-6 right-6 z-50 bg-slate-900 text-white border border-emerald-500 shadow-2xl px-4 py-3 rounded-lg flex items-center gap-3 animate-in slide-in-from-bottom-5">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span className="text-xs font-bold">{layoutSaveNotice}</span>
         </div>
       )}
 
@@ -1201,7 +1601,8 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
             page-break-inside: avoid !important;
             break-inside: avoid !important;
             margin: 0 auto !important;
-            padding: 6mm 6mm !important;
+            padding: ${modalMarginTop}mm ${modalMarginRight}mm ${modalMarginBottom}mm ${modalMarginLeft}mm !important;
+            font-size: ${modalFontSize}pt !important;
             border: none !important;
             box-shadow: none !important;
             box-sizing: border-box !important;
@@ -1302,16 +1703,13 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                 width: '210mm',
                 minWidth: '210mm',
                 maxWidth: '210mm',
-                height: '297mm',
                 minHeight: '297mm',
-                maxHeight: '297mm',
                 boxSizing: 'border-box',
                 paddingTop: `${modalMarginTop}mm`,
                 paddingBottom: `${modalMarginBottom}mm`,
                 paddingLeft: `${modalMarginLeft}mm`,
                 paddingRight: `${modalMarginRight}mm`,
                 fontSize: `${modalFontSize}pt`,
-                overflow: 'hidden',
               }}
             >
               {/* TOP HEADER BLOCK (Synchronized across all sheets) */}
@@ -1320,7 +1718,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                   {headerImageUrl ? (
                     <div style={{ width: '100%', marginBottom: '4px', marginTop: '-2px' }}>
                       <img
-                        src={headerImageUrl}
+                        src={formatAssetUrl(headerImageUrl)}
                         alt="Header Banner"
                         style={{ width: '100%', height: 'auto', maxHeight: '90px', objectFit: 'cover', objectPosition: 'top center', display: 'block' }}
                       />
@@ -1336,13 +1734,13 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                         <td style={{ width: '55%', verticalAlign: 'bottom', textAlign: 'left', padding: 0, border: 'none' }}>
                           <DraggableElement id="invoice_logo" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Logo" resizable={true}>
                             {isLoadingInvoiceSettings ? (
-                              <div className="h-10 w-28 bg-white/90 border border-slate-300 flex items-center justify-center gap-2 text-xs text-blue-700 font-mono font-bold animate-pulse">
-                                <Loader2 className="w-3 animate-spin text-blue-600" />
-                                <span>Loading...</span>
+                              <div className="h-11 w-36 bg-slate-50 border border-slate-200 rounded flex items-center justify-center gap-1.5 text-[10px] text-blue-700 font-mono font-bold animate-pulse">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                                <span>Loading Logo...</span>
                               </div>
                             ) : logoUrl ? (
                               <img
-                                src={logoUrl}
+                                src={formatAssetUrl(logoUrl)}
                                 alt={companyNameSetting}
                                 style={{ height: '44px', maxWidth: '220px', objectFit: 'contain', display: 'block' }}
                                 onError={(e) => {
@@ -1363,11 +1761,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                         {/* Company Address Right */}
                         <td style={{ width: '45%', verticalAlign: 'bottom', textAlign: 'right', padding: 0, border: 'none', fontSize: '7.5pt', lineHeight: 1.25, color: '#1e293b' }}>
                           <DraggableElement id="invoice_address" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Company Address">
-                            <div className="text-right text-xs text-slate-800 leading-snug font-sans shrink-0 font-medium">
-                              <p className="font-bold text-slate-900 text-xs">{companyNameSetting}</p>
-                              <p className="max-w-xs ml-auto">{companyAddressSetting}</p>
-                              <p className="font-semibold text-slate-900 font-mono">{companyPhoneSetting} | {companyEmailSetting}</p>
-                            </div>
+                            {renderDynamicAddress(companyAddressSetting)}
                           </DraggableElement>
                         </td>
                       </tr>
@@ -1380,226 +1774,276 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                   <>
                     <DraggableElement id="invoice_title" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Title Banner">
                       <div 
-                        className="font-black text-center py-1.5 uppercase tracking-widest text-xs rounded-none mb-3"
-                        style={{ backgroundColor: tableHeaderBg, color: tableHeaderTextColor }}
+                        style={{
+                          backgroundColor: tableHeaderBg,
+                          color: tableHeaderTextColor || '#ffffff',
+                          fontWeight: 800,
+                          fontSize: '9pt',
+                          padding: '4px 10px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          textAlign: 'center',
+                          marginBottom: '6px',
+                        }}
                       >
                         {invoiceTitleSetting}
                       </div>
                     </DraggableElement>
 
-                    {/* 2-COLUMN ADDRESS LAYOUT & METADATA SECTION */}
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 text-xs text-slate-800 border-b border-slate-300 pb-3 mb-3">
+                    {/* 2-COLUMN ADDRESS LAYOUT & METADATA SECTION (TEXT MODEL MATCHING PDF) */}
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-x-6 gap-y-3 text-xs text-slate-900 border-b border-slate-300 pb-3 mb-3">
                       
                       {/* LEFT COLUMN: TO / BILLING ADDRESS */}
-                      <DraggableElement id="invoice_to_address" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="TO Address Box" className="md:col-span-6">
-                        <div className="space-y-1.5 bg-slate-50/70 p-2.5 border border-slate-300">
-                          <div className="flex items-center gap-1.5 font-black text-slate-900 uppercase tracking-wide text-[10px] border-b border-slate-300 pb-0.5">
-                            <Building2 className="w-3 h-3 text-[#0070c0]" />
-                            <span>TO (BILLING ADDRESS):</span>
-                          </div>
-                          {isDocPreviewMode ? (
-                            <div className="space-y-1 font-sans text-slate-900 min-h-[78px] text-[11px]">
-                              <p className="font-extrabold text-xs text-slate-900 uppercase leading-snug">{companyName || '—'}</p>
-                              <p className="text-[11px] text-slate-700 leading-normal whitespace-pre-line font-medium">{billingAddress || '—'}</p>
-                              {(clientName || clientEmail) && (
-                                <div className="grid grid-cols-2 gap-1 pt-1 border-t border-slate-200 mt-1 text-[10.5px]">
-                                  {clientName && <p><span className="font-bold text-slate-500 text-[9px] uppercase block">Attention:</span> <span className="font-semibold text-slate-900">{clientName}</span></p>}
-                                  {clientEmail && <p><span className="font-bold text-slate-500 text-[9px] uppercase block">Email:</span> <span className="font-mono text-slate-800">{clientEmail}</span></p>}
-                                </div>
-                              )}
+                      <DraggableElement id="invoice_to_address" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="TO Address Text" className="md:col-span-7">
+                        {isDocPreviewMode ? (
+                          <div className="space-y-1 font-sans text-slate-900 text-[11px] leading-relaxed">
+                            <div>
+                              <span className="font-bold text-slate-900 uppercase">TO: </span>
+                              <span className="font-extrabold text-slate-900 uppercase">{companyName || '—'}</span>
                             </div>
-                          ) : (
-                            <div className="space-y-1 font-sans">
+                            {billingAddress && (
+                              <p className="text-[11px] text-slate-800 whitespace-pre-line font-medium leading-snug">
+                                {billingAddress}
+                              </p>
+                            )}
+                            {clientName && (
+                              <p className="pt-0.5">
+                                <span className="font-bold text-slate-900">Attention: </span>
+                                <span className="font-medium text-slate-900">{clientName}</span>
+                              </p>
+                            )}
+                            {clientEmail && (
+                              <p>
+                                <span className="font-bold text-slate-900">Email: </span>
+                                <span className="font-medium text-blue-700 underline">{clientEmail}</span>
+                              </p>
+                            )}
+                            {clientPhone && (
+                              <p>
+                                <span className="font-bold text-slate-900">Cont. Numb : </span>
+                                <span className="font-medium text-slate-900 font-mono">{clientPhone}</span>
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5 font-sans text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 shrink-0 w-20">TO:</span>
                               <input
                                 type="text"
                                 value={companyName}
                                 onChange={(e) => setCompanyName(e.target.value)}
                                 placeholder="Client Company Name"
-                                className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-bold text-slate-900 rounded-none text-[11px] focus:outline-none"
+                                className="w-full bg-transparent border-b border-slate-300 focus:border-blue-600 px-1 py-0.5 font-bold text-slate-900 rounded-none text-xs focus:outline-none"
                               />
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="font-bold text-slate-900 shrink-0 w-20 text-[10px] uppercase text-slate-400">Address:</span>
                               <textarea
                                 rows={2}
                                 value={billingAddress}
                                 onChange={(e) => setBillingAddress(e.target.value)}
                                 placeholder="Billing Street Address & Location"
-                                className="w-full bg-white border border-slate-300 px-1.5 py-0.5 text-slate-700 rounded-none text-[11px] focus:outline-none"
+                                className="w-full bg-transparent border-b border-slate-300 focus:border-blue-600 px-1 py-0.5 text-slate-800 rounded-none text-[11px] focus:outline-none"
                               />
-                              <div className="grid grid-cols-2 gap-1.5 pt-0.5">
-                                <div>
-                                  <span className="text-[9px] font-bold text-slate-500 block uppercase">Attention:</span>
-                                  <input
-                                    type="text"
-                                    value={clientName}
-                                    onChange={(e) => setClientName(e.target.value)}
-                                    placeholder="Contact Person"
-                                    className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-semibold text-slate-900 rounded-none text-[10px]"
-                                  />
-                                </div>
-                                <div>
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[9px] font-bold text-slate-500 uppercase">Email:</span>
-                                    {clientEmailOptions.length > 0 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setIsCustomEmailMode(!isCustomEmailMode)}
-                                        className="text-[8.5px] text-blue-600 hover:text-blue-800 font-bold underline transition cursor-pointer"
-                                        title="Toggle between email dropdown list and custom text input"
-                                      >
-                                        {isCustomEmailMode ? 'Select Dropdown' : '+ Custom Email'}
-                                      </button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 shrink-0 w-20 text-[11px]">Attention:</span>
+                              <input
+                                type="text"
+                                value={clientName}
+                                onChange={(e) => setClientName(e.target.value)}
+                                placeholder="Contact Person"
+                                className="w-full bg-transparent border-b border-slate-300 focus:border-blue-600 px-1 py-0.5 font-medium text-slate-900 rounded-none text-[11px] focus:outline-none"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 shrink-0 w-20 text-[11px]">Email:</span>
+                              <div className="flex-1 flex items-center gap-1">
+                                {!isCustomEmailMode && clientEmailOptions.length > 0 ? (
+                                  <select
+                                    value={clientEmail}
+                                    onChange={(e) => {
+                                      if (e.target.value === '__custom__') {
+                                        setIsCustomEmailMode(true);
+                                      } else {
+                                        setClientEmail(e.target.value);
+                                      }
+                                    }}
+                                    className="w-full bg-transparent border-b border-slate-300 focus:border-blue-600 px-1 py-0.5 font-mono text-slate-800 rounded-none text-[11px] focus:outline-none cursor-pointer"
+                                  >
+                                    {clientEmailOptions.map((opt, idx) => (
+                                      <option key={idx} value={opt.email}>
+                                        {opt.email} {opt.source ? `(${opt.source})` : ''}
+                                      </option>
+                                    ))}
+                                    {clientEmail && !clientEmailOptions.some((o) => o.email === clientEmail) && (
+                                      <option value={clientEmail}>{clientEmail}</option>
                                     )}
-                                  </div>
-                                  {!isCustomEmailMode && clientEmailOptions.length > 0 ? (
-                                    <select
-                                      value={clientEmail}
-                                      onChange={(e) => {
-                                        if (e.target.value === '__custom__') {
-                                          setIsCustomEmailMode(true);
-                                        } else {
-                                          setClientEmail(e.target.value);
-                                        }
-                                      }}
-                                      className="w-full bg-white border border-slate-300 px-1 py-0.5 font-mono text-slate-800 rounded-none text-[10px] focus:outline-none cursor-pointer font-semibold"
-                                    >
-                                      {clientEmailOptions.map((opt, idx) => (
-                                        <option key={idx} value={opt.email}>
-                                          {opt.email} {opt.source ? `(${opt.source})` : ''}
-                                        </option>
-                                      ))}
-                                      {clientEmail && !clientEmailOptions.some((o) => o.email === clientEmail) && (
-                                        <option value={clientEmail}>{clientEmail}</option>
-                                      )}
-                                      <option value="__custom__">+ Enter Custom Email...</option>
-                                    </select>
-                                  ) : (
-                                    <input
-                                      type="text"
-                                      value={clientEmail}
-                                      onChange={(e) => setClientEmail(e.target.value)}
-                                      placeholder="client@company.com"
-                                      className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-mono text-slate-800 rounded-none text-[10px]"
-                                    />
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </DraggableElement>
-
-                      {/* RIGHT COLUMN: DELIVERY / SHIPPING ADDRESS */}
-                      <DraggableElement id="invoice_del_address" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="DELIVERY Address Box" className="md:col-span-6">
-                        <div className="space-y-1.5 bg-slate-50/70 p-2.5 border border-slate-300">
-                          <div className="flex items-center gap-1.5 font-black text-slate-900 uppercase tracking-wide text-[10px] border-b border-slate-300 pb-0.5">
-                            <Truck className="w-3 h-3 text-[#0070c0]" />
-                            <span>DELIVERY (SHIPPING ADDRESS):</span>
-                          </div>
-                          {isDocPreviewMode ? (
-                            <div className="space-y-1 font-sans text-slate-900 min-h-[78px] text-[11px]">
-                              <p className="font-extrabold text-xs text-slate-900 uppercase leading-snug">{deliveryCompany || companyName || '—'}</p>
-                              <p className="text-[11px] text-slate-700 leading-normal whitespace-pre-line font-medium">{deliveryAddress || billingAddress || '—'}</p>
-                              {(deliveryPic || deliveryPhone) && (
-                                <div className="grid grid-cols-2 gap-1 pt-1 border-t border-slate-200 mt-1 text-[10.5px]">
-                                  {deliveryPic && <p><span className="font-bold text-slate-500 text-[9px] uppercase block">Delivery PIC:</span> <span className="font-semibold text-slate-900">{deliveryPic}</span></p>}
-                                  {deliveryPhone && <p><span className="font-bold text-slate-500 text-[9px] uppercase block">Contact No:</span> <span className="font-mono text-slate-800">{deliveryPhone}</span></p>}
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="space-y-1 font-sans">
-                              <input
-                                type="text"
-                                value={deliveryCompany}
-                                onChange={(e) => setDeliveryCompany(e.target.value)}
-                                placeholder="Delivery Ship / Project Name"
-                                className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-bold text-slate-900 rounded-none text-[11px] focus:outline-none"
-                              />
-                              <textarea
-                                rows={2}
-                                value={deliveryAddress}
-                                onChange={(e) => setDeliveryAddress(e.target.value)}
-                                placeholder="Delivery Destination / Yard Address"
-                                className="w-full bg-white border border-slate-300 px-1.5 py-0.5 text-slate-700 rounded-none text-[11px] focus:outline-none"
-                              />
-                              <div className="grid grid-cols-2 gap-1.5 pt-0.5">
-                                <div>
-                                  <span className="text-[9px] font-bold text-slate-500 block uppercase">Delivery PIC:</span>
+                                    <option value="__custom__">+ Enter Custom Email...</option>
+                                  </select>
+                                ) : (
                                   <input
                                     type="text"
-                                    value={deliveryPic}
-                                    onChange={(e) => setDeliveryPic(e.target.value)}
-                                    placeholder="Delivery Contact Person"
-                                    className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-semibold text-slate-900 rounded-none text-[10px]"
+                                    value={clientEmail}
+                                    onChange={(e) => setClientEmail(e.target.value)}
+                                    placeholder="client@company.com"
+                                    className="w-full bg-transparent border-b border-slate-300 focus:border-blue-600 px-1 py-0.5 font-mono text-slate-800 rounded-none text-[11px] focus:outline-none"
                                   />
-                                </div>
-                                <div>
-                                  <span className="text-[9px] font-bold text-slate-500 block uppercase">Contact No:</span>
-                                  <input
-                                    type="text"
-                                    value={deliveryPhone}
-                                    onChange={(e) => setDeliveryPhone(e.target.value)}
-                                    placeholder="+6012-3456789"
-                                    className="w-full bg-white border border-slate-300 px-1.5 py-0.5 font-mono text-slate-800 rounded-none text-[10px]"
-                                  />
-                                </div>
+                                )}
+                                {clientEmailOptions.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setIsCustomEmailMode(!isCustomEmailMode)}
+                                    className="text-[9px] text-blue-600 hover:text-blue-800 font-bold underline shrink-0 cursor-pointer"
+                                    title="Toggle email mode"
+                                  >
+                                    {isCustomEmailMode ? 'Dropdown' : 'Custom'}
+                                  </button>
+                                )}
                               </div>
                             </div>
-                          )}
-                        </div>
-                      </DraggableElement>
-
-                      {/* INVOICE METADATA ROW */}
-                      <DraggableElement id="invoice_meta" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Invoice Numbers & Date" className="md:col-span-12">
-                        {isDocPreviewMode ? (
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50/90 p-2 border border-slate-300 font-mono text-xs">
-                            <div>
-                              <span className="text-[9px] font-bold text-slate-500 block uppercase">Invoice No. :</span>
-                              <span className="font-extrabold text-slate-900 text-xs block py-0.5">{invoiceNumber || '—'}</span>
-                            </div>
-                            <div>
-                              <span className="text-[9px] font-bold text-slate-500 block uppercase">Invoice Date :</span>
-                              <span className="font-bold text-slate-900 text-xs block py-0.5">{invoiceDate || '—'}</span>
-                            </div>
-                            <div>
-                              <span className="text-[9px] font-bold text-slate-500 block uppercase">PO Numb (Client PO) :</span>
-                              <span className="font-black text-blue-900 text-xs block py-0.5">{poNumber || '—'}</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-2 border border-slate-300 font-mono">
-                            <div>
-                              <span className="text-[9px] font-bold text-slate-500 block uppercase">Invoice No. :</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 shrink-0 w-20 text-[11px]">Cont. Numb :</span>
                               <input
                                 type="text"
-                                value={invoiceNumber}
-                                onChange={(e) => setInvoiceNumber(e.target.value)}
-                                className="w-full bg-slate-50 border border-slate-300 px-1.5 py-0.5 font-extrabold text-slate-900 text-xs"
-                              />
-                            </div>
-
-                            <div>
-                              <span className="text-[9px] font-bold text-slate-500 block uppercase">Invoice Date :</span>
-                              <input
-                                type="date"
-                                value={invoiceDate}
-                                onChange={(e) => setInvoiceDate(e.target.value)}
-                                className="w-full bg-slate-50 border border-slate-300 px-1.5 py-0.5 font-bold text-slate-900 text-xs"
-                              />
-                            </div>
-
-                            <div>
-                              <span className="text-[9px] font-bold text-slate-500 block uppercase">PO Numb (Client PO) :</span>
-                              <input
-                                type="text"
-                                value={poNumber}
-                                onChange={(e) => setPoNumber(e.target.value)}
-                                placeholder="e.g. DM/AGA/ABMI/PO/279/24"
-                                className="w-full bg-blue-50 border border-blue-300 px-1.5 py-0.5 font-black text-blue-900 text-xs"
+                                value={clientPhone}
+                                onChange={(e) => setClientPhone(e.target.value)}
+                                placeholder="Contact Phone / Mobile No."
+                                className="w-full bg-transparent border-b border-slate-300 focus:border-blue-600 px-1 py-0.5 font-mono text-slate-800 rounded-none text-[11px] focus:outline-none"
                               />
                             </div>
                           </div>
                         )}
                       </DraggableElement>
+
+                      {/* RIGHT COLUMN: INVOICE METADATA & DELIVERY (SHIPPING ADDRESS) */}
+                      <div className="md:col-span-5 space-y-3">
+                        {/* INVOICE METADATA (Invoice No, Date, PO Numb) */}
+                        <DraggableElement id="invoice_meta" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Invoice Numbers & Date">
+                          {isDocPreviewMode ? (
+                            <div className="space-y-1 font-sans text-[11px] leading-snug">
+                              <div>
+                                <span className="font-bold text-slate-900">Invoice No. :</span>
+                                <div className="font-extrabold text-slate-900 font-mono text-xs pl-2">{invoiceNumber || '—'}</div>
+                              </div>
+                              <div>
+                                <span className="font-bold text-slate-900">Invoice Date :</span>
+                                <div className="font-medium text-slate-900 pl-2">{invoiceDate || '—'}</div>
+                              </div>
+                              <div>
+                                <span className="font-bold text-slate-900">PO Numb :</span>
+                                <div className="font-extrabold text-slate-900 font-mono text-xs pl-2">{poNumber || '—'}</div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5 font-sans text-xs">
+                              <div>
+                                <span className="font-bold text-slate-900 block text-[11px]">Invoice No. :</span>
+                                <input
+                                  type="text"
+                                  value={invoiceNumber}
+                                  onChange={(e) => setInvoiceNumber(e.target.value)}
+                                  placeholder="e.g. ABM/INV/20260930/384"
+                                  className="w-full bg-transparent border-b border-slate-300 focus:border-blue-600 px-1 py-0.5 font-bold font-mono text-slate-900 text-xs focus:outline-none"
+                                />
+                              </div>
+                              <div>
+                                <span className="font-bold text-slate-900 block text-[11px]">Invoice Date :</span>
+                                <input
+                                  type="text"
+                                  value={invoiceDate}
+                                  onChange={(e) => setInvoiceDate(e.target.value)}
+                                  placeholder="e.g. 30/09/2026 or 30 September 2026"
+                                  className="w-full bg-transparent border-b border-slate-300 focus:border-blue-600 px-1 py-0.5 text-slate-900 text-xs focus:outline-none"
+                                />
+                              </div>
+                              <div>
+                                <span className="font-bold text-slate-900 block text-[11px]">PO Numb :</span>
+                                <input
+                                  type="text"
+                                  value={poNumber}
+                                  onChange={(e) => setPoNumber(e.target.value)}
+                                  placeholder="e.g. DM/AGA/ABMI/PO/279/24"
+                                  className="w-full bg-transparent border-b border-slate-300 focus:border-blue-600 px-1 py-0.5 font-bold font-mono text-slate-900 text-xs focus:outline-none"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </DraggableElement>
+
+                        {/* DELIVERY (SHIPPING ADDRESS) */}
+                        <DraggableElement id="invoice_del_address" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="DELIVERY Address Text">
+                          {isDocPreviewMode ? (
+                            <div className="space-y-1 font-sans text-slate-900 text-[11px] leading-relaxed pt-1">
+                              <div>
+                                <span className="font-bold text-slate-900 uppercase">DELIVERY: </span>
+                                <span className="font-extrabold text-slate-900">{deliveryCompany || companyName || '—'}</span>
+                              </div>
+                              {(deliveryAddress || billingAddress) && (
+                                <p className="text-[11px] text-slate-800 whitespace-pre-line font-medium leading-snug">
+                                  {deliveryAddress || billingAddress}
+                                </p>
+                              )}
+                              {deliveryPic && (
+                                <p className="pt-0.5">
+                                  <span className="font-bold text-slate-900">PIC – </span>
+                                  <span className="font-medium text-slate-900">{deliveryPic}</span>
+                                </p>
+                              )}
+                              {deliveryPhone && (
+                                <p>
+                                  <span className="font-bold text-slate-900">Contact No. : </span>
+                                  <span className="font-medium text-slate-900 font-mono">{deliveryPhone}</span>
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5 font-sans text-xs pt-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-900 shrink-0 w-24 text-[11px]">DELIVERY:</span>
+                                <input
+                                  type="text"
+                                  value={deliveryCompany}
+                                  onChange={(e) => setDeliveryCompany(e.target.value)}
+                                  placeholder="Delivery Ship / Project Name"
+                                  className="w-full bg-transparent border-b border-slate-300 focus:border-blue-600 px-1 py-0.5 font-bold text-slate-900 text-xs focus:outline-none"
+                                />
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <span className="font-bold text-slate-900 shrink-0 w-24 text-[10px] uppercase text-slate-400">Address:</span>
+                                <textarea
+                                  rows={2}
+                                  value={deliveryAddress}
+                                  onChange={(e) => setDeliveryAddress(e.target.value)}
+                                  placeholder="Delivery Destination / Yard Address"
+                                  className="w-full bg-transparent border-b border-slate-300 focus:border-blue-600 px-1 py-0.5 text-slate-800 rounded-none text-[11px] focus:outline-none"
+                                />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-900 shrink-0 w-24 text-[11px]">PIC –</span>
+                                <input
+                                  type="text"
+                                  value={deliveryPic}
+                                  onChange={(e) => setDeliveryPic(e.target.value)}
+                                  placeholder="Delivery Contact Person"
+                                  className="w-full bg-transparent border-b border-slate-300 focus:border-blue-600 px-1 py-0.5 font-medium text-slate-900 text-[11px] focus:outline-none"
+                                />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-900 shrink-0 w-24 text-[11px]">Contact No. :</span>
+                                <input
+                                  type="text"
+                                  value={deliveryPhone}
+                                  onChange={(e) => setDeliveryPhone(e.target.value)}
+                                  placeholder="+6012-3456789"
+                                  className="w-full bg-transparent border-b border-slate-300 focus:border-blue-600 px-1 py-0.5 font-mono text-slate-800 text-[11px] focus:outline-none"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </DraggableElement>
+                      </div>
 
                     </div>
                   </>
@@ -1631,17 +2075,50 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                           chunk.items.map((item: any, localIdx: number) => {
                             const globalIdx = chunk.startIndex + localIdx;
                             return (
-                              <tr key={globalIdx}>
-                                <td style={{ textAlign: 'center' }} className="font-mono">{globalIdx + 1}</td>
+                              <tr key={globalIdx} className="hover:bg-slate-50 transition">
+                                <td style={{ textAlign: 'center' }} className="font-mono text-xs">
+                                  {globalIdx + 1}
+                                  {!isDocPreviewMode && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveItem(globalIdx)}
+                                      className="block mx-auto mt-1 text-red-400 hover:text-red-600 transition cursor-pointer"
+                                      title="Remove Item"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </td>
 
                                 {/* ITEM Column */}
-                                <td style={{ color: '#0f172a', verticalAlign: 'top' }}>
-                                  <p className="font-bold text-slate-900 text-xs leading-tight mb-0.5">{item.description}</p>
-                                  {item.specification && (
-                                    <p className="text-[10px] text-slate-600 leading-snug font-sans mb-1">{item.specification}</p>
+                                <td style={{ color: '#0f172a', verticalAlign: 'top', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+                                  {isDocPreviewMode ? (
+                                    <>
+                                      <p className="font-bold text-slate-900 text-xs leading-tight mb-0.5 whitespace-pre-line break-words">{item.description}</p>
+                                      {item.specification && (
+                                        <p className="text-[10px] text-slate-600 leading-snug font-sans mb-1 whitespace-pre-line break-words">{item.specification}</p>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <div className="space-y-1">
+                                      <textarea
+                                        rows={Math.max(1, (item.description || '').split('\n').length)}
+                                        value={item.description || ''}
+                                        onChange={(e) => handleItemChange(globalIdx, 'description', e.target.value)}
+                                        className="w-full text-xs font-bold text-slate-900 border border-slate-300 rounded px-1.5 py-0.5 focus:ring-1 focus:ring-blue-500 resize-y"
+                                        placeholder="Item Description..."
+                                      />
+                                      <textarea
+                                        rows={Math.max(1, (item.specification || '').split('\n').length)}
+                                        value={item.specification || ''}
+                                        onChange={(e) => handleItemChange(globalIdx, 'specification', e.target.value)}
+                                        className="w-full text-[10px] text-slate-600 border border-slate-200 rounded px-1.5 py-0.5 focus:ring-1 focus:ring-blue-400 resize-y"
+                                        placeholder="Specifications (optional)..."
+                                      />
+                                    </div>
                                   )}
                                   {item.product_code && (
-                                    <span className="inline-block font-mono text-[9px] text-purple-900 font-bold bg-purple-50 px-1 rounded border border-purple-200 mb-1">
+                                    <span className="inline-block font-mono text-[9px] text-purple-900 font-bold bg-purple-50 px-1 rounded border border-purple-200 mt-1">
                                       Code: {item.product_code}
                                     </span>
                                   )}
@@ -1659,19 +2136,71 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                                 </td>
 
                                 {/* QTY */}
-                                <td style={{ textAlign: 'center' }} className="font-mono">{item.quantity}</td>
+                                <td style={{ textAlign: 'center' }} className="font-mono">
+                                  {isDocPreviewMode ? (
+                                    item.quantity
+                                  ) : (
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      step="any"
+                                      value={item.quantity ?? 1}
+                                      onChange={(e) => handleItemChange(globalIdx, 'quantity', e.target.value)}
+                                      className="w-14 text-center font-mono text-xs border border-slate-300 rounded px-1 py-0.5"
+                                    />
+                                  )}
+                                </td>
 
                                 {/* UNIT */}
-                                <td style={{ textAlign: 'center' }}>{item.unit || 'Unit'}</td>
+                                <td style={{ textAlign: 'center' }}>
+                                  {isDocPreviewMode ? (
+                                    item.unit || 'Unit'
+                                  ) : (
+                                    <input
+                                      type="text"
+                                      value={item.unit || 'Unit'}
+                                      onChange={(e) => handleItemChange(globalIdx, 'unit', e.target.value)}
+                                      className="w-16 text-center text-xs border border-slate-300 rounded px-1 py-0.5"
+                                    />
+                                  )}
+                                </td>
 
                                 {/* OFFERED ITEM */}
-                                <td style={{ color: '#0f172a', verticalAlign: 'top' }}>{item.offer || item.offered_item || '—'}</td>
+                                <td style={{ color: '#0f172a', verticalAlign: 'top', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+                                  {isDocPreviewMode ? (
+                                    <div className="text-xs text-slate-900 leading-snug whitespace-pre-line break-words">
+                                      {item.offer || item.offered_item || '—'}
+                                    </div>
+                                  ) : (
+                                    <textarea
+                                      rows={Math.max(1, (item.offer || item.offered_item || '').split('\n').length)}
+                                      value={item.offer || item.offered_item || ''}
+                                      onChange={(e) => handleItemChange(globalIdx, 'offer', e.target.value)}
+                                      className="w-full text-xs border border-slate-300 rounded px-1.5 py-0.5 resize-y"
+                                      placeholder="Offered details..."
+                                    />
+                                  )}
+                                </td>
 
                                 {/* UNIT PRICE (MYR) */}
-                                <td style={{ textAlign: 'right' }} className="font-mono">{formatCurrency(item.unit_price)}</td>
+                                <td style={{ textAlign: 'right' }} className="font-mono">
+                                  {isDocPreviewMode ? (
+                                    formatCurrency(item.unit_price)
+                                  ) : (
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      value={item.unit_price ?? 0}
+                                      onChange={(e) => handleItemChange(globalIdx, 'unit_price', e.target.value)}
+                                      className="w-24 text-right font-mono text-xs border border-slate-300 rounded px-1.5 py-0.5"
+                                    />
+                                  )}
+                                </td>
 
                                 {/* TOTAL PRICE (MYR) */}
-                                <td style={{ textAlign: 'right' }} className="font-mono font-bold">{formatCurrency(item.total)}</td>
+                                <td style={{ textAlign: 'right' }} className="font-mono font-bold">
+                                  {formatCurrency(item.total !== undefined ? item.total : (Number(item.quantity || 0) * Number(item.unit_price || 0)))}
+                                </td>
                               </tr>
                             );
                           })
@@ -1680,6 +2209,20 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                     </table>
                   </div>
                 </DraggableElement>
+
+                {/* + ADD ITEM BUTTON (Non-Preview Mode) */}
+                {!isDocPreviewMode && chunk.isLastPage && (
+                  <div className="mt-2 mb-3">
+                    <button
+                      type="button"
+                      onClick={handleAddItem}
+                      className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs px-3 py-1.5 rounded border border-blue-200 transition cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Add New Invoice Item</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* CLOSING BLOCK (Last Sheet Only) — Directly follows table in natural flow */}
                 {chunk.isLastPage && (
@@ -1755,24 +2298,39 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                           <p className="text-slate-700 font-bold uppercase tracking-wide text-[10px]">Authorised by,</p>
                           
                           <div className="h-14 flex items-center justify-start my-0.5 gap-2">
-                            {signatureUrl && (
-                              <img
-                                src={signatureUrl}
-                                alt="Digital Signature"
-                                className="h-14 object-contain max-w-[120px] pointer-events-none"
-                              />
-                            )}
-                            {stampUrl && (
-                              <img
-                                src={stampUrl}
-                                alt="Company Stamp"
-                                className="h-14 object-contain max-w-[120px] pointer-events-none"
-                              />
-                            )}
-                            {!signatureUrl && !stampUrl && (
-                              <div className="w-32 h-10 border-2 border-[#0070c0] border-dashed flex items-center justify-center text-[#0070c0] text-[9px] font-black uppercase tracking-wider transform -rotate-2">
-                                [STAMP]
+                            {isLoadingInvoiceSettings ? (
+                              <div className="h-12 w-44 border border-blue-200 bg-blue-50/70 rounded flex items-center justify-center gap-1.5 text-[10px] text-blue-700 font-bold font-mono animate-pulse">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                                <span>Loading Stamp & Signatures...</span>
                               </div>
+                            ) : (
+                              <>
+                                {signatureUrl && (
+                                  <img
+                                    src={formatAssetUrl(signatureUrl)}
+                                    alt="Digital Signature"
+                                    className="h-14 object-contain max-w-[120px] pointer-events-none"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).style.display = 'none';
+                                    }}
+                                  />
+                                )}
+                                {stampUrl && (
+                                  <img
+                                    src={formatAssetUrl(stampUrl)}
+                                    alt="Company Stamp"
+                                    className="h-14 object-contain max-w-[120px] pointer-events-none"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).style.display = 'none';
+                                    }}
+                                  />
+                                )}
+                                {!signatureUrl && !stampUrl && (
+                                  <div className="w-32 h-10 border-2 border-[#0070c0] border-dashed flex items-center justify-center text-[#0070c0] text-[9px] font-black uppercase tracking-wider transform -rotate-2">
+                                    [STAMP & TTD]
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
 
@@ -1781,15 +2339,104 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                         </div>
                       </DraggableElement>
 
-                      {/* RECEIVED BY (CLIENT RECEIVER SIGNATURE LINE) */}
+                      {/* RECEIVED BY (CLIENT RECEIVER SIGNATURE LINE & DYNAMIC SIGNATORIES) */}
                       <DraggableElement id="invoice_sig_recv" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Received By Line">
-                        <div className="text-left sm:text-right space-y-0.5">
+                        <div className="text-left sm:text-right space-y-1">
+                          
+                          {/* Interactive Signatory Toolbar (Hidden when printing/PDF) */}
+                          <div className="print:hidden no-print mb-1.5 flex flex-col items-end gap-1">
+                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                              <select
+                                value={isCustomSigMode ? '__custom__' : (receivedByName ? receivedByName : '__blank__')}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === '__blank__') {
+                                    setReceivedByName('');
+                                    setReceivedByDesignation('');
+                                    setIsCustomSigMode(false);
+                                  } else if (val === '__custom__') {
+                                    setIsCustomSigMode(true);
+                                  } else {
+                                    const match = companySignatories.find((s) => s.name === val);
+                                    if (match) {
+                                      setReceivedByName(match.name);
+                                      setReceivedByDesignation(match.designation || '');
+                                    } else {
+                                      setReceivedByName(val);
+                                    }
+                                    setIsCustomSigMode(false);
+                                  }
+                                }}
+                                className="bg-white border border-blue-400 text-slate-800 text-[10px] font-bold rounded px-1.5 py-1 shadow-xs max-w-[180px] focus:outline-blue-500"
+                                title="Select recipient PIC / signatory for this invoice"
+                              >
+                                <option value="__blank__">📝 Blank Signature Line (Default)</option>
+                                {companySignatories.map((sig, sIdx) => (
+                                  <option key={sig.id || sIdx} value={sig.name}>
+                                    👤 {sig.name} {sig.designation ? `(${sig.designation})` : ''}
+                                  </option>
+                                ))}
+                                <option value="__custom__">✍️ Custom Input...</option>
+                              </select>
+
+                              <button
+                                type="button"
+                                onClick={openAddSignatoryModal}
+                                className="inline-flex items-center gap-1 bg-gradient-to-b from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 border border-blue-300 text-blue-700 text-[10px] font-bold px-1.5 py-1 rounded shadow-xs cursor-pointer transition"
+                                title={`Add new PIC for ${companyName || 'this company'}`}
+                              >
+                                <UserPlus className="w-3 h-3 text-blue-600" />
+                                <span>+ Add PIC</span>
+                              </button>
+                            </div>
+
+                            {isCustomSigMode && (
+                              <div className="w-full max-w-[200px] bg-slate-50 border border-slate-300 p-1.5 rounded space-y-1 text-[10px] text-left">
+                                <input
+                                  type="text"
+                                  placeholder="Recipient PIC Name"
+                                  value={receivedByName}
+                                  onChange={(e) => setReceivedByName(e.target.value)}
+                                  className="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5 font-bold"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Job Title / Designation"
+                                  value={receivedByDesignation}
+                                  onChange={(e) => setReceivedByDesignation(e.target.value)}
+                                  className="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Date (e.g. 16/08/2026)"
+                                  value={receivedByDate}
+                                  onChange={(e) => setReceivedByDate(e.target.value)}
+                                  className="w-full bg-white border border-slate-300 rounded px-1.5 py-0.5"
+                                />
+                              </div>
+                            )}
+                          </div>
+
                           <p className="text-slate-700 font-bold uppercase tracking-wide text-[10px]">{receivedByLabel}</p>
                           
                           <div className="h-12 border-b-2 border-slate-900 w-48 my-0.5 ml-auto"></div>
 
-                          <p className="font-bold text-slate-900 text-[10px]">Name / Designation: ______________________</p>
-                          <p className="text-slate-500 font-mono text-[10px]">Date: ____ / ____ / ________</p>
+                          {receivedByName ? (
+                            <div>
+                              <p className="font-bold text-slate-900 text-xs"><u>{receivedByName}</u></p>
+                              {receivedByDesignation && (
+                                <p className="text-slate-600 font-mono text-[10px] uppercase">{receivedByDesignation}</p>
+                              )}
+                              <p className="text-slate-500 font-mono text-[10px] mt-0.5">
+                                Date: {receivedByDate || '____ / ____ / ________'}
+                              </p>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="font-bold text-slate-900 text-[10px]">{receivedByNameLabel}</p>
+                              <p className="text-slate-500 font-mono text-[10px]">{receivedByDateLabel}</p>
+                            </div>
+                          )}
                         </div>
                       </DraggableElement>
                     </div>
@@ -1797,7 +2444,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                 )}
               </div>
 
-              {/* BOTTOM FOOTER (Repeats on every sheet at bottom) */}
+              {/* BOTTOM FOOTER (Repeats on every sheet at bottom - Fully Dynamic) */}
               <DraggableElement id="invoice_footer" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Footer" className="mt-auto w-full">
                 <footer style={{ borderTop: '1px solid #cbd5e1', paddingTop: '4px', marginTop: '4px', textAlign: 'center', fontSize: '7pt', color: '#64748b', background: '#ffffff', width: '100%' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1px', tableLayout: 'fixed' }}>
@@ -1806,7 +2453,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                         <td style={{ textAlign: 'left', width: '70%', verticalAlign: 'middle', padding: 0, border: 'none' }}>
                           {logoUrl && (
                             <img
-                              src={logoUrl}
+                              src={formatAssetUrl(logoUrl)}
                               alt="Logo"
                               style={{ height: '14px', maxHeight: '14px', verticalAlign: 'middle', marginRight: '4px', display: 'inline-block' }}
                               onError={(e) => {
@@ -1818,7 +2465,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                             {companyNameSetting}
                           </span>
                           <span style={{ marginLeft: '6px', fontFamily: 'ui-monospace, monospace', color: '#64748b' }}>
-                            ({companyEmailSetting}, {companyPhoneSetting})
+                            ({footerText || invoiceSettings?.footer_text || `${companyEmailSetting}, ${companyPhoneSetting}, ${companyWebsiteSetting}`})
                           </span>
                         </td>
                         <td style={{ textAlign: 'right', width: '30%', verticalAlign: 'middle', padding: 0, border: 'none', fontWeight: 700, color: '#475569' }}>
@@ -1870,25 +2517,36 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
               </div>
             </div>
 
-            <div className="flex-1 bg-slate-950 p-0 overflow-hidden relative">
-              <iframe
-                src={`/api_pdf.php?type=invoice&id=${encodeURIComponent(invoiceId || invoiceNumber)}&action=stream#toolbar=1`}
-                className="w-full h-full border-none"
-                title="Live Invoice PDF Preview"
-              />
+            <div className="flex-1 bg-slate-950 p-0 overflow-hidden relative flex items-center justify-center">
+              {(!pdfPreviewUrl || isGeneratingPdfPreview) && (
+                <div className="absolute inset-0 bg-slate-900/90 flex flex-col items-center justify-center gap-3 z-10">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                  <p className="text-xs font-bold text-slate-300">Preparing Live Invoice PDF Preview...</p>
+                  <p className="text-[10px] text-slate-500 font-mono">Headless Chrome Puppeteer Engine</p>
+                </div>
+              )}
+              {pdfPreviewUrl && (
+                <iframe
+                  src={pdfPreviewUrl}
+                  onLoad={() => setIsGeneratingPdfPreview(false)}
+                  className="w-full h-full border-none"
+                  title="Live Invoice PDF Preview"
+                />
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* ── QUICK PAPER & MARGINS SETUP MODAL ──────────────────────────────── */}
+
+      {/* ── PAPER, HEADER & INVOICE SETTINGS MODAL ────────────────────── */}
       {isPaperSetupModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white border border-slate-300 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden font-sans">
-            <div className="bg-slate-900 text-white px-5 py-3 flex items-center justify-between">
+          <div className="bg-white border border-slate-300 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden font-sans max-h-[90vh] flex flex-col">
+            <div className="bg-slate-900 text-white px-5 py-3 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal className="w-4 h-4 text-purple-400" />
-                <h3 className="font-bold text-sm">Invoice Paper Size & Margin Setup</h3>
+                <h3 className="font-bold text-sm">Invoice Setup & Settings</h3>
               </div>
               <button
                 onClick={() => setIsPaperSetupModalOpen(false)}
@@ -1898,90 +2556,189 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
               </button>
             </div>
 
-            <div className="p-5 space-y-4 text-xs text-slate-800">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">Paper Size</label>
-                  <select
-                    value={modalPaperSize}
-                    onChange={(e) => setModalPaperSize(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 font-bold text-slate-900 focus:outline-blue-500"
-                  >
-                    <option value="A4">A4 (210 x 297 mm)</option>
-                    <option value="Letter">Letter (8.5 x 11 in)</option>
-                    <option value="Legal">Legal (8.5 x 14 in)</option>
-                  </select>
+            <div className="p-5 space-y-4 text-xs text-slate-800 overflow-y-auto flex-1">
+              {/* Company & Header Information */}
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3">
+                <h4 className="font-bold text-slate-900 text-xs border-b border-slate-200 pb-1 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                  Header & Company Info
+                </h4>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-0.5">Company Name</label>
+                    <input
+                      type="text"
+                      value={modalCompanyName}
+                      onChange={(e) => setModalCompanyName(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-slate-900 font-semibold focus:outline-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-0.5">Company Reg No.</label>
+                    <input
+                      type="text"
+                      value={modalCompanyRegNo}
+                      onChange={(e) => setModalCompanyRegNo(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-slate-900 font-mono focus:outline-blue-500"
+                    />
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">Base Font Size (pt)</label>
-                  <input
-                    type="number"
-                    min="7"
-                    max="14"
-                    value={modalFontSize}
-                    onChange={(e) => setModalFontSize(Number(e.target.value))}
-                    className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 font-bold focus:outline-blue-500"
+                  <label className="block font-bold text-slate-700 uppercase mb-0.5">Company Address</label>
+                  <textarea
+                    rows={2}
+                    value={modalCompanyAddress}
+                    onChange={(e) => setModalCompanyAddress(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-slate-900 text-xs focus:outline-blue-500"
+                    placeholder="2-2-40, 2nd Floor Wisma Rampai, Jalan 34/26, Taman Sri Rampai, 53300 Kuala Lumpur."
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-0.5">Phone</label>
+                    <input
+                      type="text"
+                      value={modalPhone}
+                      onChange={(e) => setModalPhone(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-slate-900 text-xs focus:outline-blue-500 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-0.5">Email</label>
+                    <input
+                      type="email"
+                      value={modalEmail}
+                      onChange={(e) => setModalEmail(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-slate-900 text-xs focus:outline-blue-500 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-0.5">Website</label>
+                    <input
+                      type="text"
+                      value={modalWebsite}
+                      onChange={(e) => setModalWebsite(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-slate-900 text-xs focus:outline-blue-500 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-0.5">Invoice Title</label>
+                    <input
+                      type="text"
+                      value={modalInvoiceTitle}
+                      onChange={(e) => setModalInvoiceTitle(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-slate-900 font-bold focus:outline-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-0.5">Table Header Color</label>
+                    <div className="flex items-center gap-2 bg-white p-1 border border-slate-300 rounded">
+                      <input
+                        type="color"
+                        value={modalTableHeaderBg}
+                        onChange={(e) => setModalTableHeaderBg(e.target.value)}
+                        className="w-6 h-6 rounded border border-slate-300 cursor-pointer"
+                      />
+                      <span className="font-mono font-bold text-slate-900">{modalTableHeaderBg}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Paper & Margins */}
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3">
+                <h4 className="font-bold text-slate-900 text-xs border-b border-slate-200 pb-1 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-purple-600"></span>
+                  Paper Size & Margins
+                </h4>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-0.5">Paper Size</label>
+                    <select
+                      value={modalPaperSize}
+                      onChange={(e) => setModalPaperSize(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 font-bold text-slate-900 focus:outline-blue-500"
+                    >
+                      <option value="A4">A4 (210 x 297 mm)</option>
+                      <option value="Letter">Letter (8.5 x 11 in)</option>
+                      <option value="Legal">Legal (8.5 x 14 in)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-0.5">Font Size (pt)</label>
+                    <input
+                      type="number"
+                      min="7"
+                      max="14"
+                      value={modalFontSize}
+                      onChange={(e) => setModalFontSize(Number(e.target.value))}
+                      className="w-full bg-white border border-slate-300 rounded px-2 py-1 font-bold focus:outline-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 uppercase mb-0.5">Margins (mm)</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    <div>
+                      <span className="block text-[10px] text-slate-500 font-bold mb-0.5">Top</span>
+                      <input
+                        type="number"
+                        value={modalMarginTop}
+                        onChange={(e) => setModalMarginTop(Number(e.target.value))}
+                        className="w-full bg-white border border-slate-300 rounded px-1.5 py-1 text-center font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <span className="block text-[10px] text-slate-500 font-bold mb-0.5">Bottom</span>
+                      <input
+                        type="number"
+                        value={modalMarginBottom}
+                        onChange={(e) => setModalMarginBottom(Number(e.target.value))}
+                        className="w-full bg-white border border-slate-300 rounded px-1.5 py-1 text-center font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <span className="block text-[10px] text-slate-500 font-bold mb-0.5">Left</span>
+                      <input
+                        type="number"
+                        value={modalMarginLeft}
+                        onChange={(e) => setModalMarginLeft(Number(e.target.value))}
+                        className="w-full bg-white border border-slate-300 rounded px-1.5 py-1 text-center font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <span className="block text-[10px] text-slate-500 font-bold mb-0.5">Right</span>
+                      <input
+                        type="number"
+                        value={modalMarginRight}
+                        onChange={(e) => setModalMarginRight(Number(e.target.value))}
+                        className="w-full bg-white border border-slate-300 rounded px-1.5 py-1 text-center font-mono font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 uppercase mb-0.5">Footer Running Text (Bottom Sheet)</label>
+                  <textarea
+                    rows={2}
+                    value={modalFooterText}
+                    onChange={(e) => setModalFooterText(e.target.value)}
+                    placeholder="abmalayaindustry@gmail.com, +60 3-8000 1234, abmalaya.com"
+                    className="w-full bg-white border border-slate-300 rounded px-2 py-1 font-mono text-xs focus:outline-blue-500"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 uppercase mb-1">Document Page Margins (mm)</label>
-                <div className="grid grid-cols-4 gap-2 bg-slate-50 p-3 border border-slate-200 rounded">
-                  <div>
-                    <span className="block text-[10px] text-slate-500 font-bold mb-0.5">Top</span>
-                    <input
-                      type="number"
-                      value={modalMarginTop}
-                      onChange={(e) => setModalMarginTop(Number(e.target.value))}
-                      className="w-full bg-white border border-slate-300 rounded px-1.5 py-1 text-center font-mono font-bold"
-                    />
-                  </div>
-                  <div>
-                    <span className="block text-[10px] text-slate-500 font-bold mb-0.5">Bottom</span>
-                    <input
-                      type="number"
-                      value={modalMarginBottom}
-                      onChange={(e) => setModalMarginBottom(Number(e.target.value))}
-                      className="w-full bg-white border border-slate-300 rounded px-1.5 py-1 text-center font-mono font-bold"
-                    />
-                  </div>
-                  <div>
-                    <span className="block text-[10px] text-slate-500 font-bold mb-0.5">Left</span>
-                    <input
-                      type="number"
-                      value={modalMarginLeft}
-                      onChange={(e) => setModalMarginLeft(Number(e.target.value))}
-                      className="w-full bg-white border border-slate-300 rounded px-1.5 py-1 text-center font-mono font-bold"
-                    />
-                  </div>
-                  <div>
-                    <span className="block text-[10px] text-slate-500 font-bold mb-0.5">Right</span>
-                    <input
-                      type="number"
-                      value={modalMarginRight}
-                      onChange={(e) => setModalMarginRight(Number(e.target.value))}
-                      className="w-full bg-white border border-slate-300 rounded px-1.5 py-1 text-center font-mono font-bold"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 uppercase mb-1">Table Header Color</label>
-                <div className="flex items-center gap-3 bg-slate-50 p-2 border border-slate-200 rounded">
-                  <input
-                    type="color"
-                    value={modalTableHeaderBg}
-                    onChange={(e) => setModalTableHeaderBg(e.target.value)}
-                    className="w-8 h-8 rounded border border-slate-300 cursor-pointer"
-                  />
-                  <span className="font-mono font-bold text-slate-900">{modalTableHeaderBg}</span>
-                </div>
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2 border-t border-slate-200">
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-200 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsPaperSetupModalOpen(false)}
@@ -1995,6 +2752,14 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                     setIsSavingPaperSetup(true);
                     const payload = {
                       ...(invoiceSettings || {}),
+                      company_name: modalCompanyName,
+                      company_reg_no: modalCompanyRegNo,
+                      company_address: modalCompanyAddress,
+                      phone: modalPhone,
+                      email: modalEmail,
+                      website: modalWebsite,
+                      invoice_title: modalInvoiceTitle,
+                      footer_text: modalFooterText,
                       paper_size: modalPaperSize,
                       margin_top: modalMarginTop,
                       margin_bottom: modalMarginBottom,
@@ -2015,10 +2780,10 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                           setInvoiceSettings(payload);
                           memoizedInvoiceSettingsInv = payload;
                           setIsPaperSetupModalOpen(false);
-                          setLayoutSaveNotice('Invoice Paper & Margin settings saved to database!');
+                          setLayoutSaveNotice('Invoice Settings & Header saved to database!');
                           setTimeout(() => setLayoutSaveNotice(null), 3000);
                         } else {
-                          alert('Failed to save paper settings: ' + (resData.message || 'Error'));
+                          alert('Failed to save settings: ' + (resData.message || 'Error'));
                         }
                       })
                       .catch((err) => {
@@ -2034,6 +2799,158 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ADD NEW SIGNATORY / PIC MODAL ──────────────────────────────── */}
+      {isAddSignatoryModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in font-sans">
+          <div className="bg-white border border-slate-300 w-full max-w-md rounded-xl shadow-2xl overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white px-5 py-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <UserPlus className="w-4 h-4 text-blue-200" />
+                <h3 className="font-bold text-sm">Add Recipient Signatory (Received By PIC)</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddSignatoryModalOpen(false)}
+                className="text-white/80 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddNewSignatory} className="p-5 space-y-4 text-xs text-slate-800">
+              {/* Company Selection Field */}
+              <div className="space-y-1.5">
+                <label className="block font-bold text-slate-800 flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-blue-700" />
+                  <span>Select Target Company *</span>
+                </label>
+                
+                {/* Existing Companies Quick Picker */}
+                <select
+                  value={
+                    allClientCompanies.some((c) => c.company_name.toLowerCase().trim() === sigTargetCompany.toLowerCase().trim())
+                      ? sigTargetCompany
+                      : (sigTargetCompany === (companyName || clientName) ? sigTargetCompany : '__custom__')
+                  }
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '__custom__') {
+                      setSigTargetCompany('');
+                    } else {
+                      setSigTargetCompany(val);
+                    }
+                  }}
+                  className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-blue-600 focus:bg-white"
+                >
+                  {companyName && (
+                    <option value={companyName}>
+                      📍 Current Invoice Company ({companyName})
+                    </option>
+                  )}
+                  {allClientCompanies
+                    .filter((c) => c.company_name !== companyName)
+                    .map((comp) => (
+                      <option key={comp.id || comp.company_name} value={comp.company_name}>
+                        🏢 {comp.company_name}
+                      </option>
+                    ))}
+                  <option value="__custom__">✏️ Enter Custom Company Name...</option>
+                </select>
+
+                {/* Company Name Editable Input */}
+                <input
+                  type="text"
+                  required
+                  placeholder="Type or edit target company name..."
+                  value={sigTargetCompany}
+                  onChange={(e) => setSigTargetCompany(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded px-3 py-1.5 text-xs font-bold text-slate-900 focus:outline-blue-600 shadow-2xs"
+                />
+                <p className="text-[10px] text-slate-500 italic">
+                  This PIC signatory will be saved specifically for the company above and automatically available for its invoices.
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Recipient Full Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Ahmad Fauzi / Masuriani"
+                  value={newSigName}
+                  onChange={(e) => setNewSigName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2 text-xs font-bold text-slate-900 focus:outline-blue-600 focus:bg-white"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Job Title / Designation</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Warehouse & Logistics PIC"
+                  value={newSigDesignation}
+                  onChange={(e) => setNewSigDesignation(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-blue-600 focus:bg-white"
+                />
+
+                {/* Quick Designation Shortcuts */}
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {[
+                    'Warehouse PIC',
+                    'Logistics PIC',
+                    'Finance & Admin',
+                    'Purchasing Staff',
+                    'Procurement Officer',
+                    'Receiver',
+                  ].map((desig) => (
+                    <button
+                      key={desig}
+                      type="button"
+                      onClick={() => setNewSigDesignation(desig)}
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 px-2 py-0.5 rounded text-[10px] cursor-pointer transition font-medium"
+                    >
+                      + {desig}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Set as Default Checkbox */}
+              <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isNewSigDefault}
+                  onChange={(e) => setIsNewSigDefault(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                />
+                <span className="text-xs font-medium text-slate-700">
+                  Set as default recipient PIC for this company
+                </span>
+              </label>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setIsAddSignatoryModalOpen(false)}
+                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingNewSig || !newSigName.trim() || !sigTargetCompany.trim()}
+                  className="px-4 py-1.5 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded shadow-xs transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isSavingNewSig ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  <span>Save Signatory to Database</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

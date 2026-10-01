@@ -469,11 +469,12 @@ Your task: extract structured procurement data from {$source_desc}.
 PROMPT;
 
     // ── Step 3: Call Gemini AI Model ─────────────────────────────────────────
-    $ocr_models = [
-        'gemini-3.6-flash',
-        'gemini-3.5-flash',
-        'gemini-flash-latest',
-    ];
+    $raw_models = function_exists('getGeminiActiveModels') ? getGeminiActiveModels($key_list) : [];
+    $filtered_models = array_values(array_filter($raw_models, function($m) {
+        return stripos($m, 'flash') !== false && stripos($m, 'tts') === false && stripos($m, 'transcribe') === false;
+    }));
+    $ocr_models = !empty($filtered_models) ? array_slice($filtered_models, 0, 3) : ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.6-flash'];
+
     $key_count = count($key_list);
     $errors    = [];
     $rate_limited_count = 0;
@@ -485,7 +486,8 @@ PROMPT;
             $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . $model_name . ':generateContent?key=' . urlencode($api_key);
 
             $parts = [['text' => $prompt]];
-            if ($has_file && !empty($file_b64)) {
+            // Only attach inline_data for actual image files (png/jpg/webp); PDF text is already in prompt
+            if ($has_file && !empty($file_b64) && strpos($mime, 'image/') === 0 && strlen($file_b64) < 4000000) {
                 $parts[] = ['inline_data' => ['mime_type' => $mime, 'data' => $file_b64]];
             }
 
@@ -537,34 +539,36 @@ PROMPT;
             } elseif ($http_code === 429) {
                 $rate_limited_count++;
                 $errors[] = '[' . $model_name . '] Key …' . substr($api_key, -6) . ': HTTP 429 (rate limited)';
-                // ── Step 4: AI Rate Limit / Waiting Retry Handler ─────────────────────────
-                // Strict Policy: 100% of items MUST be extracted by Gemini AI. No native fallback item parsing allowed.
-                // If AI is rate limited or unavailable, re-queue SPH in database with 'waiting_ai_limit' status for background retry.
-                return [
-                    'scan_status'     => 'waiting_ai_limit',
-                    'scan_confidence' => 'waiting (Tesseract OCR OK — Menunggu AI Limit Reset)',
-                    'document_type'   => 'RFQ Requisition Form',
-                    'category_name'   => $quo_context['category_name'] ?? null,
-                    'impa_code'       => null,
-                    'company_name'    => $quo_context['client_company'] ?? null,
-                    'client_name'     => $quo_context['client_name']    ?? null,
-                    'delivery_email'  => null,
-                    'notes'           => 'Tesseract OCR text extraction completed successfully. Menunggu AI (Limit) quota reset to perform 100% AI structured parsing.',
-                    'items'           => [],
-                    'ai_errors'       => implode('; ', $errors),
-                    'ai_rate_limited' => true,
-                    'retry_after_secs' => 60,
-                    'scanned_at'      => $scanned_at,
-                    'file_url'        => $file_url
-                ];
+                continue; // Try next API key in pool
             } elseif ($http_code === 404) {
                 $errors[] = '[' . $model_name . '] Model not available (404) — trying next model';
-                break;
+                break; // Try next candidate model
             } else {
                 $errors[] = '[' . $model_name . '] Key …' . substr($api_key, -6) . ': HTTP ' . $http_code;
-                sleep(1);
+                continue; // Try next API key
             }
         }
+    }
+
+    // ── Step 4: AI Rate Limit / Waiting Retry Handler (All Keys Exhausted) ───────────────────
+    if ($rate_limited_count > 0) {
+        return [
+            'scan_status'     => 'waiting_ai_limit',
+            'scan_confidence' => 'waiting (Tesseract OCR OK — Menunggu AI Limit Reset)',
+            'document_type'   => 'RFQ Requisition Form',
+            'category_name'   => $quo_context['category_name'] ?? null,
+            'impa_code'       => null,
+            'company_name'    => $quo_context['client_company'] ?? null,
+            'client_name'     => $quo_context['client_name']    ?? null,
+            'delivery_email'  => null,
+            'notes'           => 'Tesseract OCR text extraction completed successfully. Menunggu AI quota reset.',
+            'items'           => [],
+            'ai_errors'       => implode('; ', $errors),
+            'ai_rate_limited' => true,
+            'retry_after_secs' => 60,
+            'scanned_at'      => $scanned_at,
+            'file_url'        => $file_url
+        ];
     }
 
     // ── Step 4: Native Text & Regex Fallback Parser ─────────────────────────

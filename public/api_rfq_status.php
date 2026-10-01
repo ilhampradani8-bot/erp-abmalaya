@@ -172,6 +172,18 @@ try {
                 $final_reply_sender = $recipient_email;
             }
 
+            if (!empty($smtp_err)) {
+                // SMTP dispatch failed: Log error history without updating status to penawaran_terkirim
+                appendRfqHistoryLog($db_conn, $clean_id, 'Gagal Kirim Email', $user_name, $user_email, "Gagal terkirim via Gmail SMTP. Detail: {$smtp_err}");
+                ob_end_clean();
+                echo json_encode([
+                    'status' => 'error',
+                    'smtp_sent' => false,
+                    'message' => 'Gagal mengirim email via Gmail SMTP: ' . $smtp_err
+                ]);
+                exit;
+            }
+
             // Ensure rfq_replies table exists for multi-reply history
             $db_conn->query("CREATE TABLE IF NOT EXISTS rfq_replies (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -193,27 +205,15 @@ try {
                 $insReply->close();
             }
 
-            // 4. Update status in Database - save the actual sender chosen by user
+            // 4. SMTP dispatch SUCCESS -> Update status in Database
             $stmt = $db_conn->prepare("UPDATE rfq_requests SET status = ?, reply_body = ?, reply_date = NOW(), reply_sender = ? WHERE rfq_number = ? OR id = ?");
             if ($stmt) {
                 $stmt->bind_param("ssssi", $status, $reply_body, $final_reply_sender, $rfq_num, $clean_id);
                 $stmt->execute();
                 $stmt->close();
                 
-                $log_detail = "Email balasan terkirim ke klien dengan lampiran PDF SPH (" . ($attach_pdf_name ? $attach_pdf_name : "No PDF attachment") . "). Pengirim: {$final_reply_sender}.";
-                if (!empty($smtp_err)) {
-                    $log_detail .= " (SMTP Error: {$smtp_err})";
-                }
+                $log_detail = "Email balasan BERHASIL terkirim ke klien via SMTP dengan lampiran PDF SPH (" . ($attach_pdf_name ? $attach_pdf_name : "No PDF attachment") . "). Pengirim: {$final_reply_sender}.";
                 appendRfqHistoryLog($db_conn, $clean_id, 'Kirim Balasan Email', $user_name, $user_email, $log_detail);
-            }
-
-            if (!empty($smtp_err)) {
-                ob_end_clean();
-                echo json_encode([
-                    'status' => 'error',
-                    'message' => 'Saved locally, but failed to send email via Gmail SMTP: ' . $smtp_err
-                ]);
-                exit;
             }
         } else {
             $stmt = $db_conn->prepare("UPDATE rfq_requests SET status = ? WHERE rfq_number = ? OR id = ?");
@@ -261,7 +261,14 @@ function send_smtp_email(string $to, string $subject, string $body, string $from
     $host = 'smtp.gmail.com';
     $port = 465; // SSL Port
     $username = 'abmalayaindustry@gmail.com';
-    $password = 'tbsq icqa kece qaoz'; // Official Google App Password
+    global $db_conn;
+    $password = getenv('GMAIL_LIVE_APP_PASSWORD') ?: '';
+    if (empty($password) && isset($db_conn) && $db_conn) {
+        $res_pass = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key = 'SMTP_APP_PASSWORD' LIMIT 1");
+        if ($res_pass && $row_pass = $res_pass->fetch_assoc()) {
+            $password = trim($row_pass['credential_value']);
+        }
+    }
     
     // Choose From Name dynamically based on the targeted alias
     $from_name = 'AB Malaya Industry';
