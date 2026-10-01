@@ -26,7 +26,7 @@ export const SwitchUserModal: React.FC<SwitchUserModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password.trim()) {
-      setErrorMessage('Silakan masukkan sandi akses akun.');
+      setErrorMessage('Please enter user account password.');
       return;
     }
 
@@ -54,11 +54,11 @@ export const SwitchUserModal: React.FC<SwitchUserModalProps> = ({
         setErrorMessage('');
         onSuccess(data.user || targetUser);
       } else {
-        setErrorMessage(data.message || 'Sandi akses salah untuk akun ini.');
+        setErrorMessage(data.message || 'Incorrect password for this account.');
       }
     } catch (err: any) {
       setErrorMessage(
-        'Gagal memverifikasi sandi. ' + (err.message ? `(${err.message})` : 'Periksa koneksi server.')
+        'Failed to verify password. ' + (err.message ? `(${err.message})` : 'Please check server connection.')
       );
     } finally {
       setIsLoading(false);
@@ -79,10 +79,10 @@ export const SwitchUserModal: React.FC<SwitchUserModalProps> = ({
             </div>
             <div>
               <h3 className="font-extrabold text-xs text-slate-900 uppercase tracking-wider">
-                Konfirmasi Sandi Akses Pengguna
+                Confirm User Access Password
               </h3>
               <p className="text-[10px] text-slate-500">
-                Verifikasi keamanan untuk beralih sesi akun
+                Security verification to switch active user session
               </p>
             </div>
           </div>
@@ -111,7 +111,7 @@ export const SwitchUserModal: React.FC<SwitchUserModalProps> = ({
                 </span>
               </div>
               <p className="text-[11px] font-mono text-blue-700 font-bold truncate">{targetUser.email}</p>
-              <p className="text-[10px] text-slate-500 truncate">{targetUser.department || 'Divisi ERP'}</p>
+              <p className="text-[10px] text-slate-500 truncate">{targetUser.department || 'ERP Operations'}</p>
             </div>
           </div>
 
@@ -127,7 +127,7 @@ export const SwitchUserModal: React.FC<SwitchUserModalProps> = ({
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1">
               <label className="block text-xs font-bold text-slate-700 flex items-center justify-between">
-                <span>Masukkan Sandi Akun Pengguna:</span>
+                <span>Enter User Account Password:</span>
               </label>
 
               <div className="relative">
@@ -135,7 +135,7 @@ export const SwitchUserModal: React.FC<SwitchUserModalProps> = ({
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Masukkan sandi akses..."
+                  placeholder="Enter account password..."
                   autoFocus
                   disabled={isLoading}
                   className="w-full bg-[#fcfdfe] border border-[#a0b0c0] rounded-none px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-[#0080d0] focus:ring-1 focus:ring-[#0080d0] transition pr-10 font-mono shadow-[inset_1px_1px_3px_rgba(0,0,0,0.06)]"
@@ -149,7 +149,7 @@ export const SwitchUserModal: React.FC<SwitchUserModalProps> = ({
                 </button>
               </div>
               <p className="text-[10px] text-slate-500">
-                Gunakan sandi akun atau Master Passphrase ERP.
+                Use individual account password or ERP Master Passphrase.
               </p>
             </div>
 
@@ -160,7 +160,7 @@ export const SwitchUserModal: React.FC<SwitchUserModalProps> = ({
                 disabled={isLoading}
                 className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
               >
-                Batal
+                Cancel
               </button>
 
               <button
@@ -171,12 +171,12 @@ export const SwitchUserModal: React.FC<SwitchUserModalProps> = ({
                 {isLoading ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Memverifikasi...</span>
+                    <span>Verifying...</span>
                   </>
                 ) : (
                   <>
                     <UserCheck className="w-3.5 h-3.5" />
-                    <span>Beralih ke Sesi Ini</span>
+                    <span>Switch to This Session</span>
                   </>
                 )}
               </button>

@@ -90,7 +90,7 @@ try {
             ob_end_clean();
             echo json_encode([
                 'status' => 'error',
-                'message' => 'Sandi akses (passphrase) wajib diisi.'
+                'message' => 'Account access password / passphrase is required.'
             ]);
             exit;
         }
@@ -161,12 +161,12 @@ try {
 
         if (!$matchedUser) {
             // Log failed attempt in user_activity_logs
-            @$db_conn->query("INSERT INTO user_activity_logs (user_name, user_email, action, details, ip_address) VALUES ('System Auth', 'auth@abmalaya.com', 'login_failed', 'Gagal login: Sandi akses salah atau pengguna tidak ditemukan ({$email})', '{$ip}')");
+            @$db_conn->query("INSERT INTO user_activity_logs (user_name, user_email, action, details, ip_address) VALUES ('System Auth', 'auth@abmalaya.com', 'login_failed', 'Login failed: Invalid passphrase or user not found ({$email})', '{$ip}')");
 
             ob_end_clean();
             echo json_encode([
                 'status' => 'error',
-                'message' => 'Sandi akses tidak cocok untuk akun ini. Silakan periksa kembali sandi Anda.'
+                'message' => 'Invalid access password for this account. Please verify your credentials and try again.'
             ]);
             exit;
         }
@@ -175,7 +175,7 @@ try {
         $token = bin2hex(random_bytes(32));
         $days = $rememberMe ? 30 : 7;
         $expiresAt = date('Y-m-d H:i:s', strtotime("+{$days} days"));
-        $userRole = $matchedUser['role'] ?: 'Karyawan';
+        $userRole = $matchedUser['role'] ?: 'Staff';
 
         $stmt = $db_conn->prepare("INSERT INTO user_sessions (token, role, device_info, ip_address, expires_at) VALUES (?, ?, ?, ?, ?)");
         if ($stmt) {
@@ -188,12 +188,12 @@ try {
         $db_conn->query("DELETE FROM user_sessions WHERE expires_at < NOW()");
 
         // Log successful login
-        @$db_conn->query("INSERT INTO user_activity_logs (user_name, user_email, action, details, ip_address) VALUES ('{$matchedUser['name']}', '{$matchedUser['email']}', 'LOGIN_SUCCESS', 'Berhasil login ke sistem ERP AB Malaya ({$userRole})', '{$ip}')");
+        @$db_conn->query("INSERT INTO user_activity_logs (user_name, user_email, action, details, ip_address) VALUES ('{$matchedUser['name']}', '{$matchedUser['email']}', 'LOGIN_SUCCESS', 'User logged in successfully to AB Malaya ERP ({$userRole})', '{$ip}')");
 
         ob_end_clean();
         echo json_encode([
             'status' => 'success',
-            'message' => "Selamat datang, {$matchedUser['name']}!",
+            'message' => "Welcome back, {$matchedUser['name']}!",
             'token' => $token,
             'user' => $matchedUser,
             'role' => $userRole,
@@ -214,7 +214,7 @@ try {
             echo json_encode([
                 'status' => 'error',
                 'valid' => false,
-                'message' => 'Pengguna dan sandi verifikasi wajib diisi.'
+                'message' => 'User ID and verification password are required.'
             ]);
             exit;
         }
@@ -233,7 +233,7 @@ try {
             echo json_encode([
                 'status' => 'error',
                 'valid' => false,
-                'message' => 'Akun pengguna tidak ditemukan di database.'
+                'message' => 'User account not found in database.'
             ]);
             exit;
         }
@@ -244,24 +244,24 @@ try {
         if ($isValidPwd) {
             unset($targetUser['password']);
             // Log switch event
-            @$db_conn->query("INSERT INTO user_activity_logs (user_name, user_email, action, details, ip_address) VALUES ('{$targetUser['name']}', '{$targetUser['email']}', 'SWITCH_USER_SUCCESS', 'Verifikasi sandi sukses: beralih ke sesi {$targetUser['name']}', '{$_SERVER['REMOTE_ADDR']}')");
+            @$db_conn->query("INSERT INTO user_activity_logs (user_name, user_email, action, details, ip_address) VALUES ('{$targetUser['name']}', '{$targetUser['email']}', 'SWITCH_USER_SUCCESS', 'Password verified: switched session to {$targetUser['name']}', '{$_SERVER['REMOTE_ADDR']}')");
 
             ob_end_clean();
             echo json_encode([
                 'status' => 'success',
                 'valid' => true,
                 'user' => $targetUser,
-                'message' => "Verifikasi berhasil. Beralih ke {$targetUser['name']}."
+                'message' => "Verification successful. Switched to {$targetUser['name']}."
             ]);
             exit;
         } else {
-            @$db_conn->query("INSERT INTO user_activity_logs (user_name, user_email, action, details, ip_address) VALUES ('{$targetUser['name']}', '{$targetUser['email']}', 'SWITCH_USER_FAILED', 'Gagal verifikasi sandi saat switch akun ke {$targetUser['name']}', '{$_SERVER['REMOTE_ADDR']}')");
+            @$db_conn->query("INSERT INTO user_activity_logs (user_name, user_email, action, details, ip_address) VALUES ('{$targetUser['name']}', '{$targetUser['email']}', 'SWITCH_USER_FAILED', 'Password verification failed when switching to {$targetUser['name']}', '{$_SERVER['REMOTE_ADDR']}')");
 
             ob_end_clean();
             echo json_encode([
                 'status' => 'error',
                 'valid' => false,
-                'message' => 'Sandi akses salah untuk akun pengguna ini.'
+                'message' => 'Incorrect access password for this user account.'
             ]);
             exit;
         }
@@ -279,7 +279,7 @@ try {
             ob_end_clean();
             echo json_encode([
                 'status' => 'error',
-                'message' => 'Sandi baru minimal harus 4 karakter.'
+                'message' => 'New password must be at least 4 characters.'
             ]);
             exit;
         }
@@ -295,7 +295,7 @@ try {
             ob_end_clean();
             echo json_encode([
                 'status' => 'error',
-                'message' => 'Akun pengguna tidak ditemukan di database.'
+                'message' => 'User account not found in database.'
             ]);
             exit;
         }
@@ -311,7 +311,7 @@ try {
                 ob_end_clean();
                 echo json_encode([
                     'status' => 'error',
-                    'message' => 'Sandi lama salah! Masukkan sandi lama akun yang benar atau Master Passphrase.'
+                    'message' => 'Incorrect current password! Enter valid current password or Master Passphrase.'
                 ]);
                 exit;
             }
@@ -325,12 +325,12 @@ try {
             $upd->close();
         }
 
-        @$db_conn->query("INSERT INTO user_activity_logs (user_name, user_email, action, details, ip_address) VALUES ('{$uRow['name']}', '{$uRow['email']}', 'PASSWORD_CHANGE', 'Sandi akses untuk {$uRow['name']} ({$uRow['email']}) berhasil diperbarui.', '{$_SERVER['REMOTE_ADDR']}')");
+        @$db_conn->query("INSERT INTO user_activity_logs (user_name, user_email, action, details, ip_address) VALUES ('{$uRow['name']}', '{$uRow['email']}', 'PASSWORD_CHANGE', 'Password for {$uRow['name']} ({$uRow['email']}) updated successfully.', '{$_SERVER['REMOTE_ADDR']}')");
 
         ob_end_clean();
         echo json_encode([
             'status' => 'success',
-            'message' => "Sandi akses untuk {$uRow['name']} berhasil diperbarui!"
+            'message' => "Access password for {$uRow['name']} has been updated successfully!"
         ]);
         exit;
     }
