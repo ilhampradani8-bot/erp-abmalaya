@@ -84,7 +84,24 @@ try {
         throw new Exception('Failed to obtain Google Access Token: ' . $response);
     }
 
-    $spreadsheet_id = '17oE102qBlTzXGeWxHMkNTCnz0CE4TKR_xxsq65QqFmI';
+    $spreadsheet_id = getenv('GOOGLE_SPREADSHEET_SOURCE_ID') ?: '17oE102qBlTzXGeWxHMkNTCnz0CE4TKR_xxsq65QqFmI';
+    $env_file = __DIR__ . '/.env';
+    if (!file_exists($env_file)) $env_file = __DIR__ . '/../.env';
+    if (file_exists($env_file)) {
+        $lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $l) {
+            if (strpos(trim($l), '#') === 0) continue;
+            if (strpos($l, '=') !== false) {
+                list($k, $v) = explode('=', $l, 2);
+                $k = trim($k);
+                $v = trim(trim($v), '"\'');
+                if ($k === 'GOOGLE_SPREADSHEET_SOURCE_ID' && !empty($v)) {
+                    $spreadsheet_id = $v;
+                    break;
+                }
+            }
+        }
+    }
 
     // 3. Fetch Metadata to discover all sheet tabs
     $meta_url = "https://sheets.googleapis.com/v4/spreadsheets/{$spreadsheet_id}";

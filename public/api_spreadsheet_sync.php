@@ -7,7 +7,24 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
-$spreadsheet_id = '1PHMV-f5fEZzdzCHXXMZFn2laEIRnOWrDoH9ZJcxi1UQ';
+$spreadsheet_id = getenv('GOOGLE_SPREADSHEET_BACKUP_ID') ?: '1PHMV-f5fEZzdzCHXXMZFn2laEIRnOWrDoH9ZJcxi1UQ';
+$env_file = __DIR__ . '/.env';
+if (!file_exists($env_file)) $env_file = __DIR__ . '/../.env';
+if (file_exists($env_file)) {
+    $lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $l) {
+        if (strpos(trim($l), '#') === 0) continue;
+        if (strpos($l, '=') !== false) {
+            list($k, $v) = explode('=', $l, 2);
+            $k = trim($k);
+            $v = trim(trim($v), '"\'');
+            if ($k === 'GOOGLE_SPREADSHEET_BACKUP_ID' && !empty($v)) {
+                $spreadsheet_id = $v;
+                break;
+            }
+        }
+    }
+}
 
 try {
     require_once __DIR__ . '/db_connect.php';
