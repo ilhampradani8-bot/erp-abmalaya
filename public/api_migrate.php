@@ -43,6 +43,7 @@ $connection->query("CREATE TABLE IF NOT EXISTS system_paper_settings (
 $paper_cols = [
     'signature_url' => "ALTER TABLE system_paper_settings ADD COLUMN signature_url LONGTEXT DEFAULT NULL AFTER stamp_url",
     'header_image_url' => "ALTER TABLE system_paper_settings ADD COLUMN header_image_url LONGTEXT DEFAULT NULL AFTER stamp_url",
+    'footer_text' => "ALTER TABLE system_paper_settings ADD COLUMN footer_text TEXT DEFAULT NULL AFTER footer_terms",
     'paper_size' => "ALTER TABLE system_paper_settings ADD COLUMN paper_size VARCHAR(20) DEFAULT 'A4'",
     'margin_top' => "ALTER TABLE system_paper_settings ADD COLUMN margin_top INT DEFAULT 18",
     'margin_bottom' => "ALTER TABLE system_paper_settings ADD COLUMN margin_bottom INT DEFAULT 18",
@@ -77,6 +78,7 @@ $connection->query("CREATE TABLE IF NOT EXISTS system_invoice_settings (
     bank_account_name VARCHAR(255) DEFAULT 'AB MALAYA INDUSTRY',
     bank_email VARCHAR(100) DEFAULT 'abmalayaindustry@gmail.com',
     remarks_text TEXT,
+    footer_text TEXT DEFAULT NULL,
     authorised_by_name VARCHAR(255) DEFAULT 'Muhammad Aimanuddin Bin Mohd Zaki',
     authorised_by_title VARCHAR(255) DEFAULT 'Procurement Manager / Head of Sales',
     received_by_label VARCHAR(255) DEFAULT 'Received by,',
@@ -96,6 +98,7 @@ $connection->query("CREATE TABLE IF NOT EXISTS system_invoice_settings (
 $invoice_cols = [
     'signature_url' => "ALTER TABLE system_invoice_settings ADD COLUMN signature_url LONGTEXT DEFAULT NULL AFTER stamp_url",
     'header_image_url' => "ALTER TABLE system_invoice_settings ADD COLUMN header_image_url LONGTEXT DEFAULT NULL AFTER stamp_url",
+    'footer_text' => "ALTER TABLE system_invoice_settings ADD COLUMN footer_text TEXT DEFAULT NULL AFTER remarks_text",
     'paper_size' => "ALTER TABLE system_invoice_settings ADD COLUMN paper_size VARCHAR(20) DEFAULT 'A4'",
     'margin_top' => "ALTER TABLE system_invoice_settings ADD COLUMN margin_top INT DEFAULT 18",
     'margin_bottom' => "ALTER TABLE system_invoice_settings ADD COLUMN margin_bottom INT DEFAULT 18",
@@ -117,6 +120,7 @@ $connection->query("ALTER TABLE quotations MODIFY valid_until VARCHAR(50) DEFAUL
 $results['quotations'][] = "Modified valid_until to VARCHAR(50)";
 
 $quo_cols = [
+    'footer_text' => "ALTER TABLE quotations ADD COLUMN footer_text TEXT DEFAULT NULL AFTER notes",
     'source_file' => "ALTER TABLE quotations ADD COLUMN source_file TEXT DEFAULT NULL AFTER notes",
     'quotation_file' => "ALTER TABLE quotations ADD COLUMN quotation_file TEXT DEFAULT NULL AFTER source_file",
     'pdf_created' => "ALTER TABLE quotations ADD COLUMN pdf_created TINYINT(1) DEFAULT 0",

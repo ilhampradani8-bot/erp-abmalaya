@@ -375,7 +375,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
   // Run Authentic Google Gemini AI PDF OCR Scanning via PHP backend
   const handleScanPdfWithGeminiAiInModal = () => {
     if (!quotation?.id) {
-      setScanOcrLog({ status: 'error', message: 'ID SPH Quotation tidak ditemukan.' });
+      setScanOcrLog({ status: 'error', message: 'Quotation SPH ID not found.' });
       return;
     }
     setIsScanningModalOcr(true);
@@ -1910,7 +1910,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                   Original Email Specification Text:
                 </h4>
                 <p className="whitespace-pre-line text-slate-800 leading-relaxed font-sans bg-slate-50 p-2.5 border border-slate-200">
-                  {quotation?.notes || 'Spesifikasi email belum diisi.'}
+                  {quotation?.notes || 'No email specifications provided.'}
                 </p>
               </div>
 

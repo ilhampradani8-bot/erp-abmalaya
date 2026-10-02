@@ -312,7 +312,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
   const handleExecuteCSVUpload = (fileToUpload?: File) => {
     const file = fileToUpload || draggedFile;
     if (!file) {
-      alert('Pilih atau tarik (drag) file CSV terlebih dahulu!');
+      alert('Please select or drag a CSV file first!');
       return;
     }
 
@@ -1378,7 +1378,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                             setSelectedProductDetail(p);
                           }}
                           className="max-w-[200px] truncate text-slate-700 font-sans hover:text-blue-600 hover:underline cursor-pointer"
-                          title="Klik untuk lihat rincian & aksi produk"
+                          title="Click to view details & product actions"
                         >
                           {p.specification || p.description || 'Standard specification'}
                         </div>
@@ -1388,7 +1388,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                         {p.offer || p.offered_item ? (
                           <div
                             className="line-clamp-2 leading-tight max-w-[220px] cursor-pointer hover:text-blue-600 transition font-medium"
-                            title={`Alternative Offered: ${p.offer || p.offered_item} (Alternatif produk/merek jika spesifikasi sama)`}
+                            title={`Alternative Offered: ${p.offer || p.offered_item} (Alternative brand/product with equivalent specifications)`}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedProductDetail(p);
@@ -1684,13 +1684,13 @@ export const Product: React.FC<ProductProps> = ({}) => {
                   <div className="space-y-1 bg-emerald-50/60 border border-emerald-200 p-3.5 rounded-md">
                     <h4 className="font-bold text-emerald-950 uppercase tracking-wide text-[11px] flex items-center gap-1.5 border-b border-emerald-200 pb-1">
                       <Tag className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Alternative Offered (Produk / Merek Alternatif)</span>
+                      <span>Alternative Offered (Equivalent Product / Brand)</span>
                     </h4>
                     <p className="leading-relaxed text-emerald-900 font-bold text-xs font-sans pt-1">
                       {selectedProductDetail.offer || selectedProductDetail.offered_item}
                     </p>
                     <p className="text-[10px] text-emerald-700 font-medium italic">
-                      *Penawaran alternatif produk/merek dengan spesifikasi teknis yang setara.
+                      *Alternative product or brand offer with equivalent technical specifications.
                     </p>
                   </div>
                 )}
@@ -1946,7 +1946,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                 <span>
-                  Sistem menemukan <strong>{conflictDiscrepancies.length} produk</strong> dengan rincian perbedaan harga/stok antara server MySQL dan file Google Drive Cloud Backup.
+                  System detected <strong>{conflictDiscrepancies.length} products</strong> with price/stock discrepancies between MySQL and Google Drive Cloud Backup.
                 </span>
               </div>
             </div>
@@ -1956,11 +1956,11 @@ export const Product: React.FC<ProductProps> = ({}) => {
               <table className="w-full text-left text-xs border-collapse bg-white border border-slate-300 shadow-2xs">
                 <thead className="bg-slate-100 text-slate-700 font-bold text-[11px] uppercase tracking-wide border-b border-slate-300">
                   <tr>
-                    <th className="p-2.5 border-r border-slate-200 w-28">Kode Produk</th>
-                    <th className="p-2.5 border-r border-slate-200">Nama / Spesifikasi Produk</th>
-                    <th className="p-2.5 border-r border-slate-200 w-36">Field Yang Berbeda</th>
-                    <th className="p-2.5 border-r border-slate-200 bg-blue-50 text-blue-900 w-32">Nilai MySQL Lokal</th>
-                    <th className="p-2.5 bg-emerald-50 text-emerald-900 w-32">Nilai Google Drive</th>
+                    <th className="p-2.5 border-r border-slate-200 w-28">Product Code</th>
+                    <th className="p-2.5 border-r border-slate-200">Product Name / Specification</th>
+                    <th className="p-2.5 border-r border-slate-200 w-36">Different Field</th>
+                    <th className="p-2.5 border-r border-slate-200 bg-blue-50 text-blue-900 w-32">Local MySQL Value</th>
+                    <th className="p-2.5 bg-emerald-50 text-emerald-900 w-32">Google Drive Value</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 font-sans">
@@ -2003,7 +2003,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                 onClick={() => setIsDiffDetailModalOpen(false)}
                 className="px-4 py-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] text-[#3d3d3d] border border-[#a0a0a0] font-bold text-xs rounded-sm cursor-pointer hover:bg-white"
               >
-                Tutup
+                Close
               </button>
 
               <div className="flex items-center gap-2">
@@ -2450,9 +2450,9 @@ export const Product: React.FC<ProductProps> = ({}) => {
                   <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-300 font-bold text-slate-800 flex items-center justify-between text-[11px]">
                     <span className="flex items-center gap-1.5">
                       <Package className="w-3.5 h-3.5 text-[#0099ec]" />
-                      IDENTIFIKASI & METADATA PRODUK
+                      IDENTIFICATION & PRODUCT METADATA
                     </span>
-                    <span className="text-[10px] text-slate-500 font-normal">Detail Master Barang</span>
+                    <span className="text-[10px] text-slate-500 font-normal">Master Item Details</span>
                   </div>
 
                   <table className="w-full border-collapse text-xs">
@@ -2505,7 +2505,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                             value={category}
                             onChange={(e) => {
                               if (e.target.value === '__custom__') {
-                                const custom = prompt('Masukkan nama kategori baru:');
+                                const custom = prompt('Enter new category name:');
                                 if (custom && custom.trim()) {
                                   setCategory(custom.trim());
                                 }
@@ -2535,7 +2535,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                                   {cat}
                                 </option>
                               ))}
-                            <option value="__custom__">+ Kategori Baru / Custom...</option>
+                            <option value="__custom__">+ New / Custom Category...</option>
                           </select>
                         </td>
                         <td className="bg-slate-50 px-2.5 py-1.5 font-bold text-slate-700 border-r border-slate-200 align-middle">
@@ -2562,7 +2562,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                             required
                             value={productName}
                             onChange={(e) => setProductName(e.target.value)}
-                            placeholder="Nama Produk Lengkap..."
+                            placeholder="Full Product Name..."
                             className="w-full bg-slate-50/50 focus:bg-white border border-slate-300 focus:border-[#0099ec] px-2 py-1 text-xs font-bold text-slate-900 rounded-xs"
                           />
                         </td>
@@ -2572,7 +2572,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
 
                   {/* Section 2 Header */}
                   <div className="bg-slate-100 px-3 py-1.5 border-y border-slate-300 font-bold text-slate-800 flex items-center justify-between text-[11px]">
-                    <span>DESKRIPSI & SPESIFIKASI TEKNIS</span>
+                    <span>DESCRIPTION & TECHNICAL SPECIFICATIONS</span>
                   </div>
 
                   <table className="w-full border-collapse text-xs">
@@ -2586,7 +2586,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                             rows={2}
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
-                            placeholder="Ringkasan singkat produk..."
+                            placeholder="Brief product summary..."
                             className="w-full bg-slate-50/50 focus:bg-white border border-slate-300 focus:border-[#0099ec] p-1.5 text-xs text-slate-800 rounded-xs resize-y"
                           />
                         </td>
@@ -2618,7 +2618,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                               className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-white hover:bg-emerald-50 border border-emerald-300 hover:border-emerald-500 px-3 py-1 rounded cursor-pointer transition shadow-2xs"
                             >
                               <Plus className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>+ Add Alternative Offered (Produk / Merek Alternatif)</span>
+                              <span>+ Add Alternative Offered (Equivalent Brand / Product)</span>
                             </button>
                           </td>
                         </tr>
@@ -2635,7 +2635,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                                 }}
                                 className="text-[10px] text-rose-600 hover:text-rose-800 font-bold underline text-left cursor-pointer"
                               >
-                                Hapus / Batal
+                                Remove / Cancel
                               </button>
                             </div>
                           </td>
@@ -2644,7 +2644,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                               rows={2}
                               value={offerText}
                               onChange={(e) => setOfferText(e.target.value)}
-                              placeholder="Penawaran alternatif produk/merek jika spesifikasi sama (contoh: BRAND B - EQUIVALENT SPEC...)"
+                              placeholder="Alternative product/brand offer for equivalent specifications (e.g. BRAND B - EQUIVALENT SPEC...)"
                               className="w-full bg-emerald-50/20 focus:bg-white border border-emerald-300 focus:border-emerald-600 p-1.5 text-xs font-bold text-emerald-900 rounded-xs resize-y"
                             />
                           </td>
@@ -2655,7 +2655,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
 
                   {/* Section 3 Header */}
                   <div className="bg-slate-100 px-3 py-1.5 border-y border-slate-300 font-bold text-slate-800 flex items-center justify-between text-[11px]">
-                    <span>HARGA, HPP & STOK BARANG</span>
+                    <span>PRICE, CAPITAL COST & INVENTORY STOCK</span>
                   </div>
 
                   <div className="p-1 bg-slate-50">
@@ -2735,7 +2735,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
 
                   {/* Section 4 Header */}
                   <div className="bg-slate-100 px-3 py-1.5 border-y border-slate-300 font-bold text-slate-800 flex items-center justify-between text-[11px]">
-                    <span>FOTO PRODUK & UPLOAD</span>
+                    <span>PRODUCT PHOTO & UPLOAD</span>
                   </div>
 
                   {/* Photo Section Row */}
@@ -2909,7 +2909,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
               <div className="flex items-center gap-2">
                 <Upload className="w-4 h-4 text-[#0099ec]" />
                 <h3 className="font-extrabold text-xs text-slate-900">
-                  Upload Data CSV / Spreadsheet Produk
+                  Upload Product CSV / Spreadsheet Data
                 </h3>
               </div>
               <button
@@ -3051,18 +3051,18 @@ export const Product: React.FC<ProductProps> = ({}) => {
           <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
           <div className="space-y-1 flex-1 text-xs">
             <div className="flex items-center justify-between font-extrabold text-amber-300 text-xs">
-              <span>Peringatan Sync Cloud</span>
+              <span>Cloud Sync Warning</span>
               <button
                 type="button"
                 onClick={() => setIsToastDismissed(true)}
                 className="p-0.5 text-slate-400 hover:text-white transition cursor-pointer"
-                title="Tutup Notifikasi"
+                title="Dismiss Notification"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <p className="text-slate-200 text-[11px] leading-relaxed">
-              Terdapat perbedaan data stok/harga antara Google Drive Cloud & MySQL Lokal.
+              Discrepancies detected between Google Drive Cloud & Local MySQL database.
             </p>
             <div className="pt-1 flex items-center justify-between">
               <button
@@ -3070,7 +3070,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                 onClick={() => setIsDiffDetailModalOpen(true)}
                 className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold px-2.5 py-1 rounded text-[10px] cursor-pointer transition shadow-xs"
               >
-                Lihat Detail Perbedaan ➔
+                View Difference Details ➔
               </button>
 
               <button
@@ -3078,7 +3078,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                 onClick={() => setIsToastDismissed(true)}
                 className="text-[10px] text-slate-400 hover:text-slate-200 underline cursor-pointer"
               >
-                Tutup
+                Close
               </button>
             </div>
           </div>

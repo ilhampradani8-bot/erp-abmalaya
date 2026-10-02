@@ -895,22 +895,22 @@ ob_end_clean();
     <thead class="page-layout-header">
         <tr>
             <td style="padding: 0; border: none; background: #ffffff;">
-                <div style="width: 100%; border-bottom: 2px solid #004f8b; padding-bottom: 4px; margin-bottom: 6px; background: #ffffff; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
+                <div style="width: 100%; border-bottom: 2px solid #004f8b; padding-bottom: 3px; margin-bottom: 4px; background: #ffffff; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
                     <?php if (!empty($hdrImgUrl)): ?>
                         <div style="width: 100%; margin-bottom: 4px; margin-top: -2px;">
                             <img src="<?= $hdrImgUrl ?>" alt="Header Banner" style="width: 100%; height: auto; max-height: 90px; object-fit: cover; object-position: top center; display: block;">
                         </div>
                     <?php else: ?>
-                        <div style="width: 100%; height: 4px; background-color: #004f8b; background: linear-gradient(to right, #004f8b, #0070c0, #0080d0); border-top: 2px solid #004f8b; border-bottom: 1px solid #0070c0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; margin-bottom: 4px;"></div>
+                        <div style="width: 100%; height: 4px; background-color: #004f8b; background: linear-gradient(to right, #004f8b, #0070c0, #0080d0); border-top: 2px solid #004f8b; border-bottom: 1px solid #0070c0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; margin-bottom: 3px;"></div>
                     <?php endif; ?>
 
                     <table style="width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0; padding: 0;">
                         <tr>
                             <!-- Logo Left -->
                             <td style="width: 55%; vertical-align: bottom; text-align: left; padding: 0; border: none;">
-                                <div style="transform: translate(<?= $logoX ?>px, <?= $logoY ?>px); transform-origin: left bottom;">
+                                <div style="transform: translate(<?= $logoX ?>px, <?= $logoY ?>px) scale(<?= $logoScale ?>); transform-origin: left bottom; position: relative;">
                                     <?php if (!empty($logoUrl)): ?>
-                                        <img src="<?= $logoUrl ?>" alt="<?= htmlspecialchars($companyName) ?>" style="height: <?= round(44 * $logoScale) ?>px; max-width: 220px; object-fit: contain; display: block;">
+                                        <img src="<?= $logoUrl ?>" alt="<?= htmlspecialchars($companyName) ?>" style="height: 44px; max-width: 220px; object-fit: contain; display: block;">
                                     <?php else: ?>
                                         <div>
                                             <div style="font-weight: 900; font-size: 15pt; color: #004f8b; text-transform: uppercase;">
@@ -926,7 +926,7 @@ ob_end_clean();
 
                             <!-- Company Address Right -->
                             <td style="width: 45%; vertical-align: bottom; text-align: right; padding: 0; border: none; font-size: 7.5pt; line-height: 1.25; color: #1e293b;">
-                                <div style="transform: translate(<?= $addrX ?>px, <?= $addrY ?>px); transform-origin: right bottom;">
+                                <div style="transform: translate(<?= $addrX ?>px, <?= $addrY ?>px); transform-origin: left bottom; position: relative;">
                                     <?= render_dynamic_address($companyAddress) ?>
                                 </div>
                             </td>

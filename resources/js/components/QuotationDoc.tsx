@@ -271,6 +271,8 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
   const [modalMarginRight, setModalMarginRight] = useState<number>(6);
   const [modalFontSize, setModalFontSize] = useState<number>(9);
   const [modalTableHeaderBg, setModalTableHeaderBg] = useState<string>('#0070c0');
+  const [modalFooterText, setModalFooterText] = useState<string>('');
+  const [modalFooterTerms, setModalFooterTerms] = useState<string>('');
   const [isSavingPaperSetup, setIsSavingPaperSetup] = useState<boolean>(false);
 
   // Inline Document Editing State
@@ -288,6 +290,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
   const [docClientPhone, setDocClientPhone] = useState<string>('');
   const [docClientEmail, setDocClientEmail] = useState<string>('');
   const [docNotes, setDocNotes] = useState<string>('');
+  const [docFooterText, setDocFooterText] = useState<string>('');
   const [docCreatedBy, setDocCreatedBy] = useState<string>('');
   const [docTaxPercent, setDocTaxPercent] = useState<number>(11);
   const [docItems, setDocItems] = useState<QuotationItem[]>([]);
@@ -302,6 +305,8 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
     setModalMarginRight(Number(paperSettings.margin_right || paperSettings.marginRight) || 6);
     setModalFontSize(Number(paperSettings.font_size || paperSettings.fontSize) || 9);
     setModalTableHeaderBg(paperSettings.table_header_bg || paperSettings.tableHeaderBg || '#0070c0');
+    setModalFooterText(paperSettings.footer_text || paperSettings.footerText || '');
+    setModalFooterTerms(paperSettings.footer_terms || paperSettings.footerTerms || '');
   }, [paperSettings]);
 
   // Clean email helper
@@ -333,6 +338,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
     setDocClientPhone(quotation.client_phone || (quotation as any).phone || '');
     setDocClientEmail(cleanEmailStr(quotation.client_email) || 'sales@abmalaya.com');
     setDocNotes(quotation.notes || paperSettings?.footer_terms || paperSettings?.default_notes || '1. Prices stated in Malaysian Ringgit (MYR) and valid for 14 days.\n2. Goods remain property of AB Malaya Sdn. Bhd. until fully paid.\n3. Standard 1-year official manufacturer warranty applicable.');
+    setDocFooterText((quotation as any).footer_text || paperSettings?.footer_text || paperSettings?.footerText || '');
     setDocCreatedBy(
       (quotation.created_by && quotation.created_by.trim() && quotation.created_by !== 'Sesi Tidak Terdeteksi' && quotation.created_by !== 'Unidentified Session')
         ? quotation.created_by
@@ -575,6 +581,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
       tax_amount: financialTotals.taxAmount,
       grand_total: financialTotals.grandTotal,
       notes: docNotes,
+      footer_text: docFooterText,
       created_by: docCreatedBy,
       items: docItems,
     };
@@ -626,6 +633,8 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
       margin_right: modalMarginRight,
       font_size: modalFontSize,
       table_header_bg: modalTableHeaderBg,
+      footer_text: modalFooterText,
+      footer_terms: modalFooterTerms,
     };
 
     fetch('/api_paper_settings.php', {
@@ -687,7 +696,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
           const updatedSettings = { ...(paperSettings || {}), layout_offsets: toSave };
           setPaperSettings(updatedSettings);
           memoizedPaperSettingsDoc = updatedSettings;
-          setLayoutSaveNotice('✓ Layout & posisi ukuran dokumen berhasil disimpan permanen!');
+          setLayoutSaveNotice('✓ Document layout & element positions saved permanently!');
           setTimeout(() => setLayoutSaveNotice(null), 3500);
         }
       })
@@ -905,7 +914,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
   const companyPhone = paperSettings?.phone || paperSettings?.companyPhone || '+60 3-8000 1234';
   const companyWebsite = paperSettings?.website || paperSettings?.companyWebsite || 'abmalaya.com';
   const tableHeaderBgColor = paperSettings?.table_header_bg || paperSettings?.tableHeaderBg || '#0070c0';
-  const headerTitle = paperSettings?.header_title || paperSettings?.headerTitle || 'SURAT PENAWARAN HARGA (SPH) / COMMERCIAL QUOTATION';
+  const headerTitle = paperSettings?.header_title || paperSettings?.headerTitle || 'OFFICIAL COMMERCIAL QUOTATION (SPH)';
 
   const renderDynamicAddress = (addrRaw?: string) => {
     const defaultAddress = '2-2-40, 2nd Floor Wisma Rampai, Jalan 34/26, Taman Sri Rampai, 53300 Kuala Lumpur.';
@@ -1539,7 +1548,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
         <div className="no-print bg-blue-700 text-white text-xs font-bold px-4 py-2.5 text-center shadow-lg flex flex-wrap items-center justify-between gap-3 sticky top-[49px] z-30 animate-in fade-in">
           <div className="flex items-center gap-2">
             <Move className="w-4 h-4 text-blue-200 animate-bounce shrink-0" />
-            <span>DRAG & RESIZE MODE AKTIF: Geser elemen atau atur ukuran (scale) logo & teks pada penawaran harga!</span>
+            <span>DRAG & RESIZE MODE ACTIVE: Drag elements or adjust size (scale) of logo & text on the quotation!</span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -1547,27 +1556,27 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
               onClick={() => handleSaveLayout()}
               disabled={isSavingLayout}
               className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white px-3 py-1.5 rounded text-xs font-bold uppercase transition flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-60"
-              title="Simpan posisi layout saat ini ke database"
+              title="Save current layout positions to database"
             >
               {isSavingLayout ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-              <span>{isSavingLayout ? 'Menyimpan...' : 'Simpan Layout'}</span>
+              <span>{isSavingLayout ? 'Saving...' : 'Save Layout'}</span>
             </button>
             <button
               type="button"
               onClick={handleDoneDragMode}
               disabled={isSavingLayout}
               className="bg-white hover:bg-slate-100 active:scale-95 text-blue-900 px-3.5 py-1.5 rounded text-xs font-extrabold uppercase transition flex items-center gap-1.5 shadow-sm cursor-pointer"
-              title="Selesai dan simpan posisi otomatis"
+              title="Done and auto-save element positions"
             >
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Selesai & Simpan (Done)</span>
+              <span>Done & Save</span>
             </button>
             {Object.keys(offsets).length > 0 && (
               <button
                 type="button"
                 onClick={handleResetLayout}
                 className="bg-rose-500/80 hover:bg-rose-600 active:scale-95 text-white px-2.5 py-1.5 rounded text-xs font-bold uppercase transition flex items-center gap-1 cursor-pointer"
-                title="Reset semua posisi ke default"
+                title="Reset all element positions to default"
               >
                 <RotateCcw className="w-3 h-3" />
                 <span>Reset</span>
@@ -1938,7 +1947,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                                   value={(item as any).offer || (item as any).offered_item || ''}
                                   onChange={(e) => handleItemFieldChange(globalIdx, 'offer', e.target.value)}
                                   className="w-full text-slate-800 bg-amber-50/70 border border-amber-300 px-1 py-0.5 rounded text-xs focus:outline-blue-500"
-                                  placeholder="Name offered / penawaran alternatif"
+                                  placeholder="Name offered / alternative item"
                                 />
                               ) : (
                                 offeredItemText
@@ -2143,9 +2152,20 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                           <span style={{ fontWeight: 700, color: '#004f8b', textTransform: 'uppercase', verticalAlign: 'middle' }}>
                             {companyName}
                           </span>
-                          <span style={{ marginLeft: '6px', fontFamily: 'ui-monospace, monospace', color: '#64748b' }}>
-                            ({companyEmail}, {companyPhone}, {companyWebsite})
-                          </span>
+                          {isEditDocMode ? (
+                            <input
+                              type="text"
+                              value={docFooterText}
+                              onChange={(e) => setDocFooterText(e.target.value)}
+                              placeholder={paperSettings?.footer_text || paperSettings?.footerText || `${companyEmail}, ${companyPhone}, ${companyWebsite}`}
+                              className="ml-1.5 px-1 py-0.5 text-[7pt] bg-amber-50 border border-amber-300 rounded text-slate-800 focus:outline-blue-500 w-80 font-mono"
+                              title="Edit Quotation Footer Running Text"
+                            />
+                          ) : (
+                            <span style={{ marginLeft: '6px', fontFamily: 'ui-monospace, monospace', color: '#64748b' }}>
+                              ({docFooterText || paperSettings?.footer_text || paperSettings?.footerText || `${companyEmail}, ${companyPhone}, ${companyWebsite}`})
+                            </span>
+                          )}
                         </td>
                         <td style={{ textAlign: 'right', width: '30%', verticalAlign: 'middle', padding: 0, border: 'none', fontWeight: 700, color: '#475569' }}>
                           Page {chunk.pageNumber} of {chunk.totalPages}
@@ -2261,6 +2281,28 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                 </div>
               </div>
 
+              <div>
+                <label className="block font-bold text-slate-700 uppercase mb-1">Default SPH Footer Running Text (Bottom Sheet)</label>
+                <input
+                  type="text"
+                  value={modalFooterText}
+                  onChange={(e) => setModalFooterText(e.target.value)}
+                  placeholder="sales@abmalaya.com, +60 3-8000 1234, abmalaya.com"
+                  className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 font-mono text-xs focus:outline-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 uppercase mb-1">Default SPH Terms & Conditions (Above Signatures)</label>
+                <textarea
+                  rows={2}
+                  value={modalFooterTerms}
+                  onChange={(e) => setModalFooterTerms(e.target.value)}
+                  placeholder="1. 50% DP payment required after PO is issued..."
+                  className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs font-sans focus:outline-blue-500"
+                />
+              </div>
+
               <div className="pt-2 flex justify-end gap-2 border-t border-slate-200">
                 <button
                   type="button"
@@ -2303,7 +2345,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
           ) : (
             <Printer className="w-4 h-4 text-white" />
           )}
-          <span>{isPrintingDirect ? 'Menyiapkan...' : 'Direct Print (PDF)'}</span>
+          <span>{isPrintingDirect ? 'Preparing...' : 'Direct Print (PDF)'}</span>
         </button>
 
         <a

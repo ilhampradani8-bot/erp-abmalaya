@@ -995,7 +995,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
   const handleQuickSaveCompanyGroup = (group: CompanyGroup, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!group.companyName || !group.companyName.trim()) {
-      alert('Nama Perusahaan wajib ada!');
+      alert('Company Name is required!');
       return;
     }
     setIsQuickSavingDb(true);
@@ -1030,9 +1030,9 @@ export const EmailClient: React.FC<EmailClientProps> = ({
         setIsQuickSavingDb(false);
         if (resData.status === 'success') {
           fetchDbClients();
-          alert(`Profil perusahaan "${group.companyName}" berhasil disimpan ke daftar kontak!`);
+          alert(`Company profile "${group.companyName}" saved to contacts successfully!`);
         } else {
-          alert(`Gagal menyimpan kontak: ${resData.message || 'Unknown error'}`);
+          alert(`Failed to save contact: ${resData.message || 'Unknown error'}`);
         }
       })
       .catch((err) => {
@@ -1102,7 +1102,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
   const handleSaveRightProfileData = (e: React.FormEvent) => {
     e.preventDefault();
     if (!rightProfileData.company_name.trim()) {
-      alert('Nama Perusahaan wajib diisi!');
+      alert('Company Name is required!');
       return;
     }
     setIsSavingRightProfile(true);
@@ -1140,9 +1140,9 @@ export const EmailClient: React.FC<EmailClientProps> = ({
           fetchDbClients();
           fetchQuotationsData();
           setIsEditingRightProfile(false);
-          alert(`Profil perusahaan "${payload.company_name}" berhasil diperbarui!`);
+          alert(`Company profile "${payload.company_name}" updated successfully!`);
         } else {
-          alert(`Gagal menyimpan profil: ${resData.message || 'Unknown error'}`);
+          alert(`Failed to save profile: ${resData.message || 'Unknown error'}`);
         }
       })
       .catch((err) => {
@@ -1194,7 +1194,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
   const handleSaveNewSignatory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSigName.trim()) {
-      alert('Nama PIC / Signatory wajib diisi!');
+      alert('PIC / Signatory name is required!');
       return;
     }
     const targetComp = selectedGroup.companyName || editingClientData.company_name || 'Client Company';
@@ -1220,16 +1220,16 @@ export const EmailClient: React.FC<EmailClientProps> = ({
         setNewSigDesignation('');
         setNewSigIsDefault(false);
         setIsAddingSignatory(false);
-        setSignatorySuccessNotice('PIC Signatory berhasil disimpan ke database!');
+        setSignatorySuccessNotice('PIC Signatory saved to database successfully!');
         setTimeout(() => setSignatorySuccessNotice(null), 3000);
         fetchSignatoriesForCompany(targetComp, selectedGroup.dbClientId);
         fetchDbClients();
       } else {
-        alert(data.message || 'Gagal menyimpan signatory');
+        alert(data.message || 'Failed to save signatory');
       }
     } catch (err: any) {
       setIsSavingSignatory(false);
-      alert('Gagal menyimpan signatory: ' + (err?.message || 'Network error'));
+      alert('Failed to save signatory: ' + (err?.message || 'Network error'));
     }
   };
 
@@ -1252,7 +1252,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
       });
       const data = await res.json();
       if (data.status === 'success') {
-        setSignatorySuccessNotice(`"${sig.name}" sekarang dijadikan Default Signatory!`);
+        setSignatorySuccessNotice(`"${sig.name}" is now the default signatory!`);
         setTimeout(() => setSignatorySuccessNotice(null), 3000);
         fetchSignatoriesForCompany(selectedGroup.companyName, selectedGroup.dbClientId);
         fetchDbClients();
@@ -1265,7 +1265,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
   // Delete Signatory
   const handleDeleteSignatory = async (sigId?: number) => {
     if (!sigId) return;
-    if (!confirm('Hapus data PIC Signatory ini?')) return;
+    if (!confirm('Delete this PIC Signatory?')) return;
     try {
       const res = await fetch(getApiUrl('/api_clients.php'), {
         method: 'POST',
@@ -1277,7 +1277,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
       });
       const data = await res.json();
       if (data.status === 'success') {
-        setSignatorySuccessNotice('Signatory berhasil dihapus!');
+        setSignatorySuccessNotice('Signatory deleted successfully!');
         setTimeout(() => setSignatorySuccessNotice(null), 3000);
         fetchSignatoriesForCompany(selectedGroup.companyName, selectedGroup.dbClientId);
         fetchDbClients();
@@ -1468,8 +1468,8 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                 {isFetchingQuotations && effectiveQuotationsList.length === 0 ? (
                   <div className="p-6 text-center text-xs text-slate-600 flex flex-col items-center justify-center space-y-2.5">
                     <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
-                    <span className="font-extrabold text-slate-800">Memuat Data Penawaran...</span>
-                    <span className="text-[10px] text-slate-400 leading-tight">Menyinkronkan data SPH terbaru</span>
+                    <span className="font-extrabold text-slate-800">Loading Quotations...</span>
+                    <span className="text-[10px] text-slate-400 leading-tight">Syncing latest quotation data</span>
                   </div>
                 ) : filteredGroups.length === 0 ? (
                   <div className="p-6 text-center text-xs text-slate-500 space-y-1">
@@ -1533,8 +1533,8 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                           <div className="flex items-center justify-between gap-1 mt-1 text-[10px] text-slate-400 font-mono">
                             <span className="truncate">{cleanSingleEmail(group.primaryEmail) || 'No Email'}</span>
                             {group.dbClientId ? (
-                              <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 py-0.2 rounded flex items-center gap-0.5 shrink-0" title="Tersimpan di kontak resmi">
-                                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" /> Tersimpan
+                              <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 py-0.2 rounded flex items-center gap-0.5 shrink-0" title="Saved to official contacts">
+                                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" /> Saved
                               </span>
                             ) : (
                               <button
@@ -1542,10 +1542,10 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                 disabled={isQuickSavingDb}
                                 onClick={(e) => handleQuickSaveCompanyGroup(group, e)}
                                 className="text-[9px] font-extrabold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-1 py-0.2 rounded flex items-center gap-1 transition shadow-2xs cursor-pointer shrink-0"
-                                title="Simpan perusahaan ini ke daftar kontak"
+                                title="Save company to official contacts"
                               >
                                 <Save className="w-2.5 h-2.5 text-amber-700" />
-                                <span>+ Simpan Kontak</span>
+                                <span>+ Save Contact</span>
                               </button>
                             )}
                           </div>
@@ -2175,10 +2175,10 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                     <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 text-xs shadow-xs flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 text-emerald-900 font-bold">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>Tersimpan di Daftar Kontak Resmi (ID: #{selectedGroup.dbClientId})</span>
+                        <span>Saved in Official Contacts (ID: #{selectedGroup.dbClientId})</span>
                       </div>
                       <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-300 px-1.5 py-0.5 rounded font-mono shrink-0">
-                        Kontak Resmi
+                        Official Contact
                       </span>
                     </div>
                   ) : (
@@ -2186,9 +2186,9 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                       <div className="flex items-start gap-2 text-amber-900">
                         <Info className="w-4.5 h-4.5 text-amber-600 shrink-0 mt-0.5" />
                         <div className="flex-1">
-                          <p className="font-extrabold text-xs">Belum Tersimpan di Buku Kontak</p>
+                          <p className="font-extrabold text-xs">Not Saved in Contacts Yet</p>
                           <p className="text-amber-800 text-[11px] leading-relaxed mt-0.5">
-                            Perusahaan ini ditemukan dari Penawaran Harga (SPH). Klik simpan di bawah agar tersimpan resmi di daftar kontak perusahaan.
+                            This company was extracted from SPH Quotations. Click save below to register it in official client contacts.
                           </p>
                         </div>
                       </div>
@@ -2199,7 +2199,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                         className="w-full bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-3 py-1.5 rounded shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5 text-xs"
                       >
                         {isQuickSavingDb ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                        <span>+ Simpan ke Daftar Kontak</span>
+                        <span>+ Save to Contacts</span>
                       </button>
                     </div>
                   )}
@@ -2291,7 +2291,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                                     : isReady
                                                     ? 'bg-blue-100 text-blue-800 border border-blue-300'
                                                     : 'bg-amber-100 text-amber-800 border border-amber-300';
-                                                  const badgeLabel = isDone ? 'Done' : isReady ? 'Siap Kirim' : 'Draft';
+                                                  const badgeLabel = isDone ? 'Done' : isReady ? 'Ready to Send' : 'Draft';
                                                   return (
                                                     <span className={`px-1 py-0.2 rounded text-[8px] font-extrabold uppercase tracking-tight shrink-0 ${badgeClass}`}>
                                                       {badgeLabel}
@@ -2374,7 +2374,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                                 </button>
                                               ) : (
                                                 <span className="px-1 py-0.5 bg-slate-100 border border-slate-200 text-slate-400 text-[8px] font-extrabold rounded flex items-center justify-center gap-1 w-full text-center">
-                                                  Belum ada file
+                                                  No File
                                                 </span>
                                               )}
 
@@ -2386,7 +2386,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                                   title={`Send SPH ${q.quotation_number || q.id}`}
                                                 >
                                                   <Send className="w-2.5 h-2.5" />
-                                                  <span>Siap Kirim</span>
+                                                  <span>Ready to Send</span>
                                                 </button>
                                               )}
 
@@ -2428,7 +2428,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                         <form onSubmit={handleSaveRightProfileData} className="bg-white border border-slate-200 rounded-lg p-3.5 shadow-xs space-y-3 text-xs">
                           <div className="font-bold text-slate-800 uppercase text-[10px] tracking-wider border-b border-slate-200 pb-1.5 flex items-center justify-between">
                             <span className="flex items-center gap-1.5 text-blue-700 font-extrabold">
-                              <Edit3 className="w-3.5 h-3.5" /> Edit Profil Perusahaan
+                              <Edit3 className="w-3.5 h-3.5" /> Edit Company Profile
                             </span>
                             <span className="text-slate-400 text-[10px] lowercase font-normal">Direct Inline Edit</span>
                           </div>
@@ -2436,7 +2436,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                           <div className="space-y-2.5">
                             <div>
                               <label className="block text-[11px] font-extrabold text-slate-700 mb-1">
-                                Nama Perusahaan <span className="text-rose-600">*</span>
+                                Company Name <span className="text-rose-600">*</span>
                               </label>
                               <input
                                 type="text"
@@ -2444,24 +2444,24 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                 value={rightProfileData.company_name}
                                 onChange={(e) => setRightProfileData({ ...rightProfileData, company_name: e.target.value })}
                                 className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
-                                placeholder="Contoh: PT MIJ DIGITAL INDONESIA"
+                                placeholder="e.g. PT MIJ DIGITAL INDONESIA"
                               />
                             </div>
 
                             <div className="grid grid-cols-2 gap-2">
                               <div>
-                                <label className="block text-[11px] font-bold text-slate-700 mb-1">Nama Kontak / PIC</label>
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1">Contact Person / PIC</label>
                                 <input
                                   type="text"
                                   value={rightProfileData.client_name || ''}
                                   onChange={(e) => setRightProfileData({ ...rightProfileData, client_name: e.target.value })}
                                   className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
-                                  placeholder="Nama PIC"
+                                  placeholder="PIC Name"
                                 />
                               </div>
 
                               <div>
-                                <label className="block text-[11px] font-bold text-slate-700 mb-1">Telepon / WhatsApp</label>
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1">Phone / WhatsApp</label>
                                 <input
                                   type="text"
                                   value={rightProfileData.phone || ''}
@@ -2474,9 +2474,9 @@ export const EmailClient: React.FC<EmailClientProps> = ({
 
                             <div>
                               <div className="flex items-center justify-between mb-1">
-                                <label className="block text-[11px] font-bold text-slate-700">Daftar Email Kontak (Dropdown & List)</label>
+                                <label className="block text-[11px] font-bold text-slate-700">Contact Emails (Dropdown & List)</label>
                                 <span className="text-[10px] text-blue-700 font-extrabold font-mono bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-                                  {rightProfileEmailList.length} Email
+                                  {rightProfileEmailList.length} Emails
                                 </span>
                               </div>
 
@@ -2495,10 +2495,10 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                     }}
                                     className="w-full bg-blue-50/90 border border-blue-300 text-blue-900 rounded px-2 py-1 text-xs font-mono focus:bg-white focus:border-blue-600 focus:outline-none cursor-pointer"
                                   >
-                                    <option value="">+ Pilih & Tambah dari Email Terhubung ({selectedGroup.emailList.length})...</option>
+                                    <option value="">+ Select & Add from Connected Emails ({selectedGroup.emailList.length})...</option>
                                     {selectedGroup.emailList.map((em, idx) => (
                                       <option key={idx} value={em} disabled={rightProfileEmailList.includes(em)}>
-                                        {em} {rightProfileEmailList.includes(em) ? '(Sudah Ada)' : ''}
+                                        {em} {rightProfileEmailList.includes(em) ? '(Already Added)' : ''}
                                       </option>
                                     ))}
                                   </select>
@@ -2509,7 +2509,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                               <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 bg-slate-50 p-2 rounded border border-slate-200">
                                 {rightProfileEmailList.length === 0 ? (
                                   <p className="text-slate-400 italic text-[11px] text-center py-2">
-                                    Belum ada email kontak. Pilih dari dropdown atau ketik di bawah.
+                                    No contact email yet. Select from dropdown or type below.
                                   </p>
                                 ) : (
                                   rightProfileEmailList.map((em, idx) => (
@@ -2524,7 +2524,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                           setRightProfileEmailList(updated);
                                           setRightProfileData(prev => ({ ...prev, email: updated.filter(Boolean).join(', ') }));
                                         }}
-                                        placeholder="nama@perusahaan.com"
+                                        placeholder="name@company.com"
                                         className="flex-1 text-xs font-mono text-slate-800 bg-transparent focus:outline-none"
                                       />
                                       <button
@@ -2535,7 +2535,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                           setRightProfileData(prev => ({ ...prev, email: updated.filter(Boolean).join(', ') }));
                                         }}
                                         className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
-                                        title="Hapus email ini"
+                                        title="Remove email"
                                       >
                                         <X className="w-3.5 h-3.5" />
                                       </button>
@@ -2562,7 +2562,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                       }
                                     }
                                   }}
-                                  placeholder="Ketik email baru lalu tekan Tambah..."
+                                  placeholder="Type new email and press Add..."
                                   className="flex-1 bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs font-mono text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
                                 />
                                 <button
@@ -2579,13 +2579,13 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                   className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold transition flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
                                 >
                                   <Plus className="w-3.5 h-3.5" />
-                                  <span>Tambah</span>
+                                  <span>Add</span>
                                 </button>
                               </div>
                             </div>
 
                             <div>
-                              <label className="block text-[11px] font-bold text-slate-700 mb-1">No. Cukai / Tax ID / SST No.</label>
+                              <label className="block text-[11px] font-bold text-slate-700 mb-1">Tax ID / SST Reg No.</label>
                               <input
                                 type="text"
                                 value={rightProfileData.tax_id || ''}
@@ -2596,30 +2596,30 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                             </div>
 
                             <div>
-                              <label className="block text-[11px] font-bold text-slate-700 mb-1">Alamat Baris 1</label>
+                              <label className="block text-[11px] font-bold text-slate-700 mb-1">Address Line 1</label>
                               <input
                                 type="text"
                                 value={rightProfileData.address_line1 || ''}
                                 onChange={(e) => setRightProfileData({ ...rightProfileData, address_line1: e.target.value })}
                                 className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
-                                placeholder="Alamat Gedung / Jalan"
+                                placeholder="Building / Street Address"
                               />
                             </div>
 
                             <div>
-                              <label className="block text-[11px] font-bold text-slate-700 mb-1">Alamat Baris 2</label>
+                              <label className="block text-[11px] font-bold text-slate-700 mb-1">Address Line 2</label>
                               <input
                                 type="text"
                                 value={rightProfileData.address_line2 || ''}
                                 onChange={(e) => setRightProfileData({ ...rightProfileData, address_line2: e.target.value })}
                                 className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none"
-                                placeholder="Kecamatan / Unit / Suite"
+                                placeholder="District / Unit / Suite"
                               />
                             </div>
 
                             <div className="grid grid-cols-2 gap-2">
                               <div>
-                                <label className="block text-[11px] font-bold text-slate-700 mb-1">Kota / Bandar</label>
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1">City</label>
                                 <input
                                   type="text"
                                   value={rightProfileData.city || ''}
@@ -2629,7 +2629,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                 />
                               </div>
                               <div>
-                                <label className="block text-[11px] font-bold text-slate-700 mb-1">Negeri / State</label>
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1">State / Province</label>
                                 <input
                                   type="text"
                                   value={rightProfileData.state || ''}
@@ -2642,7 +2642,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
 
                             <div className="grid grid-cols-2 gap-2">
                               <div>
-                                <label className="block text-[11px] font-bold text-slate-700 mb-1">Kode Pos</label>
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1">Postal Code</label>
                                 <input
                                   type="text"
                                   value={rightProfileData.postal_code || ''}
@@ -2652,7 +2652,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                 />
                               </div>
                               <div>
-                                <label className="block text-[11px] font-bold text-slate-700 mb-1">Negara / Country</label>
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1">Country</label>
                                 <input
                                   type="text"
                                   value={rightProfileData.country || 'Malaysia'}
@@ -2664,13 +2664,13 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                             </div>
 
                             <div>
-                              <label className="block text-[11px] font-bold text-slate-700 mb-1">Catatan Perusahaan (Notes)</label>
+                              <label className="block text-[11px] font-bold text-slate-700 mb-1">Company Notes</label>
                               <textarea
                                 rows={2}
                                 value={rightProfileData.notes || ''}
                                 onChange={(e) => setRightProfileData({ ...rightProfileData, notes: e.target.value })}
                                 className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:bg-white focus:border-blue-600 focus:outline-none resize-none"
-                                placeholder="Catatan khusus klien..."
+                                placeholder="Special client notes..."
                               />
                             </div>
                           </div>
@@ -2681,7 +2681,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                               onClick={() => setIsEditingRightProfile(false)}
                               className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded text-xs transition cursor-pointer"
                             >
-                              Batal
+                              Cancel
                             </button>
                             <button
                               type="submit"
@@ -2689,7 +2689,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                               className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded text-xs transition shadow-sm cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                             >
                               {isSavingRightProfile ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                              <span>Simpan Perubahan</span>
+                              <span>Save Changes</span>
                             </button>
                           </div>
                         </form>
@@ -2744,7 +2744,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                         key={q.id}
                                         className="inline-flex items-center gap-1 bg-slate-100 text-slate-400 border border-slate-200 px-2 py-0.5 rounded text-[10px] font-mono font-bold"
                                       >
-                                        Belum ada file ({q.quotation_number || `#${q.id}`})
+                                        No file attached ({q.quotation_number || `#${q.id}`})
                                       </span>
                                     );
                                   })
@@ -2760,7 +2760,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                             <div className="font-bold text-slate-800 uppercase text-[10px] tracking-wider border-b border-blue-100 pb-1.5 flex items-center justify-between">
                               <div className="flex items-center gap-1.5 text-blue-700 font-extrabold">
                                 <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-                                <span>PIC Tanda Terima (Received by)</span>
+                                <span>Received by (PIC Signatory)</span>
                                 <span className="bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-mono text-[9px] font-bold ml-1">
                                   {companySignatories.length} PIC
                                 </span>
@@ -2771,7 +2771,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                 className="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded cursor-pointer transition shadow-2xs"
                               >
                                 <UserPlus className="w-3 h-3 text-blue-600" />
-                                <span>{isAddingSignatory ? 'Tutup Form' : '+ Add PIC'}</span>
+                                <span>{isAddingSignatory ? 'Close Form' : '+ Add PIC'}</span>
                               </button>
                             </div>
 
@@ -2788,14 +2788,14 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                               <form onSubmit={handleSaveNewSignatory} className="bg-blue-50/70 border border-blue-200 p-2.5 rounded-lg space-y-2 text-xs animate-in fade-in">
                                 <div className="font-bold text-blue-900 text-[11px] flex items-center gap-1">
                                   <UserPlus className="w-3.5 h-3.5 text-blue-700" />
-                                  <span>Tambah PIC Baru untuk {selectedGroup.companyName}</span>
+                                  <span>Add New PIC for {selectedGroup.companyName}</span>
                                 </div>
                                 <div>
-                                  <label className="block text-[10px] font-bold text-slate-700 mb-0.5">Nama Lengkap PIC *</label>
+                                  <label className="block text-[10px] font-bold text-slate-700 mb-0.5">PIC Full Name *</label>
                                   <input
                                     type="text"
                                     required
-                                    placeholder="Contoh: Ahmad Fauzi"
+                                    placeholder="e.g. Ahmad Fauzi"
                                     value={newSigName}
                                     onChange={(e) => setNewSigName(e.target.value)}
                                     className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-blue-600"
@@ -2803,10 +2803,10 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                   />
                                 </div>
                                 <div>
-                                  <label className="block text-[10px] font-bold text-slate-700 mb-0.5">Jabatan / Designation</label>
+                                  <label className="block text-[10px] font-bold text-slate-700 mb-0.5">Designation / Role</label>
                                   <input
                                     type="text"
-                                    placeholder="Contoh: Warehouse & Logistics PIC"
+                                    placeholder="e.g. Warehouse & Logistics PIC"
                                     value={newSigDesignation}
                                     onChange={(e) => setNewSigDesignation(e.target.value)}
                                     className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-900 focus:outline-blue-600"
@@ -2839,7 +2839,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                     className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                   />
                                   <label htmlFor="sig_default_chk" className="text-[11px] font-bold text-slate-700 cursor-pointer">
-                                    Jadikan Default untuk Perusahaan Ini
+                                    Set as Default for this Company
                                   </label>
                                 </div>
                                 <div className="flex justify-end gap-1.5 pt-1">
@@ -2848,7 +2848,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                     onClick={() => setIsAddingSignatory(false)}
                                     className="px-2.5 py-1 bg-white border border-slate-300 text-slate-700 font-bold rounded text-[11px] hover:bg-slate-50"
                                   >
-                                    Batal
+                                    Cancel
                                   </button>
                                   <button
                                     type="submit"
@@ -2856,7 +2856,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                     className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-[11px] flex items-center gap-1 shadow-2xs cursor-pointer disabled:opacity-50"
                                   >
                                     {isSavingSignatory ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                                    <span>Simpan PIC</span>
+                                    <span>Save PIC</span>
                                   </button>
                                 </div>
                               </form>
@@ -2867,18 +2867,18 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                               {isLoadingSignatories ? (
                                 <div className="py-3 flex items-center justify-center gap-2 text-slate-400 text-xs">
                                   <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                                  <span>Memuat data PIC...</span>
+                                  <span>Loading PIC data...</span>
                                 </div>
                               ) : companySignatories.length === 0 ? (
                                 <div className="bg-slate-50 border border-dashed border-slate-300 rounded p-3 text-center text-slate-400 text-[11px]">
                                   <UserCheck className="w-5 h-5 text-slate-300 mx-auto mb-1" />
-                                  <p>Belum ada PIC tanda terima terdaftar.</p>
+                                  <p>No recipient PIC registered yet.</p>
                                   <button
                                     type="button"
                                     onClick={() => setIsAddingSignatory(true)}
                                     className="text-blue-600 hover:underline font-bold mt-1 inline-block"
                                   >
-                                    + Tambah PIC Sekarang
+                                    + Add PIC Now
                                   </button>
                                 </div>
                               ) : (
@@ -2904,7 +2904,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                           )}
                                         </div>
                                         <p className="text-slate-600 font-mono text-[10px] mt-0.5 uppercase tracking-wide">
-                                          {sig.designation || 'PIC Tanda Terima'}
+                                          {sig.designation || 'Recipient PIC'}
                                         </p>
                                       </div>
 
@@ -2914,7 +2914,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                             type="button"
                                             onClick={() => handleSetDefaultSignatory(sig)}
                                             className="px-2 py-0.5 bg-white hover:bg-amber-50 text-slate-600 hover:text-amber-700 border border-slate-200 hover:border-amber-300 rounded text-[10px] font-bold transition shadow-2xs cursor-pointer flex items-center gap-1"
-                                            title="Jadikan default untuk invoice"
+                                            title="Set as default for invoices"
                                           >
                                             <Star className="w-2.5 h-2.5 text-amber-500" />
                                             <span>Set Default</span>
@@ -2924,7 +2924,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                           type="button"
                                           onClick={() => handleDeleteSignatory(sig.id)}
                                           className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
-                                          title="Hapus signatory ini"
+                                          title="Delete this signatory"
                                         >
                                           <Trash2 className="w-3.5 h-3.5" />
                                         </button>
@@ -2971,7 +2971,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                   {selectedGroup.country && <p className="font-bold text-slate-800 mt-1">{selectedGroup.country}</p>}
                                 </>
                               ) : (
-                                <p className="text-slate-400 italic">Alamat belum diisi.</p>
+                                <p className="text-slate-400 italic">No address provided.</p>
                               )}
                             </div>
                           </div>
@@ -2994,7 +2994,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs py-2 rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition cursor-pointer"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
-                              <span>Edit Profil</span>
+                              <span>Edit Profile</span>
                             </button>
                             {!selectedGroup.dbClientId && (
                               <button
@@ -3004,7 +3004,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                 className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs py-2 rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition cursor-pointer"
                               >
                                 {isQuickSavingDb ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                                <span>+ Simpan Kontak</span>
+                                <span>+ Save Contact</span>
                               </button>
                             )}
                           </div>
@@ -3204,10 +3204,10 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                           }}
                           className="w-full bg-blue-50/90 border border-blue-300 text-blue-900 rounded p-1.5 text-xs font-mono focus:bg-white focus:border-blue-600 focus:outline-none cursor-pointer"
                         >
-                          <option value="">+ Pilih & Tambah dari Email Terhubung ({selectedGroup.emailList.length})...</option>
+                          <option value="">+ Select & Add from Connected Emails ({selectedGroup.emailList.length})...</option>
                           {selectedGroup.emailList.map((em, idx) => (
                             <option key={idx} value={em} disabled={clientEmailList.includes(em)}>
-                              {em} {clientEmailList.includes(em) ? '(Sudah Ada)' : ''}
+                              {em} {clientEmailList.includes(em) ? '(Already Added)' : ''}
                             </option>
                           ))}
                         </select>
@@ -3504,7 +3504,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                             : isReady
                                             ? 'bg-blue-100 text-blue-800 border border-blue-300'
                                             : 'bg-amber-100 text-amber-800 border border-amber-300';
-                                          const badgeLabel = isDone ? 'Done' : isReady ? 'Siap Kirim' : 'Draft';
+                                          const badgeLabel = isDone ? 'Done' : isReady ? 'Ready to Send' : 'Draft';
                                           return (
                                             <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide ${badgeClass}`}>
                                               {badgeLabel}
@@ -3627,7 +3627,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                           className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition border border-emerald-700 text-xs font-extrabold flex items-center gap-1.5 w-full justify-center shadow-xs cursor-pointer"
                                         >
                                           <Send className="w-3.5 h-3.5" />
-                                          <span>Siap Kirim SPH</span>
+                                          <span>Send SPH Quotation</span>
                                         </button>
                                       )}
 
@@ -3777,7 +3777,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                       </button>
                     ) : (
                       <span className="px-3 py-1.5 bg-slate-100 text-slate-400 border border-slate-200 font-extrabold rounded text-xs">
-                        Belum ada file
+                        No file available
                       </span>
                     );
                   })()
@@ -3846,10 +3846,10 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                   target="_blank"
                   rel="noreferrer"
                   className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 rounded text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                  title="Buka di Tab Baru Browser"
+                  title="Open in New Browser Tab"
                 >
                   <Maximize2 className="w-3.5 h-3.5 text-blue-400" />
-                  <span className="hidden sm:inline">Buka Tab Baru</span>
+                  <span className="hidden sm:inline">Open New Tab</span>
                 </a>
                 <a
                   href={getApiUrl(`/api_pdf.php?action=download&type=quotation&id=${encodeURIComponent(pdfPreviewModalData.id)}`)}

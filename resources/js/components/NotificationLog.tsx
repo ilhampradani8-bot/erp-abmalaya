@@ -374,7 +374,7 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
                     }}
                     className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-lg transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <span>Buka Daftar Quotation SPH →</span>
+                    <span>Open Quotation SPH List →</span>
                   </button>
                 )}
 
@@ -387,7 +387,7 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
                     }}
                     className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-lg transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <span>Buka Live RFQ Inbox →</span>
+                    <span>Open Live RFQ Inbox →</span>
                   </button>
                 )}
 
@@ -400,7 +400,7 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
                     }}
                     className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs rounded-lg transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <span>Buka Sync Conflict Manager →</span>
+                    <span>Open Sync Conflict Manager →</span>
                   </button>
                 )}
               </div>

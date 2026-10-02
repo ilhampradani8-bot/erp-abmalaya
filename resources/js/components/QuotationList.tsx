@@ -236,7 +236,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                 action: 'Generate PDF SPH',
                 user_name: actorName,
                 user_email: actorEmail || null,
-                details: `Dokumen PDF SPH ${item.quotation_number || item.id} berhasil dibuat.`,
+                details: `PDF SPH document ${item.quotation_number || item.id} generated successfully.`,
                 timestamp: nowStr,
               });
 
@@ -584,7 +584,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               </div>
             </div>
             <div style="text-align: right;">
-              <span class="sph-title">SURAT PENAWARAN HARGA</span>
+              <span class="sph-title">COMMERCIAL QUOTATION (SPH)</span>
               <div style="font-family: monospace; font-weight: bold;">No: ${quo.quotation_number}</div>
               <div style="color: #666; font-size: 11px;">Date: ${quo.date_issued}</div>
             </div>
@@ -592,17 +592,17 @@ export const QuotationList: React.FC<QuotationListProps> = ({
           
           <div class="meta-grid">
             <div>
-              <span>Penerima Penawaran (Kepada Yth):</span>
+              <span>Quotation Recipient (Attn):</span>
               <strong>${quo.company_name}</strong>
-              <p style="margin: 4px 0 0 0;">U.p. Bpk/Ibu: <strong>${quo.client_name}</strong></p>
+              <p style="margin: 4px 0 0 0;">Attn: <strong>${quo.client_name}</strong></p>
               <p style="margin: 2px 0 0 0; color: #555;">Email: ${quo.client_email}</p>
             </div>
             <div style="text-align: right;">
-              <span>Detail Dokumen Penawaran:</span>
-              <p style="margin: 3px 0;">Tanggal Terbit: <strong>${quo.date_issued}</strong></p>
-              <p style="margin: 3px 0;">Masa Berlaku s.d: <strong style="color: #b45309;">${quo.valid_until || '14 Days'}</strong></p>
-              <p style="margin: 3px 0;">Mata Uang: <strong>MYR (Malaysian Ringgit)</strong></p>
-              <p style="margin: 3px 0;">Penanggung Jawab: <strong>${quo.created_by || getSessionActorName()}</strong></p>
+              <span>Quotation Document Details:</span>
+              <p style="margin: 3px 0;">Date Issued: <strong>${quo.date_issued}</strong></p>
+              <p style="margin: 3px 0;">Valid Until: <strong style="color: #b45309;">${quo.valid_until || '14 Days'}</strong></p>
+              <p style="margin: 3px 0;">Currency: <strong>MYR (Malaysian Ringgit)</strong></p>
+              <p style="margin: 3px 0;">Issued By: <strong>${quo.created_by || getSessionActorName()}</strong></p>
             </div>
           </div>
           
@@ -615,10 +615,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
             <thead>
               <tr>
                 <th style="width: 40px; text-align: center;">No</th>
-                <th>Deskripsi Barang / Spesifikasi Layanan</th>
+                <th>Item Description / Service Specification</th>
                 <th style="width: 50px; text-align: center;">Qty</th>
-                <th style="width: 70px; text-align: center;">Satuan</th>
-                <th style="width: 120px; text-align: right;">Harga Satuan</th>
+                <th style="width: 70px; text-align: center;">Unit</th>
+                <th style="width: 120px; text-align: right;">Unit Price</th>
                 <th style="width: 50px; text-align: center;">Disc</th>
                 <th style="width: 120px; text-align: right;">Total (RM)</th>
               </tr>
@@ -630,7 +630,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
           
           <div class="totals-box">
             <div style="width: 48%; font-size: 11px; background: #f9f9f9; padding: 10px; border: 1px solid #eee;">
-              <strong>Catatan Penawaran:</strong>
+              <strong>Quotation Notes:</strong>
               <p style="color: #666; margin: 4px 0 0 0; font-style: italic;">${quo.notes || 'Standard SPH terms apply.'}</p>
             </div>
             <div style="width: 48%; text-align: right; font-family: monospace;">
@@ -643,13 +643,13 @@ export const QuotationList: React.FC<QuotationListProps> = ({
           
           <div class="footer-sigs">
             <div>
-              <p style="color: #888; margin: 0 0 5px 0;">Penerima / Pemesan,</p>
+              <p style="color: #888; margin: 0 0 5px 0;">Confirmed & Accepted by,</p>
               <div style="height: 60px;"></div>
               <strong>(${quo.client_name})</strong>
               <p style="margin: 2px 0 0 0; color: #666;">${quo.company_name}</p>
             </div>
             <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; margin-left: auto;">
-              <p style="color: #888; margin: 0 0 5px 0;">Hormat Kami,</p>
+              <p style="color: #888; margin: 0 0 5px 0;">Sincerely Yours,</p>
               <strong>ABMALAYA.COM (MALAYSIA)</strong>
               <div style="display: flex; justify-content: flex-end; width: 100%; margin: 5px 0;">
                 <div class="stamp-box" style="margin-left: auto;">[STAMP ABMALAYA]</div>
@@ -657,6 +657,9 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               <strong><u>${quo.created_by || getSessionActorName()}</u></strong>
               <p style="margin: 2px 0 0 0; color: #666;">Head of Sales & Business Development</p>
             </div>
+          </div>
+          <div style="margin-top: 30px; padding-top: 8px; border-top: 1px solid #cbd5e1; text-align: center; font-size: 8pt; color: #64748b; font-family: monospace;">
+            ${quo.footer_text || 'sales@abmalaya.com | +60 3-8000 1234 | www.abmalaya.com'}
           </div>
         </body>
       </html>
@@ -874,7 +877,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
             if (item.history_log) logs = typeof item.history_log === 'string' ? JSON.parse(item.history_log) : item.history_log;
           } catch (e) {}
           if (!Array.isArray(logs)) logs = [];
-          logs.push({ action: 'Tandai Selesai / Terkirim', user_name: actorName, user_email: actorEmail, details: `Penawaran & file (${targetFile}) ditandai Selesai / Terkirim oleh ${actorName}. (Pengiriman email otomatis diblokir demi keamanan).`, timestamp: nowStr });
+          logs.push({ action: 'Mark Done / Sent', user_name: actorName, user_email: actorEmail, details: `Quotation & file (${targetFile}) marked Done / Sent by ${actorName}.`, timestamp: nowStr });
           return { ...item, status: 'done_send' as any, history_log: JSON.stringify(logs) };
         })
       );
@@ -883,11 +886,11 @@ export const QuotationList: React.FC<QuotationListProps> = ({
         setSelectedInfoQuotation((prev) => prev ? { ...prev, status: 'done_send' as any } : null);
       }
 
-      alert(`[Status Diperbarui]\nQuotation #${q.quotation_number} telah ditandai sebagai Selesai / Terkirim.\n\n*Catatan: Pengiriman email otomatis langsung ke luar diblokir demi keamanan.`);
+      alert(`[Status Updated]\nQuotation #${q.quotation_number} has been marked as Done / Sent.`);
       
     } catch (err: any) {
       console.error('Update quotation status error:', err);
-      alert(`Gagal memperbarui status: ${err?.message || 'Error koneksi database'}`);
+      alert(`Failed to update status: ${err?.message || 'Database error'}`);
     } finally {
       setIsSendingQuotation(false);
     }
@@ -988,9 +991,9 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               <option value="all">All Quotations ({tabCounts.all})</option>
               <option value="requisition">Requisition ({tabCounts.requisition})</option>
               <option value="draft">Draft / In Progress ({tabCounts.draft})</option>
-              <option value="quotation">Quotation / Penawaran ({tabCounts.quotation})</option>
-              <option value="ready_send">Siap Kirim ({tabCounts.ready_send})</option>
-              <option value="done">Done / Terkirim ({tabCounts.done})</option>
+              <option value="quotation">Quotation ({tabCounts.quotation})</option>
+              <option value="ready_send">Ready to Send ({tabCounts.ready_send})</option>
+              <option value="done">Done / Sent ({tabCounts.done})</option>
               <option value="junk">Trash / Junk ({tabCounts.junk})</option>
             </select>
             <Sliders className="w-3 h-3 text-slate-400 pointer-events-none ml-1 shrink-0" />
@@ -1003,8 +1006,8 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               {activeTab === 'requisition' && `Requisition (${tabCounts.requisition})`}
               {activeTab === 'draft' && `Draft / In Progress (${tabCounts.draft})`}
               {activeTab === 'quotation' && `Quotation (${tabCounts.quotation})`}
-              {activeTab === 'ready_send' && `Siap Kirim (${tabCounts.ready_send})`}
-              {activeTab === 'done' && `Done / Terkirim (${tabCounts.done})`}
+              {activeTab === 'ready_send' && `Ready to Send (${tabCounts.ready_send})`}
+              {activeTab === 'done' && `Done / Sent (${tabCounts.done})`}
               {activeTab === 'junk' && `Trash (${tabCounts.junk})`}
             </span>
           </div>
@@ -1075,7 +1078,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   className="w-full text-left px-3.5 py-2 hover:bg-gradient-to-b hover:from-[#00b4ff] hover:to-[#0080d0] hover:text-white transition flex items-center gap-2 cursor-pointer font-bold text-indigo-700 bg-indigo-50/60 border-t border-slate-100"
                 >
                   <Database className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>{showAllDbColumns ? 'Tampilan Tabel Standar' : 'Tampilkan Semua Kolom Database (Full)'}</span>
+                  <span>{showAllDbColumns ? 'Standard Table View' : 'Show All Database Columns (Full)'}</span>
                 </button>
 
                 <button
@@ -1086,7 +1089,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   className="w-full text-left px-3.5 py-2 hover:bg-gradient-to-b hover:from-[#00b4ff] hover:to-[#0080d0] hover:text-white transition flex items-center gap-2 cursor-pointer font-bold text-[#3d3d3d] border-t border-[#eee]"
                 >
                   <Info className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Info SPH & Kategori</span>
+                  <span>SPH & Categories Info</span>
                 </button>
               </div>
             )}
@@ -1111,7 +1114,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                 onClick={() => setShowBatchStatusDropdown(!showBatchStatusDropdown)}
                 className="bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-white text-[#3d3d3d] border border-[#a0a0a0] font-bold px-3 py-1 rounded shadow-xs cursor-pointer text-xs"
               >
-                Edit Status Masal...
+                Batch Edit Status...
               </button>
               
               {showBatchStatusDropdown && (
@@ -1120,8 +1123,8 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                     { val: 'requisition', label: 'REQUISITION' },
                     { val: 'draft', label: 'DRAFT / IN PROGRESS' },
                     { val: 'quotation', label: 'QUOTATION' },
-                    { val: 'ready_send', label: 'SIAP KIRIM' },
-                    { val: 'done_send', label: 'DONE / TERKIRIM' }
+                    { val: 'ready_send', label: 'READY TO SEND' },
+                    { val: 'done_send', label: 'DONE / SENT' }
                   ].map((stItem) => (
                     <button
                       key={stItem.val}
@@ -1374,12 +1377,12 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                           ) : isDone ? (
                             <span className="font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded inline-flex items-center gap-1 text-[11px]">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                              Done / Terkirim
+                              Done / Sent
                             </span>
                           ) : isReadySend ? (
                             <span className="font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-300 px-2 py-0.5 rounded inline-flex items-center gap-1 text-[11px]">
                               <Send className="w-3 h-3 text-indigo-600 shrink-0" />
-                              Siap Kirim
+                              Ready to Send
                             </span>
                           ) : isQuotation ? (
                             <span className="font-extrabold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded inline-flex items-center gap-1 text-[11px]">
@@ -1562,10 +1565,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                 setSendConfirmQuotation(q);
                               }}
                               className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded text-[10px] inline-flex items-center gap-1 shadow-2xs transition cursor-pointer shrink-0"
-                              title="Kirim Penawaran ke Client"
+                              title="Send Quotation to Client"
                             >
                               <Send className="w-3 h-3 text-white" />
-                              <span>Kirim</span>
+                              <span>Send</span>
                             </button>
                           )}
 
@@ -1641,7 +1644,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   </span>
                                 </button>
 
-                                {/* 2. LIHAT & CETAK SPH (HTML) */}
+                                {/* 2. VIEW & PRINT SPH (HTML) */}
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -1652,10 +1655,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 text-emerald-900 transition flex items-center gap-2 cursor-pointer font-semibold border-t border-slate-100"
                                 >
                                   <Printer className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>Lihat & Cetak SPH (HTML)</span>
+                                  <span>View & Print SPH (HTML)</span>
                                 </button>
 
-                                {/* 3. BUAT INVOICE */}
+                                {/* 3. CREATE INVOICE */}
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -1667,7 +1670,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   className="w-full text-left px-3.5 py-2 hover:bg-purple-50 text-purple-900 transition flex items-center gap-2 cursor-pointer font-bold border-t border-slate-100"
                                 >
                                   <FileType className="w-3.5 h-3.5 text-purple-600" />
-                                  <span>Buat Invoice</span>
+                                  <span>Create Invoice</span>
                                 </button>
 
                                 {/* 4. TO BUILDER */}
@@ -1699,7 +1702,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   <span>View Log</span>
                                 </button>
 
-                                {/* 6. KIRIM EMAIL */}
+                                {/* 6. SEND EMAIL */}
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -1710,7 +1713,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 text-emerald-900 transition flex items-center gap-2 cursor-pointer font-bold border-t border-slate-100"
                                 >
                                   <Send className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>Kirim Email (Attach PDF)</span>
+                                  <span>Send Email (Attach PDF)</span>
                                 </button>
 
                                 {/* 7. VIEW FULL RECORD (DB) */}
@@ -1730,7 +1733,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
 
                                 <div className="border-t border-slate-100 my-1"></div>
 
-                                {/* 5. HAPUS */}
+                                {/* 5. DELETE */}
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -1741,7 +1744,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   className="w-full text-left px-3.5 py-2 hover:bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition flex items-center gap-2 cursor-pointer font-bold"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
-                                  <span>Hapus</span>
+                                  <span>Delete</span>
                                 </button>
                               </div>
                             )}
@@ -1811,7 +1814,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   return (
                     <div className="py-16 text-center text-slate-400 text-xs font-bold space-y-2">
                       <Clock className="w-8 h-8 mx-auto text-slate-300" />
-                      <p>Belum ada rekaman audit trail / log perubahan untuk SPH ini.</p>
+                      <p>No audit trail or change history recorded for this quotation.</p>
                     </div>
                   );
                 }
@@ -1947,15 +1950,15 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                     <span>View PDF</span>
                   </button>
 
-                  {/* TOMBOL KIRIM PENAWARAN — muncul jika siap kirim, belum done */}
+                  {/* SEND QUOTATION BUTTON — appears when ready to send, not yet done */}
                   {isReadyForSend(activeQuotation) && !(['done_send','sent','deal','terkirim','penawaran_terkirim'].includes((activeQuotation.status || '').toLowerCase())) && (
                     <button
                       onClick={() => setSendConfirmQuotation(activeQuotation)}
                       className="p-1.5 bg-gradient-to-b from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded font-extrabold text-[10px] transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                      title="Kirim penawaran ke klien"
+                      title="Send quotation to client"
                     >
                       <Send className="w-3.5 h-3.5" />
-                      <span>Kirim Penawaran</span>
+                      <span>Send Quotation</span>
                     </button>
                   )}
 
@@ -2012,7 +2015,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                         <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
                           ocrRateLimitInfo.isPartialSuccess ? 'bg-amber-200 text-amber-800' : 'bg-orange-200 text-orange-800'
                         }`}>
-                          Percobaan {ocrRateLimitInfo.attempt}/{MAX_OCR_RETRIES}
+                          Attempt {ocrRateLimitInfo.attempt}/{MAX_OCR_RETRIES}
                         </span>
                       </div>
                       <p className="text-[10px] text-slate-600 mt-0.5 leading-snug">{ocrRateLimitInfo.message}</p>
@@ -2020,7 +2023,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                       {/* Progress bar + countdown */}
                       <div className="mt-2 space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="text-[9px] text-slate-500">Auto-retry dalam:</span>
+                          <span className="text-[9px] text-slate-500">Auto-retry in:</span>
                           <span className={`text-[10px] font-mono font-black ${
                             ocrRateLimitInfo.retryAfter <= 10
                               ? 'text-emerald-600'
@@ -2131,9 +2134,9 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                           if (st === 'requisition') {
                             return <span className="bg-amber-50 text-amber-800 border border-amber-300 font-black px-2 py-0.5 rounded-sm uppercase text-[9px]">Requisition</span>;
                           } else if (isDoneDrawer) {
-                            return <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 font-black px-2 py-0.5 rounded-sm uppercase text-[9px]">Done / Terkirim</span>;
+                            return <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 font-black px-2 py-0.5 rounded-sm uppercase text-[9px]">Done / Sent</span>;
                           } else if (isReadySendDrawer) {
-                            return <span className="bg-indigo-50 text-indigo-800 border border-indigo-300 font-black px-2 py-0.5 rounded-sm uppercase text-[9px]">Siap Kirim</span>;
+                            return <span className="bg-indigo-50 text-indigo-800 border border-indigo-300 font-black px-2 py-0.5 rounded-sm uppercase text-[9px]">Ready to Send</span>;
                           } else if (isDraftDrawer) {
                             return <span className="bg-amber-100 text-amber-800 border border-amber-200 font-black px-2 py-0.5 rounded-sm uppercase text-[9px]">Draft</span>;
                           } else if (isQuotationDrawer) {
@@ -2258,19 +2261,19 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                               {activeQuotation.impa_code ? `${activeQuotation.impa_code} — ` : ''}{activeQuotation.category_name}
                             </span>
                           ) : (
-                            <span className="text-slate-400 font-mono text-[10px] italic">Belum ditentukan</span>
+                            <span className="text-slate-400 font-mono text-[10px] italic">Not specified</span>
                           )}
                         </div>
                         {/* Document & Files Section (File Sumber RFQ, File Quotation SPH, File Quotation Invoice) */}
                         <div className="col-span-3 border-l-2 border-indigo-500 pl-2.5 bg-slate-50/80 p-2.5 rounded border border-slate-200 mt-1">
                           <h4 className="text-[9.5px] text-slate-700 uppercase font-extrabold tracking-wider mb-2 flex items-center gap-1">
                             <FileText className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                            <span>Berkas & Dokumen File (RFQ, SPH & Invoice)</span>
+                            <span>Documents & Files (RFQ, SPH & Invoice)</span>
                           </h4>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px]">
                             {/* 1. File Sumber RFQ */}
                             <div className="bg-white p-2 rounded border border-slate-200 shadow-2xs">
-                              <span className="text-slate-400 font-extrabold text-[9px] block uppercase tracking-wider mb-1">File Sumber RFQ:</span>
+                              <span className="text-slate-400 font-extrabold text-[9px] block uppercase tracking-wider mb-1">Source RFQ File:</span>
                               {(() => {
                                 let fileUrl = activeQuotation.source_file || activeQuotation.email_source?.attachment_url || '';
                                 if ((!fileUrl || fileUrl === 'NONE') && activeQuotation.ocr_scan_result) {
@@ -2280,7 +2283,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   } catch (e) {}
                                 }
                                 if (!fileUrl || fileUrl === 'NONE') {
-                                  return <span className="font-mono text-slate-400 italic">Tidak ada lampiran</span>;
+                                  return <span className="font-mono text-slate-400 italic">No attachments</span>;
                                 }
                                 const isDrive = fileUrl.toLowerCase().includes('drive.google') || fileUrl.toLowerCase().includes('docs.google') || fileUrl.toLowerCase().includes('gdrive');
                                 let filename = fileUrl;
@@ -2315,7 +2318,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="font-bold text-emerald-700 hover:underline flex items-center gap-1 font-mono text-[10px] truncate"
-                                    title="Download / Buka File PDF Quotation"
+                                    title="Download / Open Quotation PDF File"
                                   >
                                     <FileText className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                                     <span className="truncate">{activeQuotation.quotation_number || activeQuotation.id}.pdf</span>
@@ -2333,7 +2336,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                 </div>
                               ) : (
                                 <span className="font-mono text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded text-[9.5px] font-semibold block border border-amber-200">
-                                  Belum dibuat (Klik 'Create Quotation')
+                                  Not generated yet (Click 'Create Quotation')
                                 </span>
                               )}
                             </div>
@@ -2342,7 +2345,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                             <div className="bg-white p-2 rounded border border-slate-200 shadow-2xs">
                               <span className="text-slate-400 font-extrabold text-[9px] block uppercase tracking-wider mb-1">File Quotation Invoice:</span>
                               <span className="font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded text-[9.5px] block border border-slate-200 italic">
-                                Belum dibuat (Invoice Plan)
+                                Not generated yet (Invoice Plan)
                               </span>
                             </div>
                           </div>
@@ -2759,7 +2762,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                 current.push({ timestamp: new Date().toISOString().replace('T',' ').substring(0,19), user_name: userName, user_email: userEmail, note: accNote });
                                 setQuotations(prev => prev.map(q => q.id === activeQuotation.id ? { ...q, approved_by: JSON.stringify(current), status: 'ready_send' } : q));
                                 setAccNote('');
-                                alert('ACC Approval berhasil dicatat dan status SPH otomatis masuk ke Siap Kirim (ready_send)!');
+                                alert('ACC Approval recorded and SPH status updated to Ready to Send (ready_send)!');
                               }
                             })
                             .catch(e => console.error('ACC error:', e));
@@ -2873,7 +2876,7 @@ onClick={() => {
                     <div>
                       <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
                         <Activity className="w-4 h-4 text-emerald-600 animate-pulse" />
-                        <span>Status Mesin Automasi Daemon PHP ({dynamicDaemons.length} Script Terdeteksi)</span>
+                        <span>PHP Daemon Automation Engines Status ({dynamicDaemons.length} Scripts Detected)</span>
                       </h4>
                       <p className="text-[10px] text-slate-500 mt-0.5">
                         Real-time scan of <code className="text-blue-700 font-mono">daemon/</code> & <code className="text-blue-700 font-mono">public/api_*.php</code> directory — New scripts are automatically detected without code changes.
@@ -2943,12 +2946,12 @@ onClick={() => {
                                   {isErr ? (
                                     <span className="text-rose-600 font-bold flex items-center gap-1">
                                       <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-600" />
-                                      <span>{item.info_diag || 'Terdeteksi kendala eksekusi mesin.'}</span>
+                                      <span>{item.info_diag || 'Engine execution anomaly detected.'}</span>
                                     </span>
                                   ) : (
                                     <span className="text-slate-600 flex items-center gap-1">
                                       <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
-                                      <span>{item.info_diag || 'Normal - Siap memproses data penawaran.'}</span>
+                                      <span>{item.info_diag || 'Normal - Ready to process quotation data.'}</span>
                                     </span>
                                   )}
                                 </td>
@@ -2959,7 +2962,7 @@ onClick={() => {
                           <tr>
                             <td colSpan={5} className="py-8 text-center text-slate-400">
                               <Loader2 className="w-5 h-5 animate-spin mx-auto text-blue-600 mb-2" />
-                              <span>Memindai tabel skrip daemon PHP...</span>
+                              <span>Scanning PHP daemon script table...</span>
                             </td>
                           </tr>
                         )}
@@ -3002,15 +3005,15 @@ onClick={() => {
                             <span className="text-rose-400 font-bold shrink-0">[LOG-ERROR]</span>
                             <div className="overflow-hidden">
                               <span className="font-bold text-amber-200">{errLog.rfq_number || 'SYSTEM'}: </span>
-                              <span className="text-rose-300 break-words">{errLog.ai_error || errLog.error || 'Pemeriksaan kuota rate limit / antrean scan latar belakang'}</span>
-                              {errLog.created_at && <span className="text-slate-500 text-[9px] block font-sans">Waktu: {errLog.created_at}</span>}
+                              <span className="text-rose-300 break-words">{errLog.ai_error || errLog.error || 'Rate limit check / background scan queue'}</span>
+                              {errLog.created_at && <span className="text-slate-500 text-[9px] block font-sans">Time: {errLog.created_at}</span>}
                             </div>
                           </div>
                         ))
                       ) : (
                         <div className="pt-1.5 flex items-start gap-2 text-emerald-400">
                           <span className="font-bold shrink-0">[STATUS-OK]</span>
-                          <span>Tidak terdeteksi error kritis. Seluruh skrip mesin daemon PHP berjalan lancar.</span>
+                          <span>No critical errors detected. All PHP daemon automation scripts are operating normally.</span>
                         </div>
                       )}
                     </div>
@@ -3220,18 +3223,18 @@ onClick={() => {
               {/* Table 3: quotation_items Line Items */}
               <div className="bg-white border border-slate-200 rounded-none overflow-hidden shadow-2xs">
                 <div className="bg-slate-900 text-white px-3.5 py-2 font-bold uppercase text-[10px] tracking-wide flex justify-between items-center border-b border-slate-800">
-                  <span className="text-cyan-400">Rincian Item Penawaran ({selectedFullDbQuotation.items?.length || 0} Item)</span>
+                  <span className="text-cyan-400">Quotation Line Items ({selectedFullDbQuotation.items?.length || 0} Items)</span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-[11px] border-collapse">
                     <thead className="bg-slate-800 border-b border-slate-700 text-slate-200 font-bold uppercase">
                       <tr>
                         <th className="p-2 border-r border-slate-700 text-center w-10">#</th>
-                        <th className="p-2 border-r border-slate-700 w-32">Kode Item</th>
-                        <th className="p-2 border-r border-slate-700">Deskripsi Barang / Jasa</th>
+                        <th className="p-2 border-r border-slate-700 w-32">Item Code</th>
+                        <th className="p-2 border-r border-slate-700">Item Description / Services</th>
                         <th className="p-2 border-r border-slate-700 text-center w-16">Qty</th>
                         <th className="p-2 border-r border-slate-700 text-center w-16">Unit</th>
-                        <th className="p-2 border-r border-slate-700 text-right w-28">Harga Satuan</th>
+                        <th className="p-2 border-r border-slate-700 text-right w-28">Unit Price</th>
                         <th className="p-2 text-right w-28">Total</th>
                       </tr>
                     </thead>
@@ -3281,7 +3284,7 @@ onClick={() => {
                 onClick={() => setIsFullDbModalOpen(false)}
                 className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-1.5 rounded-none transition cursor-pointer text-xs uppercase tracking-wider"
               >
-                Tutup Full Data Viewer
+                Close Full Data Viewer
               </button>
             </div>
 
@@ -3527,7 +3530,7 @@ onClick={() => {
                   <Send className="w-5 h-5 text-indigo-300" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-sm tracking-wide">Konfirmasi Kirim Penawaran</h3>
+                  <h3 className="font-extrabold text-sm tracking-wide">Confirm Send Quotation</h3>
                   <p className="text-[11px] text-slate-300">Quotation / SPH #{sendConfirmQuotation.quotation_number}</p>
                 </div>
               </div>
@@ -3546,18 +3549,18 @@ onClick={() => {
               {/* Safety Banner */}
               <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-2.5 flex items-center gap-2 font-semibold text-[11px]">
                 <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>Mode Keamanan Aktif: Pengiriman email otomatis langsung diblokir. Status diperbarui di sistem internal.</span>
+                <span>Security Mode Active: Direct email transmission restricted. Status updated in system records.</span>
               </div>
               
-              {/* Recipient Details (Dikirim Ke) */}
+              {/* Recipient Details (Sent To) */}
               <div className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs space-y-2">
                 <div className="flex items-center gap-1.5 text-slate-500 font-bold text-[11px] uppercase tracking-wider">
                   <User className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Klien Terkait</span>
+                  <span>Associated Client</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-100">
                   <div>
-                    <span className="text-[10px] text-slate-400 block font-semibold">Perusahaan / Klien:</span>
+                    <span className="text-[10px] text-slate-400 block font-semibold">Company / Client:</span>
                     <span className="font-extrabold text-slate-900 text-sm">
                       {sendConfirmQuotation.company_name || sendConfirmQuotation.client_name || '-'}
                     </span>
@@ -3566,33 +3569,33 @@ onClick={() => {
                     )}
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 block font-semibold">Email Penerima:</span>
+                    <span className="text-[10px] text-slate-400 block font-semibold">Recipient Email:</span>
                     <span className="font-mono font-bold text-blue-700 text-xs break-all">
-                      {sendConfirmQuotation.client_email || <span className="text-amber-600 italic">Email belum diisi</span>}
+                      {sendConfirmQuotation.client_email || <span className="text-amber-600 italic">No email provided</span>}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Quotation / SPH Details (Sebagai) */}
+              {/* Quotation / SPH Details */}
               <div className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs space-y-2">
                 <div className="flex items-center gap-1.5 text-slate-500 font-bold text-[11px] uppercase tracking-wider">
                   <FileText className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Sebagai (Quotation / SPH)</span>
+                  <span>As (Quotation / SPH)</span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 border-t border-slate-100">
                   <div>
-                    <span className="text-[10px] text-slate-400 block font-semibold">No. Quotation:</span>
+                    <span className="text-[10px] text-slate-400 block font-semibold">Quotation No.:</span>
                     <span className="font-mono font-black text-indigo-900 text-xs">{sendConfirmQuotation.quotation_number}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 block font-semibold">Total Nilai:</span>
+                    <span className="text-[10px] text-slate-400 block font-semibold">Grand Total:</span>
                     <span className="font-extrabold text-emerald-700 text-xs">
                       RM {(sendConfirmQuotation.grand_total || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 block font-semibold">Jumlah Item:</span>
+                    <span className="text-[10px] text-slate-400 block font-semibold">Total Items:</span>
                     <span className="font-bold text-slate-700 text-xs">
                       {sendConfirmQuotation.items?.length || sendConfirmQuotation.total_items_count || 0} Items
                     </span>
@@ -3600,12 +3603,12 @@ onClick={() => {
                 </div>
               </div>
 
-              {/* Attached File Details (File yang Ikut) */}
+              {/* Attached File Details */}
               <div className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-slate-500 font-bold text-[11px] uppercase tracking-wider">
                     <Paperclip className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>File Lampiran</span>
+                    <span>Attached Document</span>
                   </div>
                   {sendConfirmQuotation.pdf_created === 1 ? (
                     <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
@@ -3625,7 +3628,7 @@ onClick={() => {
                     <p className="font-mono font-bold text-xs text-slate-800 truncate">
                       {sendConfirmQuotation.quotation_file || sendConfirmQuotation.source_file || `SPH-${sendConfirmQuotation.quotation_number}.pdf`}
                     </p>
-                    <p className="text-[10px] text-slate-400">Lampiran dokumen penawaran resmi SPH PDF</p>
+                    <p className="text-[10px] text-slate-400">Official SPH PDF document attachment</p>
                   </div>
                 </div>
               </div>
@@ -3639,10 +3642,10 @@ onClick={() => {
                 onClick={() => setSendConfirmQuotation(null)}
                 className="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition cursor-pointer border border-slate-300"
               >
-                Batal
+                Cancel
               </button>
 
-              {/* Tulis Pesan di Email Client */}
+              {/* Open in Email Client */}
               <button
                 type="button"
                 onClick={() => {
@@ -3655,10 +3658,10 @@ onClick={() => {
                 className="w-full sm:w-auto px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-extrabold text-xs rounded-lg shadow-sm flex items-center justify-center gap-2 transition cursor-pointer border border-slate-700"
               >
                 <Mail className="w-3.5 h-3.5 text-blue-400" />
-                <span>Buka di Email Client</span>
+                <span>Open in Email Client</span>
               </button>
 
-              {/* Tandai Selesai / Terkirim (Tanpa Kirim Email) */}
+              {/* Mark Done / Sent */}
               <button
                 type="button"
                 disabled={isSendingQuotation}
@@ -3674,7 +3677,7 @@ onClick={() => {
                 ) : (
                   <CheckCircle2 className="w-3.5 h-3.5" />
                 )}
-                <span>{isSendingQuotation ? 'Memperbarui...' : 'Tandai Selesai / Terkirim'}</span>
+                <span>{isSendingQuotation ? 'Updating...' : 'Mark Done / Sent'}</span>
               </button>
             </div>
 

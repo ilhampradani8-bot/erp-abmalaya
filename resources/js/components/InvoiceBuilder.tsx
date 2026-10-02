@@ -497,11 +497,11 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
           fetchCompanySignatories(companyName);
         }
       } else {
-        alert(data.message || 'Gagal menyimpan signatory');
+        alert(data.message || 'Failed to save signatory');
       }
     } catch (err: any) {
       setIsSavingNewSig(false);
-      alert('Gagal menyimpan: ' + (err?.message || 'Network error'));
+      alert('Failed to save signatory: ' + (err?.message || 'Network error'));
     }
   };
 
@@ -2464,9 +2464,20 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                           <span style={{ fontWeight: 700, color: '#004f8b', textTransform: 'uppercase', verticalAlign: 'middle' }}>
                             {companyNameSetting}
                           </span>
-                          <span style={{ marginLeft: '6px', fontFamily: 'ui-monospace, monospace', color: '#64748b' }}>
-                            ({footerText || invoiceSettings?.footer_text || `${companyEmailSetting}, ${companyPhoneSetting}, ${companyWebsiteSetting}`})
-                          </span>
+                          {!isDocPreviewMode ? (
+                            <input
+                              type="text"
+                              value={footerText}
+                              onChange={(e) => setFooterText(e.target.value)}
+                              placeholder={invoiceSettings?.footer_text || `${companyEmailSetting}, ${companyPhoneSetting}, ${companyWebsiteSetting}`}
+                              className="ml-1.5 px-1 py-0.5 text-[7pt] bg-amber-50 border border-amber-300 rounded text-slate-800 focus:outline-blue-500 w-80 font-mono"
+                              title="Edit Invoice Footer Running Text"
+                            />
+                          ) : (
+                            <span style={{ marginLeft: '6px', fontFamily: 'ui-monospace, monospace', color: '#64748b' }}>
+                              ({footerText || invoiceSettings?.footer_text || `${companyEmailSetting}, ${companyPhoneSetting}, ${companyWebsiteSetting}`})
+                            </span>
+                          )}
                         </td>
                         <td style={{ textAlign: 'right', width: '30%', verticalAlign: 'middle', padding: 0, border: 'none', fontWeight: 700, color: '#475569' }}>
                           Page {chunk.pageNumber} of {chunk.totalPages}

@@ -672,7 +672,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                     type="button"
                     onClick={() => setIsEmailMenuOpen(!isEmailMenuOpen)}
                     className="p-1.5 bg-slate-200/80 hover:bg-slate-300 text-slate-700 transition cursor-pointer border border-slate-300/60"
-                    title="Opsi & Pengaturan Email"
+                    title="Email Options & Settings"
                   >
                     <MoreVertical className="w-3.5 h-3.5" />
                   </button>
@@ -1794,7 +1794,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
               {/* Activity History Logs (Riwayat) */}
               <div className="space-y-1">
-                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Activity History Log (Riwayat)</span>
+                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Activity History Log</span>
                 <div className="bg-slate-900 text-slate-200 p-3 border border-slate-800 leading-relaxed max-h-36 overflow-y-auto rounded-md text-[10px] space-y-2.5" style={{ fontFamily: "'Eurostile', 'Microgramma D OT', 'Euro Stile', monospace" }}>
                   {(aiSummaryModalData as any).history_log ? (
                     (() => {

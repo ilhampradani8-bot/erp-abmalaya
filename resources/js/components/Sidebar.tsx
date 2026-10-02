@@ -40,7 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const activeUser = currentUser || {
     id: '',
-    name: 'Pengguna Sistem',
+    name: 'System User',
     email: '',
     role: 'Admin' as const,
     department: '',

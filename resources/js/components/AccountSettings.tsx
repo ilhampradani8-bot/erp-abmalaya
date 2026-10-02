@@ -33,7 +33,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [department, setDepartment] = useState('Sales Executive');
-  const [role, setRole] = useState<UserRole>('Karyawan');
+  const [role, setRole] = useState<UserRole>('Staff');
   const [currentPasswordInput, setCurrentPasswordInput] = useState('');
   const [userPassword, setUserPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -82,7 +82,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
     setUserPassword('');
     setConfirmPassword('');
     setDepartment('Sales Executive');
-    setRole('Karyawan');
+    setRole('Staff');
     setModalTab('profile');
     setModalPwdMessage(null);
     setShowAddModal(true);
@@ -96,7 +96,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
     setUserPassword('');
     setConfirmPassword('');
     setDepartment(user.department || 'Sales Executive');
-    setRole(user.role || 'Karyawan');
+    setRole(user.role || 'Staff');
     setModalTab(tab);
     setModalPwdMessage(null);
     setShowAddModal(true);
@@ -106,15 +106,15 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
     e.preventDefault();
     if (!editingUser) return;
     if (!currentPasswordInput.trim()) {
-      setModalPwdMessage({ type: 'error', text: 'Masukkan kata sandi lama atau Passphrase Master ERP.' });
+      setModalPwdMessage({ type: 'error', text: 'Please enter old password or ERP Master Passphrase.' });
       return;
     }
     if (!userPassword.trim() || userPassword.trim().length < 4) {
-      setModalPwdMessage({ type: 'error', text: 'Kata sandi baru minimal 4 karakter.' });
+      setModalPwdMessage({ type: 'error', text: 'New password must be at least 4 characters.' });
       return;
     }
     if (userPassword !== confirmPassword) {
-      setModalPwdMessage({ type: 'error', text: 'Konfirmasi kata sandi tidak cocok.' });
+      setModalPwdMessage({ type: 'error', text: 'New password confirmation does not match.' });
       return;
     }
 
@@ -133,16 +133,16 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
       });
       const data = await res.json();
       if (data.status === 'success') {
-        setModalPwdMessage({ type: 'success', text: `Kata sandi akun ${editingUser.name} berhasil diperbarui di database!` });
+        setModalPwdMessage({ type: 'success', text: `Account password for ${editingUser.name} updated successfully in database!` });
         setCurrentPasswordInput('');
         setUserPassword('');
         setConfirmPassword('');
         fetchLogs();
       } else {
-        setModalPwdMessage({ type: 'error', text: data.message || 'Gagal memperbarui kata sandi akun.' });
+        setModalPwdMessage({ type: 'error', text: data.message || 'Failed to update account password.' });
       }
     } catch (err: any) {
-      setModalPwdMessage({ type: 'error', text: 'Kesalahan koneksi: ' + err.message });
+      setModalPwdMessage({ type: 'error', text: 'Connection error: ' + err.message });
     } finally {
       setIsUpdatingPassword(false);
     }
@@ -151,7 +151,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !email.trim()) {
-      alert('Nama dan Email wajib diisi!');
+      alert('Name and Email are required!');
       return;
     }
 
@@ -184,13 +184,13 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
     setEmail('');
     setUserPassword('');
     setDepartment('Sales Executive');
-    setRole('Karyawan');
+    setRole('Staff');
     setEditingUser(null);
     setShowAddModal(false);
   };
 
   const handleDeleteClick = (userId: string, userName: string) => {
-    if (confirm(`Apakah Anda yakin ingin menghapus akun pengguna "${userName}"?`)) {
+    if (confirm(`Are you sure you want to delete user account "${userName}"?`)) {
       onDeleteUser(userId);
     }
   };
@@ -213,12 +213,12 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <h1 className="text-sm font-bold text-slate-900 tracking-tight">Akun Pengguna & Hak Akses</h1>
+              <h1 className="text-sm font-bold text-slate-900 tracking-tight">User Accounts & Access Permissions</h1>
               <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full border border-blue-200">
-                MySQL Terhubung
+                MySQL Connected
               </span>
             </div>
-            <p className="text-[11px] text-slate-500">Kelola hak akses operator, ganti kata sandi akun, dan ganti profil aktif.</p>
+            <p className="text-[11px] text-slate-500">Manage operator permissions, update account credentials, and switch active profiles.</p>
           </div>
         </div>
 
@@ -227,7 +227,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
           <div className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg shadow-2xs flex items-center space-x-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
             <span className="text-slate-600 font-medium">Total:</span>
-            <span className="font-bold text-slate-900 font-mono">{users.length} Akun</span>
+            <span className="font-bold text-slate-900 font-mono">{users.length} Accounts</span>
           </div>
           <div className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg shadow-2xs flex items-center space-x-2">
             <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
@@ -235,7 +235,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
             <span className="font-bold text-blue-700 font-mono">{adminCount}</span>
           </div>
           <div className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg shadow-2xs flex items-center space-x-2">
-            <span className="text-slate-600 font-medium">Karyawan:</span>
+            <span className="text-slate-600 font-medium">Staff:</span>
             <span className="font-bold text-slate-700 font-mono">{staffCount}</span>
           </div>
         </div>
@@ -247,7 +247,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
           <input
             type="text"
-            placeholder="Cari akun berdasarkan nama, email, atau departemen..."
+            placeholder="Search accounts by name, email, or department..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
@@ -263,7 +263,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                 viewLayout === 'table' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              Tampilan Tabel
+              Table View
             </button>
             <button
               onClick={() => setViewLayout('cards')}
@@ -271,7 +271,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                 viewLayout === 'cards' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              Tampilan Kartu
+              Cards View
             </button>
           </div>
 
@@ -279,7 +279,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
           <button
             onClick={fetchLogs}
             disabled={isLoadingLogs}
-            title="Segarkan log aktivitas"
+            title="Refresh activity logs"
             className="p-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-lg text-xs transition-all cursor-pointer"
           >
             <RefreshCw className={`w-4 h-4 ${isLoadingLogs ? 'animate-spin text-blue-600' : ''}`} />
@@ -291,7 +291,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
             className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-xs rounded-lg shadow-xs transition-all cursor-pointer"
           >
             <UserPlus className="w-3.5 h-3.5" />
-            <span>Tambah Akun</span>
+            <span>Add Account</span>
           </button>
         </div>
       </div>
@@ -303,18 +303,18 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 text-slate-700 font-bold uppercase tracking-wider text-[10px]">
-                  <th className="py-2.5 px-4">Nama Pengguna & Email</th>
-                  <th className="py-2.5 px-4">Departemen / Divisi</th>
-                  <th className="py-2.5 px-4">Hak Akses (Role)</th>
-                  <th className="py-2.5 px-4">Status Akun</th>
-                  <th className="py-2.5 px-4 text-right">Aksi Cepat</th>
+                  <th className="py-2.5 px-4">User Name & Email</th>
+                  <th className="py-2.5 px-4">Department / Division</th>
+                  <th className="py-2.5 px-4">Role & Access</th>
+                  <th className="py-2.5 px-4">Account Status</th>
+                  <th className="py-2.5 px-4 text-right">Quick Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 text-slate-800">
                 {filteredUsers.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="py-8 text-center text-slate-400">
-                      Tidak ditemukan akun pengguna yang cocok dengan pencarian.
+                      No user accounts found matching your search.
                     </td>
                   </tr>
                 ) : (
@@ -340,7 +340,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                                 <span className="font-bold text-slate-900">{user.name}</span>
                                 {isCurrent && (
                                   <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded border border-emerald-200">
-                                    Aktif
+                                    Active
                                   </span>
                                 )}
                               </div>
@@ -363,7 +363,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                             </span>
                           ) : (
                             <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-300">
-                              <span>{user.role || 'Karyawan'}</span>
+                              <span>{user.role || 'Staff'}</span>
                             </span>
                           )}
                         </td>
@@ -380,16 +380,16 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                             {!isCurrent && (
                               <button
                                 onClick={() => onSwitchUser(user)}
-                                title="Beralih ke akun ini"
+                                title="Switch to this account"
                                 className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-semibold text-[11px] transition-all border border-slate-300 cursor-pointer"
                               >
-                                Ganti Akun
+                                Switch Account
                               </button>
                             )}
 
                             <button
                               onClick={() => handleOpenEditModal(user, 'password')}
-                              title="Ganti kata sandi akun"
+                              title="Change account password"
                               className="p-1.5 text-slate-500 hover:text-amber-700 hover:bg-amber-50 rounded-md transition-all cursor-pointer"
                             >
                               <Key className="w-3.5 h-3.5" />
@@ -397,7 +397,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
 
                             <button
                               onClick={() => handleOpenEditModal(user, 'profile')}
-                              title="Edit rincian profil"
+                              title="Edit profile details"
                               className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-all cursor-pointer"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
@@ -406,7 +406,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                             <button
                               onClick={() => handleDeleteClick(user.id, user.name)}
                               disabled={isCurrent}
-                              title={isCurrent ? 'Tidak dapat menghapus akun yang sedang aktif' : 'Hapus akun'}
+                              title={isCurrent ? 'Cannot delete currently active account' : 'Delete account'}
                               className={`p-1.5 rounded-md transition-all cursor-pointer ${
                                 isCurrent 
                                   ? 'text-slate-300 cursor-not-allowed' 
@@ -450,7 +450,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                         <span className="font-bold text-slate-900 text-sm">{user.name}</span>
                         {isCurrent && (
                           <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded border border-emerald-200">
-                            Aktif
+                            Active
                           </span>
                         )}
                       </div>
@@ -464,13 +464,13 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                     {user.department || 'Sales Executive'}
                   </span>
                   {isAdminUser ? (
-                    <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                    <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
                       <ShieldCheck className="w-3 h-3 text-purple-600" />
                       <span>Admin</span>
                     </span>
                   ) : (
                     <span className="text-[10px] font-semibold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full border border-slate-300">
-                      {user.role || 'Karyawan'}
+                      {user.role || 'Staff'}
                     </span>
                   )}
                 </div>
@@ -481,26 +481,26 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                       onClick={() => onSwitchUser(user)}
                       className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-semibold text-xs border border-slate-300 cursor-pointer"
                     >
-                      Ganti Akun
+                      Switch Account
                     </button>
                   ) : (
                     <span className="text-[11px] font-bold text-blue-700 flex items-center space-x-1">
                       <UserCheck className="w-3.5 h-3.5" />
-                      <span>Sesi Anda</span>
+                      <span>Your Session</span>
                     </span>
                   )}
 
                   <div className="flex items-center space-x-1">
                     <button
                       onClick={() => handleOpenEditModal(user, 'password')}
-                      title="Ganti kata sandi akun"
+                      title="Change account password"
                       className="p-1.5 text-slate-500 hover:text-amber-700 hover:bg-amber-50 rounded-md cursor-pointer"
                     >
                       <Key className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => handleOpenEditModal(user, 'profile')}
-                      title="Edit rincian profil"
+                      title="Edit profile details"
                       className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded-md cursor-pointer"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
@@ -508,7 +508,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                     <button
                       onClick={() => handleDeleteClick(user.id, user.name)}
                       disabled={isCurrent}
-                      title={isCurrent ? 'Tidak dapat menghapus akun yang sedang aktif' : 'Hapus akun'}
+                      title={isCurrent ? 'Cannot delete currently active account' : 'Delete account'}
                       className={`p-1.5 rounded-md cursor-pointer ${
                         isCurrent ? 'text-slate-300 cursor-not-allowed' : 'text-slate-500 hover:text-rose-700 hover:bg-rose-50'
                       }`}
@@ -529,45 +529,45 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
           <div className="flex items-center space-x-2">
             <Activity className="w-4 h-4 text-blue-600" />
             <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-              Riwayat Aktivitas Keamanan & Audit Trail (MySQL: user_activity_logs)
+              Security & Activity Audit Trail (MySQL: user_activity_logs)
             </h2>
           </div>
-          <span className="text-[11px] text-slate-500 font-mono">20 Entri Terakhir</span>
+          <span className="text-[11px] text-slate-500 font-mono">Last 20 Entries</span>
         </div>
 
         {isLoadingLogs ? (
           <div className="py-6 text-center text-xs text-slate-400 flex items-center justify-center space-x-2">
             <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600" />
-            <span>Memuat log aktivitas pengguna...</span>
+            <span>Loading user activity logs...</span>
           </div>
         ) : activityLogs.length === 0 ? (
           <div className="py-6 text-center text-xs text-slate-400">
-            Belum ada log aktivitas keamanan yang tercatat di database.
+            No security activity logs recorded in the database yet.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-100 text-slate-600 text-[10px] uppercase font-bold border-b border-slate-200">
-                  <th className="py-2 px-3">Waktu</th>
+                  <th className="py-2 px-3">Timestamp</th>
                   <th className="py-2 px-3">Operator</th>
-                  <th className="py-2 px-3">Aktivitas</th>
-                  <th className="py-2 px-3">Rincian Deskripsi</th>
-                  <th className="py-2 px-3">Alamat IP</th>
+                  <th className="py-2 px-3">Action Type</th>
+                  <th className="py-2 px-3">Details & Description</th>
+                  <th className="py-2 px-3">IP Address</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700 text-[11px]">
                 {activityLogs.slice(0, 15).map((log, idx) => (
                   <tr key={log.id || idx} className="hover:bg-slate-50">
                     <td className="py-2 px-3 font-mono text-slate-500 whitespace-nowrap">
-                      {log.created_at || log.timestamp || 'Baru Saja'}
+                      {log.created_at || log.timestamp || 'Just Now'}
                     </td>
                     <td className="py-2 px-3 font-semibold text-slate-900 whitespace-nowrap">
-                      {log.user_name || log.operator || 'Sistem'}
+                      {log.user_name || log.operator || 'System'}
                     </td>
                     <td className="py-2 px-3">
                       <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-mono text-[10px]">
-                        {log.action || log.activity_type || 'Aktivitas'}
+                        {log.action || log.activity_type || 'Activity'}
                       </span>
                     </td>
                     <td className="py-2 px-3 text-slate-600">
@@ -593,7 +593,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
               <div className="flex items-center space-x-2">
                 <Users className="w-4 h-4 text-blue-600" />
                 <span className="font-bold text-slate-900 text-sm">
-                  {editingUser ? `Edit Akun: ${editingUser.name}` : 'Tambah Akun Pengguna Baru'}
+                  {editingUser ? `Edit Account: ${editingUser.name}` : 'Add New User Account'}
                 </span>
               </div>
               <button
@@ -615,7 +615,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                       : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  Informasi Profil
+                  Profile Information
                 </button>
                 <button
                   onClick={() => setModalTab('password')}
@@ -625,7 +625,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                       : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  Ganti Kata Sandi
+                  Change Password
                 </button>
               </div>
             )}
@@ -634,32 +634,32 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
             {modalTab === 'profile' && (
               <form onSubmit={handleFormSubmit} className="p-5 space-y-4">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Nama Lengkap</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Full Name</label>
                   <input
                     type="text"
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="mis. Muhammad Aiman"
+                    placeholder="e.g. Muhammad Aiman"
                     className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Alamat Email (Login Pengguna)</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Email Address (Login ID)</label>
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="mis. aiman@abmalaya.com"
+                    placeholder="e.g. aiman@abmalaya.com"
                     className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 font-mono"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Departemen / Divisi</label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Department / Division</label>
                     <select
                       value={department}
                       onChange={(e) => setDepartment(e.target.value)}
@@ -674,26 +674,26 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Hak Akses (Role)</label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Role & Permissions</label>
                     <select
                       value={role}
                       onChange={(e) => setRole(e.target.value as any)}
                       className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 font-semibold"
                     >
-                      <option value="Karyawan">Karyawan (Staf Standar)</option>
-                      <option value="Admin">Administrator (Akses Penuh)</option>
+                      <option value="Staff">Staff (Standard Access)</option>
+                      <option value="Admin">Administrator (Full Access)</option>
                     </select>
                   </div>
                 </div>
 
                 {!editingUser && (
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Kata Sandi Awal (Password)</label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Initial Password</label>
                     <input
                       type="password"
                       value={userPassword}
                       onChange={(e) => setUserPassword(e.target.value)}
-                      placeholder="Masukkan kata sandi awal untuk akun baru..."
+                      placeholder="Enter initial password for new account..."
                       className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 font-mono"
                     />
                   </div>
@@ -705,13 +705,13 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                     onClick={() => setShowAddModal(false)}
                     className="px-3.5 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg font-semibold cursor-pointer"
                   >
-                    Batal
+                    Cancel
                   </button>
                   <button
                     type="submit"
                     className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-xs cursor-pointer"
                   >
-                    {editingUser ? 'Simpan Perubahan' : 'Tambah Akun'}
+                    {editingUser ? 'Save Changes' : 'Add Account'}
                   </button>
                 </div>
               </form>
@@ -734,30 +734,30 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
 
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Kata Sandi Lama / Passphrase Master ERP
+                    Current Password / ERP Master Passphrase
                   </label>
                   <input
                     type="password"
                     required
                     value={currentPasswordInput}
                     onChange={(e) => setCurrentPasswordInput(e.target.value)}
-                    placeholder="Sandi lama atau abm.admin2026!"
+                    placeholder="Old password or abm.admin2026!"
                     className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 font-mono"
                   />
                   <p className="text-[10px] text-slate-400 mt-0.5">
-                    Masukkan kata sandi lama akun atau Passphrase Master ERP untuk verifikasi.
+                    Enter the current password or the ERP Master Passphrase for verification.
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Kata Sandi Baru</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">New Password</label>
                   <div className="relative">
                     <input
                       type={showPwd ? 'text' : 'password'}
                       required
                       value={userPassword}
                       onChange={(e) => setUserPassword(e.target.value)}
-                      placeholder="Minimal 4 karakter"
+                      placeholder="Minimum 4 characters"
                       className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 font-mono pr-8"
                     />
                     <button
@@ -771,13 +771,13 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Konfirmasi Kata Sandi Baru</label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Confirm New Password</label>
                   <input
                     type="password"
                     required
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Ulangi kata sandi baru"
+                    placeholder="Repeat new password"
                     className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 font-mono"
                   />
                 </div>
@@ -788,14 +788,14 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                     onClick={() => setShowAddModal(false)}
                     className="px-3.5 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg font-semibold cursor-pointer"
                   >
-                    Tutup
+                    Close
                   </button>
                   <button
                     type="submit"
                     disabled={isUpdatingPassword}
                     className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-xs cursor-pointer"
                   >
-                    {isUpdatingPassword ? 'Menyimpan...' : 'Perbarui Kata Sandi'}
+                    {isUpdatingPassword ? 'Saving...' : 'Update Password'}
                   </button>
                 </div>
               </form>
