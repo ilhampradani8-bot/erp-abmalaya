@@ -19,7 +19,25 @@ $type = isset($_GET['type']) ? trim($_GET['type']) : 'quotation';
 $id = isset($_GET['id']) ? trim($_GET['id']) : '';
 
 if (empty($id)) {
-    die("Document ID missing.");
+    ob_end_clean();
+    http_response_code(400);
+    echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>No Document Selected</title>
+    <style>*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,sans-serif}
+    body{background:#f1f5f9;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+    .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:40px;max-width:480px;width:100%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.08)}
+    .icon{font-size:48px;margin-bottom:16px}
+    h1{font-size:18px;font-weight:800;color:#0f172a;margin-bottom:8px}
+    p{font-size:13px;color:#64748b;line-height:1.6;margin-bottom:20px}
+    a{display:inline-block;background:#0070c0;color:#fff;font-weight:700;font-size:13px;padding:10px 24px;border-radius:8px;text-decoration:none}
+    </style></head><body>
+    <div class="card">
+      <div class="icon">📄</div>
+      <h1>No Document Selected</h1>
+      <p>Please open a valid Invoice or Quotation document from the ERP system. A document ID is required to render this page.</p>
+      <a href="javascript:history.back()">← Go Back</a>
+    </div>
+    </body></html>';
+    exit;
 }
 
 // Base64 Image Converter Helper for local files
@@ -908,16 +926,22 @@ ob_end_clean();
                         <tr>
                             <!-- Logo Left -->
                             <td style="width: 55%; vertical-align: bottom; text-align: left; padding: 0; border: none;">
-                                <div style="transform: translate(<?= $logoX ?>px, <?= $logoY ?>px) scale(<?= $logoScale ?>); transform-origin: left bottom; position: relative;">
+                                <?php
+                                // Use actual pixel height (scale * 44px) instead of CSS transform scale(),
+                                // because CSS transform does NOT expand layout space in print/PDF contexts.
+                                // This ensures identical appearance in Web View, Direct Print, and PDF download.
+                                $logoHeightPx = max(20, round(44 * $logoScale));
+                                ?>
+                                <div style="transform: translate(<?= $logoX ?>px, <?= $logoY ?>px); transform-origin: left bottom; position: relative; display: inline-block;">
                                     <?php if (!empty($logoUrl)): ?>
-                                        <img src="<?= $logoUrl ?>" alt="<?= htmlspecialchars($companyName) ?>" style="height: 44px; max-width: 220px; object-fit: contain; display: block;">
+                                        <img src="<?= $logoUrl ?>" alt="<?= htmlspecialchars($companyName) ?>" style="height: <?= $logoHeightPx ?>px; max-width: <?= round(220 * $logoScale) ?>px; object-fit: contain; display: block;">
                                     <?php else: ?>
                                         <div>
-                                            <div style="font-weight: 900; font-size: 15pt; color: #004f8b; text-transform: uppercase;">
+                                            <div style="font-weight: 900; font-size: <?= round(15 * $logoScale) ?>pt; color: #004f8b; text-transform: uppercase;">
                                                 <?= htmlspecialchars($companyName) ?>
                                             </div>
                                             <?php if (!empty($activeSettings['company_reg_no'])): ?>
-                                                <span style="font-size: 10px; font-weight: 700; color: #0070c0; font-family: monospace; display: block;">(<?= htmlspecialchars($activeSettings['company_reg_no']) ?>)</span>
+                                                <span style="font-size: <?= round(10 * $logoScale) ?>px; font-weight: 700; color: #0070c0; font-family: monospace; display: block;">(<?= htmlspecialchars($activeSettings['company_reg_no']) ?>)</span>
                                             <?php endif; ?>
                                         </div>
                                     <?php endif; ?>
@@ -926,7 +950,7 @@ ob_end_clean();
 
                             <!-- Company Address Right -->
                             <td style="width: 45%; vertical-align: bottom; text-align: right; padding: 0; border: none; font-size: 7.5pt; line-height: 1.25; color: #1e293b;">
-                                <div style="transform: translate(<?= $addrX ?>px, <?= $addrY ?>px); transform-origin: left bottom; position: relative;">
+                                <div style="transform: translate(<?= $addrX ?>px, <?= $addrY ?>px); transform-origin: right bottom; position: relative;">
                                     <?= render_dynamic_address($companyAddress) ?>
                                 </div>
                             </td>
