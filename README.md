@@ -20,13 +20,14 @@ Portal ERP Modern & Komprehensif untuk **ABMALAYA.COM (MALAYSIA)** yang menangan
    - Penanganan *Rate Limit (HTTP 429)* pintar dengan status `waiting_ai_limit` yang otomatis re-queue dan retry saat kuota Gemini reset.
    - Penggunaan model AI aktif: `gemini-3.6-flash`, `gemini-3.5-flash`, dan `gemini-flash-latest`.
 
-3. **Mesin SPH Commercial Quotation PDF Multi-Halaman (Headless Chrome Puppeteer)**:
-   - Generasi PDF resmi Surat Penawaran Harga (SPH) berbasis Headless Chrome Puppeteer (`scripts/generate_pdf_puppeteer.cjs` & `public/api_pdf.php`).
+3. **Mesin SPH & Commercial Invoice PDF Multi-Halaman (Headless Chrome Puppeteer)**:
+   - Generasi PDF resmi Surat Penawaran Harga (SPH) & Invoice berbasis Headless Chrome Puppeteer (`scripts/generate_pdf_puppeteer.cjs` & `public/api_pdf.php`).
+   - **Tinggi Header Banner Dinamis (Preservasi Aspect Ratio)**: Perhitungan tinggi container header secara presisi `round(700 * (tinggi / lebar))` pada `view_doc.php`, `InvoiceBuilder.tsx`, dan `QuotationDoc.tsx` sehingga gambar banner tampil sempurna di belakang logo & alamat tanpa tertekan (*gepeng*) atau terpotong (*kepotong*) di batas garis biru tebal (`border-bottom: 2px solid #004f8b`).
    - **Multi-Page Flow A4**: Mendukung penawaran hingga puluhan/ratusan item (`QUO-ABM/MY/2026/0828` dengan 24+ item) secara otomatis terbagi bersih menjadi Halaman 1, 2, 3, dst.
    - **Repeating Header & Footer**: Letterhead Banner (Logo Perusahaan, Alamat, Gambar Banner Header) dan Footer Perusahaan (Logo, Email, Telepon, Website) terulang **100% konsisten pada setiap halaman A4**.
-   - **DB Layout Offsets**: Mengikuti secara presisi konfigurasi `system_paper_settings` di database (termasuk JSON `layout_offsets` untuk skala/posisi logo & alamat, `header_title`, `table_header_bg`, `stamp_url`, dan `signature_url`).
-   - **Header Tabel Berulang**: Header kolom tabel (`NO.`, `IMG`, `PRODUCT CODE`, `IMPA`, `PRODUCT NAME`, `SPECIFICATION`, `QTY`, `UNIT`, `UNIT PRICE`, `DISC`, `TOTAL`) otomatis terikut di setiap awal halaman baru.
-   - **Signatures & Summary di Halaman Terakhir**: Blok tanda tangan digital, cap perusahaan, serta ringkasan PPN & Syarat Ketentuan diletakkan khusus pada **halaman terakhir**.
+   - **Mesin Auto-Sync Daemon**: Integrasi otomatis `daemon/sync_quotations.php` dan `daemon/sync_invoices.php` yang mengonversi RFQ terverifikasi & SPH ACC menjadi Invoice & PDF resmi di latar belakang via Puppeteer dengan resolusi base URL `<base href="...">` dan penungguan gambar/font (`networkidle0` & `document.fonts.ready`).
+   - **Manajemen Aset System Settings**: Fitur modal Lightbox Preview (Eye icon) dan simpan/download file pada setiap kartu upload (Logo, Stempel, Tanda Tangan, & Header Banner).
+   - **DB Layout Offsets**: Mengikuti secara presisi konfigurasi `system_paper_settings` & `system_invoice_settings` di database (termasuk JSON `layout_offsets` untuk skala/posisi logo & alamat, `header_title`, `table_header_bg`, `stamp_url`, dan `signature_url`).
    - **High-Speed PDF Caching**: Endpoint `api_pdf.php` melayani preview PDF secara instant (0.01 detik) dari cache file `/uploads/pdf/` dan hanya menjalankan Puppeteer jika terdapat pembaruan/recreate (`force=1`).
 
 4. **Database Change Watcher & System Notification Engine**:
