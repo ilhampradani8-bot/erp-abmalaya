@@ -2181,7 +2181,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                           <span style={{ fontWeight: 700, color: '#004f8b', textTransform: 'uppercase', verticalAlign: 'middle' }}>
                             {companyName}
                           </span>
-                          {isEditDocMode ? (
+                          {isEditDocMode || isDragMode ? (
                             <input
                               type="text"
                               value={docFooterText}

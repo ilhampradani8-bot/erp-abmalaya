@@ -2499,7 +2499,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                           <span style={{ fontWeight: 700, color: '#004f8b', textTransform: 'uppercase', verticalAlign: 'middle' }}>
                             {companyNameSetting}
                           </span>
-                          {!isDocPreviewMode ? (
+                          {!isDocPreviewMode || isDragMode ? (
                             <input
                               type="text"
                               value={footerText}

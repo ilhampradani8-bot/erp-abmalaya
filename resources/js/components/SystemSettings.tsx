@@ -942,12 +942,14 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 <span className="text-[11px] text-slate-500 font-mono">TLS Port 587</span>
               </div>
 
-              <form onSubmit={handleSaveSmtp} className="p-5 space-y-4 text-xs">
+              <form onSubmit={handleSaveSmtp} className="p-5 space-y-4 text-xs" autoComplete="off" data-lpignore="true" data-1p-ignore="true">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">SMTP Host</label>
                     <input
                       type="text"
+                      name="smtp_host_no_autofill"
+                      autoComplete="off"
                       value={formConfig.host}
                       onChange={(e) => setFormConfig({ ...formConfig, host: e.target.value })}
                       placeholder="smtp.gmail.com"
@@ -960,6 +962,8 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">SMTP Port</label>
                     <input
                       type="number"
+                      name="smtp_port_no_autofill"
+                      autoComplete="off"
                       value={formConfig.port}
                       onChange={(e) => setFormConfig({ ...formConfig, port: Number(e.target.value) })}
                       placeholder="587"
@@ -971,7 +975,11 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">Sender Email / Username</label>
                     <input
-                      type="email"
+                      type="text"
+                      name="sender_email_username_no_autofill"
+                      autoComplete="off"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
                       value={formConfig.from_email || formConfig.username}
                       onChange={(e) => setFormConfig({ ...formConfig, from_email: e.target.value, username: e.target.value })}
                       placeholder="sales@abmalaya.com"
@@ -985,6 +993,11 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     <div className="relative">
                       <input
                         type={showPassword ? 'text' : 'password'}
+                        name="email_app_password_setting_no_autofill"
+                        autoComplete="new-password"
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        data-form-type="other"
                         value={plainPassword}
                         onChange={(e) => setPlainPassword(e.target.value)}
                         placeholder="•••• •••• •••• ••••"
