@@ -72,14 +72,29 @@ if (!fs.existsSync(dir)) {
         const page = await browser.newPage();
         
         if (htmlContent && htmlContent.includes('<html')) {
-            await page.setContent(htmlContent, { waitUntil: 'domcontentloaded' });
+            if (!htmlContent.includes('<base ')) {
+                htmlContent = htmlContent.replace('<head>', '<head><base href="http://127.0.0.1:8000/">');
+            }
+            await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
         } else {
-            await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+            await page.goto(targetUrl, { waitUntil: 'networkidle0', timeout: 15000 });
         }
 
-        // Wait for all fonts and images to be fully rendered
+        // Ensure all background images, logos & fonts are fully loaded
         try {
-            await page.evaluateHandle('document.fonts.ready');
+            await page.evaluate(async () => {
+                const images = Array.from(document.querySelectorAll('img'));
+                await Promise.all(images.map(img => {
+                    if (img.complete) return Promise.resolve();
+                    return new Promise((resolve) => {
+                        img.addEventListener('load', resolve);
+                        img.addEventListener('error', resolve);
+                    });
+                }));
+                if (document.fonts) {
+                    await document.fonts.ready;
+                }
+            });
         } catch (e) {}
 
         await page.pdf({

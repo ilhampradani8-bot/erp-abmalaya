@@ -31,6 +31,7 @@ interface DraggableElementProps {
   label?: string;
   inline?: boolean;
   resizable?: boolean;
+  disableScaleTransform?: boolean;
 }
 
 interface EmailOption {
@@ -93,6 +94,7 @@ const DraggableElement: React.FC<DraggableElementProps> = ({
   label,
   inline = false,
   resizable = false,
+  disableScaleTransform = false,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -160,7 +162,9 @@ const DraggableElement: React.FC<DraggableElementProps> = ({
   };
 
   const transformStyle: React.CSSProperties = {
-    transform: `translate(${currentOffset.x || 0}px, ${currentOffset.y || 0}px) scale(${currentScale})`,
+    transform: disableScaleTransform
+      ? `translate(${currentOffset.x || 0}px, ${currentOffset.y || 0}px)`
+      : `translate(${currentOffset.x || 0}px, ${currentOffset.y || 0}px) scale(${currentScale})`,
     transformOrigin: 'left bottom',
     transition: isDragging || isResizing ? 'none' : 'transform 0.05s ease-out',
     position: 'relative',
@@ -348,6 +352,24 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
   const [modalInvoiceTitle, setModalInvoiceTitle] = useState<string>('OFFICIAL INVOICE');
   const [modalFooterText, setModalFooterText] = useState<string>('');
   const [isSavingPaperSetup, setIsSavingPaperSetup] = useState<boolean>(false);
+  const [headerImageHeight, setHeaderImageHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    const bannerUrl = invoiceSettings?.header_image_url || invoiceSettings?.headerImageUrl;
+    if (bannerUrl) {
+      const img = new Image();
+      img.onload = () => {
+        if (img.width > 0) {
+          const aspect = img.height / img.width;
+          const calcH = Math.round(700 * aspect);
+          setHeaderImageHeight(calcH);
+        }
+      };
+      img.src = formatAssetUrl(bannerUrl);
+    } else {
+      setHeaderImageHeight(null);
+    }
+  }, [invoiceSettings?.header_image_url, invoiceSettings?.headerImageUrl]);
   const [quotationId, setQuotationId] = useState<string>(initialInvoice?.quotation_id || '');
   const [poNumber, setPoNumber] = useState<string>(initialInvoice?.po_number || '');
   const [invoiceDate, setInvoiceDate] = useState<string>(initialInvoice?.invoice_date || new Date().toISOString().split('T')[0]);
@@ -1116,6 +1138,11 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
   const headerImageUrl = invoiceSettings?.header_image_url || invoiceSettings?.headerImageUrl;
   const companyNameSetting = invoiceSettings?.company_name || invoiceSettings?.companyName || 'AB MALAYA INDUSTRY';
   const companyRegNoSetting = invoiceSettings?.company_reg_no || invoiceSettings?.companyRegNo || '003320457-D';
+
+  const logoScale = offsets['invoice_logo']?.scale || 1.0;
+  const logoHeightPx = Math.max(20, Math.round(44 * logoScale));
+  const defaultHeaderHeight = logoHeightPx + 10;
+  const finalHeaderHeight = headerImageHeight ? Math.max(defaultHeaderHeight, Math.min(180, headerImageHeight)) : defaultHeaderHeight;
   const companyAddressSetting = (invoiceSettings?.company_address && invoiceSettings.company_address.trim())
     || (invoiceSettings?.companyAddress && invoiceSettings.companyAddress.trim())
     || '2-2-40, 2nd Floor Wisma Rampai, Jalan 34/26, Taman Sri Rampai, 53300 Kuala Lumpur.';
@@ -1146,7 +1173,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
     if (clean.includes('\n')) {
       const lines = clean.split('\n').map((l) => l.trim()).filter(Boolean);
       return lines.map((line, idx) => (
-        <p key={idx} style={{ margin: 0, fontWeight: idx === 0 ? 700 : 400, color: idx === 0 ? '#0f172a' : '#1e293b', fontSize: idx === 0 ? '8.5pt' : '8pt' }}>
+        <p key={idx} style={{ margin: 0, fontWeight: idx === 0 ? 700 : 400, color: idx === 0 ? '#0f172a' : '#1e293b', fontSize: idx === 0 ? '7.5pt' : '7pt' }}>
           {line}
         </p>
       ));
@@ -1159,14 +1186,14 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
       const line3 = parts[parts.length - 1];
       return (
         <>
-          <p style={{ margin: 0, fontWeight: 700, color: '#0f172a', fontSize: '8.5pt' }}>{line1}</p>
-          <p style={{ margin: 0, color: '#1e293b', fontSize: '8pt' }}>{line2}</p>
-          <p style={{ margin: 0, fontWeight: 600, color: '#0f172a', fontSize: '8pt' }}>{line3}</p>
+          <p style={{ margin: 0, fontWeight: 700, color: '#0f172a', fontSize: '7.5pt' }}>{line1}</p>
+          <p style={{ margin: 0, color: '#1e293b', fontSize: '7pt' }}>{line2}</p>
+          <p style={{ margin: 0, fontWeight: 600, color: '#0f172a', fontSize: '7pt' }}>{line3}</p>
         </>
       );
     }
 
-    return <p style={{ margin: 0, fontWeight: 600, color: '#0f172a', fontSize: '8pt' }}>{clean}</p>;
+    return <p style={{ margin: 0, fontWeight: 600, color: '#0f172a', fontSize: '7.5pt' }}>{clean}</p>;
   };
 
   return (
@@ -1714,25 +1741,26 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
             >
               {/* TOP HEADER BLOCK (Synchronized across all sheets) */}
               <div style={{ width: '100%' }}>
-                <div style={{ width: '100%', borderBottom: '2px solid #004f8b', paddingBottom: '3px', marginBottom: '4px', background: '#ffffff' }}>
-                  {headerImageUrl ? (
-                    <div style={{ width: '100%', marginBottom: '4px', marginTop: '-2px' }}>
-                      <img
-                        src={formatAssetUrl(headerImageUrl)}
-                        alt="Header Banner"
-                        style={{ width: '100%', height: 'auto', maxHeight: '90px', objectFit: 'cover', objectPosition: 'top center', display: 'block' }}
-                      />
-                    </div>
-                  ) : (
-                    <div style={{ width: '100%', height: '4px', background: 'linear-gradient(to right, #004f8b, #0070c0, #0080d0)', marginBottom: '3px' }}></div>
-                  )}
-
-                  <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', margin: 0, padding: 0 }}>
+                <div 
+                  style={{ 
+                    width: '100%', 
+                    height: `${finalHeaderHeight}px`,
+                    borderBottom: '2px solid #004f8b', 
+                    padding: '4px 0 3px 0', 
+                    marginBottom: '4px',
+                    boxSizing: 'border-box',
+                    backgroundImage: headerImageUrl ? `url("${formatAssetUrl(headerImageUrl)}")` : 'linear-gradient(to right, #004f8b, #0070c0, #0080d0)',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'top center',
+                    backgroundRepeat: 'no-repeat',
+                  }}
+                >
+                  <table style={{ width: '100%', height: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', margin: 0, padding: 0 }}>
                     <tbody>
                       <tr>
                         {/* Logo Left */}
                         <td style={{ width: '55%', verticalAlign: 'bottom', textAlign: 'left', padding: 0, border: 'none' }}>
-                          <DraggableElement id="invoice_logo" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Logo" resizable={true}>
+                          <DraggableElement id="invoice_logo" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Logo" resizable={true} disableScaleTransform={true}>
                             {isLoadingInvoiceSettings ? (
                               <div className="h-11 w-36 bg-slate-50 border border-slate-200 rounded flex items-center justify-center gap-1.5 text-[10px] text-blue-700 font-mono font-bold animate-pulse">
                                 <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
@@ -1742,17 +1770,24 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                               <img
                                 src={formatAssetUrl(logoUrl)}
                                 alt={companyNameSetting}
-                                style={{ height: '44px', maxWidth: '220px', objectFit: 'contain', display: 'block' }}
+                                style={{
+                                  height: `${logoHeightPx}px`,
+                                  maxWidth: `${Math.round(220 * logoScale)}px`,
+                                  objectFit: 'contain',
+                                  display: 'block'
+                                }}
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).src = '/favicon.png';
                                 }}
                               />
                             ) : (
                               <div>
-                                <div style={{ fontWeight: 900, fontSize: '15pt', color: '#004f8b', textTransform: 'uppercase' }}>
+                                <div style={{ fontWeight: 900, fontSize: `${Math.round(15 * logoScale)}pt`, color: '#004f8b', textTransform: 'uppercase' }}>
                                   {companyNameSetting}
                                 </div>
-                                <span className="text-[10px] font-bold text-[#0070c0] font-mono block">({companyRegNoSetting})</span>
+                                {companyRegNoSetting && (
+                                  <span style={{ fontSize: `${Math.round(10 * logoScale)}px`, fontWeight: 700, color: '#0070c0', fontFamily: 'monospace', display: 'block' }}>({companyRegNoSetting})</span>
+                                )}
                               </div>
                             )}
                           </DraggableElement>
@@ -1760,7 +1795,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
 
                         {/* Company Address Right */}
                         <td style={{ width: '45%', verticalAlign: 'bottom', textAlign: 'right', padding: 0, border: 'none', fontSize: '7.5pt', lineHeight: 1.25, color: '#1e293b' }}>
-                          <DraggableElement id="invoice_address" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Company Address">
+                          <DraggableElement id="invoice_address" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Company Address" resizable={true}>
                             {renderDynamicAddress(companyAddressSetting)}
                           </DraggableElement>
                         </td>
@@ -1768,6 +1803,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                     </tbody>
                   </table>
                 </div>
+              </div>
 
                 {/* METADATA & TITLE STRIP BANNER (Page 1 Only) */}
                 {chunk.isFirstPage && (
@@ -2442,7 +2478,6 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                     </div>
                   </div>
                 )}
-              </div>
 
               {/* BOTTOM FOOTER (Repeats on every sheet at bottom - Fully Dynamic) */}
               <DraggableElement id="invoice_footer" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Footer" className="mt-auto w-full">

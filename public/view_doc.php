@@ -378,6 +378,8 @@ if ($logoScale <= 0) $logoScale = 1.0;
 
 $addrX = intval($addrOffsets['x'] ?? 0);
 $addrY = intval($addrOffsets['y'] ?? 0);
+$addrScale = floatval($addrOffsets['scale'] ?? 1.0);
+if ($addrScale <= 0) $addrScale = 1.0;
 
 $titleX = intval($titleOffsets['x'] ?? 0);
 $titleY = intval($titleOffsets['y'] ?? 0);
@@ -459,8 +461,8 @@ function render_dynamic_address($addr) {
         $lines = array_filter(array_map('trim', explode("\n", $clean)));
         $out = '';
         foreach ($lines as $idx => $line) {
-            $cls = ($idx === 0) ? 'font-weight: 700; color: #0f172a; font-size: 8.5pt;' : 'color: #1e293b;';
-            $out .= '<p style="' . $cls . '">' . htmlspecialchars($line) . '</p>';
+            $cls = ($idx === 0) ? 'font-weight: 700; color: #0f172a; font-size: 7.5pt;' : 'color: #1e293b; font-size: 7pt;';
+            $out .= '<p style="margin: 0; ' . $cls . '">' . htmlspecialchars($line) . '</p>';
         }
         return $out;
     }
@@ -470,12 +472,12 @@ function render_dynamic_address($addr) {
         $line1 = implode(', ', array_slice($parts, 0, 2)) . ',';
         $line2 = implode(', ', array_slice($parts, 2, count($parts) - 3)) . ',';
         $line3 = $parts[count($parts) - 1];
-        return '<p style="font-weight: 700; color: #0f172a; font-size: 8.5pt;">' . htmlspecialchars($line1) . '</p>' .
-               '<p style="color: #1e293b;">' . htmlspecialchars($line2) . '</p>' .
-               '<p style="font-weight: 600; color: #0f172a;">' . htmlspecialchars($line3) . '</p>';
+        return '<p style="margin: 0; font-weight: 700; color: #0f172a; font-size: 7.5pt;">' . htmlspecialchars($line1) . '</p>' .
+               '<p style="margin: 0; color: #1e293b; font-size: 7pt;">' . htmlspecialchars($line2) . '</p>' .
+               '<p style="margin: 0; font-weight: 600; color: #0f172a; font-size: 7pt;">' . htmlspecialchars($line3) . '</p>';
     }
     
-    return '<p style="font-weight: 600; color: #0f172a;">' . htmlspecialchars($clean) . '</p>';
+    return '<p style="margin: 0; font-weight: 600; color: #0f172a; font-size: 7.5pt;">' . htmlspecialchars($clean) . '</p>';
 }
 
 ob_end_clean();
@@ -913,50 +915,77 @@ ob_end_clean();
     <thead class="page-layout-header">
         <tr>
             <td style="padding: 0; border: none; background: #ffffff;">
-                <div style="width: 100%; border-bottom: 2px solid #004f8b; padding-bottom: 3px; margin-bottom: 4px; background: #ffffff; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
-                    <?php if (!empty($hdrImgUrl)): ?>
-                        <div style="width: 100%; margin-bottom: 4px; margin-top: -2px;">
-                            <img src="<?= $hdrImgUrl ?>" alt="Header Banner" style="width: 100%; height: auto; max-height: 90px; object-fit: cover; object-position: top center; display: block;">
-                        </div>
-                    <?php else: ?>
-                        <div style="width: 100%; height: 4px; background-color: #004f8b; background: linear-gradient(to right, #004f8b, #0070c0, #0080d0); border-top: 2px solid #004f8b; border-bottom: 1px solid #0070c0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; margin-bottom: 3px;"></div>
-                    <?php endif; ?>
-
-                    <table style="width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0; padding: 0;">
-                        <tr>
-                            <!-- Logo Left -->
-                            <td style="width: 55%; vertical-align: bottom; text-align: left; padding: 0; border: none;">
-                                <?php
-                                // Use actual pixel height (scale * 44px) instead of CSS transform scale(),
-                                // because CSS transform does NOT expand layout space in print/PDF contexts.
-                                // This ensures identical appearance in Web View, Direct Print, and PDF download.
-                                $logoHeightPx = max(20, round(44 * $logoScale));
-                                ?>
-                                <div style="transform: translate(<?= $logoX ?>px, <?= $logoY ?>px); transform-origin: left bottom; position: relative; display: inline-block;">
-                                    <?php if (!empty($logoUrl)): ?>
-                                        <img src="<?= $logoUrl ?>" alt="<?= htmlspecialchars($companyName) ?>" style="height: <?= $logoHeightPx ?>px; max-width: <?= round(220 * $logoScale) ?>px; object-fit: contain; display: block;">
-                                    <?php else: ?>
-                                        <div>
-                                            <div style="font-weight: 900; font-size: <?= round(15 * $logoScale) ?>pt; color: #004f8b; text-transform: uppercase;">
-                                                <?= htmlspecialchars($companyName) ?>
-                                            </div>
-                                            <?php if (!empty($activeSettings['company_reg_no'])): ?>
-                                                <span style="font-size: <?= round(10 * $logoScale) ?>px; font-weight: 700; color: #0070c0; font-family: monospace; display: block;">(<?= htmlspecialchars($activeSettings['company_reg_no']) ?>)</span>
+                <?php
+                $logoHeightPx = max(20, round(44 * $logoScale));
+                $hdrHeightPx = $logoHeightPx + 10;
+                if (!empty($hdrImgUrl)) {
+                    if (strpos($hdrImgUrl, 'data:image') === 0) {
+                        $commaPos = strpos($hdrImgUrl, ',');
+                        if ($commaPos !== false) {
+                            $rawBytes = @base64_decode(substr($hdrImgUrl, $commaPos + 1));
+                            if ($rawBytes !== false) {
+                                $imgInfo = @getimagesizefromstring($rawBytes);
+                                if ($imgInfo && !empty($imgInfo[0]) && $imgInfo[0] > 0) {
+                                    $aspectRatio = $imgInfo[1] / $imgInfo[0];
+                                    $calcHeight = round(700 * $aspectRatio);
+                                    $hdrHeightPx = max($hdrHeightPx, min(180, $calcHeight));
+                                }
+                            }
+                        }
+                    } else {
+                        $relPath = ltrim(parse_url($hdrImgUrl, PHP_URL_PATH) ?? '', '/');
+                        $localPath = __DIR__ . '/' . $relPath;
+                        if (!file_exists($localPath)) {
+                            $localPath = $_SERVER['DOCUMENT_ROOT'] . '/' . $relPath;
+                        }
+                        if (file_exists($localPath) && !is_dir($localPath)) {
+                            $imgInfo = @getimagesize($localPath);
+                            if ($imgInfo && !empty($imgInfo[0]) && $imgInfo[0] > 0) {
+                                $aspectRatio = $imgInfo[1] / $imgInfo[0];
+                                $calcHeight = round(700 * $aspectRatio);
+                                $hdrHeightPx = max($hdrHeightPx, min(180, $calcHeight));
+                            }
+                        }
+                    }
+                    $hdrBgStyle = "background-image: url('" . $hdrImgUrl . "'); background-size: cover; background-position: top center; background-repeat: no-repeat;";
+                } else {
+                    $hdrBgStyle = 'background: linear-gradient(to right, #004f8b, #0070c0, #0080d0);';
+                }
+                ?>
+                <table style="width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0; padding: 0; border-bottom: 2px solid #004f8b; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
+                    <tr>
+                        <td colspan="2" style="height: <?= $hdrHeightPx ?>px; padding: 4px 0 3px 0; border: none; <?= $hdrBgStyle ?> -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
+                            <!-- Logo + Address content rendered ON TOP of banner background -->
+                            <table style="width: 100%; height: 100%; border-collapse: collapse; table-layout: fixed; margin: 0; padding: 0;">
+                                <tr>
+                                    <!-- Logo Left -->
+                                    <td style="width: 55%; vertical-align: bottom; text-align: left; padding: 0; border: none;">
+                                        <div style="transform: translate(<?= $logoX ?>px, <?= $logoY ?>px); transform-origin: left bottom; position: relative; display: inline-block;">
+                                            <?php if (!empty($logoUrl)): ?>
+                                                <img src="<?= $logoUrl ?>" alt="<?= htmlspecialchars($companyName) ?>" style="height: <?= $logoHeightPx ?>px; max-width: <?= round(220 * $logoScale) ?>px; object-fit: contain; display: block;">
+                                            <?php else: ?>
+                                                <div>
+                                                    <div style="font-weight: 900; font-size: <?= round(15 * $logoScale) ?>pt; color: #004f8b; text-transform: uppercase;">
+                                                        <?= htmlspecialchars($companyName) ?>
+                                                    </div>
+                                                    <?php if (!empty($activeSettings['company_reg_no'])): ?>
+                                                        <span style="font-size: <?= round(10 * $logoScale) ?>px; font-weight: 700; color: #0070c0; font-family: monospace; display: block;">(<?= htmlspecialchars($activeSettings['company_reg_no']) ?>)</span>
+                                                    <?php endif; ?>
+                                                </div>
                                             <?php endif; ?>
                                         </div>
-                                    <?php endif; ?>
-                                </div>
-                            </td>
-
-                            <!-- Company Address Right -->
-                            <td style="width: 45%; vertical-align: bottom; text-align: right; padding: 0; border: none; font-size: 7.5pt; line-height: 1.25; color: #1e293b;">
-                                <div style="transform: translate(<?= $addrX ?>px, <?= $addrY ?>px); transform-origin: right bottom; position: relative;">
-                                    <?= render_dynamic_address($companyAddress) ?>
-                                </div>
-                            </td>
-                        </tr>
-                    </table>
-                </div>
+                                    </td>
+                                    <!-- Company Address Right -->
+                                    <td style="width: 45%; vertical-align: bottom; text-align: right; padding: 0; border: none; font-size: 7.5pt; line-height: 1.25; color: #1e293b;">
+                                        <div style="transform: translate(<?= $addrX ?>px, <?= $addrY ?>px) scale(<?= $addrScale ?>); transform-origin: right bottom; position: relative;">
+                                            <?= render_dynamic_address($companyAddress) ?>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
             </td>
         </tr>
     </thead>

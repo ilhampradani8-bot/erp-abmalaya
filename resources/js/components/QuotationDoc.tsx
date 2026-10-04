@@ -34,6 +34,7 @@ interface DraggableElementProps {
   label?: string;
   inline?: boolean;
   resizable?: boolean;
+  disableScaleTransform?: boolean;
   style?: React.CSSProperties;
 }
 
@@ -56,6 +57,7 @@ const DraggableElement: React.FC<DraggableElementProps> = ({
   label,
   inline = false,
   resizable = false,
+  disableScaleTransform = false,
   style = {},
 }) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -126,7 +128,9 @@ const DraggableElement: React.FC<DraggableElementProps> = ({
   const isRightAligned = id === 'signature_issuer' || className.includes('sig-issuer-box') || className.includes('summary-box');
 
   const transformStyle: React.CSSProperties = {
-    transform: `translate(${currentOffset.x || 0}px, ${currentOffset.y || 0}px) scale(${currentScale})`,
+    transform: disableScaleTransform
+      ? `translate(${currentOffset.x || 0}px, ${currentOffset.y || 0}px)`
+      : `translate(${currentOffset.x || 0}px, ${currentOffset.y || 0}px) scale(${currentScale})`,
     transformOrigin: isRightAligned ? 'right bottom' : 'left bottom',
     transition: isDragging || isResizing ? 'none' : 'transform 0.05s ease-out',
     position: 'relative',
@@ -916,6 +920,25 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
   const tableHeaderBgColor = paperSettings?.table_header_bg || paperSettings?.tableHeaderBg || '#0070c0';
   const headerTitle = paperSettings?.header_title || paperSettings?.headerTitle || 'OFFICIAL COMMERCIAL QUOTATION (SPH)';
 
+  const [headerImageHeight, setHeaderImageHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    const bannerUrl = paperSettings?.header_image_url || paperSettings?.headerImageUrl;
+    if (bannerUrl) {
+      const img = new Image();
+      img.onload = () => {
+        if (img.width > 0) {
+          const aspect = img.height / img.width;
+          const calcH = Math.round(700 * aspect);
+          setHeaderImageHeight(calcH);
+        }
+      };
+      img.src = formatAssetUrl(bannerUrl);
+    } else {
+      setHeaderImageHeight(null);
+    }
+  }, [paperSettings?.header_image_url, paperSettings?.headerImageUrl]);
+
   const renderDynamicAddress = (addrRaw?: string) => {
     const defaultAddress = '2-2-40, 2nd Floor Wisma Rampai, Jalan 34/26, Taman Sri Rampai, 53300 Kuala Lumpur.';
     const clean = (addrRaw && addrRaw.trim()) ? addrRaw.trim() : defaultAddress;
@@ -923,7 +946,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
     if (clean.includes('\n')) {
       const lines = clean.split('\n').map((l) => l.trim()).filter(Boolean);
       return lines.map((line, idx) => (
-        <p key={idx} style={{ margin: 0, fontWeight: idx === 0 ? 700 : 400, color: idx === 0 ? '#0f172a' : '#1e293b', fontSize: idx === 0 ? '8.5pt' : '8pt' }}>
+        <p key={idx} style={{ margin: 0, fontWeight: idx === 0 ? 700 : 400, color: idx === 0 ? '#0f172a' : '#1e293b', fontSize: idx === 0 ? '7.5pt' : '7pt' }}>
           {line}
         </p>
       ));
@@ -936,14 +959,14 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
       const line3 = parts[parts.length - 1];
       return (
         <>
-          <p style={{ margin: 0, fontWeight: 700, color: '#0f172a', fontSize: '8.5pt' }}>{line1}</p>
-          <p style={{ margin: 0, color: '#1e293b', fontSize: '8pt' }}>{line2}</p>
-          <p style={{ margin: 0, fontWeight: 600, color: '#0f172a', fontSize: '8pt' }}>{line3}</p>
+          <p style={{ margin: 0, fontWeight: 700, color: '#0f172a', fontSize: '7.5pt' }}>{line1}</p>
+          <p style={{ margin: 0, color: '#1e293b', fontSize: '7pt' }}>{line2}</p>
+          <p style={{ margin: 0, fontWeight: 600, color: '#0f172a', fontSize: '7pt' }}>{line3}</p>
         </>
       );
     }
 
-    return <p style={{ margin: 0, fontWeight: 600, color: '#0f172a', fontSize: '8pt' }}>{clean}</p>;
+    return <p style={{ margin: 0, fontWeight: 600, color: '#0f172a', fontSize: '7.5pt' }}>{clean}</p>;
   };
 
   // Match item description against products catalog database for photos and IMPA codes
@@ -1629,25 +1652,26 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
             >
               {/* TOP HEADER BLOCK (Synchronized across all sheets) */}
               <div style={{ width: '100%' }}>
-                <div style={{ width: '100%', borderBottom: '2px solid #004f8b', paddingBottom: '3px', marginBottom: '4px', background: '#ffffff' }}>
-                  {headerImageUrl ? (
-                    <div style={{ width: '100%', marginBottom: '4px', marginTop: '-2px' }}>
-                      <img
-                        src={headerImageUrl}
-                        alt="Header Banner"
-                        style={{ width: '100%', height: 'auto', maxHeight: '90px', objectFit: 'cover', objectPosition: 'top center', display: 'block' }}
-                      />
-                    </div>
-                  ) : (
-                    <div style={{ width: '100%', height: '4px', background: 'linear-gradient(to right, #004f8b, #0070c0, #0080d0)', marginBottom: '3px' }}></div>
-                  )}
-
-                  <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', margin: 0, padding: 0 }}>
+                <div 
+                  style={{ 
+                    width: '100%', 
+                    height: `${headerImageHeight ? Math.max(Math.max(20, Math.round(44 * (offsets['header_logo']?.scale || 1.0))) + 10, Math.min(180, headerImageHeight)) : Math.max(20, Math.round(44 * (offsets['header_logo']?.scale || 1.0))) + 10}px`,
+                    borderBottom: '2px solid #004f8b', 
+                    padding: '4px 0 3px 0', 
+                    marginBottom: '4px',
+                    boxSizing: 'border-box',
+                    backgroundImage: headerImageUrl ? `url("${formatAssetUrl ? formatAssetUrl(headerImageUrl) : headerImageUrl}")` : 'linear-gradient(to right, #004f8b, #0070c0, #0080d0)',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'top center',
+                    backgroundRepeat: 'no-repeat',
+                  }}
+                >
+                  <table style={{ width: '100%', height: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', margin: 0, padding: 0 }}>
                     <tbody>
                       <tr>
                         {/* Logo Left */}
                         <td style={{ width: '55%', verticalAlign: 'bottom', textAlign: 'left', padding: 0, border: 'none' }}>
-                          <DraggableElement id="header_logo" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Logo" resizable={true}>
+                          <DraggableElement id="header_logo" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Logo" resizable={true} disableScaleTransform={true}>
                             {isLoadingPaperSettings ? (
                               <div className="h-10 w-28 bg-white/90 border border-slate-300 flex items-center justify-center gap-2 text-xs text-blue-700 font-mono font-bold animate-pulse">
                                 <Loader2 className="w-3 animate-spin text-blue-600" />
@@ -1655,15 +1679,20 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
                               </div>
                             ) : logoUrl ? (
                               <img
-                                src={logoUrl}
+                                src={formatAssetUrl(logoUrl)}
                                 alt={companyName}
-                                style={{ height: '44px', maxWidth: '220px', objectFit: 'contain', display: 'block' }}
+                                style={{
+                                  height: `${Math.max(20, Math.round(44 * (offsets['header_logo']?.scale || 1.0)))}px`,
+                                  maxWidth: `${Math.round(220 * (offsets['header_logo']?.scale || 1.0))}px`,
+                                  objectFit: 'contain',
+                                  display: 'block'
+                                }}
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).src = '/favicon.png';
                                 }}
                               />
                             ) : (
-                              <div style={{ fontWeight: 900, fontSize: '15pt', color: '#004f8b', textTransform: 'uppercase' }}>
+                              <div style={{ fontWeight: 900, fontSize: `${Math.round(15 * (offsets['header_logo']?.scale || 1.0))}pt`, color: '#004f8b', textTransform: 'uppercase' }}>
                                 {companyName}
                               </div>
                             )}
@@ -1672,7 +1701,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
 
                         {/* Company Address Right */}
                         <td style={{ width: '45%', verticalAlign: 'bottom', textAlign: 'right', padding: 0, border: 'none', fontSize: '7.5pt', lineHeight: 1.25, color: '#1e293b' }}>
-                          <DraggableElement id="header_address" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Company Address">
+                          <DraggableElement id="header_address" isDragMode={isDragMode} offsets={offsets} onOffsetChange={handleOffsetChange} label="Company Address" resizable={true}>
                             {renderDynamicAddress(companyAddress)}
                           </DraggableElement>
                         </td>
