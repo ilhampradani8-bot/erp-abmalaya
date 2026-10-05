@@ -91,22 +91,62 @@ try {
         $reply_sender = isset($input['reply_sender']) ? trim($input['reply_sender']) : null;
 
         if ($reply_body !== null) {
-            // 1. Fetch client_email, recipient_email, and subject from DB
-            $client_email = '';
+            // 1. Fetch client_email, recipient_email, and subject from DB or input payload
+            $client_email = !empty($input['target_client_email']) && filter_var(trim($input['target_client_email']), FILTER_VALIDATE_EMAIL) !== false
+                ? trim($input['target_client_email'])
+                : '';
             $recipient_email = '';
             $orig_subject = '';
-            $stmt_load = $db_conn->prepare("SELECT client_email, recipient_email, subject FROM rfq_requests WHERE id = ? OR rfq_number = ?");
+
+            // Try loading from rfq_requests table
+            $stmt_load = $db_conn->prepare("SELECT client_email, recipient_email, subject FROM rfq_requests WHERE id = ? OR rfq_number = ? LIMIT 1");
             if ($stmt_load) {
                 $stmt_load->bind_param("is", $clean_id, $rfq_num);
                 $stmt_load->execute();
                 $res_load = $stmt_load->get_result();
                 if ($res_load && $res_load->num_rows > 0) {
                     $row = $res_load->fetch_assoc();
-                    $client_email = $row['client_email'];
+                    if (empty($client_email)) {
+                        $client_email = $row['client_email'];
+                    }
                     $recipient_email = $row['recipient_email'];
                     $orig_subject = $row['subject'];
                 }
                 $stmt_load->close();
+            }
+
+            // Find quotation linked to rfq_id or passed explicitly
+            $quo_id = isset($input['quotation_id']) ? trim($input['quotation_id']) : '';
+            $quo_num = null;
+            if (empty($quo_id)) {
+                $stmt_q = $db_conn->prepare("SELECT id, quotation_number, client_email, company_name FROM quotations WHERE rfq_id = ? OR rfq_id = ? OR id = ? OR quotation_number = ? ORDER BY id DESC LIMIT 1");
+                if ($stmt_q) {
+                    $stmt_q->bind_param("ssss", $clean_id, $rfq_num, $rfq_id_raw, $rfq_id_raw);
+                    $stmt_q->execute();
+                    $res_q = $stmt_q->get_result();
+                    if ($res_q && $q_row = $res_q->fetch_assoc()) {
+                        $quo_id = $q_row['id'];
+                        $quo_num = $q_row['quotation_number'];
+                        if (empty($client_email) && !empty($q_row['client_email'])) {
+                            $client_email = $q_row['client_email'];
+                        }
+                    }
+                    $stmt_q->close();
+                }
+            } else {
+                $stmt_q2 = $db_conn->prepare("SELECT quotation_number, client_email FROM quotations WHERE id = ? OR quotation_number = ? LIMIT 1");
+                if ($stmt_q2) {
+                    $stmt_q2->bind_param("ss", $quo_id, $quo_id);
+                    $stmt_q2->execute();
+                    $res_q2 = $stmt_q2->get_result();
+                    if ($res_q2 && $q2_row = $res_q2->fetch_assoc()) {
+                        $quo_num = $q2_row['quotation_number'];
+                        if (empty($client_email) && !empty($q2_row['client_email'])) {
+                            $client_email = $q2_row['client_email'];
+                        }
+                    }
+                    $stmt_q2->close();
+                }
             }
 
             // Clean & fallback if recipient_email is empty / invalid
@@ -114,28 +154,30 @@ try {
                 $recipient_email = 'sales@abmalaya.com';
             }
 
-            // Check if quotation PDF should be generated and attached
+            // Check if quotation PDF or attached file should be attached
             $attach_pdf_path = null;
             $attach_pdf_name = null;
+            $is_temp_file = false;
             
-            $quo_id = isset($input['quotation_id']) ? $input['quotation_id'] : '';
-            $quo_num = null;
-            if (empty($quo_id)) {
-                // Find quotation linked to rfq_id
-                $stmt_q = $db_conn->prepare("SELECT id, quotation_number FROM quotations WHERE rfq_id = ? OR rfq_id = ? ORDER BY id DESC LIMIT 1");
-                if ($stmt_q) {
-                    $stmt_q->bind_param("ss", $clean_id, $rfq_num);
-                    $stmt_q->execute();
-                    $res_q = $stmt_q->get_result();
-                    if ($res_q && $q_row = $res_q->fetch_assoc()) {
-                        $quo_id = $q_row['id'];
-                        $quo_num = $q_row['quotation_number'];
+            $custom_attach = isset($input['attachment_file']) ? trim($input['attachment_file']) : '';
+            if (!empty($custom_attach)) {
+                $possible_paths = [
+                    __DIR__ . '/uploads/pdf/' . basename($custom_attach),
+                    __DIR__ . '/uploads/' . basename($custom_attach),
+                    __DIR__ . '/' . ltrim($custom_attach, '/'),
+                    sys_get_temp_dir() . '/' . basename($custom_attach)
+                ];
+                foreach ($possible_paths as $p) {
+                    if (file_exists($p) && filesize($p) > 0) {
+                        $attach_pdf_path = $p;
+                        $attach_pdf_name = basename($custom_attach);
+                        $is_temp_file = false;
+                        break;
                     }
-                    $stmt_q->close();
                 }
             }
 
-            if (!empty($quo_id)) {
+            if (!$attach_pdf_path && !empty($quo_id)) {
                 $tmp_pdf = sys_get_temp_dir() . '/SPH_' . preg_replace('/[^a-zA-Z0-9_-]/', '', $quo_id) . '_' . time() . '.pdf';
                 $node_cmd = 'node ' . escapeshellarg(__DIR__ . '/../scripts/generate_pdf_puppeteer.cjs') . ' ' . escapeshellarg($quo_id) . ' quotation ' . escapeshellarg($tmp_pdf) . ' 2>&1';
                 exec($node_cmd, $node_out, $node_code);
@@ -143,6 +185,7 @@ try {
                 if ($node_code === 0 && file_exists($tmp_pdf) && filesize($tmp_pdf) > 0) {
                     $attach_pdf_path = $tmp_pdf;
                     $attach_pdf_name = 'Surat_Penawaran_Harga_' . ($quo_num ? $quo_num : $quo_id) . '.pdf';
+                    $is_temp_file = true;
                 }
             }
 
@@ -151,18 +194,25 @@ try {
             $smtp_from = !empty($reply_sender) && filter_var($reply_sender, FILTER_VALIDATE_EMAIL) !== false
                 ? $reply_sender
                 : $recipient_email;
+
             if (!empty($client_email)) {
                 try {
-                    $subject = "Re: " . $orig_subject;
+                    if (!empty($orig_subject)) {
+                        $subject = stripos($orig_subject, 'Re:') === 0 ? $orig_subject : ("Re: " . $orig_subject);
+                    } else if (!empty($quo_num)) {
+                        $subject = "Commercial Price Quotation - {$quo_num} (AB MALAYA SDN. BHD.)";
+                    } else {
+                        $subject = "Official Commercial Quotation - AB MALAYA SDN. BHD.";
+                    }
                     send_smtp_email($client_email, $subject, $reply_body, $smtp_from, $attach_pdf_path, $attach_pdf_name);
                 } catch (Exception $ex) {
                     $smtp_err = $ex->getMessage();
                 }
             } else {
-                $smtp_err = "No client email found for this RFQ.";
+                $smtp_err = "No recipient client email specified for this dispatch.";
             }
 
-            if ($attach_pdf_path && file_exists($attach_pdf_path)) {
+            if ($is_temp_file && $attach_pdf_path && file_exists($attach_pdf_path)) {
                 @unlink($attach_pdf_path);
             }
 
@@ -192,7 +242,7 @@ try {
                 reply_body TEXT DEFAULT NULL,
                 reply_sender VARCHAR(255) DEFAULT NULL,
                 client_email VARCHAR(255) DEFAULT NULL,
-                quotation_id INT DEFAULT NULL,
+                quotation_id VARCHAR(100) DEFAULT NULL,
                 quotation_number VARCHAR(100) DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
@@ -212,8 +262,18 @@ try {
                 $stmt->execute();
                 $stmt->close();
                 
-                $log_detail = "Email balasan BERHASIL terkirim ke klien via SMTP dengan lampiran PDF SPH (" . ($attach_pdf_name ? $attach_pdf_name : "No PDF attachment") . "). Pengirim: {$final_reply_sender}.";
+                $log_detail = "Email balasan BERHASIL terkirim ke klien via SMTP ({$client_email}) dengan lampiran PDF SPH (" . ($attach_pdf_name ? $attach_pdf_name : "No PDF attachment") . "). Pengirim: {$final_reply_sender}.";
                 appendRfqHistoryLog($db_conn, $clean_id, 'Kirim Balasan Email', $user_name, $user_email, $log_detail);
+            }
+
+            // Also update quotation status in database to done_send if quotation was found
+            if (!empty($quo_id)) {
+                $upd_q = $db_conn->prepare("UPDATE quotations SET status = 'done_send', updated_at = NOW() WHERE id = ? OR quotation_number = ?");
+                if ($upd_q) {
+                    $upd_q->bind_param("ss", $quo_id, $quo_id);
+                    $upd_q->execute();
+                    $upd_q->close();
+                }
             }
         } else {
             $stmt = $db_conn->prepare("UPDATE rfq_requests SET status = ? WHERE rfq_number = ? OR id = ?");

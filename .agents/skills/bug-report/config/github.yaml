@@ -1,0 +1,111 @@
+# GitHub Issues Format Configuration
+# Specific mappings for bug reports exported from GitHub Issues
+
+format_name: github
+format_version: "1.0"
+
+# Title pattern: # Bug: Title or # Title
+title_pattern: "^#\\s+(?:Bug:\\s+)?(.+?)$"
+
+# ID extraction: look for #123 in title or use hash
+id_pattern: "#(\\d+)"
+id_prefix: "GH-"
+
+# Metadata extraction
+metadata:
+  labels:
+    pattern: "\\*\\*Labels\\*\\*:\\s*(.+?)(?:\\n|$)"
+    separator: ","
+
+  assignee:
+    pattern: "\\*\\*Assignee\\*\\*:\\s*@?(\\S+)"
+
+  reporter:
+    pattern: "\\*\\*Opened by\\*\\*:\\s*@?(\\S+)"
+    fallback: "\\*\\*Author\\*\\*:\\s*@?(\\S+)"
+
+  milestone:
+    pattern: "\\*\\*Milestone\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  created:
+    pattern: "on\\s+(\\d{4}-\\d{2}-\\d{2})"
+
+# Section mappings
+sections:
+  description:
+    headers:
+      - "## Description"
+      - "## Problem"
+    required: false
+
+  reproduction_steps:
+    headers:
+      - "## Steps to Reproduce"
+      - "## Reproduction Steps"
+    required: true
+    list_type: numbered
+
+  expected_behavior:
+    headers:
+      - "## Expected Behavior"
+      - "## Expected"
+    required: true
+
+  actual_behavior:
+    headers:
+      - "## Actual Behavior"
+      - "## Actual"
+    required: true
+
+  environment:
+    headers:
+      - "## Environment"
+    required: false
+    list_type: bullet
+
+  error_logs:
+    headers:
+      - "## Error Logs"
+      - "## Console Output"
+    required: false
+    extract_code_blocks: true
+
+  screenshots:
+    headers:
+      - "## Screenshots"
+    required: false
+
+  additional_context:
+    headers:
+      - "## Additional Context"
+    required: false
+
+  severity_assessment:
+    headers:
+      - "## Severity Assessment"
+    required: false
+
+  related_issues:
+    headers:
+      - "## Related Issues"
+    required: false
+
+# Severity extraction
+severity:
+  explicit_pattern: "\\*\\*Severity\\*\\*:\\s*(\\w+)"
+  label_based: true
+  severity_labels:
+    - "critical"
+    - "high-priority"
+    - "bug"
+    - "low-priority"
+
+# Priority extraction
+priority:
+  explicit_pattern: "\\*\\*Priority\\*\\*:\\s*(\\w+)"
+  label_based: true
+  priority_labels:
+    - "P0"
+    - "P1"
+    - "P2"
+    - "P3"

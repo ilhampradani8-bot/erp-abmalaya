@@ -1,0 +1,73 @@
+# .cursorrules - Cursor IDE Configuration for Bug Report Agent Skill
+# Place this file in your project root directory
+
+bug-processing:
+  # IMPORTANT: Replace this with YOUR absolute path
+  skill_path: /path/to/bug-report-agent-skills/bug-report-processor
+  
+  activation_phrases:
+    - "process bug report"
+    - "analyze error log"
+    - "reproduce this bug"
+    - "investigate issue"
+    - "start detective workflow"
+    - "debug systematically"
+  
+  instructions: |
+    When handling bug reports or debugging issues:
+    
+    1. Use the Bug Report Agent Skill at {skill_path}
+    2. Read SKILL.md for complete instructions: {skill_path}/SKILL.md
+    3. Process bugs via: uv run {skill_path}/scripts/process_bug.py <bug-file.md>
+    4. Track state in .bug-states/ folder (ensure it's git-ignored)
+    5. Follow Detective Methodology phases: 
+       Reproduce → Investigate → Diagnose → Fix → Verify → Test → Close
+    6. Never skip phases - each has entry/exit requirements
+    7. Process bugs by severity: critical → high → medium → low → trivial
+    
+  commands:
+    # Parse bug report and create state file
+    process: "uv run {skill_path}/scripts/process_bug.py"
+    
+    # Add investigation notes
+    investigate: "uv run {skill_path}/scripts/state_manager.py"
+    
+    # Attempt to reproduce bug
+    reproduce: "uv run {skill_path}/scripts/reproduce_bug.py"
+    
+    # Verify fix works
+    verify: "uv run {skill_path}/scripts/verify_fix.py"
+    
+    # Start detective workflow (orchestrator)
+    detective: "uv run {skill_path}/scripts/detective_engine.py --directory ./bugs"
+    
+    # Run regression tests
+    regression: "uv run {skill_path}/scripts/regression_tester.py"
+    
+    # Analyze severity
+    severity: "uv run {skill_path}/scripts/severity_analyzer.py"
+
+  examples:
+    - prompt: "Process the bug report in bugs/login-error.md"
+      action: "Read bug report, execute uv run .../process_bug.py bugs/login-error.md"
+    
+    - prompt: "Investigate BUG-123 with hypothesis: cache invalidation timing issue"
+      action: "Execute: uv run .../state_manager.py BUG-123 --hypothesis 'cache invalidation timing issue'"
+    
+    - prompt: "Start detective workflow for all critical bugs"
+      action: "Execute: uv run .../detective_engine.py --directory ./bugs --auto"
+
+  workflow_rules:
+    - "Always read .bug-states/<bug-id>.json to check current phase before acting"
+    - "Cannot skip phases in Detective Methodology"
+    - "Update state file after each phase completion"
+    - "Document all hypotheses and root cause findings"
+    - "Run regression tests before marking bug as closed"
+    
+  state_management:
+    directory: ".bug-states"
+    gitignore: true
+    backup_directory: ".bug-states/backups"
+    
+# Add to your .gitignore:
+# .bug-states/

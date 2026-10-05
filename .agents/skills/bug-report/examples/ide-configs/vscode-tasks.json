@@ -1,0 +1,101 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Process Bug Report",
+            "type": "shell",
+            "command": "uv run /path/to/bug-report-agent-skills/bug-report-processor/scripts/process_bug.py ${file}",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Detective Workflow (Auto)",
+            "type": "shell",
+            "command": "uv run /path/to/bug-report-agent-skills/bug-report-processor/scripts/detective_engine.py --directory ./bugs --auto",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            }
+        },
+        {
+            "label": "Detective Workflow (Interactive)",
+            "type": "shell",
+            "command": "uv run /path/to/bug-report-agent-skills/bug-report-processor/scripts/detective_engine.py --directory ./bugs",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            }
+        },
+        {
+            "label": "Investigate Bug",
+            "type": "shell",
+            "command": "uv run /path/to/bug-report-agent-skills/bug-report-processor/scripts/state_manager.py ${input:bugId} --note '${input:investigationNote}'",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always"
+            }
+        },
+        {
+            "label": "Add Hypothesis",
+            "type": "shell",
+            "command": "uv run /path/to/bug-report-agent-skills/bug-report-processor/scripts/state_manager.py ${input:bugId} --hypothesis '${input:hypothesis}'",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always"
+            }
+        },
+        {
+            "label": "Verify Bug Fix",
+            "type": "shell",
+            "command": "uv run /path/to/bug-report-agent-skills/bug-report-processor/scripts/verify_fix.py ${input:bugId}",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always"
+            }
+        },
+        {
+            "label": "Run Regression Tests",
+            "type": "shell",
+            "command": "uv run /path/to/bug-report-agent-skills/bug-report-processor/scripts/regression_tester.py ${input:bugId}",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always"
+            }
+        },
+        {
+            "label": "Analyze Severity",
+            "type": "shell",
+            "command": "uv run /path/to/bug-report-agent-skills/bug-report-processor/scripts/severity_analyzer.py ${file}",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always"
+            }
+        }
+    ],
+    "inputs": [
+        {
+            "id": "bugId",
+            "type": "promptString",
+            "description": "Enter Bug ID (e.g., BUG-123):"
+        },
+        {
+            "id": "investigationNote",
+            "type": "promptString",
+            "description": "Enter investigation note:"
+        },
+        {
+            "id": "hypothesis",
+            "type": "promptString",
+            "description": "Enter hypothesis:"
+        }
+    ]
+}

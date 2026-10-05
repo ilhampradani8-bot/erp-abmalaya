@@ -1,0 +1,153 @@
+# .windsurfrules - Windsurf IDE Configuration
+# Place this file in your project root directory
+
+skills:
+  bug-report-processor:
+    # IMPORTANT: Replace with YOUR absolute path
+    path: /path/to/bug-report-agent-skills/bug-report-processor
+    documentation: SKILL.md
+    
+    activation_triggers:
+      - "process bug"
+      - "analyze error"
+      - "reproduce bug"
+      - "debug issue"
+      - "detective workflow"
+      - "investigate bug"
+      - "verify fix"
+      - "regression test"
+    
+    methodology: |
+      Detective Methodology (systematic bug resolution):
+      
+      Workflow Phases:
+      1. Reproduce - Verify bug exists in controlled environment
+      2. Investigate - Document hypotheses and gather evidence
+      3. Diagnose - Identify root cause through analysis
+      4. Fix - Implement solution with proper testing
+      5. Verify - Confirm bug no longer occurs
+      6. Regression Test - Ensure no side effects introduced
+      7. Close - Document resolution and learnings
+      
+      Rules:
+      - Phases cannot be skipped
+      - Each phase has entry/exit requirements
+      - Track all state in .bug-states/<bug-id>.json
+      - Process bugs by severity: critical → high → medium → low
+      - Document all hypotheses and root causes
+    
+    commands:
+      # Process a bug report from markdown
+      process: "uv run {{skill_path}}/scripts/process_bug.py"
+      
+      # Start detective workflow orchestrator
+      detective: "uv run {{skill_path}}/scripts/detective_engine.py"
+      
+      # Add investigation data
+      investigate: "uv run {{skill_path}}/scripts/state_manager.py"
+      
+      # Attempt reproduction
+      reproduce: "uv run {{skill_path}}/scripts/reproduce_bug.py"
+      
+      # Verify fix works
+      verify: "uv run {{skill_path}}/scripts/verify_fix.py"
+      
+      # Run regression tests
+      test: "uv run {{skill_path}}/scripts/regression_tester.py"
+      
+      # Analyze severity
+      severity: "uv run {{skill_path}}/scripts/severity_analyzer.py"
+    
+    workflows:
+      # Complete bug processing workflow
+      full_detective:
+        description: "Complete Detective workflow from start to finish"
+        steps:
+          - "Read bug report markdown file"
+          - "Execute: process command with bug file"
+          - "Execute: detective command with --auto flag"
+          - "Monitor progress through each phase"
+          - "Report completion status"
+      
+      # Investigation workflow
+      investigate_bug:
+        description: "Investigate a bug and document findings"
+        steps:
+          - "Read current state from .bug-states/<bug-id>.json"
+          - "Verify current phase is 'investigating'"
+          - "Execute: investigate command with --note or --hypothesis"
+          - "Update and verify state file"
+      
+      # Fix verification workflow
+      verify_and_test:
+        description: "Verify fix and run regression tests"
+        steps:
+          - "Execute: verify command for bug ID"
+          - "If verification passes, execute: test command"
+          - "Update bug status to 'closed' if all tests pass"
+    
+    state_tracking:
+      directory: ".bug-states"
+      format: "json"
+      backup_enabled: true
+      backup_directory: ".bug-states/backups"
+    
+    supported_formats:
+      - "GitHub Issues"
+      - "Linear"
+      - "Bugzilla"
+      - "Custom (via YAML config)"
+    
+    stack_trace_support:
+      - language: "Python"
+        pattern: "Traceback (most recent call last):"
+      - language: "JavaScript"
+        pattern: "Error:|TypeError:"
+      - language: "Java"
+        pattern: "Exception in thread"
+      - language: "C#"
+        pattern: "Unhandled Exception:"
+
+project_setup:
+  gitignore:
+    - ".bug-states/"
+    - ".bug-states/backups/"
+  
+  recommended_structure:
+    - "bugs/"           # Store bug report markdown files
+    - ".bug-states/"    # Auto-generated state tracking (git-ignored)
+  
+  initialization:
+    - "mkdir -p bugs .bug-states"
+    - "echo '.bug-states/' >> .gitignore"
+
+agent_instructions: |
+  When processing bugs with this skill:
+  
+  1. ALWAYS read SKILL.md before first use
+  2. Check current phase in .bug-states/<bug-id>.json before acting
+  3. Follow Detective Methodology - never skip phases
+  4. Document all hypotheses and investigation notes
+  5. Use 'uv run' to execute all Python scripts
+  6. Verify state updates after each command
+  7. Process critical bugs first in detective mode
+  
+  Example prompts that should trigger this skill:
+  - "Process the bug report in bugs/login-error.md"
+  - "Investigate BUG-123 with hypothesis: race condition"
+  - "Start detective workflow for all critical bugs"
+  - "Verify the fix for BUG-456 and run regression tests"
+
+flow_mode_integration:
+  enabled: true
+  autonomous_actions:
+    - "Read bug state files"
+    - "Execute process_bug.py for new reports"
+    - "Execute detective_engine.py in auto mode"
+    - "Update investigation notes automatically"
+    - "Run verification and tests sequentially"
+  
+  approval_required:
+    - "Modifying source code for fixes"
+    - "Marking bugs as closed"
+    - "Deleting state files"

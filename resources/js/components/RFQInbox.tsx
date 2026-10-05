@@ -506,7 +506,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
   const getAttachmentPreviewUrl = (att: EmailAttachment | null) => {
     if (!att) return '';
-    if (att.url && att.url.startsWith('http')) return att.url;
+    if (att.url) return getApiUrl(att.url);
     const msgno = (selectedRfq as any)?.msgno || 403;
     const part = att.part || 2;
     const fn = att.filename || 'attachment.pdf';

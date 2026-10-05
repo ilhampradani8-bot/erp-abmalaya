@@ -1,0 +1,198 @@
+{
+  "bug_id": "BUG-456",
+  "title": "Login button not responding on mobile",
+  "type": "bug",
+  "severity": "high",
+  "priority": "urgent",
+  "status": "verified",
+  "created_at": "2026-01-20T10:30:00Z",
+  "updated_at": "2026-01-21T16:45:00Z",
+  "metadata": {
+    "reporter": "jane_user",
+    "assignee": "john_developer",
+    "labels": ["bug", "mobile", "authentication"],
+    "affected_versions": ["v2.1.0"],
+    "target_fix_version": "v2.1.2",
+    "regression": false,
+    "customer_impact": "Cannot login on mobile - complete feature failure",
+    "affected_users": 1500
+  },
+  "description": {
+    "summary": "Login button doesn't respond when tapped on mobile Safari",
+    "observed_behavior": "Button tap has no visible effect. Form does not submit.",
+    "expected_behavior": "Should show loading indicator and proceed to dashboard on successful authentication.",
+    "additional_context": "Bug does not occur on desktop browsers. Started after v2.1.0 deployment."
+  },
+  "reproduction": {
+    "steps": [
+      "Open login page on iPhone (iOS 17)",
+      "Enter valid credentials",
+      "Tap login button",
+      "Observe no response"
+    ],
+    "reproduction_rate": "100%",
+    "automated_reproduction": {
+      "possible": true,
+      "script_path": "",
+      "last_attempt": "2026-01-20T14:00:00Z",
+      "status": "reproduced",
+      "evidence": {
+        "screenshots": ["reproduction_evidence.png"],
+        "logs": ["console_output.txt"]
+      }
+    }
+  },
+  "environment": {
+    "device": "iPhone 13",
+    "os": "iOS 17.2",
+    "browser": "Safari 17.2",
+    "app_version": "v2.1.0",
+    "network": "4G LTE"
+  },
+  "error_analysis": {
+    "error_type": "TypeError",
+    "error_message": "Cannot read property 'submit' of null",
+    "stack_trace": [
+      {
+        "frame_number": 0,
+        "file": "login.js",
+        "line": 45,
+        "column": 12,
+        "function": "handleLoginClick"
+      },
+      {
+        "frame_number": 1,
+        "file": "login.js",
+        "line": 38,
+        "column": 5,
+        "function": "HTMLButtonElement.<anonymous>"
+      }
+    ],
+    "likely_cause": "Form element not found in DOM - selector mismatch"
+  },
+  "screenshots": [
+    {
+      "filename": "login_bug_mobile.png",
+      "description": "Login screen showing unresponsive button",
+      "extracted_text": "Login, Email, Password, Sign In",
+      "error_messages": [],
+      "timestamp": "2026-01-20T10:30:00Z"
+    }
+  ],
+  "investigation": {
+    "status": "diagnosed",
+    "started_at": "2026-01-20T11:00:00Z",
+    "hypothesis": [
+      {
+        "id": "HYP-1",
+        "description": "Mobile Safari has different event handling",
+        "created_at": "2026-01-20T11:30:00Z",
+        "status": "rejected",
+        "evidence": ["Tested with touchstart/touchend events - same behavior"],
+        "tested_by": "john_developer",
+        "conclusion": "Event handling works correctly"
+      },
+      {
+        "id": "HYP-2",
+        "description": "Form element ID changed in recent commit",
+        "created_at": "2026-01-20T13:00:00Z",
+        "status": "confirmed",
+        "evidence": [
+          "Git diff shows form ID changed from 'loginForm' to 'login-form' in commit abc123",
+          "JavaScript still references old ID 'loginForm'",
+          "DOM inspection confirms form element has new ID"
+        ],
+        "tested_by": "john_developer",
+        "conclusion": "Confirmed - ID mismatch between HTML and JavaScript"
+      }
+    ],
+    "root_cause": {
+      "description": "Commit abc123 changed form ID from 'loginForm' to 'login-form' as part of CSS BEM naming convention update, but JavaScript handler was not updated to match.",
+      "identified_at": "2026-01-20T14:30:00Z",
+      "responsible_commit": "abc123",
+      "responsible_file": "templates/login.html"
+    },
+    "notes": [
+      {
+        "timestamp": "2026-01-20T11:00:00Z",
+        "author": "john_developer",
+        "content": "Starting investigation. First will try to reproduce locally."
+      },
+      {
+        "timestamp": "2026-01-20T12:00:00Z",
+        "author": "john_developer",
+        "content": "Successfully reproduced on iPhone simulator. Same error in console."
+      },
+      {
+        "timestamp": "2026-01-20T14:00:00Z",
+        "author": "john_developer",
+        "content": "Found the issue - form ID mismatch. Recent BEM naming update changed HTML but not JS."
+      }
+    ]
+  },
+  "fix": {
+    "status": "implemented",
+    "description": "Updated JavaScript to use new form ID 'login-form' instead of 'loginForm'",
+    "implementation": {
+      "started_at": "2026-01-20T15:00:00Z",
+      "completed_at": "2026-01-20T16:00:00Z",
+      "files_changed": ["static/js/login.js"],
+      "commits": ["def456"],
+      "pull_request": "PR-789"
+    },
+    "verification": {
+      "status": "verified",
+      "verified_at": "2026-01-21T10:00:00Z",
+      "verified_by": "qa_engineer",
+      "test_results": {
+        "original_bug": "fixed",
+        "test_cases_passed": 8,
+        "test_cases_failed": 0
+      }
+    }
+  },
+  "regression_testing": {
+    "status": "passed",
+    "test_suites": [
+      {
+        "suite": "tests/test_login.py",
+        "tests_run": 15,
+        "passed": 15,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "tests/test_authentication.py",
+        "tests_run": 25,
+        "passed": 25,
+        "failed": 0,
+        "skipped": 2
+      }
+    ],
+    "executed_at": "2026-01-21T14:00:00Z",
+    "new_issues_found": []
+  },
+  "detective_state": {
+    "current_phase": "closed",
+    "phases_completed": [
+      "reproduce",
+      "investigate",
+      "diagnose",
+      "fix",
+      "verify",
+      "regression_test"
+    ],
+    "blockers": [],
+    "related_bugs": ["BUG-234", "BUG-245"]
+  },
+  "resolution": {
+    "resolution_type": "fixed",
+    "closed_at": "2026-01-21T16:45:00Z",
+    "time_to_resolution_hours": 30.25,
+    "lessons_learned": [
+      "Add automated tests that verify element IDs match between HTML and JavaScript",
+      "Update code review checklist to include cross-file reference checks",
+      "Consider using data attributes instead of IDs for JavaScript selectors"
+    ]
+  }
+}

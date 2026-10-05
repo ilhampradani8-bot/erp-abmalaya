@@ -1,0 +1,78 @@
+[project]
+name = "bug-report-processor"
+version = "1.1.0"
+description = "AI agent skill for automated bug report processing and systematic debugging"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "Development Team" }
+]
+keywords = [
+    "agent-skills",
+    "debugging",
+    "bug-tracking",
+    "qa-automation",
+    "root-cause-analysis"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Bug Tracking",
+]
+
+dependencies = [
+    "pyyaml>=6.0",
+    "markdown>=3.5",
+    "pillow>=10.0",
+    "pytesseract>=0.3.10",
+    "rich>=13.0",
+    "stackprinter>=0.2.11",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+]
+dev = [
+    "black>=23.0",
+    "pylint>=3.0",
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+]
+automation = [
+    "selenium>=4.15",
+    "playwright>=1.40",
+]
+
+[project.urls]
+Homepage = "https://github.com/bowen31337/bug-report-agent-skills"
+Repository = "https://github.com/bowen31337/bug-report-agent-skills"
+Issues = "https://github.com/bowen31337/bug-report-agent-skills/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=scripts --cov-report=term-missing"
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311", "py312"]
+
+[tool.pylint.messages_control]
+max-line-length = 100
+disable = ["C0111", "C0103"]

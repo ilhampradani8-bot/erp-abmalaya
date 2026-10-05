@@ -1,0 +1,94 @@
+{
+  "bug_id": "",
+  "title": "",
+  "type": "bug",
+  "severity": "medium",
+  "priority": "normal",
+  "status": "new",
+  "created_at": "",
+  "updated_at": "",
+  "metadata": {
+    "reporter": "",
+    "assignee": "",
+    "labels": [],
+    "affected_versions": [],
+    "target_fix_version": "",
+    "regression": false,
+    "customer_impact": "",
+    "affected_users": 0
+  },
+  "description": {
+    "summary": "",
+    "observed_behavior": "",
+    "expected_behavior": "",
+    "additional_context": ""
+  },
+  "reproduction": {
+    "steps": [],
+    "reproduction_rate": "",
+    "automated_reproduction": {
+      "possible": false,
+      "script_path": "",
+      "last_attempt": "",
+      "status": "not_attempted",
+      "evidence": {
+        "screenshots": [],
+        "logs": []
+      }
+    }
+  },
+  "environment": {},
+  "error_analysis": {
+    "error_type": "",
+    "error_message": "",
+    "stack_trace": [],
+    "likely_cause": ""
+  },
+  "screenshots": [],
+  "investigation": {
+    "status": "not_started",
+    "started_at": "",
+    "hypothesis": [],
+    "root_cause": null,
+    "notes": []
+  },
+  "fix": {
+    "status": "pending",
+    "description": "",
+    "implementation": {
+      "started_at": "",
+      "completed_at": "",
+      "files_changed": [],
+      "commits": [],
+      "pull_request": ""
+    },
+    "verification": {
+      "status": "pending",
+      "verified_at": "",
+      "verified_by": "",
+      "test_results": {
+        "original_bug": "not_tested",
+        "test_cases_passed": 0,
+        "test_cases_failed": 0
+      }
+    }
+  },
+  "regression_testing": {
+    "status": "pending",
+    "test_suites": [],
+    "executed_at": "",
+    "new_issues_found": []
+  },
+  "detective_state": {
+    "current_phase": "new",
+    "phases_completed": [],
+    "blockers": [],
+    "related_bugs": []
+  },
+  "resolution": {
+    "resolution_type": "",
+    "closed_at": "",
+    "time_to_resolution_hours": 0,
+    "lessons_learned": []
+  }
+}

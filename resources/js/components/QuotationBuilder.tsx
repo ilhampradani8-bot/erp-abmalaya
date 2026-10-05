@@ -434,6 +434,49 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
       });
   };
 
+  // Load existing OCR Scan result into modal console
+  const handleLoadExistingScanResult = () => {
+    if (!quotation?.id) return;
+    setIsScanningModalOcr(true);
+    fetch(getApiUrl(`/api_ocr_scan.php?quo_id=${encodeURIComponent(quotation.id)}`))
+      .then((res) => res.json())
+      .then((data) => {
+        setIsScanningModalOcr(false);
+        if (data.status === 'success' && data.ocr_scan_result) {
+          try {
+            const parsed = typeof data.ocr_scan_result === 'string' ? JSON.parse(data.ocr_scan_result) : data.ocr_scan_result;
+            setScanOcrLog(parsed);
+          } catch (e) {
+            setScanOcrLog({ status: data.ocr_scan_status, extracted_raw_text: data.ocr_scan_result });
+          }
+        } else {
+          setScanOcrLog({
+            status: data.ocr_scan_status || 'not_scanned_yet',
+            message: 'Belum ada riwayat hasil scan untuk dokumen ini. Silakan klik tombol "Scan PDF dengan Gemini AI" di atas.',
+          });
+        }
+      })
+      .catch((err) => {
+        setIsScanningModalOcr(false);
+        setScanOcrLog({ status: 'error', message: 'Gagal memuat riwayat scan: ' + err.toString() });
+      });
+  };
+
+  useEffect(() => {
+    if (isSourceModalOpen && quotation?.id) {
+      if (quotation.ocr_scan_result) {
+        try {
+          const parsed = typeof quotation.ocr_scan_result === 'string' ? JSON.parse(quotation.ocr_scan_result) : quotation.ocr_scan_result;
+          setScanOcrLog(parsed);
+        } catch (e) {
+          handleLoadExistingScanResult();
+        }
+      } else {
+        handleLoadExistingScanResult();
+      }
+    }
+  }, [isSourceModalOpen, quotation?.id]);
+
   // Recalculate totals
   const updateQuotationTotals = (items: QuotationItem[], taxPercent: number) => {
     let subtotal = 0;
@@ -1820,20 +1863,42 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  {(() => {
+                    let sourceFile = quotation?.source_file || (quotation as any)?.email_source?.attachment_url || (quotation as any)?.attachment_url || '';
+                    if (!sourceFile && scanOcrLog?.scanned_pdf_file) {
+                      sourceFile = scanOcrLog.scanned_pdf_file;
+                    }
+                    if (sourceFile && sourceFile !== 'NONE') {
+                      return (
+                        <a
+                          href={getApiUrl(sourceFile)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 bg-white hover:bg-slate-100 text-blue-700 font-bold text-xs px-3 py-1.5 rounded border border-blue-300 shadow-xs cursor-pointer transition"
+                          title="Buka / Download file dokumen PDF asli"
+                        >
+                          <Download className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Buka Dokumen PDF</span>
+                        </a>
+                      );
+                    }
+                    return null;
+                  })()}
+
                   <button
-                    onClick={() => {
-                      if (quotation?.id) {
-                        window.open(getApiUrl(`/api_ocr_scan.php?quo_id=${encodeURIComponent(quotation.id)}`), '_blank');
-                      }
-                    }}
+                    type="button"
+                    onClick={handleLoadExistingScanResult}
+                    disabled={isScanningModalOcr}
                     className="flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs px-3 py-1.5 rounded border border-slate-300 shadow-xs cursor-pointer transition"
+                    title="Muat riwayat hasil scan AI di konsol modal ini"
                   >
-                    <Eye className="w-3.5 h-3.5 text-blue-600" />
-                    <span>View Scan Result</span>
+                    <Eye className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Lihat Hasil Scan AI</span>
                   </button>
 
                   <button
+                    type="button"
                     onClick={handleScanPdfWithGeminiAiInModal}
                     disabled={isScanningModalOcr}
                     className="flex items-center gap-1.5 bg-gradient-to-b from-[#00b4ff] to-[#0080d0] hover:from-[#00a2e8] hover:to-[#0070b8] text-white font-extrabold text-xs px-3.5 py-1.5 rounded border border-[#0060b0] shadow-xs cursor-pointer disabled:opacity-50 transition"

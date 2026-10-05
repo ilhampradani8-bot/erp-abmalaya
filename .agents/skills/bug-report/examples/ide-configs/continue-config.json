@@ -1,0 +1,74 @@
+{
+    "systemMessage": "You are an AI coding assistant with access to specialized skills for systematic bug resolution.",
+    "contextProviders": [
+        {
+            "name": "bug-report-processor",
+            "params": {
+                "skillPath": "/path/to/bug-report-agent-skills/bug-report-processor",
+                "docs": [
+                    "/path/to/bug-report-agent-skills/bug-report-processor/SKILL.md",
+                    "/path/to/bug-report-agent-skills/bug-report-processor/references/DETECTIVE_METHOD.md"
+                ]
+            }
+        }
+    ],
+    "slashCommands": [
+        {
+            "name": "process-bug",
+            "description": "Process a bug report using Detective Methodology",
+            "command": "uv run /path/to/bug-report-agent-skills/bug-report-processor/scripts/process_bug.py {{filepath}}"
+        },
+        {
+            "name": "detective",
+            "description": "Start detective workflow",
+            "command": "uv run /path/to/bug-report-agent-skills/bug-report-processor/scripts/detective_engine.py --directory {{input}}"
+        },
+        {
+            "name": "detective-auto",
+            "description": "Start detective workflow in auto mode",
+            "command": "uv run /path/to/bug-report-agent-skills/bug-report-processor/scripts/detective_engine.py --directory ./bugs --auto"
+        },
+        {
+            "name": "investigate",
+            "description": "Add investigation notes to a bug",
+            "command": "uv run /path/to/bug-report-agent-skills/bug-report-processor/scripts/state_manager.py {{input}}"
+        },
+        {
+            "name": "reproduce-bug",
+            "description": "Attempt to reproduce a bug",
+            "command": "uv run /path/to/bug-report-agent-skills/bug-report-processor/scripts/reproduce_bug.py {{input}}"
+        },
+        {
+            "name": "verify-fix",
+            "description": "Verify that a bug fix works",
+            "command": "uv run /path/to/bug-report-agent-skills/bug-report-processor/scripts/verify_fix.py {{input}}"
+        },
+        {
+            "name": "regression-test",
+            "description": "Run regression tests for a bug",
+            "command": "uv run /path/to/bug-report-agent-skills/bug-report-processor/scripts/regression_tester.py {{input}}"
+        },
+        {
+            "name": "analyze-severity",
+            "description": "Analyze bug severity",
+            "command": "uv run /path/to/bug-report-agent-skills/bug-report-processor/scripts/severity_analyzer.py {{filepath}}"
+        }
+    ],
+    "customCommands": [
+        {
+            "name": "Bug Report Status",
+            "description": "Check the current status of a bug",
+            "prompt": "Read the bug state file at .bug-states/{{input}}.json and summarize the current phase, status, and next steps according to Detective Methodology."
+        },
+        {
+            "name": "List Critical Bugs",
+            "description": "List all critical severity bugs",
+            "prompt": "Search .bug-states/ directory for all .json files with severity='critical' and list them with their current phase."
+        }
+    ],
+    "experimental": {
+        "contextProviderInstructions": {
+            "bug-report-processor": "When using this skill: 1) Read SKILL.md first, 2) Follow Detective Methodology phases, 3) Track state in .bug-states/, 4) Never skip workflow phases"
+        }
+    }
+}

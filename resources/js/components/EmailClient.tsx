@@ -1317,6 +1317,8 @@ export const EmailClient: React.FC<EmailClientProps> = ({
           const sentText = messageText;
           setMessageText('');
           setSelectedReplyTarget(null);
+          setAttachedPdfFile(null);
+          setSelectedReplyQuotation(null);
 
           // Update active quotation status in database to done_send if present
           if (activeQuotation?.id) {

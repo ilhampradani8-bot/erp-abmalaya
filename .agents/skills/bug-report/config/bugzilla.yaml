@@ -1,0 +1,118 @@
+# Bugzilla Format Configuration
+# Specific mappings for bug reports exported from Bugzilla
+
+format_name: bugzilla
+format_version: "1.0"
+
+# Title pattern
+title_pattern: "^#\\s+(.+?)$"
+
+# ID extraction
+id_pattern: "Bug\\s+(\\d+)"
+id_prefix: "BZ-"
+
+# Metadata extraction
+metadata:
+  bug_id:
+    pattern: "\\*\\*Bug ID\\*\\*:\\s*(\\d+)"
+
+  product:
+    pattern: "\\*\\*Product\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  component:
+    pattern: "\\*\\*Component\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  version:
+    pattern: "\\*\\*Version\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  severity:
+    pattern: "\\*\\*Severity\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  priority:
+    pattern: "\\*\\*Priority\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  status:
+    pattern: "\\*\\*Status\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  resolution:
+    pattern: "\\*\\*Resolution\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  assignee:
+    pattern: "\\*\\*Assigned To\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  reporter:
+    pattern: "\\*\\*Reporter\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  cc:
+    pattern: "\\*\\*CC\\*\\*:\\s*(.+?)(?:\\n|$)"
+    separator: ","
+
+  keywords:
+    pattern: "\\*\\*Keywords\\*\\*:\\s*(.+?)(?:\\n|$)"
+    separator: ","
+
+  target_milestone:
+    pattern: "\\*\\*Target Milestone\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  platform:
+    pattern: "\\*\\*Platform\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  os:
+    pattern: "\\*\\*OS\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+# Section mappings
+sections:
+  description:
+    headers:
+      - "## Description"
+      - "## Summary"
+    required: false
+
+  steps_to_reproduce:
+    headers:
+      - "## Steps to Reproduce"
+    required: true
+    list_type: numbered
+
+  expected_results:
+    headers:
+      - "## Expected Results"
+    required: true
+
+  actual_results:
+    headers:
+      - "## Actual Results"
+    required: true
+
+  additional_information:
+    headers:
+      - "## Additional Information"
+    required: false
+
+# Bugzilla severity mapping
+severity_mapping:
+  "blocker": "critical"
+  "critical": "critical"
+  "major": "high"
+  "normal": "medium"
+  "minor": "low"
+  "trivial": "trivial"
+  "enhancement": "trivial"
+
+# Bugzilla priority mapping
+priority_mapping:
+  "P1": "urgent"
+  "P2": "high"
+  "P3": "normal"
+  "P4": "low"
+  "P5": "low"
+
+# Status mapping
+status_mapping:
+  "UNCONFIRMED": "new"
+  "NEW": "new"
+  "ASSIGNED": "in_progress"
+  "REOPENED": "new"
+  "RESOLVED": "closed"
+  "VERIFIED": "closed"
+  "CLOSED": "closed"

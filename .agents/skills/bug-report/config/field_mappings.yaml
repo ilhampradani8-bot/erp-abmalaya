@@ -1,0 +1,132 @@
+# Default Field Mappings for Bug Report Parser
+# Maps common field names across different ticket systems
+
+# Title extraction patterns
+title_patterns:
+  - "^#\\s+(?:Bug:\\s+)?(.+?)$"
+  - "^#\\s+([A-Z]+-\\d+)\\s+-\\s+(.+?)$"
+
+# Metadata field mappings
+metadata:
+  severity:
+    - "**Severity**:"
+    - "Severity:"
+    - "severity:"
+  priority:
+    - "**Priority**:"
+    - "Priority:"
+    - "priority:"
+  status:
+    - "**Status**:"
+    - "Status:"
+    - "status:"
+  assignee:
+    - "**Assignee**:"
+    - "Assignee:"
+    - "Assigned to:"
+  reporter:
+    - "**Reporter**:"
+    - "Reporter:"
+    - "Opened by:"
+    - "Created by:"
+  labels:
+    - "**Labels**:"
+    - "Labels:"
+    - "Tags:"
+
+# Section header mappings
+sections:
+  description:
+    - "## Description"
+    - "## Problem"
+    - "## Issue"
+    - "## Summary"
+    - "## Bug"
+
+  reproduction_steps:
+    - "## Steps to Reproduce"
+    - "## Reproduction Steps"
+    - "## Steps"
+    - "## How to Reproduce"
+    - "## Repro Steps"
+
+  expected_behavior:
+    - "## Expected Behavior"
+    - "## Expected"
+    - "## Expected Results"
+    - "## Should"
+
+  actual_behavior:
+    - "## Actual Behavior"
+    - "## Actual"
+    - "## Actual Results"
+    - "## Observed Behavior"
+    - "## Result"
+
+  environment:
+    - "## Environment"
+    - "## System Information"
+    - "## Platform"
+    - "## Context"
+
+  error_logs:
+    - "## Error Logs"
+    - "## Logs"
+    - "## Stack Trace"
+    - "## Error"
+    - "## Console Output"
+
+  additional_context:
+    - "## Additional Context"
+    - "## Notes"
+    - "## Additional Information"
+    - "## More Information"
+
+  related_issues:
+    - "## Related Issues"
+    - "## Related"
+    - "## See Also"
+
+# Environment field mappings
+environment_fields:
+  os:
+    - "OS"
+    - "Operating System"
+    - "Platform"
+  browser:
+    - "Browser"
+    - "Web Browser"
+  version:
+    - "Version"
+    - "App Version"
+    - "Application Version"
+  device:
+    - "Device"
+    - "Hardware"
+
+# Severity level mappings
+severity_levels:
+  critical:
+    - "critical"
+    - "blocker"
+    - "p0"
+    - "urgent"
+  high:
+    - "high"
+    - "major"
+    - "p1"
+    - "important"
+  medium:
+    - "medium"
+    - "normal"
+    - "p2"
+    - "moderate"
+  low:
+    - "low"
+    - "minor"
+    - "p3"
+  trivial:
+    - "trivial"
+    - "cosmetic"
+    - "p4"
+    - "enhancement"

@@ -169,7 +169,7 @@ function getEmailAttachmentsIMAP($inbox, $email_number, $raw_body) {
                         'filename' => $filename,
                         'filesize' => $bytes . ' KB',
                         'filetype' => $ext ?: 'pdf',
-                        'url' => "http://localhost:8000/api_fetch_live_gmail.php?preview=1&msgno={$email_number}&part={$part_num}&ext={$ext}&fn=" . urlencode($filename)
+                        'url' => "/api_fetch_live_gmail.php?preview=1&msgno={$email_number}&part={$part_num}&ext={$ext}&fn=" . urlencode($filename)
                     ];
                 }
             }
@@ -189,7 +189,7 @@ function getEmailAttachmentsIMAP($inbox, $email_number, $raw_body) {
                     'filename' => $fn,
                     'filesize' => rand(600, 2800) . ' KB',
                     'filetype' => $ext,
-                    'url' => "http://localhost:8000/api_fetch_live_gmail.php?preview=1&msgno={$email_number}&part={$part_num}&ext={$ext}&fn=" . urlencode($fn)
+                    'url' => "/api_fetch_live_gmail.php?preview=1&msgno={$email_number}&part={$part_num}&ext={$ext}&fn=" . urlencode($fn)
                 ];
             }
         }
@@ -378,8 +378,8 @@ function appendGoogleDriveAttachments(&$attachments, $message_body, $rfq_id) {
         
         $downloaded = file_exists($dest_path);
         $local_url = ($clean_id > 0)
-            ? "http://localhost:8000/file_inbox/rfq-{$clean_id}/{$local_filename}"
-            : "http://localhost:8000/file_inbox/live/{$local_filename}";
+            ? "/file_inbox/rfq-{$clean_id}/{$local_filename}"
+            : "/file_inbox/live/{$local_filename}";
         
         // ── AUTO-DOWNLOAD: silently attempt to cache if not yet downloaded ──────
         if (!$downloaded) {
@@ -690,7 +690,7 @@ try {
                         'filename' => 'PD-ENG-2026-059_Requisition_Spec.pdf',
                         'filesize' => '2.4 MB',
                         'filetype' => 'pdf',
-                        'url' => "http://localhost:8000/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
+                        'url' => "/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
                     ];
                 }
 
@@ -911,7 +911,7 @@ try {
                                 'filename' => 'PD-ENG-2026-059_Requisition_Spec.pdf',
                                 'filesize' => '2.4 MB',
                                 'filetype' => 'pdf',
-                                'url' => "http://localhost:8000/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
+                                'url' => "/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
                             ];
                         }
 
@@ -976,7 +976,7 @@ try {
                                     'filename' => 'PD-ENG-2026-059_Requisition_Spec.pdf',
                                     'filesize' => '2.4 MB',
                                     'filetype' => 'pdf',
-                                    'url' => "http://localhost:8000/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
+                                    'url' => "/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
                                 ];
                             }
                             $data[] = [
@@ -1029,7 +1029,7 @@ try {
                             'filename' => 'PD-ENG-2026-059_Requisition_Spec.pdf',
                             'filesize' => '2.4 MB',
                             'filetype' => 'pdf',
-                            'url' => "http://localhost:8000/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
+                            'url' => "/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
                         ];
                     }
                     appendGoogleDriveAttachments($attachments, $clean_body, $cached_row['id']);
@@ -1276,7 +1276,7 @@ try {
                         'filename' => 'PD-ENG-2026-059_Requisition_Spec.pdf',
                         'filesize' => '2.4 MB',
                         'filetype' => 'pdf',
-                        'url' => "http://localhost:8000/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
+                        'url' => "/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
                     ];
                 }
                 appendGoogleDriveAttachments($attachments, $row['message_body'], $row['id']);

@@ -1,0 +1,102 @@
+# Linear Format Configuration
+# Specific mappings for bug reports exported from Linear
+
+format_name: linear
+format_version: "1.0"
+
+# Title pattern: # BUG-123 - Title
+title_pattern: "^#\\s+([A-Z]+-\\d+)\\s+-\\s+(.+?)$"
+
+# ID extraction
+id_pattern: "([A-Z]+-\\d+)"
+id_prefix: ""  # Linear IDs are already prefixed
+
+# Metadata extraction
+metadata:
+  status:
+    pattern: "\\*\\*Status\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  priority:
+    pattern: "\\*\\*Priority\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  assignee:
+    pattern: "\\*\\*Assignee\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  reporter:
+    pattern: "\\*\\*Reporter\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  labels:
+    pattern: "\\*\\*Labels\\*\\*:\\s*(.+?)(?:\\n|$)"
+    separator: ","
+
+  cycle:
+    pattern: "\\*\\*Cycle\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  created:
+    pattern: "\\*\\*Created\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  updated:
+    pattern: "\\*\\*Updated\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+# Section mappings
+sections:
+  description:
+    headers:
+      - "## Problem"
+      - "## Description"
+    required: false
+
+  impact:
+    headers:
+      - "## Impact"
+    required: false
+
+  environment:
+    headers:
+      - "## Environment"
+    required: false
+    list_type: bullet
+
+  reproduction_steps:
+    headers:
+      - "## Reproduction Steps"
+      - "## Steps"
+    required: true
+    list_type: numbered
+
+  expected_vs_actual:
+    headers:
+      - "## Expected vs Actual"
+    required: false
+    subfields:
+      - expected: "Expected:"
+      - actual: "Actual:"
+
+  stack_trace:
+    headers:
+      - "## Stack Trace"
+      - "## Error"
+    required: false
+    extract_code_blocks: true
+
+  attachments:
+    headers:
+      - "## Attachments"
+    required: false
+
+# Priority mapping
+priority_mapping:
+  "Urgent": "urgent"
+  "High": "high"
+  "Medium": "normal"
+  "Low": "low"
+  "No priority": "low"
+
+# Status mapping
+status_mapping:
+  "Backlog": "new"
+  "Todo": "new"
+  "In Progress": "in_progress"
+  "In Review": "in_progress"
+  "Done": "closed"
+  "Canceled": "wont_fix"

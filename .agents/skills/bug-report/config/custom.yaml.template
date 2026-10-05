@@ -1,0 +1,127 @@
+# Custom Format Configuration Template
+# Copy this file to create mappings for your own ticket system
+
+format_name: custom
+format_version: "1.0"
+
+# Title extraction pattern
+# Use regex with capture groups
+title_pattern: "^#\\s+(.+?)$"
+
+# Bug ID extraction
+# Pattern to find bug ID in the document
+id_pattern: "(BUG-\\d+)"
+# Prefix to add if ID doesn't have one
+id_prefix: "CUSTOM-"
+
+# Metadata field extraction
+# Each field has a regex pattern to extract its value
+metadata:
+  severity:
+    pattern: "\\*\\*Severity\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  priority:
+    pattern: "\\*\\*Priority\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  status:
+    pattern: "\\*\\*Status\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  assignee:
+    pattern: "\\*\\*Assignee\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  reporter:
+    pattern: "\\*\\*Reporter\\*\\*:\\s*(.+?)(?:\\n|$)"
+
+  labels:
+    pattern: "\\*\\*Labels\\*\\*:\\s*(.+?)(?:\\n|$)"
+    separator: ","  # How to split multiple values
+
+# Section mappings
+# Define which headers map to which bug report sections
+sections:
+  # Bug description/summary
+  description:
+    headers:
+      - "## Description"
+      - "## Summary"
+      - "## Problem"
+    required: false
+
+  # Steps to reproduce the bug
+  reproduction_steps:
+    headers:
+      - "## Steps to Reproduce"
+      - "## Repro Steps"
+    required: true
+    list_type: numbered  # numbered or bullet
+
+  # What should happen
+  expected_behavior:
+    headers:
+      - "## Expected Behavior"
+      - "## Expected"
+    required: true
+
+  # What actually happens
+  actual_behavior:
+    headers:
+      - "## Actual Behavior"
+      - "## Actual"
+    required: true
+
+  # Environment information
+  environment:
+    headers:
+      - "## Environment"
+      - "## System Info"
+    required: false
+    list_type: bullet
+
+  # Error logs and stack traces
+  error_logs:
+    headers:
+      - "## Error Logs"
+      - "## Stack Trace"
+      - "## Logs"
+    required: false
+    extract_code_blocks: true
+
+  # Screenshots section
+  screenshots:
+    headers:
+      - "## Screenshots"
+      - "## Images"
+    required: false
+
+  # Additional notes
+  additional_context:
+    headers:
+      - "## Additional Context"
+      - "## Notes"
+    required: false
+
+# Map your system's severity values to standard levels
+# Standard levels: critical, high, medium, low, trivial
+severity_mapping:
+  "Critical": "critical"
+  "High": "high"
+  "Medium": "medium"
+  "Low": "low"
+  "Minor": "trivial"
+
+# Map your system's priority values to standard levels
+# Standard levels: urgent, high, normal, low
+priority_mapping:
+  "P1": "urgent"
+  "P2": "high"
+  "P3": "normal"
+  "P4": "low"
+
+# Map your system's status values
+# Standard statuses: new, in_progress, closed, wont_fix, duplicate
+status_mapping:
+  "Open": "new"
+  "In Progress": "in_progress"
+  "Resolved": "closed"
+  "Won't Fix": "wont_fix"
+  "Duplicate": "duplicate"

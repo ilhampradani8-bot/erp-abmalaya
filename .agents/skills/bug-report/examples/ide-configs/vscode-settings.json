@@ -1,0 +1,17 @@
+{
+    "version": "2.0.0",
+    "github.copilot.chat.codeGeneration.instructions": [
+        {
+            "text": "Bug Report Processing: Use skill at /path/to/bug-report-agent-skills/bug-report-processor. Read SKILL.md first. Follow Detective Methodology (Reproduce → Investigate → Diagnose → Fix → Verify → Test). Track state in .bug-states/. Execute commands with: uv run /path/scripts/<script>.py"
+        }
+    ],
+    "files.exclude": {
+        ".bug-states/": true
+    },
+    "files.watcherExclude": {
+        ".bug-states/**": true
+    },
+    "search.exclude": {
+        ".bug-states/": true
+    }
+}

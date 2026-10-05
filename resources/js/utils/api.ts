@@ -1,16 +1,25 @@
 /**
- * Utility to resolve the correct API endpoint URL depending on the environment.
+ * Utility to resolve the correct API endpoint and file URL depending on the environment.
  * 
- * In local development (Vite running on localhost/127.0.0.1), it prefixes endpoints
- * with http://localhost:8000 (the XAMPP PHP backend port).
- * 
- * In production hosting (cPanel live environment), it uses relative URLs, which resolve
- * to the hosted domain automatically.
+ * Automatically converts any hardcoded localhost:8000 or 127.0.0.1:8000 links
+ * to environment-agnostic relative paths so they work on both VPS IP (port 3000)
+ * and production hosting (erp.abmalaya.com).
  */
 export const getApiUrl = (path: string): string => {
-  // Always use relative paths — Vite proxy in dev mode forwards ^/api_.* to http://127.0.0.1:8000 internally,
-  // and production web servers serve relative API paths directly.
-  return path.startsWith('/') ? path : `/${path}`;
+  if (!path) return '';
+  
+  // Keep external Google Drive / Docs URLs intact
+  if (path.includes('drive.google.com') || path.includes('docs.google.com')) {
+    return path;
+  }
+  
+  // Strip hardcoded localhost / 127.0.0.1 host and port
+  let clean = path.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i, '');
+  
+  // Ensure single leading slash for relative routing
+  if (!clean.startsWith('/') && !clean.startsWith('http')) {
+    clean = `/${clean}`;
+  }
+  
+  return clean;
 };
-
-

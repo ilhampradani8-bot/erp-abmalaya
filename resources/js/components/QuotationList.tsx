@@ -2295,7 +2295,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                 }
                                 return (
                                   <a
-                                    href={fileUrl}
+                                    href={getApiUrl(fileUrl)}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="font-bold text-blue-600 hover:underline flex items-center gap-1 font-mono text-[10px] truncate"

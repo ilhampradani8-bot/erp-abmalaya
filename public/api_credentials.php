@@ -124,11 +124,22 @@ if ($method === 'POST') {
         exit;
     }
 
-    // Support Batch Save
-    if ((isset($input['action']) && $input['action'] === 'save_batch') || (isset($input['items']) && is_array($input['items']))) {
+    // Support Batch Save (accepts 'items', 'batch', 'data', or direct array)
+    $batch_items = null;
+    if (isset($input['items']) && is_array($input['items'])) {
+        $batch_items = $input['items'];
+    } elseif (isset($input['batch']) && is_array($input['batch'])) {
+        $batch_items = $input['batch'];
+    } elseif (isset($input['data']) && is_array($input['data'])) {
+        $batch_items = $input['data'];
+    } elseif (is_array($input) && isset($input[0]) && is_array($input[0])) {
+        $batch_items = $input;
+    }
+
+    if ($batch_items !== null) {
         $stmt = $connection->prepare("INSERT INTO api_credentials (credential_key, credential_value, service_name) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE credential_value = VALUES(credential_value), service_name = VALUES(service_name)");
         $saved_count = 0;
-        foreach ($input['items'] as $item) {
+        foreach ($batch_items as $item) {
             $k = isset($item['credential_key']) ? trim($item['credential_key']) : '';
             $v = isset($item['credential_value']) ? trim($item['credential_value']) : '';
             $s = isset($item['service_name']) ? trim($item['service_name']) : 'System Setting';

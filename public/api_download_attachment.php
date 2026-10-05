@@ -84,8 +84,8 @@ $local_filename = $target_link['type'] . '_' . substr($target_link['id'], 0, 12)
 $dest_path      = $rfq_dir . '/' . $local_filename;
 
 // Public URL for local dev and production
-$local_url_dev  = "http://localhost:8000/file_inbox/rfq-{$clean_id}/{$local_filename}";
-$local_url_prod = "https://erp.abmalaya.com/public/file_inbox/rfq-{$clean_id}/{$local_filename}";
+$local_url_dev  = "/file_inbox/rfq-{$clean_id}/{$local_filename}";
+$local_url_prod = "/file_inbox/rfq-{$clean_id}/{$local_filename}";
 
 try {
     downloadFileWithRetry($target_link['url'], $dest_path);
