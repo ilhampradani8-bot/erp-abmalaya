@@ -505,6 +505,62 @@ function classifyEmailWithGeminiWithRetry($subject, $body, $attachments, $key_li
         $key_suffix = substr($api_key, -6);
         $success = false;
 
+        // 🚀 1. Check if Key is a Groq API Key (starts with gsk_)
+        if (strpos($api_key, 'gsk_') === 0) {
+            $groq_url = "https://api.groq.com/openai/v1/chat/completions";
+            $groq_models = ['openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-120b'];
+            
+            foreach ($groq_models as $g_model) {
+                $groq_payload = [
+                    'model' => $g_model,
+                    'messages' => [
+                        ['role' => 'system', 'content' => "You are an AI Email Classifier. You MUST respond with ONLY valid JSON with keys: classification ('client_rfq' or 'junk'), reason, item_requested."],
+                        ['role' => 'user', 'content' => $prompt]
+                    ],
+                    'temperature' => 0.1,
+                    'response_format' => ['type' => 'json_object']
+                ];
+
+                $ch = curl_init($groq_url);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($groq_payload));
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Authorization: Bearer ' . $api_key,
+                    'Content-Type: application/json',
+                    'User-Agent: ERP-ABM/1.0'
+                ]);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+                $response = curl_exec($ch);
+                $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curl_err = curl_error($ch);
+                curl_close($ch);
+
+                if ($http_code === 200 && !empty($response)) {
+                    $res_json = json_decode($response, true);
+                    $text = $res_json['choices'][0]['message']['content'] ?? '';
+                    $clean_text = trim($text);
+                    $parsed = json_decode($clean_text, true);
+                    if ($parsed && isset($parsed['classification'])) {
+                        return [
+                            'classification' => $parsed['classification'],
+                            'item_requested' => $parsed['item_requested'] ?? null,
+                            'verified' => 1,
+                            'error' => null
+                        ];
+                    }
+                }
+
+                $err_msg = "Attempt " . ($attempt + 1) . " (Groq Key .." . $key_suffix . ", Model " . $g_model . ") failed. Code: $http_code. Curl Err: $curl_err.";
+                if (!empty($response)) {
+                    $err_msg .= " Resp: " . substr($response, 0, 150);
+                }
+                $errors[] = $err_msg;
+            }
+            continue;
+        }
+
+        // 🌟 2. Standard Gemini API Key Path
         foreach ($candidate_models as $model_name) {
             $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $model_name . ":generateContent?key=" . urlencode($api_key);
             $payload = [
