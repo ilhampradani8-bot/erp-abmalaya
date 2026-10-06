@@ -103,7 +103,7 @@ try {
 
         $all_rfqs = [];
         $all_rfqs_by_email = [];
-        $rfq_q = $db_conn->query("SELECT id, rfq_number, client_name AS sender_name, client_email AS sender_email, recipient_email, subject, attachment_url, created_at FROM rfq_requests");
+        $rfq_q = $db_conn->query("SELECT id, rfq_number, client_name AS sender_name, client_email AS sender_email, recipient_email, subject, message_body, attachment_url, created_at FROM rfq_requests");
         if ($rfq_q) {
             while ($rfq = $rfq_q->fetch_assoc()) {
                 $all_rfqs[$rfq['id']] = $rfq;
