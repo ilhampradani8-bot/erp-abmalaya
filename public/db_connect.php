@@ -184,11 +184,11 @@ if (!function_exists('getGeminiActiveModels')) {
         }
 
         $fallback_models = [
-            'gemini-flash-latest',
-            'gemini-3.8-flash',
-            'gemini-3.6-flash',
+            'gemini-2.5-flash',
+            'gemini-2.5-flash-lite',
             'gemini-3.5-flash',
-            'gemini-2.5-flash'
+            'gemini-3.8-flash',
+            'gemini-flash-latest'
         ];
 
         if (empty($key_list)) {
@@ -198,13 +198,13 @@ if (!function_exists('getGeminiActiveModels')) {
 
         foreach ($key_list as $key) {
             $key = trim($key);
-            if (empty($key) || strpos($key, '...') !== false) continue;
+            if (empty($key) || strpos($key, '...') !== false || strpos($key, 'gsk_') === 0) continue;
 
             $url = 'https://generativelanguage.googleapis.com/v1beta/models?key=' . urlencode($key);
             $ch = curl_init($url);
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT => 6,
+                CURLOPT_TIMEOUT => 4,
                 CURLOPT_SSL_VERIFYPEER => false
             ]);
             $resp = curl_exec($ch);
@@ -232,10 +232,12 @@ if (!function_exists('getGeminiActiveModels')) {
                         }
                     }
 
-                    // Sort: gemini-flash-latest first, then newest versions
+                    // Sort: gemini-2.5-flash first, then flash-lite, then newest versions
                     usort($flash_models, function($a, $b) {
-                        if ($a === 'gemini-flash-latest') return -1;
-                        if ($b === 'gemini-flash-latest') return 1;
+                        if ($a === 'gemini-2.5-flash') return -1;
+                        if ($b === 'gemini-2.5-flash') return 1;
+                        if ($a === 'gemini-2.5-flash-lite') return -1;
+                        if ($b === 'gemini-2.5-flash-lite') return 1;
                         return strcmp($b, $a);
                     });
 
@@ -247,6 +249,7 @@ if (!function_exists('getGeminiActiveModels')) {
                     }
                 }
             }
+            break; // Check only first working key
         }
 
         $memory_cache = $fallback_models;
