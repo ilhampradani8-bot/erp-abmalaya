@@ -10,26 +10,28 @@
  * POST /api_ocr_scan.php { "quo_id": "QUO-xxx" } — trigger a scan
  */
 
-error_reporting(0);
-ini_set('display_errors', 0);
-ob_start();
+if (php_sapi_name() !== 'cli' || isset($_SERVER['REQUEST_METHOD'])) {
+    error_reporting(0);
+    ini_set('display_errors', 0);
+    ob_start();
 
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
-header('Content-Type: application/json; charset=utf-8');
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type');
+    header('Content-Type: application/json; charset=utf-8');
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    ob_end_clean();
-    echo json_encode(['status' => 'ok']);
-    exit;
+    if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+        ob_end_clean();
+        echo json_encode(['status' => 'ok']);
+        exit;
+    }
 }
 
 try {
     require_once __DIR__ . '/db_connect.php';
 
     // ── GET: Return existing scan result ──────────────────────────────────────
-    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'GET') {
         $quo_id = isset($_GET['quo_id']) ? trim($_GET['quo_id']) : '';
         if (empty($quo_id)) {
             ob_end_clean();
@@ -54,7 +56,7 @@ try {
     }
 
     // ── POST: Trigger OCR Scan ────────────────────────────────────────────────
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $raw   = file_get_contents('php://input');
         $input = json_decode($raw, true) ?: [];
         $quo_id = isset($input['quo_id']) ? trim($input['quo_id']) : (isset($_POST['quo_id']) ? trim($_POST['quo_id']) : '');
@@ -563,9 +565,9 @@ PROMPT;
     }
 
     // ── Step 4: Ultra-Fast Groq AI Fallback (~0.05s) ────────────────────────
-    $groq_api_key = getEnvValue('GROQ_API_KEY_1', getEnvValue('GROQ_API_KEYS', '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'));
+    $groq_api_key = getenv('GROQ_API_KEY_1') ?: (getenv('GROQ_API_KEYS') ?: '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');
     if (!empty($groq_api_key)) {
-        $groq_models = ['openai/gpt-oss-20b', 'qwen/qwen3.8-27b'];
+        $groq_models = ['openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'llama-3.3-70b-versatile'];
         foreach ($groq_models as $g_mod) {
             $g_ch = curl_init('https://api.groq.com/openai/v1/chat/completions');
             curl_setopt_array($g_ch, [
