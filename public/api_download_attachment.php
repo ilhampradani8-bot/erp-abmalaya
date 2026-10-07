@@ -108,8 +108,10 @@ try {
     ]);
 
 } catch (Exception $ex) {
-    $err_msg  = "GDrive Download Failed for ID {$link_id}: " . $ex->getMessage();
-    $new_err  = trim($current_ai_error . " | " . $err_msg, " | ");
+    $err_msg  = $ex->getMessage();
+    $is_restricted = (strpos($err_msg, 'Access Restricted') !== false || strpos($err_msg, 'Access Denied') !== false || strpos($err_msg, 'private') !== false);
+    $full_err_log = "GDrive Download Failed for ID {$link_id}: " . $err_msg;
+    $new_err  = trim($current_ai_error . " | " . $full_err_log, " | ");
 
     $up_stmt = $db_conn->prepare("UPDATE rfq_requests SET ai_error = ? WHERE id = ?");
     if ($up_stmt) {
@@ -118,9 +120,14 @@ try {
         $up_stmt->close();
     }
 
-    appendRfqHistoryLog($db_conn, $clean_id, 'GDrive Download Error', 'Sesi Downloader', 'downloader@abmalaya.com', $err_msg);
+    appendRfqHistoryLog($db_conn, $clean_id, 'GDrive Download Error', 'Sesi Downloader', 'downloader@abmalaya.com', $full_err_log);
 
-    echo json_encode(['status' => 'error', 'message' => $err_msg]);
+    echo json_encode([
+        'status'        => 'error',
+        'error_code'    => $is_restricted ? 'RESTRICTED_ACCESS' : 'DOWNLOAD_ERROR',
+        'is_restricted' => $is_restricted,
+        'message'       => $err_msg
+    ]);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -160,9 +167,20 @@ function downloadFileWithRetry($url, $dest_path, $attempt = 1) {
         return downloadFileWithRetry($url . '&confirm=' . $cm[1], $dest_path, $attempt + 1);
     }
 
-    // Safety: reject HTML error pages
-    if (strpos($data, '<html') !== false && strpos($data, 'Access Denied') !== false) {
-        throw new Exception("Google Drive Access Denied. Ensure the file sharing is set to 'Anyone with the link can view'.");
+    // Safety: detect Google Drive Restricted / Private / Login redirect HTML pages
+    $is_html = (strpos($data, '<!DOCTYPE html') !== false || strpos($data, '<html') !== false);
+    if ($is_html) {
+        if (
+            strpos($data, 'accounts.google.com') !== false ||
+            strpos($data, 'ServiceLogin') !== false ||
+            strpos($data, 'Access Denied') !== false ||
+            strpos($data, 'You need access') !== false ||
+            strpos($data, 'Request access') !== false ||
+            strpos($data, 'permission') !== false ||
+            strpos($data, 'signin') !== false
+        ) {
+            throw new Exception("Access Restricted: This Google Drive file is private. File sharing must be set to 'Anyone with the link' to allow direct download.");
+        }
     }
 
     file_put_contents($dest_path, $data);

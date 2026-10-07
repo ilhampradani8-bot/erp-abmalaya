@@ -510,8 +510,10 @@ function appendGoogleDriveAttachments(&$attachments, $message_body, $rfq_id) {
                     curl_close($ch2);
                 }
                 
-                // Only save if it looks like a real file (not HTML error page)
-                if ($http_code === 200 && !empty($data) && !(strpos($data, '<html') !== false && strpos($data, 'Access Denied') !== false)) {
+                // Only save if it looks like a real binary file (not HTML login / error page)
+                $is_html_err = (strpos($data, '<html') !== false || strpos($data, '<!DOCTYPE') !== false) && 
+                               (strpos($data, 'Access Denied') !== false || strpos($data, 'accounts.google.com') !== false || strpos($data, 'ServiceLogin') !== false || strpos($data, 'You need access') !== false || strpos($data, 'permission') !== false);
+                if ($http_code === 200 && !empty($data) && !$is_html_err && strlen($data) > 100) {
                     @file_put_contents($dest_path, $data);
                     $downloaded = file_exists($dest_path);
                 }
@@ -673,7 +675,7 @@ function classifyEmailWithGeminiWithRetry($subject, $body, $attachments, $key_li
                 ]);
                 curl_setopt($ch, CURLOPT_TIMEOUT, 10);
                 curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER => false);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
                 $response = curl_exec($ch);
                 $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
                 $curl_err = curl_error($ch);

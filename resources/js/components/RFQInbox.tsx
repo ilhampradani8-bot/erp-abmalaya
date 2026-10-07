@@ -227,6 +227,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(50); // Default 50 items per page!
   const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
+  const [restrictedAttachments, setRestrictedAttachments] = useState<Record<string, string>>({});
 
   const handleDownloadAttachment = (att: EmailAttachment) => {
     if (!selectedRfq) return;
@@ -247,6 +248,11 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
         setDownloadingAttachmentId(null);
         if (data.status === 'success') {
           setNotificationText(`Successfully downloaded: ${att.filename}!`);
+          setRestrictedAttachments((prev) => {
+            const next = { ...prev };
+            delete next[att.id];
+            return next;
+          });
 
           if (onRefreshLiveEmails) {
             onRefreshLiveEmails();
@@ -261,8 +267,16 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
           setTimeout(() => setShowNotificationBanner(false), 3000);
         } else {
-          setNotificationText(`Download failed: ${data.message}`);
-          setTimeout(() => setShowNotificationBanner(false), 5000);
+          if (data.is_restricted || data.error_code === 'RESTRICTED_ACCESS' || (data.message && (data.message.includes('Access Restricted') || data.message.includes('private')))) {
+            setRestrictedAttachments((prev) => ({
+              ...prev,
+              [att.id]: data.message || "This Google Drive file is private. File sharing must be set to 'Anyone with the link'."
+            }));
+            setNotificationText(`Access Restricted: This Google Drive link is private. Access is required from the sender.`);
+          } else {
+            setNotificationText(`Download failed: ${data.message}`);
+          }
+          setTimeout(() => setShowNotificationBanner(false), 6000);
         }
       })
       .catch((err) => {
@@ -1515,11 +1529,26 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                   <h4 className="text-sm font-extrabold" style={{ fontFamily: "'Eurostile', monospace" }}>
                     {previewAttachment.is_folder ? 'Google Drive Folder Link' : 'Google Drive / Docs Attachment Link'}
                   </h4>
-                  <p className="text-xs text-slate-300 text-center leading-relaxed">
-                    {previewAttachment.is_folder
-                      ? 'This is a Google Drive folder link shared in the email. Folders cannot be downloaded directly — click below to open it in Google Drive.'
-                      : 'This file is linked from the email body. It has not been cached on our server yet. You can copy the original link or download it to the server.'}
-                  </p>
+
+                  {restrictedAttachments[previewAttachment.id] ? (
+                    <div className="w-full p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-start gap-3 text-amber-200">
+                      <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                        <AlertTriangle className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <h5 className="text-xs font-bold text-amber-300">Access Restricted (Private File)</h5>
+                        <p className="text-[11px] text-amber-200/80 leading-relaxed mt-0.5">
+                          The sender has not set this Google Drive link to <strong>"Anyone with the link can view"</strong>. Direct download to server was blocked by Google security.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-300 text-center leading-relaxed">
+                      {previewAttachment.is_folder
+                        ? 'This is a Google Drive folder link shared in the email. Folders cannot be downloaded directly — click below to open it in Google Drive.'
+                        : 'This file is linked from the email body. It has not been cached on our server yet. You can copy the original link or download it to the server.'}
+                    </p>
+                  )}
 
                   <div className="flex flex-wrap gap-3 items-center justify-center w-full pt-2">
                     {/* Copy Link Button */}
@@ -1536,16 +1565,16 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                       <span>Copy Google Drive Link</span>
                     </button>
 
-                    {/* Open in Drive (always) or Download to Server (only for files) */}
-                    {previewAttachment.is_folder ? (
+                    {/* Open in Drive (always) or Download to Server */}
+                    {previewAttachment.is_folder || restrictedAttachments[previewAttachment.id] ? (
                       <a
                         href={previewAttachment.original_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded transition flex items-center gap-1.5 cursor-pointer"
+                        className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded transition flex items-center gap-1.5 cursor-pointer shadow-md"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
-                        <span>Open Folder in Google Drive</span>
+                        <span>{restrictedAttachments[previewAttachment.id] ? 'Open & Request Access' : 'Open Folder in Google Drive'}</span>
                       </a>
                     ) : (
                       <button
