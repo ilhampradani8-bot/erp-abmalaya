@@ -119,17 +119,10 @@ try {
         }
         $key_list = array_values(array_unique($key_list));
 
-        if (empty($key_list)) {
-            $db_conn->query("UPDATE quotations SET ocr_scan_status = 'error', ocr_scan_result = '{\"scan_status\":\"error\",\"reason\":\"No active OCR API key configured in gemini_api_keys table\"}' WHERE id = '" . $db_conn->real_escape_string($quo_id) . "'");
-            ob_end_clean();
-            echo json_encode(['status' => 'error', 'message' => 'No active OCR API key found. Add active key in System Settings.']);
-            exit;
-        }
-
         // PRIORITY CONTROL: Set manual_scan lock in MySQL to halt background daemons
         $db_conn->query("INSERT INTO system_locks (lock_key, lock_value) VALUES ('manual_scan_active', '" . time() . "') ON DUPLICATE KEY UPDATE lock_value = '" . time() . "'");
 
-        // Perform OCR scan
+        // Perform OCR scan (with Gemini AI -> Groq AI -> OpenRouter AI -> Native fallback)
         $scan_result = performOCRScan($attachment_url, $key_list, $quo);
 
         // Clear manual_scan lock after completion

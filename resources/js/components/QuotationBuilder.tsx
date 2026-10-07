@@ -401,8 +401,8 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
     })
       .then((res) => res.json())
       .then((resData) => {
-        setScanOcrLog(resData);
         const scanRes = resData.ocr_scan_result || resData;
+        setScanOcrLog(scanRes);
         const rawItems = scanRes?.items || resData?.items || [];
         if (resData.status === 'success' && Array.isArray(rawItems) && rawItems.length > 0) {
           const formattedItems: QuotationItem[] = rawItems.map((it: any, idx: number) => {
@@ -427,10 +427,13 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
             impa_code: scanRes?.impa_code || prev.impa_code,
           }));
 
-          setSaveSuccessMessage(`Gemini AI PDF scan results (${formattedItems.length} items) populated into quotation table successfully!`);
+          setSaveSuccessMessage(`AI Scan results (${formattedItems.length} items) populated into quotation table successfully!`);
           setTimeout(() => setSaveSuccessMessage(null), 4000);
         } else if (resData.status === 'skipped') {
           setScanOcrLog({ status: 'skipped', message: resData.message || 'RFQ attachment file not found.' });
+        } else if (resData.status === 'success') {
+          setSaveSuccessMessage(`AI scan completed. (Document metadata updated)`);
+          setTimeout(() => setSaveSuccessMessage(null), 3000);
         } else {
           setScanOcrLog({ status: 'error', message: resData.message || scanRes?.reason || 'Failed to extract items from document.' });
         }
