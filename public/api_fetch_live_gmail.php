@@ -52,72 +52,152 @@ if (!file_exists($cache_dir)) {
     @mkdir($cache_dir, 0777, true);
 }
 
-// REAL LIVE INSTANT ATTACHMENT BINARY STREAMER WITH DISK CACHING
+// REAL LIVE INSTANT ATTACHMENT BINARY STREAMER WITH SMART DISK SEARCH & IMAP CACHING
 if (isset($_GET['download']) || isset($_GET['preview'])) {
     $msgno = isset($_GET['msgno']) ? (int)$_GET['msgno'] : 0;
     $part_no = isset($_GET['part']) ? $_GET['part'] : '2';
-    $ext = isset($_GET['ext']) ? strtolower($_GET['ext']) : 'pdf';
-    $filename = isset($_GET['fn']) ? $_GET['fn'] : 'document.' . $ext;
+    $ext = isset($_GET['ext']) ? strtolower($_GET['ext']) : '';
+    $filename = isset($_GET['fn']) ? $_GET['fn'] : '';
+
+    if (empty($filename) && isset($_GET['file'])) {
+        $filename = $_GET['file'];
+    }
+    if (empty($filename)) {
+        $filename = 'document.pdf';
+    }
+    if (empty($ext)) {
+        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        if (empty($ext)) $ext = 'pdf';
+    }
 
     $safe_fn = preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $filename);
-    $cache_file = $cache_dir . "/msg_{$msgno}_part_{$part_no}_{$safe_fn}";
+    $base_clean = preg_replace('/[^a-zA-Z0-9]/', '', pathinfo($filename, PATHINFO_FILENAME));
 
-    if (file_exists($cache_file) && filesize($cache_file) > 100) {
-        if ($ext === 'pdf') {
-            header('Content-Type: application/pdf');
-        } else if (in_array($ext, ['png', 'jpg', 'jpeg', 'gif'])) {
-            header('Content-Type: image/' . ($ext === 'jpg' ? 'jpeg' : $ext));
-        } else {
-            header('Content-Type: application/octet-stream');
+    $found_file = null;
+
+    // 1. Direct candidate paths
+    $candidate_files = [
+        $cache_dir . "/msg_{$msgno}_part_{$part_no}_{$safe_fn}",
+        $cache_dir . "/{$filename}",
+        $cache_dir . "/{$safe_fn}",
+        dirname(__DIR__) . "/attachments/{$filename}",
+        dirname(__DIR__) . "/attachments/{$safe_fn}",
+        dirname(__DIR__) . "/attachments/msg_{$msgno}_part_{$part_no}_{$safe_fn}",
+        __DIR__ . "/uploads/pdf/{$filename}",
+        __DIR__ . "/uploads/pdf/{$safe_fn}",
+        __DIR__ . "/uploads/{$filename}",
+        dirname(__DIR__) . "/public/uploads/pdf/{$filename}",
+        dirname(__DIR__) . "/public/attachments/{$safe_fn}"
+    ];
+
+    foreach ($candidate_files as $cf) {
+        if (file_exists($cf) && is_file($cf) && filesize($cf) > 100) {
+            $found_file = $cf;
+            break;
         }
-
-        header('Content-Length: ' . filesize($cache_file));
-        header('Content-Disposition: inline; filename="' . basename($filename) . '"');
-        header('X-Cache-Status: HIT-LOCAL-DISK');
-        ob_end_clean();
-        readfile($cache_file);
-        exit;
     }
 
-    $inbox = @imap_open($hostname, $username, $password, OP_READONLY, 1, array('DISABLE_AUTHENTICATOR' => 'GSSAPI'));
-    if ($inbox && $msgno > 0) {
-        $raw_attachment = @imap_fetchbody($inbox, $msgno, $part_no);
-        if (empty($raw_attachment) || strlen($raw_attachment) < 50) {
-            $raw_attachment = @imap_fetchbody($inbox, $msgno, "2");
+    // 2. Fuzzy disk search in cache_dir and uploads/pdf/ if exact path not matched
+    if (!$found_file && !empty($base_clean)) {
+        $search_dirs = [
+            $cache_dir,
+            dirname(__DIR__) . '/attachments',
+            __DIR__ . '/uploads/pdf',
+            __DIR__ . '/uploads'
+        ];
+        foreach ($search_dirs as $sdir) {
+            if (is_dir($sdir)) {
+                $dir_files = @scandir($sdir);
+                if ($dir_files) {
+                    foreach ($dir_files as $df) {
+                        if ($df === '.' || $df === '..') continue;
+                        $df_clean = preg_replace('/[^a-zA-Z0-9]/', '', pathinfo($df, PATHINFO_FILENAME));
+                        if (!empty($df_clean) && (strpos($df_clean, $base_clean) !== false || strpos($base_clean, $df_clean) !== false || (strlen($base_clean) > 8 && strpos($df, substr($safe_fn, 0, 15)) !== false))) {
+                            $full_df = $sdir . '/' . $df;
+                            if (is_file($full_df) && filesize($full_df) > 100) {
+                                $found_file = $full_df;
+                                break 2;
+                            }
+                        }
+                    }
+                }
+            }
         }
-        if (empty($raw_attachment) || strlen($raw_attachment) < 50) {
-            $raw_attachment = @imap_fetchbody($inbox, $msgno, "1.2");
+    }
+
+    // Helper to stream binary file
+    $streamFile = function($filePath, $displayFn, $fileExt, $cacheStatus = 'HIT-LOCAL-DISK') {
+        $mimes = [
+            'pdf' => 'application/pdf',
+            'png' => 'image/png',
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'gif' => 'image/gif',
+            'svg' => 'image/svg+xml',
+            'zip' => 'application/zip',
+            'txt' => 'text/plain'
+        ];
+        $contentType = isset($mimes[$fileExt]) ? $mimes[$fileExt] : 'application/octet-stream';
+        
+        while (ob_get_level() > 0) {
+            @ob_end_clean();
         }
 
-        $decoded_attachment = base64_decode($raw_attachment, true);
-        if ($decoded_attachment === false || strlen($decoded_attachment) < 20) {
-            $decoded_attachment = quoted_printable_decode($raw_attachment);
-        }
-        if (empty($decoded_attachment)) {
-            $decoded_attachment = $raw_attachment;
-        }
+        header('Access-Control-Allow-Origin: *');
+        header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+        header('Access-Control-Allow-Headers: Content-Type');
+        header('Content-Type: ' . $contentType);
+        header('Content-Length: ' . filesize($filePath));
+        header('Content-Disposition: inline; filename="' . rawurlencode(basename($displayFn)) . '"; filename*=UTF-8\'\'' . rawurlencode(basename($displayFn)));
+        header('X-Cache-Status: ' . $cacheStatus);
+        header('Cache-Control: public, max-age=86400');
+        readfile($filePath);
+        exit;
+    };
 
-        @imap_close($inbox);
+    if ($found_file) {
+        $streamFile($found_file, $filename, $ext, 'HIT-LOCAL-DISK');
+    }
 
-        if (!empty($decoded_attachment)) {
-            @file_put_contents($cache_file, $decoded_attachment);
-
-            if ($ext === 'pdf') {
-                header('Content-Type: application/pdf');
-            } else if (in_array($ext, ['png', 'jpg', 'jpeg', 'gif'])) {
-                header('Content-Type: image/' . ($ext === 'jpg' ? 'jpeg' : $ext));
-            } else {
-                header('Content-Type: application/octet-stream');
+    // 3. If not found on local disk, try IMAP download
+    $cache_file = $cache_dir . "/msg_{$msgno}_part_{$part_no}_{$safe_fn}";
+    if ($msgno > 0) {
+        $inbox = @imap_open($hostname, $username, $password, OP_READONLY, 1, array('DISABLE_AUTHENTICATOR' => 'GSSAPI'));
+        if ($inbox) {
+            $raw_attachment = @imap_fetchbody($inbox, $msgno, $part_no);
+            if (empty($raw_attachment) || strlen($raw_attachment) < 50) {
+                $raw_attachment = @imap_fetchbody($inbox, $msgno, "2");
+            }
+            if (empty($raw_attachment) || strlen($raw_attachment) < 50) {
+                $raw_attachment = @imap_fetchbody($inbox, $msgno, "1.2");
             }
 
-            header('Content-Length: ' . strlen($decoded_attachment));
-            header('Content-Disposition: inline; filename="' . basename($filename) . '"');
-            header('X-Cache-Status: MISS-SAVED-TO-CACHE');
-            ob_end_clean();
-            echo $decoded_attachment;
-            exit;
+            $decoded_attachment = base64_decode($raw_attachment, true);
+            if ($decoded_attachment === false || strlen($decoded_attachment) < 20) {
+                $decoded_attachment = quoted_printable_decode($raw_attachment);
+            }
+            if (empty($decoded_attachment)) {
+                $decoded_attachment = $raw_attachment;
+            }
+
+            @imap_close($inbox);
+
+            if (!empty($decoded_attachment) && strlen($decoded_attachment) > 100) {
+                @file_put_contents($cache_file, $decoded_attachment);
+                $streamFile($cache_file, $filename, $ext, 'MISS-SAVED-TO-CACHE');
+            }
         }
     }
+
+    // 4. File not found: Return clean 404 text or SVG placeholder, NEVER dump the RFQs list JSON!
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+    http_response_code(404);
+    header('Access-Control-Allow-Origin: *');
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Attachment Not Found</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#94a3b8;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;padding:20px;box-sizing:border-box}.box{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:32px;max-width:440px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.5)}.icon{font-size:40px;margin-bottom:12px}h2{color:#f8fafc;font-size:16px;margin:0 0 8px 0}p{font-size:12px;margin:0 0 16px 0;line-height:1.5}code{display:block;background:#0f172a;padding:8px;border-radius:6px;font-size:11px;color:#38bdf8;word-break:break-all;margin-bottom:16px}</style></head><body><div class="box"><div class="icon">📎</div><h2>File Preview Not Available</h2><p>This attachment has not been downloaded to the server yet or the email session was refreshed.</p><code>' . htmlspecialchars($filename) . '</code><p style="font-size:11px;color:#64748b">Please click "Download File to Server" in the RFQ Inbox or check the email in Gmail.</p></div></body></html>';
+    exit;
 }
 
 header('Content-Type: application/json; charset=utf-8');

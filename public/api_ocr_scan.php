@@ -286,29 +286,72 @@ function performOCRScan(string $file_url, array $key_list, array $quo_context): 
 
         $file_data = false;
         
-        // 1. Try local filesystem resolution directly (Fastest, zero web-server deadlock)
-        if (strpos($file_url, 'msgno=') !== false) {
-            $msgno = $qp['msgno'] ?? '';
-            if ($msgno) {
-                $search_dirs = [
-                    __DIR__ . '/attachments',
-                    __DIR__ . '/../public/attachments',
-                    __DIR__ . '/../attachments',
-                    '/root/erp-abmalaya/public/attachments'
-                ];
-                foreach ($search_dirs as $s_dir) {
-                    if (is_dir($s_dir)) {
-                        $files = glob($s_dir . '/msg_' . $msgno . '_*');
-                        if (!empty($files)) {
-                            foreach ($files as $fpath) {
-                                if (file_exists($fpath) && (empty($ext) || strtolower(pathinfo($fpath, PATHINFO_EXTENSION)) === $ext)) {
-                                    $file_data = file_get_contents($fpath);
+        $fn = !empty($qp['fn']) ? $qp['fn'] : basename(parse_url($file_url, PHP_URL_PATH));
+        $safe_fn = preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $fn);
+        $base_clean = preg_replace('/[^a-zA-Z0-9]/', '', pathinfo($fn, PATHINFO_FILENAME));
+        $msgno = $qp['msgno'] ?? '';
+        $part_no = $qp['part'] ?? '2';
+
+        // 1. Direct candidate matching
+        $candidate_files = [
+            __DIR__ . "/attachments/msg_{$msgno}_part_{$part_no}_{$safe_fn}",
+            dirname(__DIR__) . "/attachments/msg_{$msgno}_part_{$part_no}_{$safe_fn}",
+            __DIR__ . "/attachments/{$fn}",
+            __DIR__ . "/attachments/{$safe_fn}",
+            dirname(__DIR__) . "/attachments/{$fn}",
+            dirname(__DIR__) . "/attachments/{$safe_fn}",
+            __DIR__ . "/uploads/pdf/{$fn}",
+            __DIR__ . "/uploads/pdf/{$safe_fn}",
+            dirname(__DIR__) . "/public/uploads/pdf/{$fn}",
+            dirname(__DIR__) . "/public/uploads/pdf/{$safe_fn}"
+        ];
+
+        foreach ($candidate_files as $cf) {
+            if (file_exists($cf) && is_file($cf) && filesize($cf) > 100) {
+                $file_data = file_get_contents($cf);
+                break;
+            }
+        }
+
+        // 2. Glob / fuzzy search across attachment and upload directories
+        if ($file_data === false) {
+            $search_dirs = [
+                __DIR__ . '/attachments',
+                dirname(__DIR__) . '/attachments',
+                dirname(__DIR__) . '/public/attachments',
+                __DIR__ . '/uploads/pdf',
+                __DIR__ . '/uploads',
+                dirname(__DIR__) . '/public/uploads/pdf',
+                dirname(__DIR__) . '/public/uploads'
+            ];
+
+            foreach ($search_dirs as $s_dir) {
+                if (!is_dir($s_dir)) continue;
+
+                if (!empty($msgno)) {
+                    $m_files = glob($s_dir . '/msg_' . $msgno . '_*');
+                    if (!empty($m_files)) {
+                        foreach ($m_files as $mf) {
+                            if (file_exists($mf) && is_file($mf) && filesize($mf) > 100) {
+                                $file_data = file_get_contents($mf);
+                                break 2;
+                            }
+                        }
+                    }
+                }
+
+                if (!empty($base_clean)) {
+                    $dir_files = @scandir($s_dir);
+                    if ($dir_files) {
+                        foreach ($dir_files as $df) {
+                            if ($df === '.' || $df === '..') continue;
+                            $df_clean = preg_replace('/[^a-zA-Z0-9]/', '', pathinfo($df, PATHINFO_FILENAME));
+                            if (!empty($df_clean) && (strpos($df_clean, $base_clean) !== false || strpos($base_clean, $df_clean) !== false || (strlen($base_clean) > 8 && strpos($df, substr($safe_fn, 0, 15)) !== false))) {
+                                $full_df = $s_dir . '/' . $df;
+                                if (is_file($full_df) && filesize($full_df) > 100) {
+                                    $file_data = file_get_contents($full_df);
                                     break 2;
                                 }
-                            }
-                            if ($file_data === false && file_exists($files[0])) {
-                                $file_data = file_get_contents($files[0]);
-                                break;
                             }
                         }
                     }
@@ -316,25 +359,7 @@ function performOCRScan(string $file_url, array $key_list, array $quo_context): 
             }
         }
 
-        // Direct local upload path resolution (/uploads/pdf/... or /public/uploads/...)
-        if ($file_data === false) {
-            $local_clean_path = parse_url($file_url, PHP_URL_PATH);
-            if (!empty($local_clean_path)) {
-                $possible_paths = [
-                    __DIR__ . '/' . ltrim($local_clean_path, '/'),
-                    __DIR__ . '/../public/' . ltrim($local_clean_path, '/'),
-                    '/root/erp-abmalaya/public/' . ltrim($local_clean_path, '/')
-                ];
-                foreach ($possible_paths as $p_path) {
-                    if (file_exists($p_path) && !is_dir($p_path) && filesize($p_path) > 50) {
-                        $file_data = file_get_contents($p_path);
-                        break;
-                    }
-                }
-            }
-        }
-
-        // 2. Fallback to external HTTP request if not found locally
+        // 3. Fallback to external HTTP request if not found locally
         if ($file_data === false || strlen((string)$file_data) < 100) {
             $target_url = $file_url;
             if (preg_match('/^https?:\/\//i', $target_url) && strpos($target_url, '127.0.0.1') === false && strpos($target_url, 'localhost') === false) {
@@ -344,6 +369,7 @@ function performOCRScan(string $file_url, array $key_list, array $quo_context): 
                     CURLOPT_SSL_VERIFYPEER => false,
                     CURLOPT_FOLLOWLOCATION => true,
                     CURLOPT_TIMEOUT        => 10,
+                    CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,
                     CURLOPT_USERAGENT      => 'ABMalaya-ERP-OCR/2.0'
                 ]);
                 $file_data = curl_exec($ch_dl);
@@ -506,11 +532,11 @@ Your task: extract structured procurement data from {$source_desc}.
 PROMPT;
 
     // ── Step 3: Fast Multi-Key Gemini AI Scan ──────────────────────────────
-    $ocr_models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.5-flash'];
+    $ocr_models = ['gemini-flash-latest', 'gemini-2.0-flash', 'gemini-1.5-flash'];
     $errors    = [];
     $shuffled_keys = $key_list;
     shuffle($shuffled_keys);
-    $max_gemini_attempts = min(4, count($shuffled_keys));
+    $max_gemini_attempts = min(6, count($shuffled_keys));
 
     foreach ($ocr_models as $model_name) {
         for ($i = 0; $i < $max_gemini_attempts; $i++) {
@@ -540,7 +566,8 @@ PROMPT;
                 CURLOPT_POSTFIELDS     => $payload,
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_SSL_VERIFYPEER => false,
-                CURLOPT_TIMEOUT        => 8,
+                CURLOPT_TIMEOUT        => 12,
+                CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,
                 CURLOPT_HTTPHEADER     => ['Content-Type: application/json']
             ]);
             $resp      = curl_exec($ch);
