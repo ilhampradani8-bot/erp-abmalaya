@@ -558,6 +558,36 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
     }
   };
 
+  const handleBulkToggleAiKeyStatus = (pool: 'inbox' | 'ocr' | 'all', newStatus: 'active' | 'disabled') => {
+    if (pool === 'inbox' || pool === 'all') {
+      const updatedInbox = inboxAiKeys.map((k) => ({ ...k, status: newStatus as any }));
+      setInboxAiKeys(updatedInbox);
+    }
+    if (pool === 'ocr' || pool === 'all') {
+      const updatedOcr = ocrAiKeys.map((k) => ({ ...k, status: newStatus as any }));
+      setOcrAiKeys(updatedOcr);
+    }
+
+    fetch(getApiUrl('/api_gemini_keys.php'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'toggle_all',
+        pool_type: pool === 'all' ? undefined : pool,
+        status: newStatus
+      })
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.status === 'success') {
+          setSavedMessage(`All ${pool === 'all' ? 'AI' : pool.toUpperCase()} keys set to ${newStatus.toUpperCase()}!`);
+          setIsSaved(true);
+          setTimeout(() => setIsSaved(false), 3000);
+        }
+      })
+      .catch((err) => console.log('Bulk toggle error:', err));
+  };
+
   const handleSavePaper = () => {
     fetch(getApiUrl('/api_paper_settings.php'), {
       method: 'POST',
@@ -1111,26 +1141,75 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'ai' && (
           <div className="w-full space-y-4 animate-in fade-in">
+            {/* Global Bulk Control Bar */}
+            <div className="p-3.5 bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-xl shadow-xs border border-slate-700 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center space-x-2.5">
+                <Sparkles className="w-5 h-5 text-amber-400" />
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-100">Global AI Key Master Controls</h4>
+                  <p className="text-[11px] text-slate-400">Aktifkan atau nonaktifkan seluruh AI Key sekaligus tanpa perlu klik satu per satu.</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => handleBulkToggleAiKeyStatus('all', 'active')}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-xs cursor-pointer transition"
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  <span>Enable All (Semua Key)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleBulkToggleAiKeyStatus('all', 'disabled')}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 hover:text-white font-bold rounded-lg text-xs border border-slate-600 shadow-xs cursor-pointer transition"
+                >
+                  <PowerOff className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Disable All (Semua Key)</span>
+                </button>
+              </div>
+            </div>
+
             {/* Pool 1: Inbox RFQ AI */}
             <div className="w-full bg-white border border-slate-300 rounded-xl shadow-xs overflow-hidden">
-              <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
+              <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center space-x-2">
                   <Bot className="w-4 h-4 text-pink-600" />
-                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">RFQ Inbox Classification AI Pool (Gemini 2.5 Flash)</span>
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                    RFQ Inbox Classification AI Pool ({inboxAiKeys.filter((k) => k.status === 'active').length}/{inboxAiKeys.length} Active)
+                  </span>
                 </div>
-                <button
-                  onClick={() => {
-                    setModalKeyPool('inbox');
-                    setEditingKeyItem(null);
-                    setModalAlias('');
-                    setModalKeyString('');
-                    setIsAiModalOpen(true);
-                  }}
-                  className="inline-flex items-center space-x-1 px-3 py-1 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 text-white font-bold rounded-lg text-xs shadow-xs cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Key</span>
-                </button>
+                <div className="flex items-center space-x-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleBulkToggleAiKeyStatus('inbox', 'active')}
+                    className="px-2.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold text-[11px] rounded border border-emerald-300 cursor-pointer"
+                    title="Enable all keys in Inbox pool"
+                  >
+                    Enable All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBulkToggleAiKeyStatus('inbox', 'disabled')}
+                    className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[11px] rounded border border-slate-300 cursor-pointer"
+                    title="Disable all keys in Inbox pool"
+                  >
+                    Disable All
+                  </button>
+                  <button
+                    onClick={() => {
+                      setModalKeyPool('inbox');
+                      setEditingKeyItem(null);
+                      setModalAlias('');
+                      setModalKeyString('');
+                      setIsAiModalOpen(true);
+                    }}
+                    className="inline-flex items-center space-x-1 px-3 py-1 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 text-white font-bold rounded-lg text-xs shadow-xs cursor-pointer ml-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Key</span>
+                  </button>
+                </div>
               </div>
 
               <div className="p-4 space-y-2.5">
@@ -1184,24 +1263,44 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
 
             {/* Pool 2: OCR Vision AI */}
             <div className="w-full bg-white border border-slate-300 rounded-xl shadow-xs overflow-hidden">
-              <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
+              <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center space-x-2">
                   <ScanLine className="w-4 h-4 text-indigo-600" />
-                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">PDF Document OCR Vision AI Pool (Gemini 2.5 Flash Vision)</span>
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                    PDF Document OCR Vision AI Pool ({ocrAiKeys.filter((k) => k.status === 'active').length}/{ocrAiKeys.length} Active)
+                  </span>
                 </div>
-                <button
-                  onClick={() => {
-                    setModalKeyPool('ocr');
-                    setEditingKeyItem(null);
-                    setModalAlias('');
-                    setModalKeyString('');
-                    setIsAiModalOpen(true);
-                  }}
-                  className="inline-flex items-center space-x-1 px-3 py-1 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 text-white font-bold rounded-lg text-xs shadow-xs cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Key</span>
-                </button>
+                <div className="flex items-center space-x-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleBulkToggleAiKeyStatus('ocr', 'active')}
+                    className="px-2.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold text-[11px] rounded border border-emerald-300 cursor-pointer"
+                    title="Enable all keys in OCR pool"
+                  >
+                    Enable All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBulkToggleAiKeyStatus('ocr', 'disabled')}
+                    className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[11px] rounded border border-slate-300 cursor-pointer"
+                    title="Disable all keys in OCR pool"
+                  >
+                    Disable All
+                  </button>
+                  <button
+                    onClick={() => {
+                      setModalKeyPool('ocr');
+                      setEditingKeyItem(null);
+                      setModalAlias('');
+                      setModalKeyString('');
+                      setIsAiModalOpen(true);
+                    }}
+                    className="inline-flex items-center space-x-1 px-3 py-1 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 text-white font-bold rounded-lg text-xs shadow-xs cursor-pointer ml-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Key</span>
+                  </button>
+                </div>
               </div>
 
               <div className="p-4 space-y-2.5">

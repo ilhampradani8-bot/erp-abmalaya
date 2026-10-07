@@ -2019,9 +2019,27 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                   ) : (
                     <div className="space-y-2">
                       <div className="flex flex-wrap justify-between text-slate-300 text-[10px] gap-2 border-b border-slate-800 pb-2">
-                        <span>Status: <strong className="text-emerald-400">{scanOcrLog.status}</strong></span>
+                        <span>Status: <strong className={scanOcrLog.status === 'error' ? 'text-rose-400' : 'text-emerald-400'}>{scanOcrLog.status}</strong></span>
                         <span>Scanned File: <strong className="text-amber-300">{scanOcrLog.scanned_pdf_file || scanOcrLog.file_url || 'Email Message Text'}</strong></span>
                       </div>
+
+                      {scanOcrLog.message && (
+                        <div className={`p-2.5 rounded border text-[11px] ${
+                          scanOcrLog.status === 'error'
+                            ? 'bg-rose-950/80 border-rose-800 text-rose-300'
+                            : 'bg-blue-950/80 border-blue-800 text-blue-300'
+                        }`}>
+                          <strong className="block font-bold mb-0.5">
+                            {scanOcrLog.status === 'error' ? 'Notice / Info:' : 'System Message:'}
+                          </strong>
+                          <span>{scanOcrLog.message}</span>
+                          {scanOcrLog.status === 'error' && (
+                            <p className="mt-1 text-[10px] text-slate-400">
+                              💡 Tip: Jika API Key sedang berstatus disable di System Settings, Anda bisa mengaktifkan kembali melalui menu <strong>System Settings &gt; Gemini AI API Key Pool</strong> dengan tombol <em>Enable All</em>, atau memasukkan rincian item penawaran secara manual di tabel builder.
+                            </p>
+                          )}
+                        </div>
+                      )}
 
                       {scanOcrLog.prompt_sent_to_gemini && (
                         <div>

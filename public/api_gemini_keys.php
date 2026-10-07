@@ -125,6 +125,24 @@ if ($method === 'POST') {
         exit;
     }
 
+    // Bulk Toggle All Status (Enable All / Disable All)
+    if ($action === 'toggle_all' || $action === 'bulk_toggle_status') {
+        $pool = isset($input['pool_type']) && in_array($input['pool_type'], ['ocr', 'inbox']) ? $input['pool_type'] : null;
+        $new_status = ($input['status'] ?? 'active') === 'active' ? 'active' : 'disabled';
+        if ($pool) {
+            $stmt = $connection->prepare("UPDATE gemini_api_keys SET status = ? WHERE pool_type = ?");
+            $stmt->bind_param("ss", $new_status, $pool);
+        } else {
+            $stmt = $connection->prepare("UPDATE gemini_api_keys SET status = ?");
+            $stmt->bind_param("s", $new_status);
+        }
+        $stmt->execute();
+        $stmt->close();
+        ob_end_clean();
+        echo json_encode(['status' => 'success', 'message' => "All API keys status updated to " . strtoupper($new_status) . "!"]);
+        exit;
+    }
+
     // Single Add/Edit or Batch Save
     $batch_items = isset($input['items']) && is_array($input['items']) ? $input['items'] : (isset($input['keys']) && is_array($input['keys']) ? $input['keys'] : null);
     if (($action === 'save_batch' || $batch_items !== null) && $batch_items !== null) {
