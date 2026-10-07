@@ -531,8 +531,8 @@ Your task: extract structured procurement data from {$source_desc}.
 }
 PROMPT;
 
-    // ── Step 3: Fast Multi-Key Gemini AI Scan ──────────────────────────────
-    $ocr_models = ['gemini-flash-latest', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    // ── Step 3: Fast Multi-Key Gemini AI Scan with Dynamic Active Models ──
+    $ocr_models = function_exists('getGeminiActiveModels') ? getGeminiActiveModels($key_list) : ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-3.8-flash'];
     $errors    = [];
     $shuffled_keys = $key_list;
     shuffle($shuffled_keys);
@@ -617,7 +617,7 @@ PROMPT;
     $groq_key_list = array_values(array_unique($groq_key_list));
     shuffle($groq_key_list);
 
-    $groq_models = ['qwen/qwen3.8-27b', 'openai/gpt-oss-20b', 'openai/gpt-oss-120b'];
+    $groq_models = function_exists('getGroqActiveModels') ? getGroqActiveModels($groq_key_list) : ['qwen/qwen3.8-27b', 'openai/gpt-oss-20b', 'openai/gpt-oss-120b'];
     foreach ($groq_key_list as $groq_api_key) {
         foreach ($groq_models as $g_mod) {
             $g_ch = curl_init('https://api.groq.com/openai/v1/chat/completions');

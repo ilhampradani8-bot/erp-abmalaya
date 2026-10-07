@@ -592,7 +592,7 @@ function classifyEmailWithGeminiWithRetry($subject, $body, $attachments, $key_li
         // 🚀 1. Check if Key is a Groq API Key (starts with gsk_)
         if (strpos($api_key, 'gsk_') === 0) {
             $groq_url = "https://api.groq.com/openai/v1/chat/completions";
-            $groq_models = ['openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-120b'];
+            $groq_models = function_exists('getGroqActiveModels') ? getGroqActiveModels([$api_key]) : ['openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-120b'];
             
             foreach ($groq_models as $g_model) {
                 $groq_payload = [

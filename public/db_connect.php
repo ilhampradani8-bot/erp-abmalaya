@@ -175,20 +175,23 @@ if (!function_exists('getGeminiActiveModels')) {
         }
 
         $cache_file = sys_get_temp_dir() . '/gemini_active_models_cache.json';
-        if (file_exists($cache_file) && (time() - filemtime($cache_file) < 7200)) { // 2 hours file cache
+        if (file_exists($cache_file) && (time() - filemtime($cache_file) < 3600)) { // 1 hour file cache
             $saved = @json_decode(file_get_contents($cache_file), true);
-            if (!empty($saved) && is_array($saved)) {
+            if (!empty($saved) && is_array($saved) && count($saved) > 0) {
                 $memory_cache = $saved;
                 return $memory_cache;
             }
         }
 
         $fallback_models = [
-            'gemini-2.5-flash',
-            'gemini-2.5-flash-lite',
-            'gemini-3.5-flash',
+            'gemini-flash-latest',
+            'gemini-flash-lite-latest',
             'gemini-3.8-flash',
-            'gemini-flash-latest'
+            'gemini-3.7-flash',
+            'gemini-3.6-flash',
+            'gemini-3.5-flash',
+            'gemini-3.1-flash-lite',
+            'gemini-pro-latest'
         ];
 
         if (empty($key_list)) {
@@ -204,7 +207,8 @@ if (!function_exists('getGeminiActiveModels')) {
             $ch = curl_init($url);
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT => 4,
+                CURLOPT_TIMEOUT => 6,
+                CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
                 CURLOPT_SSL_VERIFYPEER => false
             ]);
             $resp = curl_exec($ch);
@@ -216,29 +220,46 @@ if (!function_exists('getGeminiActiveModels')) {
                 if (isset($data['models']) && is_array($data['models'])) {
                     $flash_models = [];
                     $other_models = [];
+                    
+                    // Disallowed keywords for general text/vision generation
+                    $disallowed = ['tts', 'image', 'audio', 'embed', 'transcribe', 'robotics', 'lyria', 'banana', 'computer-use', 'deep-research'];
+
                     foreach ($data['models'] as $m) {
                         $methods = $m['supportedGenerationMethods'] ?? [];
                         if (in_array('generateContent', $methods)) {
                             $model_name = str_replace('models/', '', $m['name']);
-                            // Filter out specialized speech/image-only models
-                            if (stripos($model_name, 'tts') !== false || stripos($model_name, 'image') !== false || stripos($model_name, 'transcribe') !== false) {
-                                continue;
+                            
+                            // Filter out non-general models
+                            $is_bad = false;
+                            foreach ($disallowed as $bad_kw) {
+                                if (stripos($model_name, $bad_kw) !== false) {
+                                    $is_bad = true;
+                                    break;
+                                }
                             }
+                            if ($is_bad) continue;
+
                             if (stripos($model_name, 'flash') !== false) {
                                 $flash_models[] = $model_name;
-                            } else {
+                            } else if (stripos($model_name, 'gemini') !== false) {
                                 $other_models[] = $model_name;
                             }
                         }
                     }
 
-                    // Sort: gemini-2.5-flash first, then flash-lite, then newest versions
+                    // Sort models: 'gemini-flash-latest' first, then 'gemini-flash-lite-latest', then highest versions
                     usort($flash_models, function($a, $b) {
-                        if ($a === 'gemini-2.5-flash') return -1;
-                        if ($b === 'gemini-2.5-flash') return 1;
-                        if ($a === 'gemini-2.5-flash-lite') return -1;
-                        if ($b === 'gemini-2.5-flash-lite') return 1;
-                        return strcmp($b, $a);
+                        if ($a === 'gemini-flash-latest') return -1;
+                        if ($b === 'gemini-flash-latest') return 1;
+                        if ($a === 'gemini-flash-lite-latest') return -1;
+                        if ($b === 'gemini-flash-lite-latest') return 1;
+                        return version_compare($b, $a);
+                    });
+
+                    usort($other_models, function($a, $b) {
+                        if ($a === 'gemini-pro-latest') return -1;
+                        if ($b === 'gemini-pro-latest') return 1;
+                        return version_compare($b, $a);
                     });
 
                     $active_models = array_values(array_unique(array_merge($flash_models, $other_models)));
@@ -256,5 +277,84 @@ if (!function_exists('getGeminiActiveModels')) {
         return $memory_cache;
     }
 }
+
+if (!function_exists('getGroqActiveModels')) {
+    /**
+     * Query live active chat models directly from Groq API (GET /openai/v1/models)
+     * with local caching to prevent model name obsolescence/deprecation.
+     */
+    function getGroqActiveModels(array $key_list = []): array {
+        static $memory_cache = null;
+        if ($memory_cache !== null && !empty($memory_cache)) {
+            return $memory_cache;
+        }
+
+        $cache_file = sys_get_temp_dir() . '/groq_active_models_cache.json';
+        if (file_exists($cache_file) && (time() - filemtime($cache_file) < 3600)) { // 1 hour file cache
+            $saved = @json_decode(file_get_contents($cache_file), true);
+            if (!empty($saved) && is_array($saved) && count($saved) > 0) {
+                $memory_cache = $saved;
+                return $memory_cache;
+            }
+        }
+
+        $fallback_models = ['qwen/qwen3.8-27b', 'openai/gpt-oss-20b', 'openai/gpt-oss-120b'];
+        if (empty($key_list)) {
+            $memory_cache = $fallback_models;
+            return $memory_cache;
+        }
+
+        foreach ($key_list as $key) {
+            $key = trim($key);
+            if (empty($key) || strpos($key, 'gsk_') !== 0) continue;
+
+            $ch = curl_init('https://api.groq.com/openai/v1/models');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $key],
+                CURLOPT_TIMEOUT        => 6,
+                CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,
+                CURLOPT_SSL_VERIFYPEER => false
+            ]);
+            $resp = curl_exec($ch);
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($code === 200 && !empty($resp)) {
+                $data = json_decode($resp, true);
+                if (isset($data['data']) && is_array($data['data'])) {
+                    $chat_models = [];
+                    $disallowed = ['whisper', 'guard', 'safeguard', 'orpheus', 'tts', 'embed', 'audio'];
+                    foreach ($data['data'] as $m) {
+                        $id = $m['id'] ?? '';
+                        $active = $m['active'] ?? true;
+                        if (!$active || empty($id)) continue;
+                        
+                        $is_bad = false;
+                        foreach ($disallowed as $bad_kw) {
+                            if (stripos($id, $bad_kw) !== false) {
+                                $is_bad = true;
+                                break;
+                            }
+                        }
+                        if ($is_bad) continue;
+                        $chat_models[] = $id;
+                    }
+
+                    if (!empty($chat_models)) {
+                        @file_put_contents($cache_file, json_encode($chat_models));
+                        $memory_cache = $chat_models;
+                        return $memory_cache;
+                    }
+                }
+            }
+            break;
+        }
+
+        $memory_cache = $fallback_models;
+        return $memory_cache;
+    }
+}
+
 
 
