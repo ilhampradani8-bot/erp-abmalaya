@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Quotation, QuotationItem } from '../types/erp';
 import { 
-  Plus, Trash2, Send, FileCheck, X, Paperclip, FileType, CheckCircle2, Loader2, Terminal, Save, Eye, MoreVertical, Package, Image as ImageIcon, PlusCircle, Search, RefreshCw, Sliders, Settings, Building, User, Mail, Calendar, DollarSign, ShieldCheck, FileText, ChevronDown, Download
+  Plus, Trash2, Send, FileCheck, X, Paperclip, FileType, CheckCircle2, Loader2, Terminal, Save, Eye, MoreVertical, Package, Image as ImageIcon, PlusCircle, Search, RefreshCw, Sliders, Settings, Building, User, Mail, Calendar, DollarSign, ShieldCheck, FileText, ChevronDown, Download, ExternalLink
 } from 'lucide-react';
 import { ProductItem } from './Product';
 import { getApiUrl } from '../utils/api';
@@ -1887,28 +1887,6 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
-                  {(() => {
-                    let sourceFile = quotation?.source_file || (quotation as any)?.email_source?.attachment_url || (quotation as any)?.attachment_url || '';
-                    if (!sourceFile && scanOcrLog?.scanned_pdf_file) {
-                      sourceFile = scanOcrLog.scanned_pdf_file;
-                    }
-                    if (sourceFile && sourceFile !== 'NONE') {
-                      return (
-                        <a
-                          href={getApiUrl(sourceFile)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 bg-white hover:bg-slate-100 text-blue-700 font-bold text-xs px-3 py-1.5 rounded border border-blue-300 shadow-xs cursor-pointer transition"
-                          title="Open original document"
-                        >
-                          <Download className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Open Source Document</span>
-                        </a>
-                      );
-                    }
-                    return null;
-                  })()}
-
                   <button
                     type="button"
                     onClick={handleLoadExistingScanResult}
@@ -1919,6 +1897,38 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                     <Eye className="w-3.5 h-3.5 text-slate-600" />
                     <span>View AI OCR Result</span>
                   </button>
+
+                  {/* View PDF Button (External Tab View) */}
+                  {(() => {
+                    let sourceFile = quotation?.source_file || (quotation as any)?.email_source?.attachment_url || (quotation as any)?.attachment_url || '';
+                    if (!sourceFile && scanOcrLog?.scanned_pdf_file) {
+                      sourceFile = scanOcrLog.scanned_pdf_file;
+                    }
+                    const targetPdfUrl = (sourceFile && sourceFile !== 'NONE')
+                      ? getApiUrl(sourceFile)
+                      : (quotation?.quotation_file 
+                          ? getApiUrl(quotation.quotation_file) 
+                          : (quotation?.id ? getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${encodeURIComponent(quotation.id)}`) : ''));
+
+                    return (
+                      <a
+                        href={targetPdfUrl || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => {
+                          if (!targetPdfUrl) {
+                            e.preventDefault();
+                            alert('No PDF document file found for this quotation.');
+                          }
+                        }}
+                        className="flex items-center gap-1.5 bg-white hover:bg-blue-50 text-blue-700 font-bold text-xs px-3 py-1.5 rounded border border-blue-300 shadow-xs cursor-pointer transition"
+                        title="Open PDF Document in External Tab"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
+                        <span>View PDF</span>
+                      </a>
+                    );
+                  })()}
 
                   <button
                     type="button"
