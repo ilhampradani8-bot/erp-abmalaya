@@ -615,6 +615,7 @@ function classifyEmailWithGeminiWithRetry($subject, $body, $attachments, $key_li
                     'User-Agent: ERP-ABM/1.0'
                 ]);
                 curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+                curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
                 $response = curl_exec($ch);
                 $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
                 $curl_err = curl_error($ch);

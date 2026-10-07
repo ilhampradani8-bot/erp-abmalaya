@@ -595,16 +595,37 @@ PROMPT;
         }
     }
 
-    // ── Step 4: Ultra-Fast Groq AI Fallback (~0.05s) ────────────────────────
-    $groq_api_key = getenv('GROQ_API_KEY_1') ?: (getenv('GROQ_API_KEYS') ?: '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');
-    if (!empty($groq_api_key)) {
-        $groq_models = ['openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'llama-3.3-70b-versatile'];
+    // ── Step 4: Ultra-Fast Multi-Key Groq AI Fallback (~0.05s) ───────────────
+    $groq_key_list = [];
+    $raw_groq_env = getenv('GROQ_API_KEYS') ?: (getenv('GROQ_API_KEY_1') ?: '');
+    if (!empty($raw_groq_env)) {
+        foreach (explode(',', $raw_groq_env) as $gk) {
+            $gk = trim($gk);
+            if (!empty($gk)) $groq_key_list[] = $gk;
+        }
+    }
+    // Hardcoded fallback pool with all 4 accounts
+    $default_groq_keys = [
+        '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',
+        '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',
+        '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',
+        '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'
+    ];
+    foreach ($default_groq_keys as $dgk) {
+        $groq_key_list[] = $dgk;
+    }
+    $groq_key_list = array_values(array_unique($groq_key_list));
+    shuffle($groq_key_list);
+
+    $groq_models = ['qwen/qwen3.8-27b', 'openai/gpt-oss-20b', 'openai/gpt-oss-120b'];
+    foreach ($groq_key_list as $groq_api_key) {
         foreach ($groq_models as $g_mod) {
             $g_ch = curl_init('https://api.groq.com/openai/v1/chat/completions');
             curl_setopt_array($g_ch, [
                 CURLOPT_POST           => true,
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT        => 8,
+                CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,
                 CURLOPT_HTTPHEADER     => [
                     'Authorization: Bearer ' . $groq_api_key,
                     'Content-Type: application/json',
@@ -636,6 +657,8 @@ PROMPT;
                     $g_parsed['scan_status']     = 'done';
                     return $g_parsed;
                 }
+            } elseif ($g_code === 429) {
+                break; // Rate limit on this key, proceed to next key
             }
         }
     }
