@@ -1865,7 +1865,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
               <div className="flex items-center gap-2">
                 <Paperclip className="w-4 h-4 text-[#0099ec]" />
                 <h3 className="font-extrabold text-xs text-[#3d3d3d]">
-                  Source RFQ Document & OCR Inspection — {quotation?.quotation_number}
+                  Original Source RFQ & Inspection Console — {quotation?.quotation_number}
                 </h3>
               </div>
               <button
@@ -1877,103 +1877,127 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
             </div>
 
             <div className="p-4 overflow-y-auto space-y-3 text-xs text-slate-900 bg-slate-50 flex-1">
-              <div className="bg-white p-3.5 border border-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-                <div className="space-y-1">
-                  <span className="font-bold text-slate-500 uppercase text-[10px] block">Source RFQ Document:</span>
-                  <div className="flex items-center gap-2 font-mono font-bold text-slate-900 text-xs">
-                    <FileType className="w-4 h-4 text-red-600" />
-                    <span>Attachment for {quotation?.quotation_number} ({quotation?.company_name || 'Client RFQ Document'})</span>
-                  </div>
-                </div>
+              {(() => {
+                let sourceFile = quotation?.source_file || (quotation as any)?.email_source?.attachment_url || (quotation as any)?.attachment_url || '';
+                if (!sourceFile || sourceFile === 'NONE') {
+                  if (quotation?.ocr_scan_result) {
+                    try {
+                      const parsed = typeof quotation.ocr_scan_result === 'string' ? JSON.parse(quotation.ocr_scan_result) : quotation.ocr_scan_result;
+                      if (parsed?.file_url && parsed.file_url !== 'NONE') sourceFile = parsed.file_url;
+                      if (!sourceFile && parsed?.scanned_pdf_file && parsed.scanned_pdf_file !== 'NONE') sourceFile = parsed.scanned_pdf_file;
+                    } catch (e) {}
+                  }
+                }
+                if (!sourceFile || sourceFile === 'NONE') {
+                  if (scanOcrLog?.file_url && scanOcrLog.file_url !== 'NONE') sourceFile = scanOcrLog.file_url;
+                  if (!sourceFile && scanOcrLog?.scanned_pdf_file && scanOcrLog.scanned_pdf_file !== 'NONE') sourceFile = scanOcrLog.scanned_pdf_file;
+                }
+                if (!sourceFile || sourceFile === 'NONE') {
+                  const matchedSaved = savedQuotations.find((q) => q.id === quotation?.id || q.quotation_number === quotation?.quotation_number);
+                  if (matchedSaved) {
+                    sourceFile = matchedSaved.source_file || (matchedSaved as any)?.email_source?.attachment_url || '';
+                  }
+                }
 
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={handleLoadExistingScanResult}
-                    disabled={isScanningModalOcr}
-                    className="flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs px-3 py-1.5 rounded border border-slate-300 shadow-xs cursor-pointer transition"
-                    title="Load AI scan logs in console"
-                  >
-                    <Eye className="w-3.5 h-3.5 text-slate-600" />
-                    <span>View AI OCR Result</span>
-                  </button>
+                const hasSourceAttachment = Boolean(sourceFile && sourceFile !== 'NONE' && sourceFile.trim() !== '');
 
-                  {/* View PDF Button (External Tab View) */}
-                  {(() => {
-                    let sourceFile = quotation?.source_file || (quotation as any)?.email_source?.attachment_url || (quotation as any)?.attachment_url || '';
-                    if (!sourceFile || sourceFile === 'NONE') {
-                      if (quotation?.ocr_scan_result) {
-                        try {
-                          const parsed = typeof quotation.ocr_scan_result === 'string' ? JSON.parse(quotation.ocr_scan_result) : quotation.ocr_scan_result;
-                          if (parsed?.file_url && parsed.file_url !== 'NONE') sourceFile = parsed.file_url;
-                          if (!sourceFile && parsed?.scanned_pdf_file && parsed.scanned_pdf_file !== 'NONE') sourceFile = parsed.scanned_pdf_file;
-                        } catch (e) {}
-                      }
-                    }
-                    if (!sourceFile || sourceFile === 'NONE') {
-                      if (scanOcrLog?.file_url && scanOcrLog.file_url !== 'NONE') sourceFile = scanOcrLog.file_url;
-                      if (!sourceFile && scanOcrLog?.scanned_pdf_file && scanOcrLog.scanned_pdf_file !== 'NONE') sourceFile = scanOcrLog.scanned_pdf_file;
-                    }
-                    if (!sourceFile || sourceFile === 'NONE') {
-                      const matchedSaved = savedQuotations.find((q) => q.id === quotation?.id || q.quotation_number === quotation?.quotation_number);
-                      if (matchedSaved) {
-                        sourceFile = matchedSaved.source_file || (matchedSaved as any)?.email_source?.attachment_url || '';
-                      }
-                    }
+                let sourceFilename = 'Source Attachment Document';
+                if (hasSourceAttachment) {
+                  if (sourceFile.includes('fn=')) {
+                    const m = sourceFile.match(/fn=([^&]+)/);
+                    if (m) sourceFilename = decodeURIComponent(m[1]);
+                  } else if (sourceFile.includes('/')) {
+                    sourceFilename = sourceFile.substring(sourceFile.lastIndexOf('/') + 1);
+                  }
+                }
 
-                    const targetPdfUrl = (sourceFile && sourceFile !== 'NONE')
-                      ? getApiUrl(sourceFile)
-                      : (quotation?.quotation_file && quotation.quotation_file !== 'NONE'
-                          ? getApiUrl(quotation.quotation_file)
-                          : (quotation?.id || quotation?.quotation_number
-                              ? getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${encodeURIComponent(quotation.id || quotation.quotation_number || '')}`)
-                              : ''));
+                const quotationPdfUrl = (quotation?.quotation_file && quotation.quotation_file !== 'NONE')
+                  ? getApiUrl(quotation.quotation_file)
+                  : (quotation?.id || quotation?.quotation_number
+                      ? getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${encodeURIComponent(quotation.id || quotation.quotation_number || '')}`)
+                      : '');
 
-                    return (
-                      <a
-                        href={targetPdfUrl || '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => {
-                          if (!targetPdfUrl || targetPdfUrl === '#') {
-                            e.preventDefault();
-                            if (quotation?.id || quotation?.quotation_number) {
-                              const streamUrl = getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${encodeURIComponent(quotation.id || quotation.quotation_number || '')}`);
-                              window.open(streamUrl, '_blank', 'noopener,noreferrer');
-                            } else {
-                              alert('No PDF document file found for this quotation.');
-                            }
-                          }
-                        }}
-                        className="flex items-center gap-1.5 bg-white hover:bg-blue-50 text-blue-700 font-bold text-xs px-3 py-1.5 rounded border border-blue-300 shadow-xs cursor-pointer transition"
-                        title="Open PDF Document in External Browser Tab"
+                return (
+                  <div className="bg-white p-3.5 border border-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <span className="font-bold text-slate-500 uppercase text-[10px] block">
+                        {hasSourceAttachment ? 'Original Email RFQ File Attachment:' : 'Original Email RFQ Source:'}
+                      </span>
+                      {hasSourceAttachment ? (
+                        <div className="flex items-center gap-2 font-mono font-bold text-slate-900 text-xs">
+                          <FileType className="w-4 h-4 text-red-600 shrink-0" />
+                          <span className="truncate">{sourceFilename}</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-slate-600 font-medium text-xs">
+                          <Mail className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span>No file attachment in original email — RFQ was received as direct message body text.</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      {/* View Source PDF if attachment exists */}
+                      {hasSourceAttachment && (
+                        <a
+                          href={getApiUrl(sourceFile)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 bg-white hover:bg-blue-50 text-blue-700 font-bold text-xs px-3 py-1.5 rounded border border-blue-300 shadow-xs cursor-pointer transition"
+                          title="Open original email attachment file in external tab"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
+                          <span>View Source PDF</span>
+                        </a>
+                      )}
+
+                      {/* View Generated Quotation PDF */}
+                      {quotationPdfUrl && (
+                        <a
+                          href={quotationPdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 bg-white hover:bg-emerald-50 text-emerald-800 font-bold text-xs px-3 py-1.5 rounded border border-emerald-300 shadow-xs cursor-pointer transition"
+                          title="Open generated Quotation Document in external tab"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>View Quotation PDF</span>
+                        </a>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleLoadExistingScanResult}
+                        disabled={isScanningModalOcr}
+                        className="flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs px-3 py-1.5 rounded border border-slate-300 shadow-xs cursor-pointer transition"
+                        title="Load AI scan logs in console"
                       >
-                        <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
-                        <span>View PDF</span>
-                      </a>
-                    );
-                  })()}
+                        <Eye className="w-3.5 h-3.5 text-slate-600" />
+                        <span>View AI OCR Result</span>
+                      </button>
 
-                  <button
-                    type="button"
-                    onClick={handleScanPdfWithGeminiAiInModal}
-                    disabled={isScanningModalOcr}
-                    className="flex items-center gap-1.5 bg-gradient-to-b from-[#00b4ff] to-[#0080d0] hover:from-[#00a2e8] hover:to-[#0070b8] text-white font-extrabold text-xs px-3.5 py-1.5 rounded border border-[#0060b0] shadow-xs cursor-pointer disabled:opacity-50 transition"
-                  >
-                    {isScanningModalOcr ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
-                        <span>Scanning via AI...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Search className="w-3.5 h-3.5 text-white" />
-                        <span>Scan PDF with AI</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
+                      <button
+                        type="button"
+                        onClick={handleScanPdfWithGeminiAiInModal}
+                        disabled={isScanningModalOcr}
+                        className="flex items-center gap-1.5 bg-gradient-to-b from-[#00b4ff] to-[#0080d0] hover:from-[#00a2e8] hover:to-[#0070b8] text-white font-extrabold text-xs px-3.5 py-1.5 rounded border border-[#0060b0] shadow-xs cursor-pointer disabled:opacity-50 transition"
+                      >
+                        {isScanningModalOcr ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                            <span>Scanning via AI...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Search className="w-3.5 h-3.5 text-white" />
+                            <span>{hasSourceAttachment ? 'Scan PDF with AI' : 'Parse RFQ Text with AI'}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {scanOcrLog && (
                 <div className="bg-slate-950 border border-slate-800 rounded-md p-3.5 space-y-2 text-emerald-400 text-[11px] shadow-lg animate-in fade-in font-mono">
@@ -1993,7 +2017,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                     <div className="space-y-2">
                       <div className="flex flex-wrap justify-between text-slate-300 text-[10px] gap-2 border-b border-slate-800 pb-2">
                         <span>Status: <strong className="text-emerald-400">{scanOcrLog.status}</strong></span>
-                        <span>Scanned File: <strong className="text-amber-300">{scanOcrLog.scanned_pdf_file}</strong></span>
+                        <span>Scanned File: <strong className="text-amber-300">{scanOcrLog.scanned_pdf_file || scanOcrLog.file_url || 'Email Message Text'}</strong></span>
                       </div>
 
                       {scanOcrLog.prompt_sent_to_gemini && (
@@ -2028,12 +2052,22 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
               )}
 
               <div className="bg-white p-3.5 border border-slate-300 space-y-2 shadow-2xs">
-                <h4 className="font-bold text-slate-900 uppercase text-xs border-b border-slate-200 pb-1.5">
-                  Original Email Specification Text:
+                <h4 className="font-bold text-slate-900 uppercase text-xs border-b border-slate-200 pb-1.5 flex items-center justify-between">
+                  <span>Original Email Specification & Message Body:</span>
+                  {(quotation as any)?.email_source?.recipient_email && (
+                    <span className="text-[10px] text-slate-500 font-mono font-normal">
+                      Received at: {(quotation as any).email_source.recipient_email}
+                    </span>
+                  )}
                 </h4>
-                <p className="whitespace-pre-line text-slate-800 leading-relaxed font-sans bg-slate-50 p-2.5 border border-slate-200">
-                  {quotation?.notes || 'No email specifications provided.'}
-                </p>
+                <div className="space-y-1.5 text-slate-800">
+                  <p className="text-[11px] font-bold text-slate-900">
+                    Subject: <span className="font-normal font-sans">{(quotation as any)?.email_source?.subject || quotation?.notes || 'RFQ Supply Requisition'}</span>
+                  </p>
+                  <p className="whitespace-pre-line text-slate-800 leading-relaxed font-sans bg-slate-50 p-2.5 border border-slate-200 max-h-48 overflow-y-auto">
+                    {(quotation as any)?.email_source?.message_body || quotation?.notes || 'No email specifications provided.'}
+                  </p>
+                </div>
               </div>
 
             </div>
