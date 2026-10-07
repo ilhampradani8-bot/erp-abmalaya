@@ -9,7 +9,7 @@ import {
   Activity, Layers, Server, Cpu, Calendar, ScanLine,
   Cloud, RefreshCw, ShieldCheck, Copy, Check, Receipt, Building2, CreditCard,
   Mail, MessageSquare, Package, FileSpreadsheet, Lock, Sparkles, CheckCircle,
-  SlidersHorizontal, Upload, X, Shield, Terminal, HardDrive, ArrowUpRight, Search, Download
+  SlidersHorizontal, Upload, X, Shield, Terminal, HardDrive, ArrowUpRight, Search, Download, PowerOff
 } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
