@@ -184,12 +184,16 @@ try {
 
     if ($res_ocr && $res_ocr->num_rows > 0) {
         $ocr_keys = [];
-        $k_res = $db_conn->query("SELECT api_key FROM gemini_api_keys WHERE status = 'active' ORDER BY id ASC");
+        $k_res = $db_conn->query("SELECT api_key FROM gemini_api_keys WHERE status = 'active' OR is_active = 1 ORDER BY id ASC");
         if ($k_res) {
             while ($kr = $k_res->fetch_assoc()) {
                 $k = trim($kr['api_key']);
                 if (!empty($k) && strpos($k, '...') === false) $ocr_keys[] = $k;
             }
+        }
+        if (isset($env['GEMINI_API_KEYS_OCR'])) {
+            $env_k = array_filter(array_map('trim', explode(',', $env['GEMINI_API_KEYS_OCR'])));
+            $ocr_keys = array_merge($ocr_keys, $env_k);
         }
         $ocr_keys = array_values(array_unique($ocr_keys));
 
