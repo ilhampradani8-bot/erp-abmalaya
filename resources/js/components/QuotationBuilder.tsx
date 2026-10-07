@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Quotation, QuotationItem } from '../types/erp';
 import { 
-  Plus, Trash2, Send, FileCheck, X, Paperclip, FileType, CheckCircle2, Loader2, Terminal, Save, Eye, MoreVertical, Package, Image as ImageIcon, PlusCircle, Search, RefreshCw, Sliders, Settings, Building, User, Mail, Calendar, DollarSign, ShieldCheck, FileText, ChevronDown
+  Plus, Trash2, Send, FileCheck, X, Paperclip, FileType, CheckCircle2, Loader2, Terminal, Save, Eye, MoreVertical, Package, Image as ImageIcon, PlusCircle, Search, RefreshCw, Sliders, Settings, Building, User, Mail, Calendar, DollarSign, ShieldCheck, FileText, ChevronDown, Download
 } from 'lucide-react';
 import { ProductItem } from './Product';
 import { getApiUrl } from '../utils/api';
@@ -713,7 +713,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                   className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-sky-50 hover:text-sky-700 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
                 >
                   <Paperclip className="w-3.5 h-3.5 text-sky-600" />
-                  <span>Source RFQ Details</span>
+                  <span>View Source File</span>
                 </button>
 
                 <button
@@ -763,11 +763,10 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
           <button
             onClick={() => setIsSourceModalOpen(true)}
             className="flex items-center gap-1 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] border border-[#a0a0a0] text-[#3d3d3d] font-bold text-xs px-2.5 py-1 rounded shadow-inner transition cursor-pointer hover:bg-white"
-            title="View Original RFQ Source File / Message"
+            title="View Original Source RFQ Document / Message"
           >
-
             <Paperclip className="w-3.5 h-3.5 text-[#0099ec]" />
-            <span>Source RFQ</span>
+            <span>View Source File</span>
           </button>
         </div>
 
@@ -872,7 +871,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                   className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-sky-50 hover:text-sky-700 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
                 >
                   <Paperclip className="w-3.5 h-3.5 text-sky-600" />
-                  <span>Source RFQ Details</span>
+                  <span>View Source File</span>
                 </button>
 
                 <button
@@ -1866,7 +1865,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
               <div className="flex items-center gap-2">
                 <Paperclip className="w-4 h-4 text-[#0099ec]" />
                 <h3 className="font-extrabold text-xs text-[#3d3d3d]">
-                  Source RFQ Inspection & Gemini AI OCR Scanner — {quotation?.quotation_number}
+                  Source RFQ Document & OCR Inspection — {quotation?.quotation_number}
                 </h3>
               </div>
               <button
@@ -1880,7 +1879,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
             <div className="p-4 overflow-y-auto space-y-3 text-xs text-slate-900 bg-slate-50 flex-1">
               <div className="bg-white p-3.5 border border-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
                 <div className="space-y-1">
-                  <span className="font-bold text-slate-500 uppercase text-[10px] block">Source Target Specification File:</span>
+                  <span className="font-bold text-slate-500 uppercase text-[10px] block">Source RFQ Document:</span>
                   <div className="flex items-center gap-2 font-mono font-bold text-slate-900 text-xs">
                     <FileType className="w-4 h-4 text-red-600" />
                     <span>Attachment for {quotation?.quotation_number} ({quotation?.company_name || 'Client RFQ Document'})</span>
@@ -1900,10 +1899,10 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-1.5 bg-white hover:bg-slate-100 text-blue-700 font-bold text-xs px-3 py-1.5 rounded border border-blue-300 shadow-xs cursor-pointer transition"
-                          title="Buka / Download file dokumen PDF asli"
+                          title="Open original document"
                         >
                           <Download className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Buka Dokumen PDF</span>
+                          <span>Open Source Document</span>
                         </a>
                       );
                     }
@@ -1915,10 +1914,10 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                     onClick={handleLoadExistingScanResult}
                     disabled={isScanningModalOcr}
                     className="flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs px-3 py-1.5 rounded border border-slate-300 shadow-xs cursor-pointer transition"
-                    title="Muat riwayat hasil scan AI di konsol modal ini"
+                    title="Load AI scan logs in console"
                   >
                     <Eye className="w-3.5 h-3.5 text-slate-600" />
-                    <span>Lihat Hasil Scan AI</span>
+                    <span>View AI OCR Result</span>
                   </button>
 
                   <button
@@ -1930,12 +1929,12 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                     {isScanningModalOcr ? (
                       <>
                         <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
-                        <span>Scanning via Gemini...</span>
+                        <span>Scanning via AI...</span>
                       </>
                     ) : (
                       <>
                         <Search className="w-3.5 h-3.5 text-white" />
-                        <span>Scan PDF dengan Gemini AI</span>
+                        <span>Scan PDF with AI</span>
                       </>
                     )}
                   </button>
@@ -2010,7 +2009,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                 onClick={() => setIsSourceModalOpen(false)}
                 className="px-4 py-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] text-[#3d3d3d] border border-[#a0a0a0] font-bold text-xs rounded-sm cursor-pointer hover:bg-white"
               >
-                Close Inspection
+                Close
               </button>
             </div>
 

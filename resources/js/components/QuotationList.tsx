@@ -2273,7 +2273,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px]">
                             {/* 1. File Sumber RFQ */}
                             <div className="bg-white p-2 rounded border border-slate-200 shadow-2xs">
-                              <span className="text-slate-400 font-extrabold text-[9px] block uppercase tracking-wider mb-1">Source RFQ File:</span>
+                              <span className="text-slate-400 font-extrabold text-[9px] block uppercase tracking-wider mb-1">Source File:</span>
                               {(() => {
                                 let fileUrl = activeQuotation.source_file || activeQuotation.email_source?.attachment_url || '';
                                 if ((!fileUrl || fileUrl === 'NONE') && activeQuotation.ocr_scan_result) {
