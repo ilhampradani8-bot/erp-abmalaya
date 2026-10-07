@@ -179,33 +179,46 @@ export const App: React.FC = () => {
     setIsAuthenticated(false);
   };
 
-  useEffect(() => {
-    fetch(getApiUrl('/api_users.php'))
-      .then((res) => res.json())
-      .then((resData) => {
-        if (resData.status === 'success' && Array.isArray(resData.data)) {
-          setUsers(resData.data);
-          
-          const rawCached = localStorage.getItem('abmalaya_user_session');
-          if (rawCached) {
-            try {
-              const parsed = JSON.parse(rawCached);
-              const matchedUser = resData.data.find((u: UserAccount) => u.email.toLowerCase() === parsed.email?.toLowerCase());
-              if (matchedUser) {
-                setCurrentUser(matchedUser);
-                localStorage.setItem('abmalaya_user_session', JSON.stringify(matchedUser));
-              } else {
-                // If user no longer exists in MySQL -> FORCE RE-LOGIN immediately!
-                console.warn('User session not found in active database users. Requiring re-login.');
-                handleLogout();
-              }
-            } catch (e) {
-              handleLogout();
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch(getApiUrl('/api_users.php'));
+      const resData = await res.json();
+      if (resData.status === 'success' && Array.isArray(resData.data)) {
+        setUsers(resData.data);
+        
+        const rawCached = localStorage.getItem('abmalaya_user_session');
+        if (rawCached) {
+          try {
+            const parsed = JSON.parse(rawCached);
+            const matchedUser = resData.data.find(
+              (u: UserAccount) =>
+                (parsed.id && u.id === parsed.id) ||
+                (parsed.email && u.email.toLowerCase() === parsed.email.toLowerCase())
+            );
+            if (matchedUser) {
+              setCurrentUser(matchedUser);
+              localStorage.setItem('abmalaya_user_session', JSON.stringify(matchedUser));
+            } else if (resData.data.length > 0) {
+              setCurrentUser(resData.data[0]);
+              localStorage.setItem('abmalaya_user_session', JSON.stringify(resData.data[0]));
             }
+          } catch (e) {
+            console.error('Failed to parse cached user session', e);
           }
+        } else if (resData.data.length > 0) {
+          setCurrentUser(resData.data[0]);
+          localStorage.setItem('abmalaya_user_session', JSON.stringify(resData.data[0]));
         }
-      })
-      .catch((err) => console.log('MySQL Users fetch error:', err));
+        return resData.data;
+      }
+    } catch (err) {
+      console.log('MySQL Users fetch error:', err);
+    }
+    return [];
+  };
+
+  useEffect(() => {
+    fetchUsers();
   }, []);
 
   const fetchLiveEmails = (isSync: boolean = false) => {
@@ -447,49 +460,89 @@ export const App: React.FC = () => {
     setViewMode('inbox');
   };
 
-  const handleAddUser = (newUser: any) => {
+  const handleAddUser = async (newUser: any) => {
     setIsLoading(true);
-    const userId = newUser.id || `USR-${Date.now()}`;
-    const user: UserAccount = {
-      id: userId,
-      name: newUser.name || 'Team Member',
-      email: newUser.email || 'user@abmalaya.com',
-      role: newUser.role || 'Karyawan',
-      department: newUser.department || 'Sales Executive',
-      status: newUser.status || 'Active',
-      created_at: newUser.created_at || new Date().toISOString().split('T')[0],
-    };
+    try {
+      const userPayload = {
+        id: newUser.id || '',
+        name: newUser.name || 'Team Member',
+        email: newUser.email || 'user@abmalaya.com',
+        role: newUser.role || 'Staff',
+        department: newUser.department || 'Sales Executive',
+        status: newUser.status || 'Active',
+        created_at: newUser.created_at || new Date().toISOString().split('T')[0],
+        password: newUser.password || undefined,
+      };
 
-    fetch(getApiUrl('/api_users.php'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(user),
-    })
-      .then(() => {
-        setUsers((prev) => {
-          const exists = prev.some((u) => u.id === user.id);
-          if (exists) {
-            return prev.map((u) => (u.id === user.id ? user : u));
+      const res = await fetch(getApiUrl('/api_users.php'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userPayload),
+      });
+      const resData = await res.json();
+      
+      if (resData.status === 'success' && Array.isArray(resData.data)) {
+        setUsers(resData.data);
+
+        // If the active user profile was edited, update currentUser state & session storage
+        if (currentUser) {
+          const isCurrentEdited = 
+            (newUser.id && currentUser.id === newUser.id) ||
+            (newUser.email && currentUser.email.toLowerCase() === newUser.email.toLowerCase()) ||
+            (resData.id && currentUser.id === resData.id);
+
+          if (isCurrentEdited) {
+            const updatedUser = resData.data.find((u: UserAccount) => 
+              u.id === (resData.id || newUser.id) || 
+              u.email.toLowerCase() === (newUser.email || '').toLowerCase()
+            );
+            if (updatedUser) {
+              setCurrentUser(updatedUser);
+              localStorage.setItem('abmalaya_user_session', JSON.stringify(updatedUser));
+            }
           }
-          return [...prev, user];
-        });
-      })
-      .catch((err) => console.log('Save user MySQL error:', err))
-      .finally(() => setIsLoading(false));
+        }
+      } else {
+        await fetchUsers();
+      }
+    } catch (err) {
+      console.error('Save user MySQL error:', err);
+      await fetchUsers();
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleDeleteUser = (userId: string) => {
+  const handleDeleteUser = async (userId: string) => {
     setIsLoading(true);
-    fetch(getApiUrl('/api_users.php?action=delete'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: userId }),
-    })
-      .then(() => {
-        setUsers((prev) => prev.filter((u) => u.id !== userId));
-      })
-      .catch((err) => console.log('Delete user MySQL error:', err))
-      .finally(() => setIsLoading(false));
+    try {
+      const res = await fetch(getApiUrl('/api_users.php?action=delete'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: userId }),
+      });
+      const resData = await res.json();
+      if (resData.status === 'success' && Array.isArray(resData.data)) {
+        setUsers(resData.data);
+        // If deleted user was active user, switch to first available user
+        if (currentUser && (currentUser.id === userId || currentUser.email === userId)) {
+          const nextUser = resData.data[0] || null;
+          setCurrentUser(nextUser);
+          if (nextUser) {
+            localStorage.setItem('abmalaya_user_session', JSON.stringify(nextUser));
+          } else {
+            localStorage.removeItem('abmalaya_user_session');
+          }
+        }
+      } else {
+        await fetchUsers();
+      }
+    } catch (err) {
+      console.error('Delete user MySQL error:', err);
+      await fetchUsers();
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const [pendingSwitchUser, setPendingSwitchUser] = useState<UserAccount | null>(null);

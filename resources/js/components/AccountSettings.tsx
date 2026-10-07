@@ -96,7 +96,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
     setUserPassword('');
     setConfirmPassword('');
     setDepartment(user.department || 'Sales Executive');
-    setRole(user.role || 'Staff');
+    setRole((user.role || 'Staff') as UserRole);
     setModalTab(tab);
     setModalPwdMessage(null);
     setShowAddModal(true);
@@ -170,7 +170,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
     } else {
       // Add new user
       onAddUser({
-        id: `USR-${Date.now().toString().slice(-4)}`,
+        id: '',
         name: name.trim(),
         email: email.trim(),
         role,
@@ -214,8 +214,9 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
           <div>
             <div className="flex items-center space-x-2">
               <h1 className="text-sm font-bold text-slate-900 tracking-tight">User Accounts & Access Permissions</h1>
-              <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full border border-blue-200">
-                MySQL Connected
+              <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center space-x-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                <span>Active</span>
               </span>
             </div>
             <p className="text-[11px] text-slate-500">Manage operator permissions, update account credentials, and switch active profiles.</p>
@@ -319,7 +320,12 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                   </tr>
                 ) : (
                   filteredUsers.map((user) => {
-                    const isCurrent = currentUser?.id === user.id || currentUser?.email === user.email;
+                    const isCurrent = Boolean(
+                      currentUser && (
+                        (currentUser.id && user.id && currentUser.id === user.id) ||
+                        (currentUser.email && user.email && currentUser.email.toLowerCase() === user.email.toLowerCase())
+                      )
+                    );
                     const isAdminUser = user.role === 'Admin';
                     return (
                       <tr 
@@ -429,7 +435,12 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
         /* Cards Grid View */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredUsers.map((user) => {
-            const isCurrent = currentUser?.id === user.id || currentUser?.email === user.email;
+            const isCurrent = Boolean(
+              currentUser && (
+                (currentUser.id && user.id && currentUser.id === user.id) ||
+                (currentUser.email && user.email && currentUser.email.toLowerCase() === user.email.toLowerCase())
+              )
+            );
             const isAdminUser = user.role === 'Admin';
             return (
               <div
@@ -529,7 +540,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
           <div className="flex items-center space-x-2">
             <Activity className="w-4 h-4 text-blue-600" />
             <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-              Security & Activity Audit Trail (MySQL: user_activity_logs)
+              Security & Activity Audit Trail
             </h2>
           </div>
           <span className="text-[11px] text-slate-500 font-mono">Last 20 Entries</span>
@@ -681,6 +692,9 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
                       className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-hidden focus:border-blue-500 font-semibold"
                     >
                       <option value="Staff">Staff (Standard Access)</option>
+                      <option value="Sales Engineer">Sales Engineer</option>
+                      <option value="Finance">Finance & Accounting</option>
+                      <option value="Manager">Manager</option>
                       <option value="Admin">Administrator (Full Access)</option>
                     </select>
                   </div>

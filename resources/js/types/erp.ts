@@ -171,7 +171,7 @@ export interface Invoice {
   created_at?: string;
 }
 
-export type UserRole = 'Admin' | 'Karyawan';
+export type UserRole = 'Admin' | 'Staff' | 'Karyawan' | 'Sales Engineer' | 'Manager' | 'Finance';
 
 export interface UserAccount {
   id: string;
