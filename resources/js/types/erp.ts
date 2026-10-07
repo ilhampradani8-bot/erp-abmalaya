@@ -46,6 +46,8 @@ export interface QuotationItem {
   impa_code?: string | null;
   description: string;
   specification?: string;
+  offer?: string;
+  offered_item?: string;
   quantity: number;
   unit: string;
   unit_price: number;

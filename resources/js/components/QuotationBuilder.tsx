@@ -1315,21 +1315,15 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
               <table className="w-full text-left text-xs font-sans border-collapse">
                 <thead className="bg-gradient-to-b from-[#DFDFDF] to-[#EDEDED] border-b border-[rgba(0,0,0,0.15)] text-[#626262] font-semibold text-[11px] uppercase tracking-wide sticky top-0 z-10">
                   <tr>
-                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-8 text-center">#</th>
-                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-8 text-center" title="Swap / Replace from Product Catalog">
-                      <RefreshCw className="w-3.5 h-3.5 mx-auto text-[#626262]" />
-                    </th>
-                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-12 text-center">Photo</th>
-                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-28 font-mono">Product Code</th>
-                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-32 font-mono">IMPA</th>
-                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-48">Product Name</th>
-                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)]">Specification</th>
-                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-20 text-center">Qty</th>
-                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-20">Unit</th>
-                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-32">Unit Price (MYR)</th>
-                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-16 text-center">Disc (%)</th>
-                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-32 text-right">Subtotal (MYR)</th>
-                    <th className="p-2 text-center w-10">Action</th>
+                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-8 text-center">NO.</th>
+                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] min-w-[340px]">ITEM (Product, Specification & Photo)</th>
+                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-16 text-center">QTY</th>
+                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-20 text-center">UNIT</th>
+                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] min-w-[180px]">OFFERED ITEM</th>
+                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-32 text-right">UNIT PRICE (MYR)</th>
+                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-16 text-center">DISC (%)</th>
+                    <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-32 text-right">TOTAL (MYR)</th>
+                    <th className="p-2 text-center w-10">DEL</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1351,118 +1345,135 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                         onClick={() => setActiveRowIdx(idx)}
                         className={`border-b border-[rgba(0,0,0,0.1)] transition ${rowBgClass}`}
                       >
-                        <td className="p-1.5 border-r border-[rgba(0,0,0,0.1)] text-center font-mono font-bold text-[11px]">
+                        {/* 1. NO. */}
+                        <td className="p-2 border-r border-[rgba(0,0,0,0.1)] text-center font-mono font-bold text-[11px] align-top">
                           {idx + 1}
                         </td>
 
-                        <td className="p-1.5 border-r border-[rgba(0,0,0,0.1)] text-center">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setRowToReplaceIndex(idx);
-                              setIsProductPickerModalOpen(true);
-                            }}
-                            className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded transition cursor-pointer"
-                            title="Swap product from catalog"
-                          >
-                            <RefreshCw className="w-3.5 h-3.5 mx-auto text-blue-600 hover:rotate-180 transition-transform duration-300" />
-                          </button>
-                        </td>
-
-                        <td className="p-1 border-r border-[rgba(0,0,0,0.1)] text-center">
-                          {displayPhotoUrl ? (
-                            <img
-                              src={displayPhotoUrl}
-                              alt="Product"
-                              className="w-8 h-8 object-cover border border-slate-300 mx-auto rounded-xs"
+                        {/* 2. ITEM (Stacked: Product Name + Specification + Photo/Catalog + Code/IMPA) */}
+                        <td className="p-2 border-r border-[rgba(0,0,0,0.1)] align-top space-y-1.5">
+                          {/* Product Name Input */}
+                          <div>
+                            <input
+                              type="text"
+                              value={item.description}
+                              onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
+                              placeholder="Product Name / Description..."
+                              className={`w-full font-bold text-xs p-1 rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                                isActive
+                                  ? 'bg-slate-800 text-white border-slate-700'
+                                  : isDescEmpty
+                                  ? 'bg-amber-50 text-amber-900 border-amber-300 font-medium'
+                                  : 'bg-white text-slate-900 border-slate-200'
+                              }`}
                             />
-                          ) : (
-                            <div className="w-8 h-8 bg-slate-200 border border-slate-300 mx-auto flex items-center justify-center text-slate-400" title="No photo">
-                              <ImageIcon className="w-3.5 h-3.5 opacity-50" />
+                          </div>
+
+                          {/* Specification Textarea */}
+                          <div>
+                            <textarea
+                              rows={2}
+                              value={item.specification || ''}
+                              onChange={(e) => handleItemChange(idx, 'specification', e.target.value)}
+                              placeholder="Technical specification, size, material standard..."
+                              className={`w-full text-xs font-sans p-1.5 rounded border resize-y min-h-[36px] focus:outline-none focus:ring-1 focus:ring-blue-500 leading-relaxed ${
+                                isActive
+                                  ? 'bg-slate-800 text-slate-200 border-slate-700 placeholder-slate-400'
+                                  : 'bg-slate-50 text-slate-700 border-slate-200 placeholder-slate-400'
+                              }`}
+                            />
+                          </div>
+
+                          {/* Sub-row: Photo preview + Swap button + Product Code & IMPA */}
+                          <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-200/60">
+                            <div className="flex items-center gap-1.5">
+                              {displayPhotoUrl ? (
+                                <img
+                                  src={displayPhotoUrl}
+                                  alt="Product"
+                                  className="w-7 h-7 object-cover border border-slate-300 rounded-xs shrink-0"
+                                />
+                              ) : (
+                                <div className="w-7 h-7 bg-slate-200 border border-slate-300 rounded-xs flex items-center justify-center text-slate-400 shrink-0" title="No photo">
+                                  <ImageIcon className="w-3.5 h-3.5 opacity-50" />
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setRowToReplaceIndex(idx);
+                                  setIsProductPickerModalOpen(true);
+                                }}
+                                className="px-1.5 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-[10px] font-bold inline-flex items-center gap-1 transition cursor-pointer"
+                                title="Swap / select product from master catalog"
+                              >
+                                <RefreshCw className="w-3 h-3" />
+                                <span>Catalog</span>
+                              </button>
                             </div>
-                          )}
+
+                            <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                              <input
+                                type="text"
+                                value={item.product_code || item.item_code || ''}
+                                onChange={(e) => handleItemChange(idx, 'product_code', e.target.value)}
+                                placeholder="Code"
+                                className="w-20 bg-white border border-slate-200 px-1 py-0.5 rounded text-[10px] font-mono text-blue-700 focus:outline-none"
+                                title="Product Code"
+                              />
+                              <input
+                                type="text"
+                                value={(item as any).impa_code || (item as any).category_name || ''}
+                                onChange={(e) => handleItemChange(idx, 'impa_code' as any, e.target.value)}
+                                placeholder="IMPA"
+                                className="w-16 bg-white border border-slate-200 px-1 py-0.5 rounded text-[10px] font-mono text-purple-700 focus:outline-none"
+                                title="IMPA Code"
+                              />
+                            </div>
+                          </div>
                         </td>
 
-                        <td className="p-1 border-r border-[rgba(0,0,0,0.1)]">
-                          <input
-                            type="text"
-                            value={item.product_code || item.item_code || ''}
-                            onChange={(e) => handleItemChange(idx, 'product_code', e.target.value)}
-                            placeholder="Code"
-                            className={`w-full bg-transparent border-none outline-none focus:ring-0 p-1 text-xs font-mono font-bold ${
-                              isActive ? 'text-amber-300' : 'text-blue-700'
-                            }`}
-                          />
-                        </td>
-
-                        {/* Per Item IMPA Code Field */}
-                        <td className="p-1 border-r border-[rgba(0,0,0,0.1)]">
-                          <input
-                            type="text"
-                            value={(item as any).impa_code || (item as any).category_name || ''}
-                            onChange={(e) => handleItemChange(idx, 'impa_code' as any, e.target.value)}
-                            placeholder="IMPA Code"
-                            className={`w-full bg-transparent border-none outline-none focus:ring-0 p-1 text-xs font-mono font-bold ${
-                              isActive ? 'text-purple-300 placeholder-slate-400' : 'text-purple-900 placeholder-slate-400'
-                            }`}
-                          />
-                        </td>
-
-                        <td className="p-1 border-r border-[rgba(0,0,0,0.1)]">
-                          <input
-                            type="text"
-                            value={item.description}
-                            onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
-                            placeholder="Product Name..."
-                            className={`w-full bg-transparent border-none outline-none focus:ring-0 p-1 text-xs font-bold ${
-                              isActive
-                                ? 'text-white placeholder-slate-400'
-                                : isDescEmpty
-                                ? 'text-amber-800 font-medium placeholder-amber-600/70'
-                                : 'text-slate-900 placeholder-slate-400'
-                            }`}
-                          />
-                        </td>
-
-                        <td className="p-1 border-r border-[rgba(0,0,0,0.1)]">
-                          <textarea
-                            rows={1}
-                            value={item.specification || ''}
-                            onChange={(e) => handleItemChange(idx, 'specification', e.target.value)}
-                            placeholder="Technical specification, size, material..."
-                            className={`w-full bg-transparent border-none outline-none focus:ring-0 p-1 text-xs font-sans resize-y min-h-[28px] ${
-                              isActive
-                                ? 'text-white placeholder-slate-400'
-                                : 'text-slate-700 placeholder-slate-400'
-                            }`}
-                          />
-                        </td>
-
-                        <td className="p-1 border-r border-[rgba(0,0,0,0.1)] text-center">
+                        {/* 3. QTY */}
+                        <td className="p-2 border-r border-[rgba(0,0,0,0.1)] text-center align-top">
                           <input
                             type="number"
                             min={1}
                             value={item.quantity}
                             onChange={(e) => handleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
-                            className={`w-full bg-transparent border-none outline-none focus:ring-0 p-1 text-xs text-center font-bold ${
-                              isActive ? 'text-white' : 'text-slate-900'
+                            className={`w-full p-1 text-xs text-center font-mono font-bold rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                              isActive ? 'bg-slate-800 text-white border-slate-700' : 'bg-white text-slate-900 border-slate-200'
                             }`}
                           />
                         </td>
 
-                        <td className="p-1 border-r border-[rgba(0,0,0,0.1)]">
+                        {/* 4. UNIT */}
+                        <td className="p-2 border-r border-[rgba(0,0,0,0.1)] text-center align-top">
                           <input
                             type="text"
                             value={item.unit}
                             onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
-                            className={`w-full bg-transparent border-none outline-none focus:ring-0 p-1 text-xs ${
-                              isActive ? 'text-white' : 'text-slate-900'
+                            className={`w-full p-1 text-xs text-center rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                              isActive ? 'bg-slate-800 text-white border-slate-700' : 'bg-white text-slate-900 border-slate-200'
                             }`}
                           />
                         </td>
 
-                        <td className="p-1 border-r border-[rgba(0,0,0,0.1)]">
+                        {/* 5. OFFERED ITEM */}
+                        <td className="p-2 border-r border-[rgba(0,0,0,0.1)] align-top">
+                          <textarea
+                            rows={2}
+                            value={(item as any).offer || (item as any).offered_item || ''}
+                            onChange={(e) => handleItemChange(idx, 'offer' as any, e.target.value)}
+                            placeholder="Offered item / alternative proposal..."
+                            className={`w-full text-xs font-sans p-1.5 rounded border resize-y min-h-[36px] focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                              isActive ? 'bg-slate-800 text-white border-slate-700' : 'bg-white text-slate-800 border-slate-200'
+                            }`}
+                          />
+                        </td>
+
+                        {/* 6. UNIT PRICE (MYR) */}
+                        <td className="p-2 border-r border-[rgba(0,0,0,0.1)] align-top">
                           <input
                             type="number"
                             min={0}
@@ -1470,36 +1481,39 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                             value={item.unit_price}
                             onChange={(e) => handleItemChange(idx, 'unit_price', parseFloat(e.target.value) || 0)}
                             placeholder="0"
-                            className={`w-full p-1 text-xs font-mono transition ${
+                            className={`w-full p-1 text-xs font-mono text-right rounded border transition focus:outline-none focus:ring-1 focus:ring-blue-500 ${
                               isPriceEmpty
-                                ? 'bg-amber-200/90 text-amber-950 font-extrabold border border-amber-500 rounded'
+                                ? 'bg-amber-100 text-amber-950 font-extrabold border-amber-400'
                                 : isActive
-                                ? 'bg-transparent text-white border-none outline-none'
-                                : 'bg-transparent text-slate-900 border-none outline-none'
+                                ? 'bg-slate-800 text-white border-slate-700'
+                                : 'bg-white text-slate-900 border-slate-200'
                             }`}
                           />
                         </td>
 
-                        <td className="p-1 border-r border-[rgba(0,0,0,0.1)] text-center">
+                        {/* 7. DISC (%) */}
+                        <td className="p-2 border-r border-[rgba(0,0,0,0.1)] text-center align-top">
                           <input
                             type="number"
                             min={0}
                             max={100}
                             value={item.discount_percent}
                             onChange={(e) => handleItemChange(idx, 'discount_percent', parseFloat(e.target.value) || 0)}
-                            className={`w-full bg-transparent border-none outline-none focus:ring-0 p-1 text-xs text-center font-bold ${
-                              isActive ? 'text-amber-300' : 'text-amber-700'
+                            className={`w-full p-1 text-xs text-center font-bold rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                              isActive ? 'bg-slate-800 text-amber-300 border-slate-700' : 'bg-white text-amber-700 border-slate-200'
                             }`}
                           />
                         </td>
 
-                        <td className={`p-1.5 border-r border-[rgba(0,0,0,0.1)] text-right font-mono font-bold text-xs ${
+                        {/* 8. TOTAL */}
+                        <td className={`p-2 border-r border-[rgba(0,0,0,0.1)] text-right font-mono font-bold text-xs align-top ${
                           isActive ? 'text-white' : 'text-slate-900'
                         }`}>
                           {formatCurrency(item.total)}
                         </td>
 
-                        <td className="p-1.5 text-center">
+                        {/* 9. DEL */}
+                        <td className="p-2 text-center align-top">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1507,6 +1521,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                             }}
                             disabled={(quotation?.items || []).length === 1}
                             className="p-1 text-slate-400 hover:text-rose-600 disabled:opacity-30 transition cursor-pointer"
+                            title="Delete line item"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
