@@ -62,7 +62,7 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
   };
 
   const handleClearAllHistory = () => {
-    if (!window.confirm('Delete all notification log history from MySQL database?')) return;
+    if (!window.confirm('Delete all notifications history?')) return;
 
     fetch(getApiUrl('/api_notifications.php'), {
       method: 'DELETE',
@@ -220,7 +220,7 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
         {isLoading ? (
           <div className="py-24 text-center space-y-2">
             <RefreshCw className="w-7 h-7 text-[#0099ec] animate-spin mx-auto" />
-            <p className="text-xs font-bold text-slate-600">Loading notifications log from MySQL...</p>
+            <p className="text-xs font-bold text-slate-600">Loading notifications...</p>
           </div>
         ) : filteredNotifications.length === 0 ? (
           <div className="py-20 text-center text-slate-400 text-xs space-y-2">

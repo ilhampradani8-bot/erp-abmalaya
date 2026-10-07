@@ -48,8 +48,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     created_at: '',
   };
 
-  const isAdmin = activeUser.role === 'Admin';
-
   // Fetch unread notification count & MySQL users from backend
   useEffect(() => {
     fetch(getApiUrl('/api_notifications.php'))
@@ -111,15 +109,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'product_catalog',
       label: 'Product Catalog',
       icon: Package,
-      badge: 'Catalog',
-      badgeColor: 'bg-amber-100 text-amber-900 border border-amber-300 font-bold',
+      badge: null,
+      badgeColor: '',
     },
     {
       id: 'quotation_list',
       label: 'Quotations List',
       icon: FileSpreadsheet,
-      badge: 'MySQL',
-      badgeColor: 'bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold',
+      badge: null,
+      badgeColor: '',
     },
     {
       id: 'builder',
@@ -132,37 +130,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'invoice_builder',
       label: 'Create Invoice',
       icon: Receipt,
-      badge: 'Invoice',
-      badgeColor: 'bg-[#0070c0] text-white font-bold',
+      badge: null,
+      badgeColor: '',
     },
     {
       id: 'doc_preview',
-      label: 'PDF Document Preview',
+      label: 'Document Preview',
       icon: FileCheck,
-      badge: 'PDF',
-      badgeColor: 'backdrop-blur-md bg-blue-500/15 text-blue-800 border border-blue-300/60 font-bold',
+      badge: null,
+      badgeColor: '',
     },
     {
       id: 'trash',
       label: 'Trash Bin',
       icon: Trash2,
-      badge: 'Trash',
-      badgeColor: 'bg-rose-100 text-rose-800 border border-rose-200 font-bold',
+      badge: null,
+      badgeColor: '',
     },
     // ── System & Administration ──
     {
       id: 'account_settings',
       label: 'User Accounts & Access',
       icon: Users,
-      badge: isAdmin ? 'Admin' : 'Restricted',
-      badgeColor: isAdmin ? 'backdrop-blur-md bg-purple-500/15 text-purple-800 border border-purple-300/60 font-bold' : 'bg-slate-200 text-slate-600',
+      badge: null,
+      badgeColor: '',
     },
     {
       id: 'system_settings',
-      label: 'ERP System Settings',
+      label: 'System Settings',
       icon: Settings,
-      badge: 'System',
-      badgeColor: 'bg-slate-800 text-slate-100 font-bold',
+      badge: null,
+      badgeColor: '',
     },
   ];
 

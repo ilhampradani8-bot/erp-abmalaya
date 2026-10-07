@@ -1154,7 +1154,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
       {generatingPdfId && (
         <div className="bg-amber-500 text-amber-950 px-4 py-2 text-xs font-bold border-b border-amber-600 flex items-center justify-center gap-2 shadow-sm animate-pulse z-30 shrink-0">
           <Loader2 className="w-4 h-4 text-amber-950 animate-spin shrink-0" />
-          <span>Generating Quotation PDF via Puppeteer Headless Chrome... Please wait a moment (Status updating automatically to ACC).</span>
+          <span>Generating PDF Document... Please wait a moment.</span>
         </div>
       )}
 
@@ -1164,7 +1164,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
         {isLoading ? (
           <div className="py-24 text-center space-y-2">
             <Loader2 className="w-7 h-7 text-[#0099ec] animate-spin mx-auto" />
-            <p className="text-xs font-bold text-slate-600">Fetching quotations from MySQL database...</p>
+            <p className="text-xs font-bold text-slate-600">Loading quotations...</p>
           </div>
         ) : (
           <div className="w-full flex-1 min-h-[calc(100vh-140px)] overflow-x-auto border-t border-b border-[rgba(0,0,0,0.2)] bg-white pb-36">
@@ -1270,7 +1270,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                         {shortenQuotationNumber(q.quotation_number || q.id)}
                       </td>
 
-                      {/* IMPA Category Column (Next to SPH Number / ID DB) */}
+                      {/* IMPA Category Column (Next to SPH Number / ID) */}
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">
                         {q.impa_code || q.category_name ? (
                           <span

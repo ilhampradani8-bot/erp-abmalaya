@@ -616,7 +616,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
       .then((res) => res.json())
       .then((resData) => {
         console.log('Processed RFQ saved to MySQL:', resData);
-        setNotificationText(`RFQ from ${pendingConfirmRfq.sender_name} processed and saved to MySQL! Opening Quotation Builder...`);
+        setNotificationText(`RFQ from ${pendingConfirmRfq.sender_name} processed successfully! Opening Quotation Builder...`);
         setShowNotificationBanner(true);
         setTimeout(() => setShowNotificationBanner(false), 4000);
         onCreateQuotationFromRfq(pendingConfirmRfq);
@@ -1725,7 +1725,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-blue-300 animate-pulse" />
                 <h3 className="font-extrabold text-sm text-white">
-                  Confirm Process RFQ to MySQL Database
+                  Confirm Process RFQ
                 </h3>
               </div>
               <button
@@ -1740,7 +1740,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
               <div className="bg-blue-50 border-l-4 border-blue-600 p-3 space-y-1">
                 <p className="font-bold text-blue-900">Are you sure you want to process this RFQ?</p>
                 <p className="text-slate-600">
-                  This will log the RFQ in MySQL database <strong>abmalaya_erp (Tabel quotations & rfq_requests)</strong>, set its status to <strong>In Progress</strong>, and move this RFQ into the In Progress filter tab!
+                  This will process the RFQ, set its status to <strong>In Progress</strong>, and open the Quotation Builder automatically.
                 </p>
               </div>
 
@@ -1767,7 +1767,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 {isOcrProcessing ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin text-white" />
-                    <span>Processing & Saving to MySQL...</span>
+                    <span>Processing & Saving...</span>
                   </>
                 ) : (
                   <>

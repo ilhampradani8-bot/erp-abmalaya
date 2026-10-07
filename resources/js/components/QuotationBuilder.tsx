@@ -75,7 +75,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
       });
   };
 
-  // Load list of saved quotations from MySQL database for dropdown selector
+  // Load list of saved quotations  for dropdown selector
   const loadQuotationsListFromMySQL = () => {
     setIsLoadingQuotations(true);
     fetch(getApiUrl('/api_quotations.php'))
@@ -89,7 +89,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
       .finally(() => setIsLoadingQuotations(false));
   };
 
-  // Load products catalog from MySQL database
+  // Load products catalog 
   const loadProductsCatalogFromMySQL = () => {
     fetch(getApiUrl('/api_products.php'))
       .then((res) => res.json())
@@ -215,7 +215,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
       // Recalculate financial breakdown for the selected quotation
       updateQuotationTotals(items, parseFloat(target.tax_percent as any) || 11);
 
-      setSaveSuccessMessage(`Loaded Quotation "${target.quotation_number}" (${items.length} item(s)) from MySQL database!`);
+      setSaveSuccessMessage(`Loaded Quotation "${target.quotation_number}" (${items.length} item(s)) successfully!`);
       setTimeout(() => setSaveSuccessMessage(null), 3500);
     }
     setTimeout(() => {
@@ -343,7 +343,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
     updateQuotationTotals(combinedItems, quotation?.tax_percent || 11);
     setSelectedProductIds([]);
     setIsProductPickerModalOpen(false);
-    setSaveSuccessMessage(`${newItems.length} product(s) added from Master Database to Line Items Table!`);
+    setSaveSuccessMessage(`${newItems.length} product(s) added added to Line Items Table!`);
     setTimeout(() => setSaveSuccessMessage(null), 4000);
   };
 
@@ -584,7 +584,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
           };
           setQuotation(updatedQuo);
           setSelectedQuoId(savedId);
-          setSaveSuccessMessage(`Quotation ${savedNum} saved successfully to MySQL database!`);
+          setSaveSuccessMessage(`Quotation ${savedNum} saved successfully!`);
           setTimeout(() => setSaveSuccessMessage(null), 4000);
           loadQuotationsListFromMySQL();
           if (callback) callback();
@@ -1302,10 +1302,10 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                 </div>
                 <div className="text-center space-y-1">
                   <span className="font-extrabold text-xs text-slate-900 uppercase tracking-wider block">
-                    Loading Quotation Line Items from Database...
+                    Loading Quotation Items...
                   </span>
                   <p className="text-[11px] text-slate-500 font-mono">
-                    Populating line item specifications, quantities, and prices from MySQL
+                    Loading line item details and specifications...
                   </p>
                 </div>
               </div>
