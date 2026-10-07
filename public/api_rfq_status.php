@@ -67,7 +67,7 @@ try {
 
             if (!$quo_row && $row) {
                 $quo_id = 'QUO-' . time() . '-' . rand(10, 99);
-                $quo_num_str = 'SPH-ABM/MY/' . date('Y') . '/' . sprintf('%04d', rand(1000, 9999));
+                $quo_num_str = 'QUO-ABM/MY/' . date('Y') . '/' . sprintf('%04d', rand(1000, 9999));
                 $client_email = $row['client_email'] ?? '';
                 $client_name = $row['client_name'] ?? (explode('@', $client_email)[0] ?: 'Client');
                 $client_name = ucwords(str_replace(['.', '_', '-'], ' ', $client_name));

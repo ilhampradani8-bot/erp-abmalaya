@@ -35,7 +35,7 @@ function syncVerifiedClientRfqsToQuotations($db_conn) {
         $check = $db_conn->query("SELECT id FROM quotations WHERE rfq_id = {$rfq_id} LIMIT 1");
         if (!$check || $check->num_rows === 0) {
             $quo_id = 'QUO-' . time() . '-' . rand(100, 999) . '-' . $processed;
-            $quo_num = 'SPH-ABM/MY/2026/0' . rand(100, 999);
+            $quo_num = 'QUO-ABM/MY/2026/0' . rand(100, 999);
             
             $client_email = $row['client_email'];
             $client_name = explode('@', $client_email)[0];

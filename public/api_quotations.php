@@ -247,7 +247,7 @@ try {
         }
 
         $id = isset($input['id']) && !empty($input['id']) ? $input['id'] : 'QUO-' . time();
-        $quo_num = isset($input['quotation_number']) && !empty($input['quotation_number']) ? $input['quotation_number'] : 'SPH-ABM/MY/2026/0' . rand(100, 999);
+        $quo_num = isset($input['quotation_number']) && !empty($input['quotation_number']) ? $input['quotation_number'] : 'QUO-ABM/MY/2026/0' . rand(100, 999);
         
         $rfq_id_raw = null;
         if (isset($input['rfq_id'])) {

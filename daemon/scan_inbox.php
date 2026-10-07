@@ -218,7 +218,7 @@ function autoGenerateQuotation($db_conn, $rfq_row, $items, $item_requested) {
     }
 
     $quo_id = 'QUO-' . time() . '-' . rand(10, 99);
-    $quo_num = 'SPH-ABM/MY/2026/0' . rand(100, 999);
+    $quo_num = 'QUO-ABM/MY/2026/0' . rand(100, 999);
     
     $client_email = $rfq_row['client_email'];
     $client_name = explode('@', $client_email)[0];

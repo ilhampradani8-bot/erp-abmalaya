@@ -550,7 +550,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
     const docHtml = `
       <html>
         <head>
-          <title>SPH - ${quo.quotation_number}</title>
+          <title>Quotation - ${quo.quotation_number}</title>
           <style>
             body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #333; line-height: 1.4; }
             .header { display: flex; justify-content: space-between; border-bottom: 3px solid #333; padding-bottom: 20px; margin-bottom: 20px; }
@@ -851,7 +851,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
     const actorName = currentUserRef.current?.name || currentUserRef.current?.email || 'Admin';
     const actorEmail = currentUserRef.current?.email || 'admin@abmalaya.com';
     const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
-    const targetFile = q.quotation_file || q.source_file || `SPH-${q.quotation_number}.pdf`;
+    const targetFile = q.quotation_file || q.source_file || `QUO-${q.quotation_number}.pdf`;
 
     setIsSendingQuotation(true);
 
@@ -3626,7 +3626,7 @@ onClick={() => {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="font-mono font-bold text-xs text-slate-800 truncate">
-                      {sendConfirmQuotation.quotation_file || sendConfirmQuotation.source_file || `SPH-${sendConfirmQuotation.quotation_number}.pdf`}
+                      {sendConfirmQuotation.quotation_file || sendConfirmQuotation.source_file || `QUO-${sendConfirmQuotation.quotation_number}.pdf`}
                     </p>
                     <p className="text-[10px] text-slate-400">Official Quotation PDF document attachment</p>
                   </div>

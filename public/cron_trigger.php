@@ -140,7 +140,7 @@ try {
         while ($rfq_row = $res_create->fetch_assoc()) {
             $rfq_id = (int)$rfq_row['id'];
             $quo_id = 'QUO-' . time() . '-' . rand(100, 999) . '-' . $created_quos;
-            $quo_num = 'SPH-ABM/MY/2026/0' . rand(100, 999);
+            $quo_num = 'QUO-ABM/MY/2026/0' . rand(100, 999);
 
             $client_email = $rfq_row['client_email'];
             $client_name = !empty($rfq_row['client_name']) ? $rfq_row['client_name'] : ucwords(str_replace(['.', '_', '-'], ' ', explode('@', $client_email)[0]));

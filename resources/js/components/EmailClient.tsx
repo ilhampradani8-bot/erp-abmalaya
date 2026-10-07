@@ -682,7 +682,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
 
     // 1. Select Quotation & PDF File
     setSelectedReplyQuotation(targetQuo);
-    const targetPdf = targetQuo.quotation_file || targetQuo.source_file || (targetQuo.pdf_created === 1 ? `SPH-${targetQuo.quotation_number}.pdf` : null);
+    const targetPdf = targetQuo.quotation_file || targetQuo.source_file || (targetQuo.pdf_created === 1 ? targetQuo.quotation_file || (targetQuo.quotation_number ? `${targetQuo.quotation_number.replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf` : null) : null);
     if (targetPdf) setAttachedPdfFile(targetPdf);
 
     // 2. Set Recipient Email
@@ -837,7 +837,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
       }
       setSelectedReplyQuotation(quotation);
 
-      const targetFile = quotation.quotation_file || quotation.source_file || (quotation.pdf_created === 1 ? `SPH-${quotation.quotation_number}.pdf` : null);
+      const targetFile = quotation.quotation_file || quotation.source_file || (quotation.pdf_created === 1 ? quotation.quotation_file || (quotation.quotation_number ? `${quotation.quotation_number.replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf` : null) : null);
       if (targetFile) {
         setAttachedPdfFile(targetFile);
       }
