@@ -319,8 +319,63 @@ export const App: React.FC = () => {
     setTimeout(() => setIsLoading(false), 300);
   };
 
-  const handleCreateQuotationFromRfq = (rfq: RFQ) => {
+  const handleCreateQuotationFromRfq = (rfq: RFQ, savedQuo?: any) => {
     setIsLoading(true);
+
+    if (savedQuo && savedQuo.id) {
+      const dbQuo: Quotation = {
+        id: savedQuo.id,
+        rfq_id: rfq.id,
+        quotation_number: savedQuo.quotation_number || `SPH-ABM/MY/${new Date().getFullYear()}/${Math.floor(1000 + Math.random() * 9000)}`,
+        client_name: savedQuo.client_name || rfq.sender_name,
+        client_email: savedQuo.client_email || rfq.sender_email,
+        company_name: savedQuo.company_name || rfq.company || 'Maritime Client',
+        date_issued: savedQuo.date_issued || new Date().toISOString().split('T')[0],
+        valid_until: savedQuo.valid_until || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+        category_name: savedQuo.category_name || null,
+        impa_code: savedQuo.impa_code || null,
+        items: (savedQuo.items && savedQuo.items.length > 0)
+          ? savedQuo.items.map((it: any, idx: number) => ({
+              id: it.id || `item-${idx + 1}`,
+              product_code: it.product_code || null,
+              category_code: it.category_code || null,
+              description: it.description || 'Maritime Supply Item',
+              specification: it.specification || '',
+              quantity: Number(it.quantity) || 1,
+              unit: it.unit || 'Pcs',
+              unit_price: Number(it.unit_price) || 0,
+              discount_percent: Number(it.discount_percent) || 0,
+              total: Number(it.total) || 0,
+            }))
+          : [
+              {
+                id: 'item-autogen-1',
+                description: rfq.item_requested || rfq.subject || 'Industrial Maritime Supply Requisition',
+                specification: '',
+                quantity: 1,
+                unit: 'Package',
+                unit_price: 0,
+                discount_percent: 0,
+                total: 0,
+              }
+            ],
+        subtotal: Number(savedQuo.subtotal) || 0,
+        discount_total: Number(savedQuo.discount_total) || 0,
+        tax_percent: Number(savedQuo.tax_percent) || 11,
+        tax_amount: Number(savedQuo.tax_amount) || 0,
+        grand_total: Number(savedQuo.grand_total) || 0,
+        notes: savedQuo.notes || rfq.item_requested || rfq.subject || '',
+        status: (savedQuo.status as any) || 'in_progress',
+        ocr_scan_status: (savedQuo.ocr_scan_status as any) || 'pending',
+        created_by: savedQuo.created_by || currentUser?.name || 'System Admin'
+      };
+
+      setCurrentQuotation(dbQuo);
+      setViewModeState('builder');
+      setTimeout(() => setIsLoading(false), 300);
+      return;
+    }
+
     const uniqueQuoId = `QUO-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
     const newQuo: Quotation = {
       ...sampleQuotation,

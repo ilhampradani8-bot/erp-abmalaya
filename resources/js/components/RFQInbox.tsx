@@ -168,7 +168,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
           if (onRefreshLiveEmails) {
             onRefreshLiveEmails();
           }
-          onCreateQuotationFromRfq(rfq);
+          onCreateQuotationFromRfq(rfq, resData.quotation);
         } else {
           alert('Error moving RFQ: ' + resData.message);
         }

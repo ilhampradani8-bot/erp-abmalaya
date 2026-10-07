@@ -52,36 +52,95 @@ try {
                 $stmt_load->close();
             }
 
-            if ($row) {
-                // 3. Trigger autoGenerateQuotation
-                require_once __DIR__ . '/../daemon/scan_ai.php';
+            // 3. Find or Create Quotation record in MySQL database
+            $quo_row = null;
+            $stmt_q = $db_conn->prepare("SELECT * FROM quotations WHERE rfq_id = ? OR rfq_id = ? ORDER BY id DESC LIMIT 1");
+            if ($stmt_q) {
+                $stmt_q->bind_param("is", $clean_id, $rfq_num);
+                $stmt_q->execute();
+                $res_q = $stmt_q->get_result();
+                if ($res_q && $res_q->num_rows > 0) {
+                    $quo_row = $res_q->fetch_assoc();
+                }
+                $stmt_q->close();
+            }
 
-                $items = [];
-                if (!empty($row['item_requested'])) {
-                    $items[] = [
-                        'description' => $row['item_requested'],
-                        'quantity' => 1.00,
-                        'unit' => 'Unit'
-                    ];
-                } else {
-                    $items[] = [
-                        'description' => 'Industrial Spare Parts Requisition specification details',
-                        'quantity' => 1.00,
-                        'unit' => 'Package'
-                    ];
+            if (!$quo_row && $row) {
+                $quo_id = 'QUO-' . time() . '-' . rand(10, 99);
+                $quo_num_str = 'SPH-ABM/MY/' . date('Y') . '/' . sprintf('%04d', rand(1000, 9999));
+                $client_email = $row['client_email'] ?? '';
+                $client_name = $row['client_name'] ?? (explode('@', $client_email)[0] ?: 'Client');
+                $client_name = ucwords(str_replace(['.', '_', '-'], ' ', $client_name));
+                $company_name = $row['company_name'] ?? $client_name;
+                $date_issued = date('Y-m-d');
+                $valid_until = date('Y-m-d', strtotime('+14 days'));
+                $item_req = $row['item_requested'] ?: ($row['subject'] ?: 'Industrial Maritime Supply Requisition');
+                $created_by = $user_name;
+
+                $ins_q = $db_conn->prepare("INSERT INTO quotations (id, rfq_id, quotation_number, client_name, client_email, company_name, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, status, ocr_scan_status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0.00, 11.00, 0.00, 0.00, ?, 'in_progress', 'pending', ?)");
+                if ($ins_q) {
+                    $ins_q->bind_param("sissssssss", $quo_id, $clean_id, $quo_num_str, $client_name, $client_email, $company_name, $date_issued, $valid_until, $item_req, $created_by);
+                    $ins_q->execute();
+                    $ins_q->close();
+
+                    // Insert initial analyzed item
+                    $ins_item = $db_conn->prepare("INSERT INTO quotation_items (quotation_id, description, quantity, unit, unit_price, discount_percent, total) VALUES (?, ?, 1.0, 'Package', 0.00, 0.00, 0.00)");
+                    if ($ins_item) {
+                        $ins_item->bind_param("ss", $quo_id, $item_req);
+                        $ins_item->execute();
+                        $ins_item->close();
+                    }
                 }
 
-                autoGenerateQuotation($db_conn, $row, $items, $row['item_requested']);
-
-                // 4. Log history
-                appendRfqHistoryLog($db_conn, $clean_id, 'Pindah Manual oleh User / Admin', $user_name, $user_email, 'Email dipindahkan secara manual oleh user dari tab general (Others) ke Requisition, dan draf SPH dibuat secara otomatis.');
+                // Re-fetch created quotation
+                $stmt_q2 = $db_conn->prepare("SELECT * FROM quotations WHERE id = ? LIMIT 1");
+                if ($stmt_q2) {
+                    $stmt_q2->bind_param("s", $quo_id);
+                    $stmt_q2->execute();
+                    $res_q2 = $stmt_q2->get_result();
+                    if ($res_q2 && $res_q2->num_rows > 0) {
+                        $quo_row = $res_q2->fetch_assoc();
+                    }
+                    $stmt_q2->close();
+                }
             }
+
+            // Load items for quotation
+            if ($quo_row) {
+                $items_list = [];
+                $stmt_it = $db_conn->prepare("SELECT * FROM quotation_items WHERE quotation_id = ? ORDER BY id ASC");
+                if ($stmt_it) {
+                    $stmt_it->bind_param("s", $quo_row['id']);
+                    $stmt_it->execute();
+                    $res_it = $stmt_it->get_result();
+                    while ($it = $res_it->fetch_assoc()) {
+                        $items_list[] = [
+                            'id' => (string)$it['id'],
+                            'product_code' => $it['product_code'] ?? null,
+                            'category_code' => $it['category_code'] ?? null,
+                            'description' => $it['description'],
+                            'specification' => $it['specification'] ?? '',
+                            'quantity' => (float)$it['quantity'],
+                            'unit' => $it['unit'],
+                            'unit_price' => (float)$it['unit_price'],
+                            'discount_percent' => (float)$it['discount_percent'],
+                            'total' => (float)$it['total']
+                        ];
+                    }
+                    $stmt_it->close();
+                }
+                $quo_row['items'] = $items_list;
+            }
+
+            // 4. Log history
+            appendRfqHistoryLog($db_conn, $clean_id, 'Pindah Manual oleh User / Admin', $user_name, $user_email, 'Email dipindahkan secara manual oleh user dari tab general (Others) ke Requisition, dan draf SPH dibuat secara otomatis.');
 
             ob_end_clean();
             echo json_encode([
                 'status' => 'success',
-                'message' => 'RFQ successfully moved to Requisition and Quotation/SPH auto-generated',
-                'rfq_id' => $rfq_id_raw
+                'message' => 'RFQ successfully moved to Requisition and Quotation/SPH auto-generated in database',
+                'rfq_id' => $rfq_id_raw,
+                'quotation' => $quo_row
             ]);
             exit;
         }
