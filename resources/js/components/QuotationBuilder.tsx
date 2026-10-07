@@ -1901,14 +1901,33 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                   {/* View PDF Button (External Tab View) */}
                   {(() => {
                     let sourceFile = quotation?.source_file || (quotation as any)?.email_source?.attachment_url || (quotation as any)?.attachment_url || '';
-                    if (!sourceFile && scanOcrLog?.scanned_pdf_file) {
-                      sourceFile = scanOcrLog.scanned_pdf_file;
+                    if (!sourceFile || sourceFile === 'NONE') {
+                      if (quotation?.ocr_scan_result) {
+                        try {
+                          const parsed = typeof quotation.ocr_scan_result === 'string' ? JSON.parse(quotation.ocr_scan_result) : quotation.ocr_scan_result;
+                          if (parsed?.file_url && parsed.file_url !== 'NONE') sourceFile = parsed.file_url;
+                          if (!sourceFile && parsed?.scanned_pdf_file && parsed.scanned_pdf_file !== 'NONE') sourceFile = parsed.scanned_pdf_file;
+                        } catch (e) {}
+                      }
                     }
+                    if (!sourceFile || sourceFile === 'NONE') {
+                      if (scanOcrLog?.file_url && scanOcrLog.file_url !== 'NONE') sourceFile = scanOcrLog.file_url;
+                      if (!sourceFile && scanOcrLog?.scanned_pdf_file && scanOcrLog.scanned_pdf_file !== 'NONE') sourceFile = scanOcrLog.scanned_pdf_file;
+                    }
+                    if (!sourceFile || sourceFile === 'NONE') {
+                      const matchedSaved = savedQuotations.find((q) => q.id === quotation?.id || q.quotation_number === quotation?.quotation_number);
+                      if (matchedSaved) {
+                        sourceFile = matchedSaved.source_file || (matchedSaved as any)?.email_source?.attachment_url || '';
+                      }
+                    }
+
                     const targetPdfUrl = (sourceFile && sourceFile !== 'NONE')
                       ? getApiUrl(sourceFile)
-                      : (quotation?.quotation_file 
-                          ? getApiUrl(quotation.quotation_file) 
-                          : (quotation?.id ? getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${encodeURIComponent(quotation.id)}`) : ''));
+                      : (quotation?.quotation_file && quotation.quotation_file !== 'NONE'
+                          ? getApiUrl(quotation.quotation_file)
+                          : (quotation?.id || quotation?.quotation_number
+                              ? getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${encodeURIComponent(quotation.id || quotation.quotation_number || '')}`)
+                              : ''));
 
                     return (
                       <a
@@ -1916,13 +1935,18 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => {
-                          if (!targetPdfUrl) {
+                          if (!targetPdfUrl || targetPdfUrl === '#') {
                             e.preventDefault();
-                            alert('No PDF document file found for this quotation.');
+                            if (quotation?.id || quotation?.quotation_number) {
+                              const streamUrl = getApiUrl(`/api_pdf.php?action=stream&type=quotation&id=${encodeURIComponent(quotation.id || quotation.quotation_number || '')}`);
+                              window.open(streamUrl, '_blank', 'noopener,noreferrer');
+                            } else {
+                              alert('No PDF document file found for this quotation.');
+                            }
                           }
                         }}
                         className="flex items-center gap-1.5 bg-white hover:bg-blue-50 text-blue-700 font-bold text-xs px-3 py-1.5 rounded border border-blue-300 shadow-xs cursor-pointer transition"
-                        title="Open PDF Document in External Tab"
+                        title="Open PDF Document in External Browser Tab"
                       >
                         <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
                         <span>View PDF</span>

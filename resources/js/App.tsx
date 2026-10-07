@@ -378,8 +378,12 @@ export const App: React.FC = () => {
         tax_amount: Number(savedQuo.tax_amount) || 0,
         grand_total: Number(savedQuo.grand_total) || 0,
         notes: savedQuo.notes || rfq.item_requested || rfq.subject || '',
+        source_file: savedQuo.source_file || rfq.attachment_url || (rfq.attachments && rfq.attachments.length > 0 ? rfq.attachments[0].url : '') || '',
+        quotation_file: savedQuo.quotation_file || '',
+        email_source: rfq as any,
         status: (savedQuo.status as any) || 'in_progress',
         ocr_scan_status: (savedQuo.ocr_scan_status as any) || 'pending',
+        ocr_scan_result: savedQuo.ocr_scan_result || null,
         created_by: savedQuo.created_by || currentUser?.name || 'System Admin'
       };
 
@@ -399,6 +403,8 @@ export const App: React.FC = () => {
       client_email: rfq.sender_email,
       company_name: rfq.company,
       date_issued: new Date().toISOString().split('T')[0],
+      source_file: rfq.attachment_url || (rfq.attachments && rfq.attachments.length > 0 ? rfq.attachments[0].url : '') || '',
+      email_source: rfq as any,
       items: [
         {
           id: 'item-autogen-1',

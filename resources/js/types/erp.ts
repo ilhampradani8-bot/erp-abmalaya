@@ -33,6 +33,7 @@ export interface RFQ {
   status: RFQStatus;
   labels?: string[];
   attachments?: EmailAttachment[];
+  attachment_url?: string;
   notes?: string;
   msgno?: number;
   recipient_email?: string;
