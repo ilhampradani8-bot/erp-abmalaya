@@ -36,15 +36,33 @@ if (!ftp_login($conn, $user, $pass)) {
 }
 
 ftp_pasv($conn, true);
-// Auto-scan public/ folder -> upload to root
-function addFolderToUploads($dir, $remote_prefix, &$list) {
+$cache_file = __DIR__ . '/.ftp_deploy_cache.json';
+$cache = file_exists($cache_file) ? json_decode(file_get_contents($cache_file), true) : [];
+if (!is_array($cache)) $cache = [];
+
+$force_all = in_array('--all', $argv) || in_array('--force', $argv);
+
+// Auto-scan folders -> upload to root
+function addFolderToUploads($dir, $remote_prefix, &$list, $ignore_heavy = true) {
     if (!is_dir($dir)) return;
     $files = scandir($dir);
     foreach ($files as $file) {
-        if ($file === '.' || $file === '..' || $file === '.git') continue;
+        if ($file === '.' || $file === '..' || $file === '.git' || $file === 'node_modules') continue;
         $path = $dir . '/' . $file;
+        
+        // Skip heavy directories unless needed
+        if ($ignore_heavy && (
+            strpos($path, 'uploads/pdf') !== false ||
+            strpos($path, 'daemon/logs') !== false ||
+            strpos($path, 'dist/attachments') !== false ||
+            strpos($path, 'public/attachments') !== false ||
+            strpos($path, 'exports/') !== false
+        )) {
+            continue;
+        }
+
         if (is_dir($path)) {
-            addFolderToUploads($path, $remote_prefix . $file . '/', $list);
+            addFolderToUploads($path, $remote_prefix . $file . '/', $list, $ignore_heavy);
         } else {
             $list[$path] = $remote_prefix . $file;
         }
@@ -52,13 +70,22 @@ function addFolderToUploads($dir, $remote_prefix, &$list) {
 }
 
 $files_to_upload = [];
-addFolderToUploads('public', '', $files_to_upload);
-addFolderToUploads('daemon', '../daemon/', $files_to_upload);
-addFolderToUploads('cpanel', '../cpanel/', $files_to_upload);
-addFolderToUploads('dist', '', $files_to_upload);
+addFolderToUploads('dist', '', $files_to_upload, !$force_all);
+addFolderToUploads('daemon', '../daemon/', $files_to_upload, !$force_all);
+addFolderToUploads('cpanel', '../cpanel/', $files_to_upload, !$force_all);
+addFolderToUploads('public', '', $files_to_upload, !$force_all); // public ALWAYS takes priority for backend PHP!
 
+$uploaded_count = 0;
+$skipped_count = 0;
 
 foreach ($files_to_upload as $local => $remote) {
+    $current_hash = md5_file($local) . '_' . filesize($local);
+    
+    if (!$force_all && isset($cache[$local]) && $cache[$local] === $current_hash) {
+        $skipped_count++;
+        continue;
+    }
+
     echo "Uploading $local to $remote...\n";
     
     // Ensure remote directory exists
@@ -74,10 +101,14 @@ foreach ($files_to_upload as $local => $remote) {
     
     if (ftp_put($conn, $remote, $local, FTP_BINARY)) {
         echo "Successfully uploaded $local to $remote\n";
+        $cache[$local] = $current_hash;
+        $uploaded_count++;
     } else {
         echo "FAILED to upload $local to $remote\n";
     }
 }
 
+file_put_contents($cache_file, json_encode($cache, JSON_PRETTY_PRINT));
 ftp_close($conn);
-echo "FTP Deployment Finished!\n";
+echo "FTP Deployment Finished! ($uploaded_count uploaded, $skipped_count skipped/unchanged)\n";
+

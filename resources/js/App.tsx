@@ -256,10 +256,10 @@ export const App: React.FC = () => {
 
     const interval = setInterval(() => {
       if (!isPreviewOpenRef.current) {
-        fetchLiveEmails(true);
+        fetchLiveEmails(false);
         fetchQuotationsList();
       }
-    }, 15000); // Fast 15 seconds sync interval
+    }, 15000); // 15 seconds fast silent background refresh from local MySQL DB
 
     return () => {
       clearInterval(interval);
