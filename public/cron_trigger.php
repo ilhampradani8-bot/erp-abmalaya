@@ -85,13 +85,16 @@ try {
                 $prompt = "Classify this maritime procurement email:\nSubject: {$sbj}\nBody: {$bod}\nIs this a client RFQ? Reply JSON: {\"is_rfq\": true/false, \"classification\": \"client_rfq\"/\"general_inquiry\", \"item_requested\": \"short summary\"}";
                 $chosen_key = $keys[array_rand($keys)];
                 if (strpos($chosen_key, 'AIza') === 0 || strpos($chosen_key, 'AQ.') === 0) {
-                    $u = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . urlencode($chosen_key);
+                    $dyn_models = function_exists('getGeminiActiveModels') ? getGeminiActiveModels($keys) : ['gemini-flash-latest'];
+                    $chosen_model = $dyn_models[0] ?? 'gemini-flash-latest';
+                    $u = 'https://generativelanguage.googleapis.com/v1beta/models/' . $chosen_model . ':generateContent?key=' . urlencode($chosen_key);
                     $ch = curl_init($u);
                     curl_setopt_array($ch, [
                         CURLOPT_POST => true,
                         CURLOPT_POSTFIELDS => json_encode(['contents' => [['parts' => [['text' => $prompt]]]]]),
                         CURLOPT_RETURNTRANSFER => true,
-                        CURLOPT_TIMEOUT => 3,
+                        CURLOPT_TIMEOUT => 4,
+                        CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
                         CURLOPT_HTTPHEADER => ['Content-Type: application/json']
                     ]);
                     $ai_res = curl_exec($ch);

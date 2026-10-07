@@ -1228,7 +1228,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
 
           {/* SPH / QUOTATIONS SELECTOR DROPDOWN */}
           <div className="flex items-center gap-1.5">
-            <span className="font-bold text-slate-700 text-[11px]">Load from SPH:</span>
+            <span className="font-bold text-slate-700 text-[11px]">Load from Quotation:</span>
             <select
               value={selectedQuoId}
               onChange={(e) => handleSelectQuotation(e.target.value)}
@@ -1236,7 +1236,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
               className="bg-gradient-to-b from-[#fafafa] to-[#eaeaea] border border-[#a0a0a0] px-3 py-1 text-xs text-[#3d3d3d] font-bold rounded shadow-inner cursor-pointer max-w-xs focus:outline-none disabled:opacity-60 transition"
             >
               <option value="">
-                {isLoadingQuotations ? '-- Loading Quotations... --' : '-- Select SPH / Quotation --'}
+                {isLoadingQuotations ? '-- Loading Quotations... --' : '-- Select Quotation --'}
               </option>
               {completedQuotations.map((q) => (
                 <option key={q.id} value={q.id}>
@@ -1249,7 +1249,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
           {isLoadingQuotations && (
             <div className="flex items-center gap-1.5 text-[11px] text-blue-700 font-bold font-mono bg-blue-50 px-2 py-0.5 rounded border border-blue-200 animate-pulse">
               <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
-              <span>Loading SPH...</span>
+              <span>Loading Quotation...</span>
             </div>
           )}
 

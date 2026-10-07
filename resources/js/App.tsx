@@ -326,7 +326,7 @@ export const App: React.FC = () => {
       const dbQuo: Quotation = {
         id: savedQuo.id,
         rfq_id: rfq.id,
-        quotation_number: savedQuo.quotation_number || `SPH-ABM/MY/${new Date().getFullYear()}/${Math.floor(1000 + Math.random() * 9000)}`,
+        quotation_number: savedQuo.quotation_number || `QUO-ABM/MY/${new Date().getFullYear()}/${Math.floor(1000 + Math.random() * 9000)}`,
         client_name: savedQuo.client_name || rfq.sender_name,
         client_email: savedQuo.client_email || rfq.sender_email,
         company_name: savedQuo.company_name || rfq.company || 'Maritime Client',
@@ -381,7 +381,7 @@ export const App: React.FC = () => {
       ...sampleQuotation,
       id: uniqueQuoId,
       rfq_id: rfq.id,
-      quotation_number: `SPH-ABM/MY/${new Date().getFullYear()}/${Math.floor(1000 + Math.random() * 9000)}`,
+      quotation_number: `QUO-ABM/MY/${new Date().getFullYear()}/${Math.floor(1000 + Math.random() * 9000)}`,
       client_name: rfq.sender_name,
       client_email: rfq.sender_email,
       company_name: rfq.company,

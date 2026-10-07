@@ -146,7 +146,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
   const handleMoveToRequisition = (rfq: RFQ) => {
     setIsOcrProcessing(true);
-    setNotificationText(`Moving "${rfq.subject}" to Requisition & generating SPH...`);
+    setNotificationText(`Processing "${rfq.subject}" & generating Quotation...`);
     setShowNotificationBanner(true);
 
     fetch(getApiUrl('/api_rfq_status.php'), {
@@ -586,7 +586,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
       body: JSON.stringify({
         id: `QUO-${Date.now().toString().slice(-4)}`,
         rfq_id: pendingConfirmRfq.id,
-        quotation_number: `SPH-ABM/MY/2026/0${Math.floor(Math.random() * 900 + 100)}`,
+        quotation_number: `QUO-ABM/MY/2026/0${Math.floor(Math.random() * 900 + 100)}`,
         client_name: pendingConfirmRfq.sender_name,
         client_email: pendingConfirmRfq.sender_email,
         company_name: pendingConfirmRfq.company || pendingConfirmRfq.sender_name,
@@ -993,7 +993,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                                   className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-blue-50 hover:text-blue-700 font-semibold text-left"
                                 >
                                   <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                                  <span>Process to SPH</span>
+                                  <span>Process Quotation</span>
                                 </button>
 
                                 <button
@@ -1249,13 +1249,13 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
                 <div className="flex items-center gap-2 shrink-0 relative">
 
-                  {/* Process RFQ to SPH Button */}
+                  {/* Process RFQ to Quotation Button */}
                   <button
                     onClick={() => handleProcessRfqClick(selectedRfq)}
                     className="flex items-center gap-1.5 bg-gradient-to-b from-[#00b4ff] to-[#0080d0] hover:from-[#00a2e8] hover:to-[#0070b8] text-white font-extrabold text-xs px-3.5 py-1.5 rounded-md border border-[#0060b0] shadow-sm cursor-pointer transition"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-                    <span>Process RFQ to SPH</span>
+                    <span>Process to Quotation</span>
                   </button>
 
                   <div className="relative">
@@ -1690,7 +1690,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 <div className="bg-white p-4 border border-indigo-200 shadow-2xs space-y-2 rounded-sm">
                   <h4 className="font-bold text-indigo-950 text-xs border-b border-indigo-200 pb-2 flex items-center gap-2">
                     <Send className="w-3.5 h-3.5 text-indigo-650" />
-                    <span>Sent Email Reply (Outbound Quotation SPH)</span>
+                    <span>Sent Email Reply (Outbound Quotation)</span>
                   </h4>
                   <div className="bg-indigo-50/20 border border-indigo-100 p-4 rounded-sm space-y-2">
                     <div className="flex items-center justify-between text-[10px] font-bold text-indigo-850 border-b border-indigo-100 pb-1 mb-2">

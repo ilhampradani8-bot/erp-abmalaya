@@ -113,48 +113,53 @@ try {
     $reply_text = '';
     $last_err   = '';
 
+    $dyn_models = function_exists('getGeminiActiveModels') ? getGeminiActiveModels($api_keys) : ['gemini-flash-latest', 'gemini-flash-lite-latest'];
+
     foreach ($api_keys as $key) {
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" . $key;
+        foreach ($dyn_models as $model_name) {
+            $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $model_name . ":generateContent?key=" . urlencode($key);
 
-        $payload = [
-            'contents' => [[
-                'parts' => [['text' => $user_content]]
-            ]],
-            'systemInstruction' => [
-                'parts' => [['text' => $sys_instr]]
-            ],
-            'generationConfig' => [
-                'temperature'     => 0.72,
-                'maxOutputTokens' => 4096,
-                'topP'            => 0.9
-            ]
-        ];
+            $payload = [
+                'contents' => [[
+                    'parts' => [['text' => $user_content]]
+                ]],
+                'systemInstruction' => [
+                    'parts' => [['text' => $sys_instr]]
+                ],
+                'generationConfig' => [
+                    'temperature'     => 0.72,
+                    'maxOutputTokens' => 4096,
+                    'topP'            => 0.9
+                ]
+            ];
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST,           true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS,     json_encode($payload));
-        curl_setopt($ch, CURLOPT_HTTPHEADER,     ['Content-Type: application/json']);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_TIMEOUT,        25);
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST,           true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS,     json_encode($payload));
+            curl_setopt($ch, CURLOPT_HTTPHEADER,     ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_IPRESOLVE,      CURL_IPRESOLVE_V4);
+            curl_setopt($ch, CURLOPT_TIMEOUT,        15);
 
-        $response  = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+            $response  = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
 
-        if ($http_code === 200) {
-            $decoded = json_decode($response, true);
-            if (isset($decoded['candidates'][0]['content']['parts'][0]['text'])) {
-                $reply_text = trim($decoded['candidates'][0]['content']['parts'][0]['text']);
-                break;
+            if ($http_code === 200) {
+                $decoded = json_decode($response, true);
+                if (isset($decoded['candidates'][0]['content']['parts'][0]['text'])) {
+                    $reply_text = trim($decoded['candidates'][0]['content']['parts'][0]['text']);
+                    break 2;
+                }
+            } elseif ($http_code === 404) {
+                continue; // Try next model
+            } elseif ($http_code === 429) {
+                $last_err = "Key rate-limited (429). Rotating...";
+                break; // Try next key
+            } else {
+                $last_err = "Model {$model_name} HTTP {$http_code}: " . substr($response, 0, 300);
             }
-        } elseif ($http_code === 429) {
-            // Rate limited — try next key
-            $last_err = "Key rate-limited (429). Rotating...";
-            sleep(1);
-            continue;
-        } else {
-            $last_err = "HTTP {$http_code}: " . substr($response, 0, 400);
         }
     }
 

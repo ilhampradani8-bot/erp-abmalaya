@@ -32,7 +32,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
   const [isSavingMySQL, setIsSavingMySQL] = useState<boolean>(false);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
 
-  // Exactly 2 Tabs Navigation State: 'header' (Tab 1: Info SPH & Klien) | 'items' (Tab 2: Tabel Items & Total)
+  // Exactly 2 Tabs Navigation State: 'header' (Tab 1: Quotation Info & Client) | 'items' (Tab 2: Line Items & Totals)
   const [activeTab, setActiveTab] = useState<'header' | 'items'>('items');
 
   // Header Dropdown Menu & Modals State
@@ -375,7 +375,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
   // Run Authentic Google Gemini AI PDF OCR Scanning via PHP backend
   const handleScanPdfWithGeminiAiInModal = () => {
     if (!quotation?.id) {
-      setScanOcrLog({ status: 'error', message: 'Quotation SPH ID not found.' });
+      setScanOcrLog({ status: 'error', message: 'Quotation ID not found.' });
       return;
     }
     setIsScanningModalOcr(true);
@@ -641,7 +641,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                     setIsLeftQuoDropdownOpen(false);
                     setQuotation({
                       id: `QUO-${Date.now()}`,
-                      quotation_number: `SPH-ABM/MY/2026/${Math.floor(1000 + Math.random() * 9000)}`,
+                      quotation_number: `QUO-ABM/MY/2026/${Math.floor(1000 + Math.random() * 9000)}`,
                       client_name: '',
                       client_email: '',
                       company_name: '',
@@ -719,7 +719,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                   className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-purple-50 hover:text-purple-700 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
                 >
                   <Settings className="w-3.5 h-3.5 text-purple-600" />
-                  <span>Paper & SPH Settings</span>
+                  <span>Paper & Quotation Settings</span>
                 </button>
               </div>
             )}
@@ -878,7 +878,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                   className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-purple-50 hover:text-purple-700 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
                 >
                   <Sliders className="w-3.5 h-3.5 text-purple-600" />
-                  <span>Advance SPH Settings (System Settings)</span>
+                  <span>Advance Quotation Settings (System Settings)</span>
                 </button>
 
               </div>
@@ -1219,10 +1219,10 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
               <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                 <label className="block text-xs font-extrabold text-slate-900 flex items-center gap-1.5 uppercase tracking-wide">
                   <Sliders className="w-4 h-4 text-purple-600" />
-                  <span>Custom Footer Running Text (Kop Footer Bawah SPH):</span>
+                  <span>Custom Footer Running Text (Document Footer):</span>
                 </label>
                 <span className="text-[10px] text-slate-500 font-mono">
-                  Default dari Setting Paper jika dikosongkan
+                  Default from Paper Settings if left empty
                 </span>
               </div>
               <textarea
@@ -1232,7 +1232,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                 placeholder={paperSettings?.footer_text || 'sales@abmalaya.com, +60 3-8000 1234, abmalaya.com'}
                 className="w-full bg-slate-50 border border-slate-300 p-2.5 text-xs text-slate-900 rounded focus:ring-2 focus:ring-purple-500 focus:outline-none font-mono leading-relaxed"
               />
-              <p className="text-[10px] text-slate-400">Teks ini akan dicetak di bagian paling bawah lembar dokumen preview dan PDF SPH.</p>
+              <p className="text-[10px] text-slate-400">This text will be printed at the bottom of the document preview and Quotation PDF.</p>
             </div>
 
           </div>
@@ -2018,7 +2018,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
               <div className="bg-slate-950 border border-slate-800 rounded-md p-4 space-y-2 text-slate-200 font-mono shadow-inner">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2 text-slate-400">
                   <span className="font-bold text-amber-400">MySQL Audit Log Events</span>
-                  <span>ID SPH: {quotation?.id}</span>
+                  <span>Quotation ID: {quotation?.id}</span>
                 </div>
 
                 {quotation?.history_log ? (

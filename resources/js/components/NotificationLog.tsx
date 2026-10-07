@@ -374,7 +374,7 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
                     }}
                     className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-lg transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <span>Open Quotation SPH List →</span>
+                    <span>Open Quotations List →</span>
                   </button>
                 )}
 

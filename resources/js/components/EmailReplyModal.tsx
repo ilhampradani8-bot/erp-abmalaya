@@ -139,10 +139,10 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
           </div>
           <div>
             <h3 className="font-extrabold text-sm text-white" style={{ fontFamily: "'Eurostile', monospace" }}>
-              Reply Email & Send Quotation SPH
+              Reply Email & Send Commercial Quotation
             </h3>
             <p className="text-[10px] text-slate-400">
-              Compose email response to the client along with the SPH document attachments.
+              Compose email response to the client along with the Quotation document attachments.
             </p>
           </div>
         </div>
@@ -163,7 +163,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
           </div>
           <h4 className="text-lg font-extrabold text-slate-900">Email Dispatched Successfully!</h4>
           <p className="text-xs text-slate-600 max-w-md text-center leading-relaxed">
-            Quotation SPH <strong className="text-blue-700">{quotation.quotation_number}</strong> has been successfully dispatched to <strong className="text-slate-900">{toEmail}</strong>. Status updated to <span className="text-emerald-700 font-semibold">Quotation Sent</span>.
+            Quotation <strong className="text-blue-700">{quotation.quotation_number}</strong> has been successfully dispatched to <strong className="text-slate-900">{toEmail}</strong>. Status updated to <span className="text-emerald-700 font-semibold">Quotation Sent</span>.
           </p>
         </div>
       ) : (
@@ -235,7 +235,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
                   />
                   <span className="flex items-center gap-1.5 text-slate-800 font-bold text-xs">
                     <Paperclip className="w-4 h-4 text-amber-600" />
-                    Attach PDF SPH Document ({quotation.quotation_number}.pdf)
+                    Attach PDF Quotation Document ({quotation.quotation_number}.pdf)
                   </span>
                 </label>
                 <span className="text-[9px] text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded font-mono font-bold">

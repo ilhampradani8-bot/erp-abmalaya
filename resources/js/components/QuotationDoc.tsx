@@ -918,7 +918,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
   const companyPhone = paperSettings?.phone || paperSettings?.companyPhone || '+60 3-8000 1234';
   const companyWebsite = paperSettings?.website || paperSettings?.companyWebsite || 'abmalaya.com';
   const tableHeaderBgColor = paperSettings?.table_header_bg || paperSettings?.tableHeaderBg || '#0070c0';
-  const headerTitle = paperSettings?.header_title || paperSettings?.headerTitle || 'OFFICIAL COMMERCIAL QUOTATION (SPH)';
+  const headerTitle = paperSettings?.header_title || paperSettings?.headerTitle || 'OFFICIAL COMMERCIAL QUOTATION';
 
   const [headerImageHeight, setHeaderImageHeight] = useState<number | null>(null);
 
@@ -1417,7 +1417,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
             className="bg-gradient-to-b from-[#fafafa] to-[#eaeaea] border border-[#a0a0a0] px-3 py-1 text-xs text-[#3d3d3d] font-bold rounded shadow-inner cursor-pointer max-w-xs focus:outline-none disabled:opacity-60 transition"
           >
             <option value="">
-              {isLoadingQuotations ? '-- Loading Quotations... --' : '-- Select Saved SPH / Quotation --'}
+              {isLoadingQuotations ? '-- Loading Quotations... --' : '-- Select Saved Quotation --'}
             </option>
             {savedQuotations.map((q) => {
               const itemCnt = (q.items || q.items_details || []).length;
@@ -2311,7 +2311,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 uppercase mb-1">Default SPH Footer Running Text (Bottom Sheet)</label>
+                <label className="block font-bold text-slate-700 uppercase mb-1">Default Quotation Footer Running Text (Bottom Sheet)</label>
                 <input
                   type="text"
                   value={modalFooterText}
@@ -2322,7 +2322,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 uppercase mb-1">Default SPH Terms & Conditions (Above Signatures)</label>
+                <label className="block font-bold text-slate-700 uppercase mb-1">Default Quotation Terms & Conditions (Above Signatures)</label>
                 <textarea
                   rows={2}
                   value={modalFooterTerms}

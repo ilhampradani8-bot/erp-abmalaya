@@ -125,7 +125,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
     bankAccountNumber: '5648 9201 3345',
     bankAccountName: 'AB MALAYA SDN BHD',
     bankEmail: 'finance@abmalaya.com',
-    headerTitle: 'COMMERCIAL QUOTATION (SPH)',
+    headerTitle: 'OFFICIAL COMMERCIAL QUOTATION',
     footerTerms: '1. 50% DP payment required after PO is issued.\n2. Remaining 50% payment upon delivery completion.\n3. Quotation valid for 14 days from issue date.',
     footerText: 'Thank you for choosing AB MALAYA SDN. BHD. as your trusted marine supplier.',
     headerColor: '#0080d0',
@@ -594,7 +594,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
       .then((res) => res.json())
       .then((resData) => {
         if (resData.status === 'success') {
-          setSavedMessage('SPH Letterhead & Paper settings saved to SQL Database successfully!');
+          setSavedMessage('Quotation Letterhead & Paper settings saved to SQL Database successfully!');
           setIsSaved(true);
           setTimeout(() => setIsSaved(false), 4000);
         } else {
@@ -843,7 +843,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
     { id: 'credentials', label: '1. Email & SMTP', icon: Key, badge: 'TLS 587' },
     { id: 'inbox_rules', label: '2. Filter & Cutoff Rules', icon: Sliders, badge: 'Filter' },
     { id: 'ai', label: '3. AI API Key Pool', icon: Bot, badge: 'Gemini' },
-    { id: 'paper', label: '4. SPH Letterhead', icon: FileText, badge: 'SPH' },
+    { id: 'paper', label: '4. Quotation Letterhead', icon: FileText, badge: 'Quotation' },
     { id: 'quotation_settings', label: '5. Quotation Standards', icon: Percent, badge: 'Fee' },
     { id: 'invoice', label: '6. Invoice Format & Signatory', icon: Receipt, badge: 'Invoice' },
     { id: 'cloud_sync', label: '7. Google Sheets Backup', icon: Cloud, badge: 'Sheets' },
@@ -853,7 +853,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
   // Core MySQL Tables Registry
   const coreTables = [
     { name: 'rfq_requests', label: 'RFQ Requests Registry', type: 'InnoDB', charset: 'utf8mb4', desc: 'Inbound email RFQ requests and manual quotations.' },
-    { name: 'quotations', label: 'Quotation Documents (SPH)', type: 'InnoDB', charset: 'utf8mb4', desc: 'Document headers, official SPH numbers, total values, SST/tax, and validity.' },
+    { name: 'quotations', label: 'Quotation Documents', type: 'InnoDB', charset: 'utf8mb4', desc: 'Document headers, official quotation numbers, total values, SST/tax, and validity.' },
     { name: 'quotation_items', label: 'Quotation Line Items', type: 'InnoDB', charset: 'utf8mb4', desc: 'Product item list, IMPA codes, quantities, unit prices, and discounts.' },
     { name: 'invoices', label: 'Commercial Tax Invoices', type: 'InnoDB', charset: 'utf8mb4', desc: 'Commercial invoices, invoice numbers, due dates, and payment statuses.' },
     { name: 'invoice_items', label: 'Invoice Line Items', type: 'InnoDB', charset: 'utf8mb4', desc: 'Itemized breakdown of products and services billed on invoices.' },
@@ -863,7 +863,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
     { name: 'spreadsheet_backups', label: 'Google Sheets Backup Targets', type: 'InnoDB', charset: 'utf8mb4', desc: 'Configured Google Spreadsheet IDs for automated product catalog synchronization.' },
     { name: 'gemini_api_keys', label: 'Gemini AI API Key Pool', type: 'InnoDB', charset: 'utf8mb4', desc: 'Rotational API key pool for RFQ classification and OCR Vision scanning.' },
     { name: 'api_credentials', label: 'System Configuration Store', type: 'InnoDB', charset: 'utf8mb4', desc: 'SMTP host settings, email filter rules, and system fee parameters.' },
-    { name: 'system_paper_settings', label: 'SPH Letterhead Configuration', type: 'InnoDB', charset: 'utf8mb4', desc: 'Company identity, logo, official stamp, bank details, and margins.' },
+    { name: 'system_paper_settings', label: 'Quotation Letterhead Configuration', type: 'InnoDB', charset: 'utf8mb4', desc: 'Company identity, logo, official stamp, bank details, and margins.' },
     { name: 'system_invoice_settings', label: 'Invoice Template Format', type: 'InnoDB', charset: 'utf8mb4', desc: 'Invoice header, SSM number, official signatory name, and payment terms.' },
     { name: 'users', label: 'System User Accounts', type: 'InnoDB', charset: 'utf8mb4', desc: 'Operator logins, role-based access permissions, departments, and password hashes.' },
     { name: 'user_activity_logs', label: 'Activity & Security Audit Logs', type: 'InnoDB', charset: 'utf8mb4', desc: 'Audit trails of logins, data modifications, and document dispatches.' },
@@ -1256,7 +1256,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         )}
 
         {/* ════════════════════════════════════════════════════════════════════
-            TAB 4: SPH LETTERHEAD & PAPER BRANDING
+            TAB 4: QUOTATION LETTERHEAD & PAPER BRANDING
         ════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'paper' && (
           <div className="w-full space-y-4 animate-in fade-in">
@@ -1264,14 +1264,14 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               <div className="px-5 py-3 bg-gradient-to-b from-slate-100 to-slate-200 border-b border-slate-300 flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <FileText className="w-4 h-4 text-amber-600" />
-                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Quotation Letterhead (SPH) & Corporate Identity</span>
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">Quotation Letterhead & Corporate Identity</span>
                 </div>
                 <button
                   onClick={handleSavePaper}
                   className="inline-flex items-center space-x-1.5 px-4 py-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 text-white font-bold rounded-lg shadow-xs text-xs transition-all cursor-pointer"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  <span>Save SPH Settings</span>
+                  <span>Save Quotation Settings</span>
                 </button>
               </div>
 
@@ -1423,17 +1423,17 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   </div>
                 </div>
 
-                {/* SPH Bottom Footer Bar & Running Text Settings with Live Preview */}
+                {/* Quotation Bottom Footer Bar & Running Text Settings with Live Preview */}
                 <div className="p-4 bg-slate-50 border border-slate-300 rounded-xl space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                     <div className="flex items-center gap-2">
                       <Sliders className="w-4 h-4 text-purple-600" />
                       <div>
                         <span className="font-extrabold text-slate-900 text-xs uppercase tracking-wide block">
-                          SPH Document Bottom Footer Bar & Running Info
+                          Quotation Document Bottom Footer Bar & Running Info
                         </span>
                         <span className="text-[11px] text-slate-500">
-                          Configure the repeating footer bar printed at the bottom of every SPH sheet.
+                          Configure the repeating footer bar printed at the bottom of every quotation sheet.
                         </span>
                       </div>
                     </div>
@@ -1441,7 +1441,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
 
                   {/* Live Visual Preview of the SPH Footer */}
                   <div className="space-y-1">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Live SPH Footer Preview (How it prints at the bottom of every sheet):</span>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Live Quotation Footer Preview (How it prints at the bottom of every sheet):</span>
                     <div className="bg-white border border-slate-300 p-2.5 rounded shadow-2xs">
                       <div className="flex items-center justify-between border-t border-slate-300 pt-1.5 text-[8pt] text-slate-600 font-sans">
                         <div className="flex items-center gap-1.5 overflow-hidden">
@@ -1468,11 +1468,11 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                         placeholder="sales@abmalaya.com, +60 3-8000 1234, abmalaya.com"
                         className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-800 font-mono text-xs focus:bg-white focus:outline-blue-500"
                       />
-                      <span className="text-[10px] text-slate-500">Contact / website info displayed inside parentheses next to the company name at the bottom of every SPH sheet.</span>
+                      <span className="text-[10px] text-slate-500">Contact / website info displayed inside parentheses next to the company name at the bottom of every quotation sheet.</span>
                     </div>
 
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">Default SPH Terms & Conditions (Above Signatures)</label>
+                      <label className="block font-bold text-slate-700 mb-1">Default Quotation Terms & Conditions (Above Signatures)</label>
                       <textarea
                         rows={2}
                         value={paperSettings.footerTerms}
@@ -1480,7 +1480,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                         placeholder="1. 50% DP payment required after PO is issued..."
                         className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:bg-white focus:outline-blue-500 font-sans text-xs"
                       />
-                      <span className="text-[10px] text-slate-500">Standard terms & conditions printed above the official signature box in SPH documents.</span>
+                      <span className="text-[10px] text-slate-500">Standard terms & conditions printed above the official signature box in quotation documents.</span>
                     </div>
                   </div>
                 </div>

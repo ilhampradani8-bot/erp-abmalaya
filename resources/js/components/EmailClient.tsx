@@ -695,7 +695,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
     const grandTotalFormatted = Number(targetQuo.grand_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
 
     const draftBody = `Dear ${clientName},\n\n` +
-      `Please find attached our official Commercial Price Quotation (SPH) with details as follows:\n\n` +
+      `Please find attached our official Commercial Price Quotation with details as follows:\n\n` +
       `• Quotation No: ${quoNo}\n` +
       `• Date: ${targetQuo.date_issued || new Date().toISOString().split('T')[0]}\n` +
       `• Total Amount: MYR ${grandTotalFormatted}\n\n` +
@@ -1364,7 +1364,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
           sender_name: selectedGroup.primaryClientName,
           company: selectedGroup.companyName,
           sender_email: toEmail || selectedGroup.primaryEmail,
-          subject: 'Commercial SPH Inquiry',
+          subject: 'Commercial Quotation Inquiry',
           message_body: 'Request for quotation and technical specification offer.',
         },
         quotation_data: activeQuotation ? {
@@ -1386,11 +1386,11 @@ export const EmailClient: React.FC<EmailClientProps> = ({
           const generatedFallback = 
             `Dear ${selectedGroup.primaryClientName},\n\n` +
             `Thank you for contacting AB MALAYA SDN. BHD. regarding your requirement for ${selectedGroup.companyName}.\n\n` +
-            `We are pleased to provide our commercial proposal (SPH No: ${activeQuotation?.quotation_number || activeQuotation?.id || 'SPH-2026'}).\n\n` +
+            `We are pleased to provide our commercial proposal (Quotation No: ${activeQuotation?.quotation_number || activeQuotation?.id || 'QUO-2026'}).\n\n` +
             `Total Investment: MYR ${(activeQuotation?.grand_total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} (Inclusive of 11% Tax)\n` +
             `Validity: 14 Days from date of issue.\n\n` +
             (aiPrompt ? `Note: ${aiPrompt}\n\n` : '') +
-            `Please review the attached SPH document. Feel free to reply directly to this email for purchase order confirmation.\n\n` +
+            `Please review the attached Quotation document. Feel free to reply directly to this email for purchase order confirmation.\n\n` +
             `Best regards,\nSales & Estimating Desk\nAB MALAYA SDN. BHD.`;
           setMessageText(generatedFallback);
           setShowAiBox(false);
@@ -1517,7 +1517,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                               )}
                               {group.quotations.length > 0 && (
                                 <span className="text-[10px] font-bold text-blue-800 bg-blue-100 border border-blue-300 px-1.5 py-0.2 rounded">
-                                  {group.quotations.length} SPH
+                                  {group.quotations.length} Quotation
                                 </span>
                               )}
                             </div>
@@ -2190,7 +2190,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                         <div className="flex-1">
                           <p className="font-extrabold text-xs">Not Saved in Contacts Yet</p>
                           <p className="text-amber-800 text-[11px] leading-relaxed mt-0.5">
-                            This company was extracted from SPH Quotations. Click save below to register it in official client contacts.
+                            This company was extracted from Quotations. Click save below to register it in official client contacts.
                           </p>
                         </div>
                       </div>
@@ -2213,7 +2213,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                         <thead>
                           <tr className="bg-slate-100 border-b border-slate-200 text-[10px] uppercase font-extrabold text-slate-600">
                             <th className="p-2 border-r border-slate-200 w-2/5">Email Message (RFQ)</th>
-                            <th className="p-2 border-r border-slate-200 w-3/5">SPH Quotation & Action Workflow</th>
+                            <th className="p-2 border-r border-slate-200 w-3/5">Quotation & Action Workflow</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 font-sans">
@@ -2257,7 +2257,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                     </div>
                                   ) : (
                                     <span className="text-slate-400 italic text-[10px] font-mono block p-1">
-                                      Direct / Manual SPH
+                                      Direct / Manual Quotation
                                     </span>
                                   )}
                                 </td>
@@ -2348,7 +2348,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                                   disabled={isGeneratingPdf}
                                                   onClick={() => handleCreatePdfBackground(q)}
                                                   className="px-1 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded transition border border-blue-700 cursor-pointer flex items-center justify-center gap-1 text-[8px] font-extrabold shadow-2xs w-full disabled:opacity-75"
-                                                  title="Generate PDF SPH Document"
+                                                  title="Generate PDF Quotation Document"
                                                 >
                                                   {isGeneratingPdf ? (
                                                     <>
@@ -2385,7 +2385,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                                   type="button"
                                                   onClick={() => handleSendQuotationDirect(q)}
                                                   className="px-1 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded transition border border-emerald-700 cursor-pointer flex items-center justify-center gap-1 text-[8px] font-extrabold shadow-2xs w-full"
-                                                  title={`Send SPH ${q.quotation_number || q.id}`}
+                                                  title={`Send Quotation ${q.quotation_number || q.id}`}
                                                 >
                                                   <Send className="w-2.5 h-2.5" />
                                                   <span>Ready to Send</span>
@@ -2736,7 +2736,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                         type="button"
                                         onClick={() => setPdfPreviewModalData({ id: q.quotation_number || q.id, title: q.quotation_number || q.id })}
                                         className="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[10px] font-mono font-bold transition shadow-2xs cursor-pointer"
-                                        title={`Preview Dokumen SPH ${q.quotation_number || q.id}`}
+                                        title={`Preview Quotation Document ${q.quotation_number || q.id}`}
                                       >
                                         <FileType className="w-3 h-3 text-blue-600" />
                                         <span>View Doc ({q.quotation_number || `#${q.id}`})</span>
@@ -3385,7 +3385,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                   <div className="flex items-center gap-2">
                     <h2 className="font-extrabold text-base text-white">{selectedGroup.companyName}</h2>
                     <span className="bg-blue-600/30 text-blue-300 border border-blue-500/40 text-[10px] px-2 py-0.5 rounded font-mono font-bold">
-                      {selectedGroup.rfqs.length} Email RFQ | {selectedGroup.quotations.length} SPH Quotation
+                      {selectedGroup.rfqs.length} Email RFQ | {selectedGroup.quotations.length} Quotation
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 font-mono mt-0.5">
@@ -3412,7 +3412,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                   <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" />
                   <input
                     type="text"
-                    placeholder="Filter by subject, RFQ number, SPH number, or status..."
+                    placeholder="Filter by subject, RFQ number, Quotation number, or status..."
                     value={fullTableSearch}
                     onChange={(e) => setFullTableSearch(e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 font-sans"
@@ -3431,7 +3431,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                   <thead>
                     <tr className="bg-slate-800 text-slate-200 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-700">
                       <th className="p-3 border-r border-slate-700 w-1/3">Email Message Details (RFQ)</th>
-                      <th className="p-3 border-r border-slate-700 w-1/3">Commercial Quotation (SPH)</th>
+                      <th className="p-3 border-r border-slate-700 w-1/3">Commercial Quotation</th>
                       <th className="p-3 text-center w-1/3">Actions & Delivery Status</th>
                     </tr>
                   </thead>
@@ -3482,7 +3482,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                 </div>
                               ) : (
                                 <div className="p-3 bg-slate-50 border border-dashed border-slate-300 rounded text-center">
-                                  <span className="text-slate-500 font-semibold text-xs block">Direct / Manual SPH Quotation</span>
+                                  <span className="text-slate-500 font-semibold text-xs block">Direct / Manual Quotation</span>
                                   <span className="text-[10px] text-slate-400 italic">Created directly from Quotation System</span>
                                 </div>
                               )}
@@ -3592,7 +3592,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                           disabled={isGeneratingPdf}
                                           onClick={() => handleCreatePdfBackground(q)}
                                           className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition border border-blue-700 text-xs font-extrabold flex items-center gap-1.5 w-full justify-center shadow-xs cursor-pointer disabled:opacity-75"
-                                          title="Generate PDF SPH Document"
+                                          title="Generate PDF Quotation Document"
                                         >
                                           {isGeneratingPdf ? (
                                             <>
@@ -3629,7 +3629,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
                                           className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition border border-emerald-700 text-xs font-extrabold flex items-center gap-1.5 w-full justify-center shadow-xs cursor-pointer"
                                         >
                                           <Send className="w-3.5 h-3.5" />
-                                          <span>Send SPH Quotation</span>
+                                          <span>Send Quotation</span>
                                         </button>
                                       )}
 
@@ -3820,7 +3820,7 @@ export const EmailClient: React.FC<EmailClientProps> = ({
             <div className="bg-slate-900 text-white px-4 py-3 flex items-center justify-between shrink-0 border-b border-slate-800">
               <div className="flex items-center gap-2 font-extrabold text-sm min-w-0">
                 <FileText className="w-4 h-4 text-blue-400 shrink-0" />
-                <span className="truncate">Dokumen SPH Quotation #{pdfPreviewModalData.title}</span>
+                <span className="truncate">Quotation Document #{pdfPreviewModalData.title}</span>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {/* View Mode Toggle */}

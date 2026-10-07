@@ -116,14 +116,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'quotation_list',
-      label: 'Quotations List (SPH)',
+      label: 'Quotations List',
       icon: FileSpreadsheet,
       badge: 'MySQL',
       badgeColor: 'bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold',
     },
     {
       id: 'builder',
-      label: 'Create Quotation (SPH)',
+      label: 'Create Quotation',
       icon: FileText,
       badge: null,
       badgeColor: '',

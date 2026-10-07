@@ -233,10 +233,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               } catch (e) {}
               if (!Array.isArray(logs)) logs = [];
               logs.push({
-                action: 'Generate PDF SPH',
+                action: 'Generate PDF Quotation',
                 user_name: actorName,
                 user_email: actorEmail || null,
-                details: `PDF SPH document ${item.quotation_number || item.id} generated successfully.`,
+                details: `PDF Quotation document ${item.quotation_number || item.id} generated successfully.`,
                 timestamp: nowStr,
               });
 
@@ -584,7 +584,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               </div>
             </div>
             <div style="text-align: right;">
-              <span class="sph-title">COMMERCIAL QUOTATION (SPH)</span>
+              <span class="sph-title">COMMERCIAL QUOTATION</span>
               <div style="font-family: monospace; font-weight: bold;">No: ${quo.quotation_number}</div>
               <div style="color: #666; font-size: 11px;">Date: ${quo.date_issued}</div>
             </div>
@@ -624,14 +624,14 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               </tr>
             </thead>
             <tbody>
-              ${itemsHtml || '<tr><td colspan="7" style="text-align: center; padding: 20px;">No items defined in SPH.</td></tr>'}
+              ${itemsHtml || '<tr><td colspan="7" style="text-align: center; padding: 20px;">No items defined in quotation.</td></tr>'}
             </tbody>
           </table>
           
           <div class="totals-box">
             <div style="width: 48%; font-size: 11px; background: #f9f9f9; padding: 10px; border: 1px solid #eee;">
               <strong>Quotation Notes:</strong>
-              <p style="color: #666; margin: 4px 0 0 0; font-style: italic;">${quo.notes || 'Standard SPH terms apply.'}</p>
+              <p style="color: #666; margin: 4px 0 0 0; font-style: italic;">${quo.notes || 'Standard quotation terms apply.'}</p>
             </div>
             <div style="width: 48%; text-align: right; font-family: monospace;">
               <div style="margin: 4px 0;">Subtotal: ${fmt(sub)}</div>
@@ -734,7 +734,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   }, []);
 
   const handleDeleteQuotation = (id: string) => {
-    if (!window.confirm('Are you sure you want to move this SPH Quotation to Trash (Junk status)?')) {
+    if (!window.confirm('Are you sure you want to move this Quotation to Trash (Junk status)?')) {
       return;
     }
 
@@ -771,7 +771,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
 
   const handleBatchDelete = () => {
     if (selectedIds.length === 0) return;
-    if (!window.confirm(`Are you sure you want to move the ${selectedIds.length} selected SPH quotations to Trash (Junk)?`)) {
+    if (!window.confirm(`Are you sure you want to move the ${selectedIds.length} selected quotations to Trash (Junk)?`)) {
       return;
     }
 
@@ -798,7 +798,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
         );
         setSelectedIds([]);
         setIsSelectionMode(false);
-        alert('Selected SPH items moved to Trash!');
+        alert('Selected quotation items moved to Trash!');
       })
       .catch((err) => console.error('Batch delete error:', err))
       .finally(() => setIsLoading(false));
@@ -832,7 +832,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
         setSelectedIds([]);
         setIsSelectionMode(false);
         setShowBatchStatusDropdown(false);
-        alert(`Selected SPH items status updated to ${newStatus}!`);
+        alert(`Selected quotation items status updated to ${newStatus}!`);
       })
       .catch((err) => console.error('Batch status update error:', err))
       .finally(() => setIsLoading(false));
@@ -1019,7 +1019,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
             <Search className="w-3.5 h-3.5 absolute left-3 top-2 text-slate-500" />
             <input
               type="search"
-              placeholder="Search SPH ID, company..."
+              placeholder="Search Quotation ID, company..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-white border border-[#a0a0a0] rounded-full pl-9 pr-3 py-1 text-xs text-[#3d3d3d] focus:outline-none focus:border-[#0099ec] shadow-inner font-sans"
@@ -1054,7 +1054,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   className="w-full text-left px-3.5 py-2 hover:bg-gradient-to-b hover:from-[#00b4ff] hover:to-[#0080d0] hover:text-white transition flex items-center gap-2 cursor-pointer font-bold text-[#3d3d3d]"
                 >
                   <Plus className="w-3.5 h-3.5 text-[#0080d0]" />
-                  <span>New SPH</span>
+                  <span>New Quotation</span>
                 </button>
                 
                 <button
@@ -1066,10 +1066,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   className="w-full text-left px-3.5 py-2 hover:bg-gradient-to-b hover:from-[#00b4ff] hover:to-[#0080d0] hover:text-white transition flex items-center gap-2 cursor-pointer font-bold text-[#3d3d3d]"
                 >
                   <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{isSelectionMode ? 'Exit Selection' : 'Select SPH Items'}</span>
+                  <span>{isSelectionMode ? 'Exit Selection' : 'Select Quotations'}</span>
                 </button>
 
-                {/* USER REQUESTED: Right below "Select SPH Items", add "Tampilkan Semua Kolom Database (Full)" */}
+                {/* USER REQUESTED: Right below "Select Quotations", add "Tampilkan Semua Kolom Database (Full)" */}
                 <button
                   onClick={() => {
                     setShowActionsMenu(false);
@@ -1089,7 +1089,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   className="w-full text-left px-3.5 py-2 hover:bg-gradient-to-b hover:from-[#00b4ff] hover:to-[#0080d0] hover:text-white transition flex items-center gap-2 cursor-pointer font-bold text-[#3d3d3d] border-t border-[#eee]"
                 >
                   <Info className="w-3.5 h-3.5 text-blue-600" />
-                  <span>SPH & Categories Info</span>
+                  <span>Quotation & Categories Info</span>
                 </button>
               </div>
             )}
@@ -1103,7 +1103,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
         <div className="bg-gradient-to-b from-[#e2e8f0] to-[#cbd5e1] border-b border-[#94a3b8] px-4 py-2 flex items-center justify-between text-xs text-slate-800 font-sans shadow-inner shrink-0 z-10">
           <div className="flex items-center gap-2">
             <span className="bg-[#0080d0] text-white font-extrabold px-2 py-0.5 rounded-full text-[10px] animate-pulse">
-              {selectedIds.length} SPH Selected
+              {selectedIds.length} Quotations Selected
             </span>
           </div>
           
@@ -1154,7 +1154,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
       {generatingPdfId && (
         <div className="bg-amber-500 text-amber-950 px-4 py-2 text-xs font-bold border-b border-amber-600 flex items-center justify-center gap-2 shadow-sm animate-pulse z-30 shrink-0">
           <Loader2 className="w-4 h-4 text-amber-950 animate-spin shrink-0" />
-          <span>Generating SPH PDF via Puppeteer Headless Chrome... Please wait a moment (Status updating automatically to ACC).</span>
+          <span>Generating Quotation PDF via Puppeteer Headless Chrome... Please wait a moment (Status updating automatically to ACC).</span>
         </div>
       )}
 
@@ -1164,7 +1164,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
         {isLoading ? (
           <div className="py-24 text-center space-y-2">
             <Loader2 className="w-7 h-7 text-[#0099ec] animate-spin mx-auto" />
-            <p className="text-xs font-bold text-slate-600">Fetching SPH quotations from MySQL database...</p>
+            <p className="text-xs font-bold text-slate-600">Fetching quotations from MySQL database...</p>
           </div>
         ) : (
           <div className="w-full flex-1 min-h-[calc(100vh-140px)] overflow-x-auto border-t border-b border-[rgba(0,0,0,0.2)] bg-white pb-36">
@@ -1185,7 +1185,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                     )}
                   </th>
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-16 text-center">ID (DB)</th>}
-                  <th className="p-2.5 border-r border-slate-800 w-28">SPH Number</th>
+                  <th className="p-2.5 border-r border-slate-800 w-28">Quotation Number</th>
                   <th className="p-2.5 border-r border-slate-800 w-44">IMPA Category</th>
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-20 text-center">RFQ ID</th>}
 
@@ -1419,7 +1419,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                             <span className="truncate max-w-[80px]">
                               {q.quotation_file
                                 ? q.quotation_file.substring(q.quotation_file.lastIndexOf('/') + 1)
-                                : 'PDF SPH'}
+                                : 'PDF Quotation'}
                             </span>
                           </button>
                         ) : (
@@ -1541,7 +1541,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   ? 'bg-rose-100 text-rose-800 hover:bg-rose-200 border border-rose-300'
                                   : 'bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300'
                               }`}
-                              title={`Klik untuk melihat detail ${alerts.length} alert pada SPH ini`}
+                              title={`Klik untuk melihat detail ${alerts.length} alert on this quotation`}
                             >
                               <AlertTriangle className={`w-3.5 h-3.5 ${hasError ? 'text-rose-600' : 'text-amber-600'}`} />
                               <span>{alerts.length}</span>
@@ -1600,7 +1600,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   className="w-full text-left px-3.5 py-2 hover:bg-blue-50 text-blue-900 transition flex items-center gap-2 cursor-pointer font-bold border-b border-slate-100"
                                 >
                                   <Edit className="w-3.5 h-3.5 text-blue-600" />
-                                  <span>Edit SPH / Quotation</span>
+                                  <span>Edit Quotation</span>
                                 </button>
 
                                 {/* OPEN IN EMAIL CLIENT */}
@@ -1655,7 +1655,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 text-emerald-900 transition flex items-center gap-2 cursor-pointer font-semibold border-t border-slate-100"
                                 >
                                   <Printer className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>View & Print SPH (HTML)</span>
+                                  <span>View & Print Quotation (HTML)</span>
                                 </button>
 
                                 {/* 3. CREATE INVOICE */}
@@ -1783,7 +1783,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                 <History className="w-5 h-5 text-amber-400" />
                 <div>
                   <h3 className="font-extrabold text-xs text-white">Quotation Audit Trail History</h3>
-                  <p className="text-[10px] text-slate-400 font-mono">SPH ID: {selectedHistoryQuotation.quotation_number}</p>
+                  <p className="text-[10px] text-slate-400 font-mono">Quotation ID: {selectedHistoryQuotation.quotation_number}</p>
                 </div>
               </div>
               <button
@@ -1901,7 +1901,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                 <div className="flex items-center gap-2">
                   <FileType className="w-4 h-4 text-[#0080d0]" />
                   <div>
-                    <h3 className="font-extrabold text-xs text-[#3d3d3d]">Full Info — SPH Quotation</h3>
+                    <h3 className="font-extrabold text-xs text-[#3d3d3d]">Full Info — Quotation</h3>
                     <select
                       value={activeQuotation.id}
                       onChange={(e) => {
@@ -1927,7 +1927,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                     onClick={() => handleCreatePdfBackground(activeQuotation)}
                     disabled={generatingPdfId === activeQuotation.id}
                     className="p-1.5 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded font-extrabold text-[10px] transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-2xs"
-                    title="Generate PDF SPH & buat file quotation"
+                    title="Generate PDF Quotation & buat file quotation"
                   >
                     {generatingPdfId === activeQuotation.id ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -2268,7 +2268,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                         <div className="col-span-3 border-l-2 border-indigo-500 pl-2.5 bg-slate-50/80 p-2.5 rounded border border-slate-200 mt-1">
                           <h4 className="text-[9.5px] text-slate-700 uppercase font-extrabold tracking-wider mb-2 flex items-center gap-1">
                             <FileText className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                            <span>Documents & Files (RFQ, SPH & Invoice)</span>
+                            <span>Documents & Files (RFQ, Quotation & Invoice)</span>
                           </h4>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px]">
                             {/* 1. File Sumber RFQ */}
@@ -2310,7 +2310,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
 
                             {/* 2. File Quotation SPH */}
                             <div className="bg-white p-2 rounded border border-slate-200 shadow-2xs">
-                              <span className="text-slate-400 font-extrabold text-[9px] block uppercase tracking-wider mb-1">File Quotation SPH (PDF):</span>
+                              <span className="text-slate-400 font-extrabold text-[9px] block uppercase tracking-wider mb-1">Quotation PDF File:</span>
                               {activeQuotation.quotation_file || activeQuotation.pdf_created === 1 ? (
                                 <div className="flex items-center justify-between gap-1">
                                   <a
@@ -2600,7 +2600,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                     ) : (
                       <div className="py-20 text-center text-slate-400 font-bold space-y-1">
                         <Clock className="w-8 h-8 mx-auto text-slate-300" />
-                        <p>This SPH was created manually without a linked IMAP Gmail RFQ email source.</p>
+                        <p>This quotation was created manually without a linked IMAP Gmail RFQ email source.</p>
                       </div>
                     )}
                   </>
@@ -2762,7 +2762,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                 current.push({ timestamp: new Date().toISOString().replace('T',' ').substring(0,19), user_name: userName, user_email: userEmail, note: accNote });
                                 setQuotations(prev => prev.map(q => q.id === activeQuotation.id ? { ...q, approved_by: JSON.stringify(current), status: 'ready_send' } : q));
                                 setAccNote('');
-                                alert('ACC Approval recorded and SPH status updated to Ready to Send (ready_send)!');
+                                alert('ACC Approval recorded and Quotation status updated to Ready to Send (ready_send)!');
                               }
                             })
                             .catch(e => console.error('ACC error:', e));
@@ -2786,7 +2786,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   <button
                     onClick={() => triggerSPHPrint(activeQuotation, 'png')}
                     className="bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-[#e6e6e6] text-[#3d3d3d] font-bold text-xs p-1.5 rounded border border-[#a0a0a0] transition cursor-pointer flex items-center justify-center gap-1"
-                    title="Save SPH PNG image"
+                    title="Save Quotation PNG image"
                   >
                     <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
 
@@ -3531,7 +3531,7 @@ onClick={() => {
                 </div>
                 <div>
                   <h3 className="font-extrabold text-sm tracking-wide">Confirm Send Quotation</h3>
-                  <p className="text-[11px] text-slate-300">Quotation / SPH #{sendConfirmQuotation.quotation_number}</p>
+                  <p className="text-[11px] text-slate-300">Quotation #{sendConfirmQuotation.quotation_number}</p>
                 </div>
               </div>
               <button
@@ -3581,7 +3581,7 @@ onClick={() => {
               <div className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs space-y-2">
                 <div className="flex items-center gap-1.5 text-slate-500 font-bold text-[11px] uppercase tracking-wider">
                   <FileText className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>As (Quotation / SPH)</span>
+                  <span>As Quotation</span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 border-t border-slate-100">
                   <div>
@@ -3616,7 +3616,7 @@ onClick={() => {
                     </span>
                   ) : (
                     <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3 text-amber-600" /> Auto SPH
+                      <AlertTriangle className="w-3 h-3 text-amber-600" /> Auto Quotation
                     </span>
                   )}
                 </div>
@@ -3628,7 +3628,7 @@ onClick={() => {
                     <p className="font-mono font-bold text-xs text-slate-800 truncate">
                       {sendConfirmQuotation.quotation_file || sendConfirmQuotation.source_file || `SPH-${sendConfirmQuotation.quotation_number}.pdf`}
                     </p>
-                    <p className="text-[10px] text-slate-400">Official SPH PDF document attachment</p>
+                    <p className="text-[10px] text-slate-400">Official Quotation PDF document attachment</p>
                   </div>
                 </div>
               </div>
