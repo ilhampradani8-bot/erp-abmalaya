@@ -176,10 +176,13 @@ try {
                r.attachment_url, r.subject, r.message_body, r.item_requested, r.quantity_requested, r.client_company, r.client_phone
         FROM quotations q
         INNER JOIN rfq_requests r ON r.id = q.rfq_id
-        WHERE (q.ocr_scan_status IN ('pending', 'skipped', 'waiting', 'waiting_ai_limit') OR q.ocr_scan_status IS NULL)
-          AND (q.ocr_scan_status != 'done')
+        WHERE (q.ocr_scan_status IN ('pending', 'skipped', 'waiting', 'waiting_ai_limit', 'processing', 'failed', 'error')
+           OR q.ocr_scan_status IS NULL
+           OR q.ocr_scan_result LIKE '%waiting_ai_limit%'
+           OR q.ocr_scan_result LIKE '%Fallback Regex%'
+           OR q.ocr_scan_result LIKE '%low_quality%')
         ORDER BY q.created_at ASC
-        LIMIT 2
+        LIMIT 3
     ");
 
     if ($res_ocr && $res_ocr->num_rows > 0) {

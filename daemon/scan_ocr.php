@@ -62,14 +62,16 @@ if (empty($key_list)) {
 }
 daemon_log('Loaded ' . count($key_list) . ' Gemini OCR API key(s).');
 
-// Find pending/skipped/waiting OCR quotations (includes both text-only RFQs and attachment RFQs)
 $res = $db_conn->query("
     SELECT q.id, q.client_name, q.client_email,
            r.attachment_url, r.subject, r.message_body, r.item_requested, r.quantity_requested, r.client_company, r.client_phone
     FROM quotations q
     INNER JOIN rfq_requests r ON r.id = q.rfq_id
-    WHERE (q.ocr_scan_status IN ('pending', 'skipped', 'waiting', 'waiting_ai_limit', 'processing', 'failed') OR q.ocr_scan_status IS NULL OR q.ocr_scan_result LIKE '%waiting_ai_limit%')
-      AND (q.ocr_scan_status != 'done')
+    WHERE (q.ocr_scan_status IN ('pending', 'skipped', 'waiting', 'waiting_ai_limit', 'processing', 'failed', 'error')
+       OR q.ocr_scan_status IS NULL
+       OR q.ocr_scan_result LIKE '%waiting_ai_limit%'
+       OR q.ocr_scan_result LIKE '%Fallback Regex%'
+       OR q.ocr_scan_result LIKE '%low_quality%')
     ORDER BY q.created_at ASC
     LIMIT 50
 ");
