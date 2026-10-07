@@ -663,6 +663,71 @@ PROMPT;
         }
     }
 
+    // ── Step 4.5: Ultra-Reliable OpenRouter AI Fallback ───────────────────────
+    $or_key_list = [];
+    $raw_or_env = getenv('OPENROUTER_API_KEYS') ?: (getenv('OPENROUTER_API_KEY_1') ?: '');
+    if (!empty($raw_or_env)) {
+        foreach (explode(',', $raw_or_env) as $ok) {
+            $ok = trim($ok);
+            if (!empty($ok)) $or_key_list[] = $ok;
+        }
+    }
+    if (getenv('OPENROUTER_API_KEY_2')) {
+        $or_key_list[] = trim(getenv('OPENROUTER_API_KEY_2'));
+    }
+    $or_key_list = array_values(array_unique(array_filter($or_key_list)));
+    if (!empty($or_key_list)) {
+        shuffle($or_key_list);
+        $or_models = function_exists('getOpenRouterActiveModels') ? getOpenRouterActiveModels($or_key_list) : ['liquid/lfm-2.5-2.6b:free', 'nvidia/nemotron-3.5-lightning:free'];
+        foreach ($or_key_list as $or_api_key) {
+            foreach ($or_models as $o_mod) {
+                $o_ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
+                curl_setopt_array($o_ch, [
+                    CURLOPT_POST           => true,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_TIMEOUT        => 8,
+                    CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,
+                    CURLOPT_SSL_VERIFYPEER => false,
+                    CURLOPT_HTTPHEADER     => [
+                        'Authorization: Bearer ' . $or_api_key,
+                        'Content-Type: application/json',
+                        'HTTP-Referer: https://erp.abmalaya.com',
+                        'X-Title: ABM ERP'
+                    ],
+                    CURLOPT_POSTFIELDS     => json_encode([
+                        'model'       => $o_mod,
+                        'messages'    => [
+                            ['role' => 'system', 'content' => "You are an expert Maritime Procurement Document Parser. Output strictly in valid JSON."],
+                            ['role' => 'user', 'content' => $prompt]
+                        ],
+                        'temperature' => 0.1,
+                        'response_format' => ['type' => 'json_object']
+                    ])
+                ]);
+                $o_resp = curl_exec($o_ch);
+                $o_code = curl_getinfo($o_ch, CURLINFO_HTTP_CODE);
+                curl_close($o_ch);
+
+                if ($o_code === 200 && !empty($o_resp)) {
+                    $o_data = json_decode($o_resp, true);
+                    $o_text = $o_data['choices'][0]['message']['content'] ?? '';
+                    $o_text = trim(preg_replace('/^```json\s*/i', '', preg_replace('/\s*```$/i', '', trim($o_text))));
+                    $o_parsed = json_decode($o_text, true);
+                    if (is_array($o_parsed) && (isset($o_parsed['items']) || isset($o_parsed['scan_status']))) {
+                        $o_parsed['scanned_at']      = $scanned_at;
+                        $o_parsed['file_url']        = $file_url;
+                        $o_parsed['scan_confidence'] = 'high (OpenRouter AI [' . $o_mod . '] ' . ($has_file ? '+ Extracted OCR Text' : '+ Email Text') . ')';
+                        $o_parsed['scan_model']      = $o_mod;
+                        $o_parsed['scan_status']     = 'done';
+                        return $o_parsed;
+                    }
+                } elseif ($o_code === 429) {
+                    break;
+                }
+            }
+        }
+    }
+
     // ── Step 5: Native Regex Text Extraction Fallback (Guaranteed Completion) ────────────────
     $fallback_items = [];
     if (!empty($ctx_item_req) && strtolower($ctx_item_req) !== 'none') {

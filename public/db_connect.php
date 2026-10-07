@@ -356,5 +356,82 @@ if (!function_exists('getGroqActiveModels')) {
     }
 }
 
+if (!function_exists('getOpenRouterActiveModels')) {
+    /**
+     * Query live active free/chat models directly from OpenRouter API (GET /api/v1/models)
+     * with local caching to prevent model name obsolescence.
+     */
+    function getOpenRouterActiveModels(array $key_list = []): array {
+        static $memory_cache = null;
+        if ($memory_cache !== null && !empty($memory_cache)) {
+            return $memory_cache;
+        }
+
+        $cache_file = sys_get_temp_dir() . '/openrouter_active_models_cache.json';
+        if (file_exists($cache_file) && (time() - filemtime($cache_file) < 3600)) { // 1 hour file cache
+            $saved = @json_decode(file_get_contents($cache_file), true);
+            if (!empty($saved) && is_array($saved) && count($saved) > 0) {
+                $memory_cache = $saved;
+                return $memory_cache;
+            }
+        }
+
+        $fallback_models = [
+            'liquid/lfm-2.5-2.6b:free',
+            'nvidia/nemotron-3.5-lightning:free',
+            'inclusionai/ling-3.0-flash-sante:free',
+            'cohere/north-mini-code:free',
+            'google/gemma-4-31b-it:free'
+        ];
+
+        if (empty($key_list)) {
+            $memory_cache = $fallback_models;
+            return $memory_cache;
+        }
+
+        foreach ($key_list as $key) {
+            $key = trim($key);
+            if (empty($key) || strpos($key, 'sk-or-') !== 0) continue;
+
+            $ch = curl_init('https://openrouter.ai/api/v1/models');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $key],
+                CURLOPT_TIMEOUT        => 6,
+                CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,
+                CURLOPT_SSL_VERIFYPEER => false
+            ]);
+            $resp = curl_exec($ch);
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($code === 200 && !empty($resp)) {
+                $data = json_decode($resp, true);
+                if (isset($data['data']) && is_array($data['data'])) {
+                    $free_models = [];
+                    foreach ($data['data'] as $m) {
+                        $id = $m['id'] ?? '';
+                        if (empty($id)) continue;
+                        if (strpos($id, ':free') !== false || strpos($id, 'free') !== false) {
+                            $free_models[] = $id;
+                        }
+                    }
+
+                    if (!empty($free_models)) {
+                        @file_put_contents($cache_file, json_encode($free_models));
+                        $memory_cache = $free_models;
+                        return $memory_cache;
+                    }
+                }
+            }
+            break;
+        }
+
+        $memory_cache = $fallback_models;
+        return $memory_cache;
+    }
+}
+
+
 
 

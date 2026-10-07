@@ -645,6 +645,64 @@ function classifyEmailWithGeminiWithRetry($subject, $body, $attachments, $key_li
             continue;
         }
 
+        // 🌐 1.5. Check if Key is an OpenRouter API Key (starts with sk-or-)
+        if (strpos($api_key, 'sk-or-') === 0) {
+            $or_url = "https://openrouter.ai/api/v1/chat/completions";
+            $or_models = function_exists('getOpenRouterActiveModels') ? getOpenRouterActiveModels([$api_key]) : ['liquid/lfm-2.5-2.6b:free', 'nvidia/nemotron-3.5-lightning:free'];
+            
+            foreach ($or_models as $o_model) {
+                $or_payload = [
+                    'model' => $o_model,
+                    'messages' => [
+                        ['role' => 'system', 'content' => "You are an AI Email Classifier. You MUST respond with ONLY valid JSON with keys: classification ('client_rfq' or 'junk'), reason, item_requested."],
+                        ['role' => 'user', 'content' => $prompt]
+                    ],
+                    'temperature' => 0.1,
+                    'response_format' => ['type' => 'json_object']
+                ];
+
+                $ch = curl_init($or_url);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($or_payload));
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Authorization: Bearer ' . $api_key,
+                    'Content-Type: application/json',
+                    'HTTP-Referer: https://erp.abmalaya.com',
+                    'X-Title: ABM ERP'
+                ]);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+                curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER => false);
+                $response = curl_exec($ch);
+                $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curl_err = curl_error($ch);
+                curl_close($ch);
+
+                if ($http_code === 200 && !empty($response)) {
+                    $res_json = json_decode($response, true);
+                    $text = $res_json['choices'][0]['message']['content'] ?? '';
+                    $clean_text = trim($text);
+                    $parsed = json_decode($clean_text, true);
+                    if ($parsed && isset($parsed['classification'])) {
+                        return [
+                            'classification' => $parsed['classification'],
+                            'item_requested' => $parsed['item_requested'] ?? null,
+                            'verified' => 1,
+                            'error' => null
+                        ];
+                    }
+                }
+
+                $err_msg = "Attempt " . ($attempt + 1) . " (OpenRouter Key .." . $key_suffix . ", Model " . $o_model . ") failed. Code: $http_code. Curl Err: $curl_err.";
+                if (!empty($response)) {
+                    $err_msg .= " Resp: " . substr($response, 0, 150);
+                }
+                $errors[] = $err_msg;
+            }
+            continue;
+        }
+
         // 🌟 2. Standard Gemini API Key Path
         foreach ($candidate_models as $model_name) {
             $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $model_name . ":generateContent?key=" . urlencode($api_key);
