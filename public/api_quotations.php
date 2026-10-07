@@ -369,12 +369,34 @@ try {
 
         if (isset($input['items']) && is_array($input['items'])) {
             $db_conn->query("DELETE FROM quotation_items WHERE quotation_id = '" . $db_conn->real_escape_string($id) . "'");
-            $item_stmt = $db_conn->prepare("INSERT INTO quotation_items (quotation_id, product_code, description, specification, offer, quantity, unit, unit_price, discount_percent, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $item_stmt = $db_conn->prepare("INSERT INTO quotation_items (quotation_id, product_code, category_code, impa_code, description, specification, offer, quantity, unit, unit_price, discount_percent, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             if ($item_stmt) {
                 foreach ($input['items'] as $it) {
                     $p_code = isset($it['product_code']) ? trim($it['product_code']) : (isset($it['item_code']) ? trim($it['item_code']) : '');
+                    $c_code = isset($it['category_code']) && !empty($it['category_code']) ? trim($it['category_code']) : (isset($it['category_name']) ? trim($it['category_name']) : null);
+                    $i_code = isset($it['impa_code']) && !empty($it['impa_code']) ? trim($it['impa_code']) : null;
                     $p_desc = isset($it['description']) ? trim($it['description']) : '';
-                    $p_spec = isset($it['specification']) ? trim($it['specification']) : '';
+                    
+                    // Comprehensive specification field mapping
+                    $p_spec = '';
+                    if (isset($it['specification']) && trim($it['specification']) !== '') {
+                        $p_spec = trim($it['specification']);
+                    } else if (isset($it['spec']) && trim($it['spec']) !== '') {
+                        $p_spec = trim($it['spec']);
+                    } else if (isset($it['specs']) && trim($it['specs']) !== '') {
+                        $p_spec = trim($it['specs']);
+                    } else if (isset($it['specification_text']) && trim($it['specification_text']) !== '') {
+                        $p_spec = trim($it['specification_text']);
+                    } else if (isset($it['technical_specification']) && trim($it['technical_specification']) !== '') {
+                        $p_spec = trim($it['technical_specification']);
+                    } else if (isset($it['item_specification']) && trim($it['item_specification']) !== '') {
+                        $p_spec = trim($it['item_specification']);
+                    } else if (isset($it['offer']) && trim($it['offer']) !== '') {
+                        $p_spec = trim($it['offer']);
+                    } else if (isset($it['offered_item']) && trim($it['offered_item']) !== '') {
+                        $p_spec = trim($it['offered_item']);
+                    }
+
                     $p_offer= isset($it['offer']) ? trim($it['offer']) : (isset($it['offered_item']) ? trim($it['offered_item']) : '');
                     $p_qty  = isset($it['quantity']) ? (float)$it['quantity'] : (isset($it['qty']) ? (float)$it['qty'] : 1.0);
                     $p_unit = isset($it['unit']) ? trim($it['unit']) : 'Unit';
@@ -382,7 +404,7 @@ try {
                     $p_disc = isset($it['discount_percent']) ? (float)$it['discount_percent'] : 0.0;
                     $p_tot  = isset($it['total']) ? (float)$it['total'] : ($p_qty * $p_price);
 
-                    $item_stmt->bind_param("sssssdsddd", $id, $p_code, $p_desc, $p_spec, $p_offer, $p_qty, $p_unit, $p_price, $p_disc, $p_tot);
+                    $item_stmt->bind_param("sssssssdsddd", $id, $p_code, $c_code, $i_code, $p_desc, $p_spec, $p_offer, $p_qty, $p_unit, $p_price, $p_disc, $p_tot);
                     $item_stmt->execute();
                 }
                 $item_stmt->close();

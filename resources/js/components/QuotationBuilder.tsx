@@ -131,10 +131,16 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
     }
 
     if (!Array.isArray(rawItems) || rawItems.length === 0) {
+      const fallbackDesc = targetQuo.notes || 'Industrial Equipment / Supply';
       return [
         {
           id: 'item-1',
-          description: targetQuo.notes || '',
+          product_code: '',
+          category_code: null,
+          category_name: null,
+          impa_code: null,
+          description: fallbackDesc,
+          specification: targetQuo.item_requested || targetQuo.notes || '',
           quantity: 1,
           unit: 'Package',
           unit_price: 0,
@@ -152,14 +158,17 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
       const calculatedTot = gross - (gross * disc) / 100;
       const tot = parseFloat(it.total) || calculatedTot;
 
+      // Extract specification with wide alias support
+      const specVal = it.specification || it.spec || it.specs || it.specification_text || it.technical_specification || it.item_specification || it.offer || it.offered_item || it.details || '';
+
       return {
         id: it.id ? String(it.id) : `item-${Date.now()}-${idx}`,
         product_code: it.product_code || it.item_code || '',
         category_code: it.category_code || it.category_name || it.category || null,
         category_name: it.category_name || it.category_code || it.category || null,
         impa_code: it.impa_code || null,
-        description: it.description || '',
-        specification: it.specification || it.spec || '',
+        description: it.description || it.product_name || '',
+        specification: specVal,
         quantity: qty,
         unit: it.unit || 'Unit',
         unit_price: price,

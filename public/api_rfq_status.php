@@ -83,10 +83,12 @@ try {
                     $ins_q->execute();
                     $ins_q->close();
 
-                    // Insert initial analyzed item
-                    $ins_item = $db_conn->prepare("INSERT INTO quotation_items (quotation_id, description, quantity, unit, unit_price, discount_percent, total) VALUES (?, ?, 1.0, 'Package', 0.00, 0.00, 0.00)");
+                    // Insert initial analyzed item with description & specification
+                    $ins_item = $db_conn->prepare("INSERT INTO quotation_items (quotation_id, description, specification, quantity, unit, unit_price, discount_percent, total) VALUES (?, ?, ?, 1.0, 'Package', 0.00, 0.00, 0.00)");
                     if ($ins_item) {
-                        $ins_item->bind_param("ss", $quo_id, $item_req);
+                        $item_desc = !empty($row['subject']) ? $row['subject'] : ($item_req ?: 'Industrial Supply Requisition');
+                        $item_spec = !empty($row['item_requested']) ? $row['item_requested'] : (!empty($row['subject']) ? $row['subject'] : 'Standard Specification');
+                        $ins_item->bind_param("sss", $quo_id, $item_desc, $item_spec);
                         $ins_item->execute();
                         $ins_item->close();
                     }
