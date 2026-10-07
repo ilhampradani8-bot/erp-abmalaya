@@ -353,40 +353,44 @@ function performOCRScan(string $file_url, array $key_list, array $quo_context): 
 
         if ($file_data !== false && strlen($file_data) >= 100) {
             $file_b64 = base64_encode($file_data);
-            $tmp_base = tempnam(sys_get_temp_dir(), 'abm_ocr_');
 
-            if ($ext === 'pdf') {
-                $tmp_pdf = $tmp_base . '.pdf';
-                file_put_contents($tmp_pdf, $file_data);
-                $raw_text = (string) shell_exec('pdftotext -layout ' . escapeshellarg($tmp_pdf) . ' - 2>/dev/null');
+            $can_exec = function_exists('shell_exec') && !in_array('shell_exec', array_map('trim', explode(',', (string)ini_get('disable_functions'))));
+            if ($can_exec) {
+                $tmp_base = tempnam(sys_get_temp_dir(), 'abm_ocr_');
 
-                if (strlen(trim($raw_text)) < 80 && shell_exec('which pdftoppm 2>/dev/null')) {
-                    $tmp_png_base = $tmp_base . '_page';
-                    shell_exec('pdftoppm -r 200 -l 1 -png ' . escapeshellarg($tmp_pdf) . ' ' . escapeshellarg($tmp_png_base) . ' 2>/dev/null');
-                    $png_files = glob($tmp_png_base . '*.png');
-                    if (!empty($png_files)) {
-                        $tess_txt_path = $tmp_base . '_tess';
-                        shell_exec('tesseract ' . escapeshellarg($png_files[0]) . ' ' . escapeshellarg($tess_txt_path) . ' -l eng --oem 3 --psm 6 2>/dev/null');
-                        if (file_exists($tess_txt_path . '.txt')) {
-                            $raw_text = (string) file_get_contents($tess_txt_path . '.txt');
-                            @unlink($tess_txt_path . '.txt');
+                if ($ext === 'pdf') {
+                    $tmp_pdf = $tmp_base . '.pdf';
+                    file_put_contents($tmp_pdf, $file_data);
+                    $raw_text = (string) @shell_exec('pdftotext -layout ' . escapeshellarg($tmp_pdf) . ' - 2>/dev/null');
+
+                    if (strlen(trim($raw_text)) < 80 && @shell_exec('which pdftoppm 2>/dev/null')) {
+                        $tmp_png_base = $tmp_base . '_page';
+                        @shell_exec('pdftoppm -r 200 -l 1 -png ' . escapeshellarg($tmp_pdf) . ' ' . escapeshellarg($tmp_png_base) . ' 2>/dev/null');
+                        $png_files = glob($tmp_png_base . '*.png');
+                        if (!empty($png_files)) {
+                            $tess_txt_path = $tmp_base . '_tess';
+                            @shell_exec('tesseract ' . escapeshellarg($png_files[0]) . ' ' . escapeshellarg($tess_txt_path) . ' -l eng --oem 3 --psm 6 2>/dev/null');
+                            if (file_exists($tess_txt_path . '.txt')) {
+                                $raw_text = (string) file_get_contents($tess_txt_path . '.txt');
+                                @unlink($tess_txt_path . '.txt');
+                            }
+                            foreach ($png_files as $pf) { @unlink($pf); }
                         }
-                        foreach ($png_files as $pf) { @unlink($pf); }
                     }
+                    @unlink($tmp_pdf);
+                } else {
+                    $tmp_img = $tmp_base . '.' . $ext;
+                    file_put_contents($tmp_img, $file_data);
+                    $tess_txt_path = $tmp_base . '_tess';
+                    @shell_exec('tesseract ' . escapeshellarg($tmp_img) . ' ' . escapeshellarg($tess_txt_path) . ' -l eng --oem 3 --psm 6 2>/dev/null');
+                    if (file_exists($tess_txt_path . '.txt')) {
+                        $raw_text = (string) file_get_contents($tess_txt_path . '.txt');
+                        @unlink($tess_txt_path . '.txt');
+                    }
+                    @unlink($tmp_img);
                 }
-                @unlink($tmp_pdf);
-            } else {
-                $tmp_img = $tmp_base . '.' . $ext;
-                file_put_contents($tmp_img, $file_data);
-                $tess_txt_path = $tmp_base . '_tess';
-                shell_exec('tesseract ' . escapeshellarg($tmp_img) . ' ' . escapeshellarg($tess_txt_path) . ' -l eng --oem 3 --psm 6 2>/dev/null');
-                if (file_exists($tess_txt_path . '.txt')) {
-                    $raw_text = (string) file_get_contents($tess_txt_path . '.txt');
-                    @unlink($tess_txt_path . '.txt');
-                }
-                @unlink($tmp_img);
+                @unlink($tmp_base);
             }
-            @unlink($tmp_base);
         } else {
             $has_file = false;
         }
@@ -516,7 +520,7 @@ PROMPT;
             $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . $model_name . ':generateContent?key=' . urlencode($api_key);
 
             $parts = [['text' => $prompt]];
-            if ($has_file && !empty($file_b64) && strpos($mime, 'image/') === 0 && strlen($file_b64) < 3000000) {
+            if ($has_file && !empty($file_b64) && (strpos($mime, 'image/') === 0 || $mime === 'application/pdf') && strlen($file_b64) < 12000000) {
                 $parts[] = ['inline_data' => ['mime_type' => $mime, 'data' => $file_b64]];
             }
 

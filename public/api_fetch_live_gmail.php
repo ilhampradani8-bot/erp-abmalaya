@@ -1,12 +1,16 @@
 <?php
 error_reporting(0);
 ini_set('display_errors', 0);
-ob_start();
+if (!defined('MASTER_CRON_MODE')) {
+    ob_start();
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type');
+    header('Content-Type: application/json; charset=utf-8');
+}
 
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
-header('Content-Type: application/json; charset=utf-8');
+// Connect to MySQL Database immediately
+require_once __DIR__ . '/db_connect.php';
 
 // Global API rate-limiter counter (keeps track of calls to stay strictly under 10/min)
 $gemini_api_calls_count = 0;
@@ -754,15 +758,30 @@ try {
             $data = [];
             while ($row = $res->fetch_assoc()) {
                 $attachments = [];
-                if (preg_match('/(requisition|PD-ENG|RO WATER|specification|quotation)/i', $row['subject'] . ' ' . $row['message_body'])) {
+                
+                // 1. Real attachments stored in database
+                if (!empty($row['attachment_url']) && $row['attachment_url'] !== 'NONE') {
+                    $att_url = trim($row['attachment_url']);
+                    $fn = 'Document.pdf';
+                    $ext = 'pdf';
+                    if (preg_match('/fn=([^&]+)/i', $att_url, $m_fn)) {
+                        $fn = urldecode($m_fn[1]);
+                        $ext = strtolower(pathinfo($fn, PATHINFO_EXTENSION)) ?: 'pdf';
+                    } else {
+                        $fn = basename($att_url);
+                        $ext = strtolower(pathinfo($fn, PATHINFO_EXTENSION)) ?: 'pdf';
+                    }
                     $attachments[] = [
-                        'id' => 'att-fast-' . $row['id'],
-                        'filename' => 'PD-ENG-2026-059_Requisition_Spec.pdf',
-                        'filesize' => '2.4 MB',
-                        'filetype' => 'pdf',
-                        'url' => "/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
+                        'id' => 'att-db-' . $row['id'],
+                        'filename' => $fn,
+                        'filesize' => 'PDF Doc',
+                        'filetype' => $ext,
+                        'url' => $att_url
                     ];
                 }
+
+                // 2. Google Drive attachments in body
+                appendGoogleDriveAttachments($attachments, $row['message_body'], $row['id']);
 
                 $ai_verified = isset($row['ai_verified']) ? (int)$row['ai_verified'] : 0;
                 $ai_classification = isset($row['ai_classification']) ? $row['ai_classification'] : '';
@@ -786,6 +805,8 @@ try {
                     }
                 }
 
+                $clean_body = formatEmailBodyText($row['message_body']);
+
                 $data[] = [
                     'id' => str_replace('RFQ-', 'GMAIL-LIVE-', $row['rfq_number']),
                     'db_id' => (int)$row['id'],
@@ -797,11 +818,11 @@ try {
                     'client_company' => $row['client_company'] ?? '',
                     'phone' => '',
                     'subject' => $row['subject'],
-                    'message_body' => $row['message_body'],
-                    'original_body' => $row['message_body'],
-                    'item_requested' => $row['item_requested'] ?: extractRealRequestedItem($row['subject'], $row['message_body']),
+                    'message_body' => $clean_body,
+                    'original_body' => $clean_body,
+                    'item_requested' => $row['item_requested'] ?: extractRealRequestedItem($row['subject'], $clean_body),
                     'quantity_requested' => '1 Package',
-                    'budget_estimate' => extractRealBudgetEstimate($row['message_body']),
+                    'budget_estimate' => extractRealBudgetEstimate($clean_body),
                     'date_received' => date('Y-m-d H:i', strtotime($row['created_at'])),
                     'status' => $row['status'] ?: 'masuk',
                     'ai_verified' => $ai_verified,
@@ -1457,7 +1478,13 @@ try {
         }
     }
 
-    ob_end_clean();
+    if (defined('MASTER_CRON_MODE')) {
+        return;
+    }
+
+    if (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
     echo json_encode([
         'status' => 'success',
         'source' => 'gmail_live_imap_synced',
