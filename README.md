@@ -181,6 +181,18 @@ Struktur database pada lingkungan UTM VM (31GB RAM) (`abmalaya_erp`) disinkronka
 
 ---
 
+## ⏱️ Konfigurasi Cron Job cPanel Hosting (Penarikan Email & Otomasi 24/7)
+
+Untuk memastikan email RFQ baru dari Gmail otomatis ditarik, diklasifikasikan oleh AI, dan dibuatkan draft SPH 24/7 di hosting produksi (meskipun tidak ada pengguna yang membuka browser):
+
+- **Pengaturan Waktu Cron (Common Settings):** Every 5 Minutes (`*/5 * * * *`)
+- **Perintah Cron Command (Active cPanel Cron Job):**
+  ```bash
+  curl -s -L "https://erp.abmalaya.com/cron_trigger.php" >/dev/null 2>&1
+  ```
+
+---
+
 ## 🚀 Alur Build & Deploy FTP Ke Server Hosting
 
 Setiap kali melakukan pembaruan kode dan diminta melakukan deploy oleh user:

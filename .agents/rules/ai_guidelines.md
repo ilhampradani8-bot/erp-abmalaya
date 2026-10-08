@@ -16,11 +16,7 @@ Dokumen ini adalah standar panduan utama yang bersifat universal dan wajib dipat
 
 ---
 
-### II. ALUR RESPON & TATA KELOLA INSTRUKSI PENGGUNA
-1. **PRINSIP "JELASKAN SEBELUM BERBERTINDAK"**:
-   - Jika pengguna bertanya, meminta penjelasan, atau menanyakan alasan (*"jelasin"*, *"kenapa"*, *"apa maksudnya"*), AI wajib memberikan penjelasan tekstual yang jujur, ringkas, dan tepat sasaran TANPA mengedit file atau database secara sepihak.
-2. **KEPATUHAN PADA BATASAN SPESIFIK**:
-   - Ikuti aturan bisnis, layout boundaries, nama status, dan preferensi teknis persis seperti yang diinstruksikan pengguna tanpa menebak-nebak atau mengubah spesifikasi.
+
 
 ---
 

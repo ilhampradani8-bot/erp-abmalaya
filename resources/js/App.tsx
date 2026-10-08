@@ -12,6 +12,7 @@ import { Product } from './components/Product';
 import { EmailClient } from './components/EmailClient';
 import { AccountSettings } from './components/AccountSettings';
 import { SystemSettings } from './components/SystemSettings';
+import { DaemonMonitor } from './components/DaemonMonitor';
 import { NotificationLog } from './components/NotificationLog';
 import { Trash } from './components/Trash';
 import { LoginScreen } from './components/LoginScreen';
@@ -263,28 +264,47 @@ export const App: React.FC = () => {
       .catch((err) => console.log('Quotations fetch error on App startup:', err));
   };
 
+  const triggerAutoCron = () => {
+    if (isPreviewOpenRef.current) return;
+    fetch(getApiUrl('/cron_trigger.php'))
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.status === 'success' || data.logs) {
+          fetchLiveEmails(false);
+          fetchQuotationsList();
+        }
+      })
+      .catch(() => {});
+  };
+
   useEffect(() => {
     fetchLiveEmails(false);
     fetchQuotationsList();
+    triggerAutoCron();
 
-    const interval = setInterval(() => {
+    const fastInterval = setInterval(() => {
       if (!isPreviewOpenRef.current) {
         fetchLiveEmails(false);
         fetchQuotationsList();
       }
     }, 15000); // 15 seconds fast silent background refresh from local MySQL DB
 
+    const cronInterval = setInterval(() => {
+      triggerAutoCron();
+    }, 60000); // 60 seconds automatic background Gmail & AI engine cron trigger
+
     return () => {
-      clearInterval(interval);
+      clearInterval(fastInterval);
+      clearInterval(cronInterval);
     };
   }, []);
 
-  const [viewMode, setViewModeState] = useState<'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'client_chat'>('inbox');
+  const [viewMode, setViewModeState] = useState<'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'client_chat' | 'daemon_monitor'>('inbox');
   const [showEmailModal, setShowEmailModal] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const setViewMode = (mode: 'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'client_chat') => {
+  const setViewMode = (mode: 'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'client_chat' | 'daemon_monitor') => {
     setViewModeState(mode);
     // Instant fetch from MySQL whenever user switches views to ensure 100% fresh data
     fetchQuotationsList();
@@ -773,6 +793,10 @@ export const App: React.FC = () => {
                   smtpConfig={smtpConfig}
                   onSaveSmtpConfig={(cfg) => setSmtpConfig(cfg)}
                 />
+              )}
+
+              {viewMode === 'daemon_monitor' && (
+                <DaemonMonitor />
               )}
             </ErrorBoundary>
 

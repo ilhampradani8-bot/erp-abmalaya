@@ -270,7 +270,12 @@ export const QuotationList: React.FC<QuotationListProps> = ({
 
   useEffect(() => {
     setShowEmailBody(false);
+    setDrawerTab('summary');
   }, [selectedInfoQuotation?.id]);
+
+  useEffect(() => {
+    setShowEmailBody(false);
+  }, [drawerTab]);
   
   // OCR scan states
   const [isScanningOcr, setIsScanningOcr] = useState<boolean>(false);
@@ -364,12 +369,26 @@ export const QuotationList: React.FC<QuotationListProps> = ({
         const rateLimited    = d.rate_limited || resObj?.ai_rate_limited || false;
         const retryAfterSecs = d.retry_after_secs || resObj?.retry_after_secs || 60;
 
-        if (d.status === 'success') {
+          if (d.status === 'success') {
           setOcrScanResult(resObj);
           setQuotations(prev => prev.map(q => q.id === quo_id
             ? { ...q, ocr_scan_status: d.ocr_scan_status as any, ocr_scan_result: resStr } : q));
           setSelectedInfoQuotation(prev => prev
             ? { ...prev, ocr_scan_status: d.ocr_scan_status as any, ocr_scan_result: resStr } : null);
+
+          // All AI keys are disabled — only native fallback ran, no real AI extraction
+          if (d.all_keys_disabled) {
+            setIsScanningOcr(false);
+            const itemCount = Array.isArray(resObj?.items) ? resObj.items.length : 0;
+            if (itemCount === 0) {
+              setOcrErrorMsg('Scan incomplete: All AI keys are currently disabled. No items were extracted. Enable at least one API key in System Settings and try again.');
+              setTimeout(() => setOcrErrorMsg(null), 10000);
+            } else {
+              setOcrSuccessMsg(`Scan via native engine only (AI keys disabled) • ${itemCount} items extracted • Enable AI keys for better accuracy.`);
+              setTimeout(() => setOcrSuccessMsg(null), 9000);
+            }
+            return;
+          }
 
           if (rateLimited && resObj?.scan_confidence?.includes('Native')) {
             // Partial success — native items extracted, AI rate limited, auto-retry for AI
@@ -381,13 +400,20 @@ export const QuotationList: React.FC<QuotationListProps> = ({
             scheduleOcrRetry(quo_id, retryAfterSecs, attempt);
             setIsScanningOcr(false);
           } else {
-            // Full AI success — chain IMPA matching
             const itemCount = Array.isArray(resObj?.items) ? resObj.items.length : 0;
             const model = resObj?.scan_model ? ` [${resObj.scan_model}]` : '';
+
+            if (d.ocr_scan_status === 'error' || itemCount === 0) {
+              setIsScanningOcr(false);
+              setOcrErrorMsg(`Scan OCR Selesai (0 Item): Tidak dapat mengekstrak rincian barang dari dokumen/email. Silakan periksa kejelasan dokumen atau isi secara manual.`);
+              setTimeout(() => setOcrErrorMsg(null), 9000);
+              return;
+            }
+
             if (d.ocr_scan_status === 'waiting_ai_limit') {
-              setOcrSuccessMsg(`Waiting AI (Limit) • Quota limit reached. Automatic retry scheduled upon countdown expiry...`);
+              setOcrSuccessMsg(`Waiting for AI quota reset. Items saved via native engine. Auto-retry scheduled...`);
             } else {
-              setOcrSuccessMsg(`Scan completed${model} • ${itemCount} items • Attempt ${attempt} • Matching IMPA code...`);
+              setOcrSuccessMsg(`✓ Scan done${model} — ${itemCount} items found. Matching IMPA category...`);
             }
             setIsScanningOcr(false);
             // Auto-chain IMPA matching
@@ -399,15 +425,15 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               .then(r => r.json())
               .then(im => {
                 if (im.status === 'success') {
-                  const catName = im.category_name || 'No category_name to match. Run OCR scan first.';
-                  setOcrSuccessMsg(`Scan + IMPA completed${model} • ${itemCount} items • IMPA Code: ${im.impa_code || 'Pending'} (${catName}) • Confidence ${im.confidence || 0}%`);
+                  const catName = im.category_name || 'No matching category.';
+                  setOcrSuccessMsg(`✓ Scan + IMPA done${model} — ${itemCount} items — Category: ${catName} (${im.impa_code || 'N/A'}) — ${im.confidence || 0}% confidence`);
                   setQuotations(prev => prev.map(q => q.id === quo_id
                     ? { ...q, impa_code: im.impa_code, category_name: im.category_name } : q));
                   setSelectedInfoQuotation(prev => prev
                     ? { ...prev, impa_code: im.impa_code, category_name: im.category_name } : null);
                 } else {
-                  const catMsg = im.category_name || im.message || 'No category_name to match. Run OCR scan first.';
-                  setOcrSuccessMsg(`Scan completed • ${itemCount} items • IMPA: ${catMsg}`);
+                  const catMsg = im.category_name || im.message || 'No IMPA category matched.';
+                  setOcrSuccessMsg(`✓ Scan done — ${itemCount} items extracted. IMPA: ${catMsg}`);
                 }
                 setTimeout(() => setOcrSuccessMsg(null), 8000);
               })
@@ -1274,12 +1300,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">
                         {q.impa_code || q.category_name ? (
                           <span
-                            className="bg-indigo-50 text-indigo-900 border border-indigo-200 font-extrabold px-1.5 py-0.5 rounded text-[10px] inline-flex items-center gap-1 truncate max-w-[170px]"
+                            className="text-indigo-800 font-semibold text-[11px] truncate max-w-[170px] inline-block"
                             title={q.impa_code ? `${q.impa_code} - ${q.category_name}` : (q.category_name || '')}
                           >
-
-                            <Tag className="w-3 h-3 text-indigo-600 shrink-0" />
-                            <span className="truncate">{q.impa_code ? `${q.impa_code} — ` : ''}{q.category_name}</span>
+                            {q.impa_code ? `${q.impa_code} — ` : ''}{q.category_name}
                           </span>
                         ) : (
                           <span className="text-slate-400 font-mono text-[10px] italic">—</span>
@@ -2118,7 +2142,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               {/* Drawer Content Area — Clean Border-Separated Flat Layout */}
               <div key={activeQuotation.id} className="flex-1 p-4 overflow-y-auto bg-white divide-y divide-slate-200 text-[11px] text-[#3d3d3d] space-y-4">
                 
-                {drawerTab === 'summary' ? (
+                {drawerTab === 'summary' && (
                   <>
                     {/* Status Header Bar */}
                     <div className="flex items-center justify-between pb-3">
@@ -2299,7 +2323,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="font-bold text-blue-600 hover:underline flex items-center gap-1 font-mono text-[10px] truncate"
-                                    title={fileUrl}
+                                    title={getApiUrl(fileUrl)}
                                   >
                                     <Download className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                                     <span className="truncate">{isDrive ? 'Google Drive Link' : filename}</span>
@@ -2558,7 +2582,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                       </div>
                     )}
                   </>
-                ) : (
+                )}
+
+                {/* ── TAB: EMAIL SOURCE ────────────────────────────────────────── */}
+                {drawerTab === 'email' && (
                   <>
                     {/* Email Source Tab */}
                     {activeQuotation.email_source ? (

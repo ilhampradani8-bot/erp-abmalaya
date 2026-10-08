@@ -25,6 +25,16 @@ $start_time = microtime(true);
 $logs = [];
 
 try {
+    // Log execution timestamp to daemon/logs/cron_trigger_active.log
+    $log_dir = is_dir(__DIR__ . '/daemon/logs')
+        ? __DIR__ . '/daemon/logs'
+        : (is_dir(dirname(__DIR__) . '/daemon/logs')
+            ? dirname(__DIR__) . '/daemon/logs'
+            : (is_dir(__DIR__ . '/daemon') ? __DIR__ . '/daemon/logs' : dirname(__DIR__) . '/daemon/logs'));
+    if (!is_dir($log_dir)) @mkdir($log_dir, 0755, true);
+    $log_entry = '[' . date('Y-m-d H:i:s') . '] Cron Trigger Executed. IP: ' . ($_SERVER['REMOTE_ADDR'] ?? 'CLI') . ', UA: ' . (substr($_SERVER['HTTP_USER_AGENT'] ?? 'CLI', 0, 80)) . PHP_EOL;
+    @file_put_contents($log_dir . '/cron_trigger_active.log', $log_entry, FILE_APPEND | LOCK_EX);
+
     require_once __DIR__ . '/db_connect.php';
     if (!isset($db_conn) || !$db_conn || $db_conn->connect_error) {
         throw new Exception('Database connection failed in cron_trigger.php');
@@ -36,6 +46,7 @@ try {
         if (!defined('MASTER_CRON_MODE')) {
             define('MASTER_CRON_MODE', true);
         }
+        $_GET['sync'] = '1';
         $_GET['cron'] = '1';
         try {
             require_once __DIR__ . '/api_fetch_live_gmail.php';
@@ -44,6 +55,9 @@ try {
             $logs['gmail_sync_error'] = $e->getMessage();
         }
         $logs['gmail_sync'] = "Sync finished. Pulled/Processed {$emails_pulled} email(s).";
+        if ($emails_pulled > 0) {
+            addSystemNotification($db_conn, 'Gmail IMAP Live Sync', "Successfully synced {$emails_pulled} incoming email(s) from abmalayaindustry@gmail.com.", 'success', 'sync', 'rfq_inbox');
+        }
     }
 
     // ── STEP 2: Fast AI Inbox Verification & Classification ───────────────────
@@ -127,6 +141,9 @@ try {
         }
     }
     $logs['ai_classification'] = "Verified {$verified_rfqs} pending email(s).";
+    if ($verified_rfqs > 0) {
+        addSystemNotification($db_conn, 'AI RFQ Classification Active', "Verified & classified {$verified_rfqs} incoming inquiries using Gemini AI models.", 'info', 'ai', 'rfq_inbox');
+    }
 
     // ── STEP 3: Auto-create Quotations SPH for verified RFQs ──────────────────
     $created_quos = 0;
@@ -163,6 +180,7 @@ try {
                         $stmt_item->close();
                     }
                     $created_quos++;
+                    addSystemNotification($db_conn, "New SPH Draft #{$quo_num}", "Auto-generated quotation draft for {$company_name} ({$client_email}).", 'info', 'sph', 'quotations_list');
                 }
                 $stmt_quo->close();
             }
@@ -220,8 +238,13 @@ try {
             $scan_result = performOCRScan($file_url, $ocr_keys, $quo_ctx);
             $result_json = json_encode($scan_result, JSON_UNESCAPED_UNICODE);
 
-            $inner_st  = $scan_result['scan_status'] ?? 'done';
-            $final_st  = in_array($inner_st, ['done', 'low_quality']) ? 'done' : (in_array($inner_st, ['waiting', 'waiting_ai_limit']) ? 'waiting_ai_limit' : 'done');
+            $item_count = isset($scan_result['items']) && is_array($scan_result['items']) ? count($scan_result['items']) : 0;
+            $inner_st  = $scan_result['scan_status'] ?? 'error';
+            if ($item_count > 0) {
+                $final_st = in_array($inner_st, ['done', 'low_quality']) ? 'done' : 'error';
+            } else {
+                $final_st = (in_array($inner_st, ['waiting', 'waiting_ai_limit']) || ($scan_result['ai_rate_limited'] ?? false)) ? 'waiting_ai_limit' : 'error';
+            }
             $ext_cat   = $scan_result['category_name'] ?? null;
             $ext_impa  = $scan_result['impa_code'] ?? null;
 
@@ -259,6 +282,9 @@ try {
         }
     }
     $logs['ocr_vision_scan'] = "AI Vision OCR scanned {$scanned_quos} quotation(s).";
+    if ($scanned_quos > 0) {
+        addSystemNotification($db_conn, 'Vision AI OCR Finished', "Processed specification PDF and generated items for {$scanned_quos} quotation(s).", 'info', 'ocr', 'quotations_list');
+    }
 
     // ── STEP 5: Pure PHP IMPA Category Fuzzy Matching ────────────────────────
     $impa_matched = 0;
@@ -303,6 +329,35 @@ try {
         }
     }
     $logs['impa_matching'] = "Matched IMPA codes for {$impa_matched} quotation(s).";
+
+    // ── STEP 6: DB Change Detection & System Notification Engine ────────────
+    $watch_script = file_exists(__DIR__ . '/daemon/watch_db_changes.php')
+        ? __DIR__ . '/daemon/watch_db_changes.php'
+        : (file_exists(dirname(__DIR__) . '/daemon/watch_db_changes.php')
+            ? dirname(__DIR__) . '/daemon/watch_db_changes.php'
+            : null);
+    if ($watch_script) {
+        try {
+            @include $watch_script;
+            $logs['db_change_watch'] = "Database change detection executed.";
+        } catch (Throwable $we) {
+            $logs['db_change_watch_error'] = $we->getMessage();
+        }
+    }
+
+    // Always log heartbeat activity if no other notification in this cycle
+    if ($emails_pulled === 0 && $verified_rfqs === 0 && $created_quos === 0 && $scanned_quos === 0) {
+        $last_hb = $db_conn->query("SELECT created_at FROM system_notifications WHERE title = 'Daemon Cron Heartbeat' ORDER BY id DESC LIMIT 1");
+        $should_log_hb = true;
+        if ($last_hb && $hbr = $last_hb->fetch_assoc()) {
+            if (time() - strtotime($hbr['created_at']) < 600) { // Log at most once per 10 min
+                $should_log_hb = false;
+            }
+        }
+        if ($should_log_hb) {
+            addSystemNotification($db_conn, 'Daemon Cron Heartbeat', 'System automation & background monitoring active. All services healthy.', 'info', 'system', 'daemon_monitor');
+        }
+    }
 
 } catch (Throwable $e) {
     $logs['fatal_error'] = $e->getMessage();

@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserAccount } from '../types/erp';
-import { Mail, FileText, FileCheck, Users, Settings, ChevronRight, Check, PanelLeftClose, PanelLeft, FileSpreadsheet, Package, Bell, Trash2, Receipt, MessageSquare, LogOut } from 'lucide-react';
+import { Mail, FileText, FileCheck, Users, Settings, ChevronRight, Check, PanelLeftClose, PanelLeft, FileSpreadsheet, Package, Bell, Trash2, Receipt, MessageSquare, LogOut, Activity } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
 interface SidebarProps {
-  viewMode: 'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'client_chat';
+  viewMode: 'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'client_chat' | 'daemon_monitor';
   setViewMode: (mode: any) => void;
   onNewQuotation: () => void;
   pendingCount: number;
@@ -148,6 +148,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: '',
     },
     // ── System & Administration ──
+    {
+      id: 'daemon_monitor',
+      label: 'Daemon & Activity Monitor',
+      icon: Activity,
+      badge: 'LIVE',
+      badgeColor: 'bg-emerald-600 text-white font-extrabold',
+    },
     {
       id: 'account_settings',
       label: 'User Accounts & Access',

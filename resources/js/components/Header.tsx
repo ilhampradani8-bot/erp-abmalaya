@@ -2,7 +2,7 @@ import React from 'react';
 import { PlusCircle, Menu } from 'lucide-react';
 
 interface HeaderProps {
-  viewMode: 'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'client_chat';
+  viewMode: 'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'client_chat' | 'daemon_monitor';
   sentCount: number;
   dealCount: number;
   pendingCount: number;
@@ -43,6 +43,7 @@ export const Header: React.FC<HeaderProps> = ({
             {viewMode === 'doc_preview' && 'Document Preview (PDF)'}
             {viewMode === 'account_settings' && 'User Account Settings'}
             {viewMode === 'system_settings' && 'ERP System Settings'}
+            {viewMode === 'daemon_monitor' && 'Daemon & System Activity Monitor'}
             {viewMode === 'trash' && 'Product Trash Bin'}
             {viewMode === 'trash_quotation' && 'Quotation Trash Bin'}
           </span>

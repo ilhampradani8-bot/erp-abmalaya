@@ -40,30 +40,19 @@ try {
     $email_address = $msg_payload['emailAddress'];
     $history_id = isset($msg_payload['historyId']) ? $msg_payload['historyId'] : '';
 
-    // ⚡ Trigger background sync (non-blocking) using curl
-    $sync_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") 
+    // ⚡ Trigger master cron engine (non-blocking) using curl
+    $cron_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") 
               . "://" . $_SERVER['HTTP_HOST'] 
-              . str_replace('api_gmail_webhook.php', 'api_fetch_live_gmail.php', $_SERVER['REQUEST_URI']);
+              . str_replace('api_gmail_webhook.php', 'cron_trigger.php', $_SERVER['REQUEST_URI']);
     
-    // Add sync query param to trigger new downloads
-    $sync_url = preg_replace('/(\?|&)token=[^&]*/', '', $sync_url);
-    $sync_url .= (strpos($sync_url, '?') === false ? '?' : '&') . 'sync=1';
+    $cron_url = preg_replace('/(\?|&)token=[^&]*/', '', $cron_url);
 
-    $ch = curl_init($sync_url);
+    $ch = curl_init($cron_url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 3); // Fast timeout to keep webhook response fast
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5); // Fast timeout to return webhook response immediately
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_exec($ch);
     curl_close($ch);
-
-    // Also trigger AI scan daemon asynchronously (non-blocking via popen)
-    // This classifies any newly arrived emails immediately after sync
-    $php_bin = 'C:\\xampp\\php\\php.exe';
-    $scan_script = dirname(__DIR__) . '\\daemon\\scan_ai.php';
-    if (file_exists($scan_script)) {
-        // popen with null redirect = fire-and-forget, does not block webhook response
-        popen(escapeshellarg($php_bin) . ' ' . escapeshellarg($scan_script) . ' > NUL 2>&1', 'r');
-    }
 
     ob_end_clean();
     echo json_encode([

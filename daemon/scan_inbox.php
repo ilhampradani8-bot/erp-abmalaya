@@ -390,21 +390,17 @@ while ($row = $res->fetch_assoc()) {
     }
 
 
-    $rfq_status = 'masuk';
     if ($verified) {
         if ($classification === 'client_rfq') {
-            $rfq_status = 'diproses';
             autoGenerateQuotation($db_conn, $row, $items, $item_requested);
-        } else {
-            $rfq_status = 'junk';
         }
     }
 
-    $upd = $db_conn->prepare("UPDATE rfq_requests SET ai_verified=?, ai_classification=?, ai_error=?, item_requested=?, status=? WHERE rfq_number=?");
+    $upd = $db_conn->prepare("UPDATE rfq_requests SET ai_verified=?, ai_classification=?, ai_error=?, item_requested=? WHERE rfq_number=?");
     if ($upd) {
         $ai_err_str = $ai_error ?? '';
         $item_req_str = $item_requested ?? '';
-        $upd->bind_param('isssss', $verified, $classification, $ai_err_str, $item_req_str, $rfq_status, $rfq_num);
+        $upd->bind_param('issss', $verified, $classification, $ai_err_str, $item_req_str, $rfq_num);
         if (!$upd->execute()) {
             daemon_log("  -> ERROR updating RFQ #{$rfq_num}: " . $upd->error);
         }

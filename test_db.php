@@ -1,34 +1,19 @@
 <?php
-// Script to apply database migration to remote live DB
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-$host = '110.4.45.199';
-$user = 'abmalaya_erpuser';
-$pass = 'abmalaya2021';
-$db   = 'abmalaya_abmalaya_erp';
-
-echo "Connecting to remote database at $host...\n";
-$conn = @mysqli_connect($host, $user, $pass, $db);
-if (!$conn) {
-    die("CONNECTION FAILED: " . mysqli_connect_error() . "\n(Note: cPanel servers usually block remote MySQL connections on port 3306 unless your IP is whitelisted in remote database access settings).\n");
-}
-
-echo "Successfully connected to remote database!\n";
-
-// 1. Check if 'ai_error' column exists in rfq_requests
-$result = mysqli_query($conn, "SHOW COLUMNS FROM rfq_requests LIKE 'ai_error'");
-if (mysqli_num_rows($result) == 0) {
-    echo "Column 'ai_error' is missing in rfq_requests table. Adding it now...\n";
-    $alter = mysqli_query($conn, "ALTER TABLE rfq_requests ADD COLUMN ai_error TEXT DEFAULT NULL AFTER ai_classification");
-    if ($alter) {
-        echo "SUCCESS: Column 'ai_error' successfully added to remote DB!\n";
+require_once __DIR__ . "/public/db_connect.php";
+if ($db_conn) {
+    $start_date_limit = '2026-01-01';
+    $query_where = "WHERE r.created_at >= '" . $db_conn->real_escape_string($start_date_limit) . " 00:00:00' AND (r.ai_classification != 'junk' OR r.ai_classification IS NULL)";
+    $sql = "SELECT r.*, COALESCE(q.status, 'masuk') AS status FROM rfq_requests r LEFT JOIN quotations q ON q.rfq_id = r.id {$query_where} ORDER BY r.id DESC LIMIT 10";
+    echo $sql . "\n";
+    $res = $db_conn->query($sql);
+    if ($res) {
+        echo "Found " . $res->num_rows . " rows.\n";
+        while($row = $res->fetch_assoc()) {
+            echo $row['id'] . " - " . $row['status'] . "\n";
+        }
     } else {
-        echo "FAILED to add column: " . mysqli_error($conn) . "\n";
+        echo "Query failed: " . $db_conn->error . "\n";
     }
 } else {
-    echo "Column 'ai_error' already exists in remote DB.\n";
+    echo "No connection";
 }
-
-mysqli_close($conn);
-echo "Database check completed.\n";

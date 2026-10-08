@@ -95,8 +95,8 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
   currentUser,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeMainTab, setActiveMainTab] = useState<string>('received');
-  const [activeSubTab, setActiveSubTab] = useState<'detected' | 'unrecognized'>('detected');
+  const [activeMainTab, setActiveMainTab] = useState<string>('all');
+  const [activeSubTab, setActiveSubTab] = useState<'detected' | 'other'>('detected');
 
   const [showNotificationBanner, setShowNotificationBanner] = useState(false);
   const [notificationText, setNotificationText] = useState<string>('');
@@ -356,7 +356,41 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
     return isNaN(time) ? null : time;
   }, [inboxRules.startDate]);
 
-  const satisfiesInboxFilter = useCallback((item: RFQ, targetSubTab: 'detected' | 'unrecognized') => {
+  // Date filtered emails calculation for Info Modal stats
+  const dateFilteredRfqs = useMemo(() => {
+    if (!parsedCutoffDate) return rfqs;
+    return rfqs.filter(r => {
+      const rawDateStr = (r as any).date_received || (r as any).created_at || r.date || '';
+      if (!rawDateStr) return true;
+      const emailDate = new Date(rawDateStr).getTime();
+      return isNaN(emailDate) || emailDate >= parsedCutoffDate;
+    });
+  }, [rfqs, parsedCutoffDate]);
+
+  const modalStats = useMemo(() => {
+    const totalInDb = rfqs.length;
+    const matchingDateFilter = dateFilteredRfqs.length;
+
+    const dateFilteredAiReq = dateFilteredRfqs.filter(r => r.ai_classification === 'client_rfq').length;
+    const totalAiReq = rfqs.filter(r => r.ai_classification === 'client_rfq').length;
+
+    const dateFilteredFailedReq = dateFilteredRfqs.filter(r => r.ai_classification && r.ai_classification !== 'client_rfq').length;
+    const totalFailedReq = rfqs.filter(r => r.ai_classification && r.ai_classification !== 'client_rfq').length;
+
+    const totalErrorCount = rfqs.filter(r => r.ai_error && r.ai_error.trim() !== '').length;
+
+    return {
+      totalInDb,
+      matchingDateFilter,
+      dateFilteredAiReq,
+      totalAiReq,
+      dateFilteredFailedReq,
+      totalFailedReq,
+      totalErrorCount,
+    };
+  }, [rfqs, dateFilteredRfqs]);
+
+  const satisfiesInboxFilter = useCallback((item: RFQ, targetSubTab: 'detected' | 'other') => {
     if (!item) return false;
     const sender = (item.sender_email || '').toLowerCase();
     const subject = (item.subject || '').toLowerCase();
@@ -456,6 +490,9 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
     const isConvertedToQuotation = isInProgress || isSent || isDone;
 
+    if (activeMainTab === 'all') {
+      return true; // Show all
+    }
     if (activeMainTab === 'received') {
       return !isConvertedToQuotation;
     }
@@ -472,7 +509,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
     return true;
   }, [inboxRules, parsedStartDateLimit, parsedCutoffDate, selectedToFilter, searchTerm, activeMainTab]);
 
-  const { detectedCount, unrecognizedCount, filteredRfqs } = useMemo(() => {
+  const { detectedCount, otherCount, filteredRfqs } = useMemo(() => {
     let dCount = 0;
     let uCount = 0;
     const filtered: RFQ[] = [];
@@ -482,12 +519,12 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
       const item = list[i];
       const isDet = satisfiesInboxFilter(item, 'detected');
       if (isDet) dCount++;
-      const isUnrec = satisfiesInboxFilter(item, 'unrecognized');
-      if (isUnrec) uCount++;
+      const isOther = satisfiesInboxFilter(item, 'other');
+      if (isOther) uCount++;
 
       if (activeSubTab === 'detected' && isDet) {
         filtered.push(item);
-      } else if (activeSubTab === 'unrecognized' && isUnrec) {
+      } else if (activeSubTab === 'other' && isOther) {
         filtered.push(item);
       }
     }
@@ -506,7 +543,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
       });
     }
 
-    return { detectedCount: dCount, unrecognizedCount: uCount, filteredRfqs: filtered };
+    return { detectedCount: dCount, otherCount: uCount, filteredRfqs: filtered };
   }, [rfqs, activeSubTab, satisfiesInboxFilter, inboxRules.prioritizePdf]);
 
   const totalPages = Math.ceil(filteredRfqs.length / itemsPerPage) || 1;
@@ -758,8 +795,8 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 <button
                   onClick={() => setIsToFilterOpen(!isToFilterOpen)}
                   className={`px-2.5 py-1 font-bold text-[11px] rounded-md transition cursor-pointer flex items-center gap-1 border ${selectedToFilter !== 'all'
-                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
                     }`}
                   style={{ fontFamily: "'Eurostile', 'Microgramma D OT', 'Euro Stile', monospace" }}
                   title="Filter by recipient email alias / domain"
@@ -795,20 +832,22 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 <button
                   onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
                   className={`px-2.5 py-1 font-bold text-[11px] rounded-md transition cursor-pointer flex items-center gap-1 border ${activeMainTab === 'received'
-                      ? 'bg-blue-600 text-white shadow-2xs'
-                      : 'bg-indigo-600 text-white shadow-2xs'
+                    ? 'bg-blue-600 text-white shadow-2xs'
+                    : 'bg-indigo-600 text-white shadow-2xs'
                     }`}
                   style={{ fontFamily: "'Eurostile', 'Microgramma D OT', 'Euro Stile', monospace" }}
                   title="Filter by status: Received, In Progress, Sent, Done"
                 >
                   <span>
-                    {activeMainTab === 'received'
-                      ? 'Status: Received'
-                      : activeMainTab === 'diproses'
-                        ? 'Status: In Progress'
-                        : activeMainTab === 'siap_kirim'
-                          ? 'Status: Sent / Replied'
-                          : 'Status: Done'}
+                    {activeMainTab === 'all'
+                      ? 'Status: All'
+                      : activeMainTab === 'received'
+                        ? 'Status: New (Received)'
+                        : activeMainTab === 'diproses'
+                          ? 'Status: In Progress'
+                          : activeMainTab === 'siap_kirim'
+                            ? 'Status: Sent / Replied'
+                            : 'Status: Done'}
                   </span>
                   <ChevronDown className="w-3 h-3 text-white/80" />
                 </button>
@@ -818,7 +857,8 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                     <div className="fixed inset-0 z-40" onClick={() => setIsStatusDropdownOpen(false)} />
                     <div className="absolute right-0 mt-1.5 w-56 bg-white border border-slate-300 shadow-lg rounded-md overflow-hidden z-50 py-1 font-sans text-xs">
                       {[
-                        { id: 'received', label: 'Received' },
+                        { id: 'all', label: 'All Statuses' },
+                        { id: 'received', label: 'New (Received)' },
                         { id: 'diproses', label: 'In Progress' },
                         { id: 'siap_kirim', label: 'Sent / Replied' },
                         { id: 'done', label: 'Done' },
@@ -849,8 +889,8 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 type="button"
                 onClick={() => setActiveSubTab('detected')}
                 className={`flex-1 py-1.5 px-2 text-[10px] font-extrabold border text-center transition cursor-pointer flex items-center justify-center gap-1.5 rounded-md shadow-2xs ${activeSubTab === 'detected'
-                    ? 'bg-gradient-to-b from-[#2e2e2e] to-[#121212] text-white border-[#111]'
-                    : 'bg-gradient-to-b from-[#ffffff] to-[#f5f5f5] text-slate-700 border-slate-200 hover:from-[#fcfcfc] hover:to-[#ebebeb]'
+                  ? 'bg-gradient-to-b from-[#2e2e2e] to-[#121212] text-white border-[#111]'
+                  : 'bg-gradient-to-b from-[#ffffff] to-[#f5f5f5] text-slate-700 border-slate-200 hover:from-[#fcfcfc] hover:to-[#ebebeb]'
                   }`}
                 style={{ fontFamily: "'Eurostile', monospace" }}
               >
@@ -860,15 +900,15 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
               <button
                 type="button"
-                onClick={() => setActiveSubTab('unrecognized')}
-                className={`flex-1 py-1.5 px-2 text-[10px] font-extrabold border text-center transition cursor-pointer flex items-center justify-center gap-1.5 rounded-md shadow-2xs ${activeSubTab === 'unrecognized'
-                    ? 'bg-gradient-to-b from-[#2e2e2e] to-[#121212] text-white border-[#111]'
-                    : 'bg-gradient-to-b from-[#ffffff] to-[#f5f5f5] text-slate-700 border-slate-200 hover:from-[#fcfcfc] hover:to-[#ebebeb]'
+                onClick={() => setActiveSubTab('other')}
+                className={`flex-1 py-1.5 px-2 text-[10px] font-extrabold border text-center transition cursor-pointer flex items-center justify-center gap-1.5 rounded-md shadow-2xs ${activeSubTab === 'other'
+                  ? 'bg-gradient-to-b from-[#2e2e2e] to-[#121212] text-white border-[#111]'
+                  : 'bg-gradient-to-b from-[#ffffff] to-[#f5f5f5] text-slate-700 border-slate-200 hover:from-[#fcfcfc] hover:to-[#ebebeb]'
                   }`}
                 style={{ fontFamily: "'Eurostile', monospace" }}
               >
-                <AlertTriangle className={`w-3.5 h-3.5 ${activeSubTab === 'unrecognized' ? 'text-amber-400' : 'text-amber-600'}`} />
-                <span>OTHERS ({unrecognizedCount})</span>
+                <AlertTriangle className={`w-3.5 h-3.5 ${activeSubTab === 'other' ? 'text-amber-400' : 'text-amber-600'}`} />
+                <span>OTHERS ({otherCount})</span>
               </button>
             </div>
 
@@ -950,10 +990,10 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                       setShowNotificationBanner(false);
                     }}
                     className={`p-3 transition-all cursor-pointer border-l-4 relative ${isSelected
-                        ? 'bg-blue-50/80 border-blue-600'
-                        : !isDetected
-                          ? 'bg-amber-50/30 hover:bg-amber-50/60 border-transparent'
-                          : 'hover:bg-slate-50 border-transparent'
+                      ? 'bg-blue-50/80 border-blue-600'
+                      : !isDetected
+                        ? 'bg-amber-50/30 hover:bg-amber-50/60 border-transparent'
+                        : 'hover:bg-slate-50 border-transparent'
                       }`}
                   >
                     <div className="flex items-start justify-between gap-1 mb-1">
@@ -1036,7 +1076,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                                   <span>AI Error Log</span>
                                 </button>
 
-                                {activeSubTab === 'unrecognized' && (
+                                {activeSubTab === 'other' && (
                                   <button
                                     type="button"
                                     onClick={(e) => {
@@ -1807,8 +1847,8 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
               <div className="space-y-1">
                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">AI Classification Result</span>
                 <span className={`inline-block px-2.5 py-0.5 rounded-sm font-bold border text-[10px] ${aiSummaryModalData.ai_classification === 'client_rfq'
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                    : 'bg-rose-50 text-rose-800 border-rose-300'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                  : 'bg-rose-50 text-rose-800 border-rose-300'
                   }`}>
                   {aiSummaryModalData.ai_classification === 'client_rfq' ? 'AI: Requisition' : 'AI: Iklan / Sampah (Junk/Alert)'}
                 </span>
@@ -1891,8 +1931,8 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
               <div className="space-y-1">
                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Verification Status</span>
                 <span className={`inline-block px-2.5 py-0.5 rounded-sm font-bold border text-[10px] ${aiErrorModalData.ai_verified === 1
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                    : 'bg-amber-50 text-amber-800 border-amber-300 animate-pulse'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                  : 'bg-amber-50 text-amber-800 border-amber-300 animate-pulse'
                   }`}>
                   {aiErrorModalData.ai_verified === 1 ? 'AI Scan Success (Verified)' : 'AI Scan Pending / Failed (Waiting Scan)'}
                 </span>
@@ -1948,31 +1988,31 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                       <td className="py-2.5 font-extrabold text-slate-800 font-mono">{inboxRules.startDate || 'Not configured'}</td>
                     </tr>
                     <tr className="border-b border-slate-100">
-                      <td className="py-2.5 font-bold text-slate-500">Emails in Database</td>
-                      <td className="py-2.5 font-extrabold text-slate-800 font-mono">{rfqs.length}</td>
+                      <td className="py-2.5 font-bold text-slate-500">Emails in Database (Total All Time)</td>
+                      <td className="py-2.5 font-extrabold text-slate-800 font-mono">{modalStats.totalInDb} Emails</td>
                     </tr>
                     <tr className="border-b border-slate-100">
-                      <td className="py-2.5 font-bold text-slate-500">Total Emails (All)</td>
-                      <td className="py-2.5 font-extrabold text-slate-800 font-mono">{rfqs.length}</td>
+                      <td className="py-2.5 font-bold text-slate-500">Emails Matching Date Filter ({inboxRules.startDate || 'All'})</td>
+                      <td className="py-2.5 font-extrabold text-blue-700 font-mono">{modalStats.matchingDateFilter} Emails</td>
                     </tr>
                     <tr className="border-b border-slate-100">
                       <td className="py-2.5 font-bold text-slate-500">AI Requisition Emails (Count)</td>
                       <td className="py-2.5 font-extrabold text-emerald-700 font-mono">
-                        {rfqs.filter(r => r.ai_classification === 'client_rfq').length}
+                        {modalStats.dateFilteredAiReq} <span className="text-[10px] text-slate-400 font-normal">(Filtered Date)</span> / {modalStats.totalAiReq} <span className="text-[10px] text-slate-400 font-normal">(Total DB)</span>
                       </td>
                     </tr>
                     <tr className="border-b border-slate-100">
                       <td className="py-2.5 font-bold text-slate-500">Emails Failed Requisition Verification</td>
                       <td className="py-2.5 font-extrabold text-rose-700 font-mono">
-                        {rfqs.filter(r => r.ai_classification && r.ai_classification !== 'client_rfq').length}
+                        {modalStats.dateFilteredFailedReq} <span className="text-[10px] text-slate-400 font-normal">(Filtered Date)</span> / {modalStats.totalFailedReq} <span className="text-[10px] text-slate-400 font-normal">(Total DB)</span>
                       </td>
                     </tr>
                     <tr className="border-b border-slate-100">
                       <td className="py-2.5 font-bold text-slate-500">Error Log (Count)</td>
                       <td className="py-2.5 font-mono flex items-center justify-between">
-                        {rfqs.filter(r => r.ai_error && r.ai_error.trim() !== '').length > 0 ? (
+                        {modalStats.totalErrorCount > 0 ? (
                           <span className="font-extrabold text-rose-600 bg-rose-50 px-1.5 py-0.5 border border-rose-200 rounded-sm">
-                            {rfqs.filter(r => r.ai_error && r.ai_error.trim() !== '').length} Errors
+                            {modalStats.totalErrorCount} Errors
                           </span>
                         ) : (
                           <span className="font-extrabold text-slate-500 bg-slate-50 px-1.5 py-0.5 border border-slate-200 rounded-sm">
@@ -2074,8 +2114,8 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
               <button
                 onClick={() => setActiveLogTab('all')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${activeLogTab === 'all'
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800 hover:text-white'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800 hover:text-white'
                   }`}
               >
                 <FileText className="w-3.5 h-3.5" />
@@ -2087,8 +2127,8 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                   key={lf.file}
                   onClick={() => setActiveLogTab(lf.file)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-mono transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${activeLogTab === lf.file
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800 hover:text-white'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800 hover:text-white'
                     }`}
                 >
                   <Terminal className="w-3 h-3 text-blue-400" />
@@ -2099,8 +2139,8 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
               <button
                 onClick={() => setActiveLogTab('db_errors')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ml-auto ${activeLogTab === 'db_errors'
-                    ? 'bg-rose-600 text-white shadow-sm'
-                    : 'bg-rose-950/40 text-rose-300 hover:bg-rose-900/60 border border-rose-800/50'
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : 'bg-rose-950/40 text-rose-300 hover:bg-rose-900/60 border border-rose-800/50'
                   }`}
               >
                 <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />

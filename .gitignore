@@ -37,4 +37,5 @@ Desktop.ini
 # Local App Inbox Cache & Daemon Logs
 public/file_inbox/
 daemon/logs/
+.ftp_deploy_cache.json
 

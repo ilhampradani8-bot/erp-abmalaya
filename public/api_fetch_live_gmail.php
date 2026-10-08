@@ -889,12 +889,12 @@ try {
         exit;
     }
 
-    $is_sync = isset($_GET['sync']) && $_GET['sync'] == '1';
+    $is_sync = (isset($_GET['sync']) && $_GET['sync'] == '1') || (isset($_GET['cron']) && $_GET['cron'] == '1') || defined('MASTER_CRON_MODE');
 
     // ⚡ INSTANT FAST RESPONSE (< 5ms): Query MySQL Cache First if NOT syncing
     if (!$is_sync && $db_conn && !$db_conn->connect_error) {
-        $query_where = "WHERE created_at >= '" . $db_conn->real_escape_string($start_date_limit) . " 00:00:00' AND (ai_classification != 'junk' OR ai_classification IS NULL)";
-        $res = $db_conn->query("SELECT * FROM rfq_requests {$query_where} ORDER BY id DESC LIMIT 200");
+        $query_where = "WHERE r.created_at >= '" . $db_conn->real_escape_string($start_date_limit) . " 00:00:00'";
+        $res = $db_conn->query("SELECT r.*, COALESCE(q.status, 'masuk') AS status FROM rfq_requests r LEFT JOIN quotations q ON q.rfq_id = r.id {$query_where} ORDER BY r.id DESC LIMIT 200");
         if ($res && $res->num_rows > 0) {
             $data = [];
             while ($row = $res->fetch_assoc()) {
@@ -996,14 +996,8 @@ try {
     $saved_statuses = [];
     $saved_replies = [];
     if ($db_conn && !$db_conn->connect_error) {
-        $db_conn->query("UPDATE rfq_requests r 
-                         INNER JOIN quotations q ON q.rfq_id = r.id
-                         SET r.status = CASE 
-                             WHEN q.status = 'Approved' OR q.status = 'acc' THEN 'deal'
-                             WHEN q.status = 'Sent' OR q.status = 'done_send' THEN 'penawaran_terkirim'
-                             ELSE 'diproses'
-                         END");
-        $st_res = $db_conn->query("SELECT id, rfq_number, status, subject, client_email, recipient_email, reply_body, reply_date, reply_sender FROM rfq_requests");
+
+        $st_res = $db_conn->query("SELECT r.id, r.rfq_number, COALESCE(q.status, 'masuk') AS status, r.subject, r.client_email, r.recipient_email, r.reply_body, r.reply_date, r.reply_sender FROM rfq_requests r LEFT JOIN quotations q ON q.rfq_id = r.id");
         if ($st_res && $st_res->num_rows > 0) {
             while ($s_row = $st_res->fetch_assoc()) {
                 $status_val = $s_row['status'];
@@ -1031,8 +1025,8 @@ try {
     if (!$inbox) {
         // Fallback gracefully to DB cache if IMAP connection fails or times out
         if ($db_conn && !$db_conn->connect_error) {
-            $query_where = "WHERE created_at >= '" . $db_conn->real_escape_string($start_date_limit) . " 00:00:00' AND (ai_classification != 'junk' OR ai_classification IS NULL)";
-            $res = $db_conn->query("SELECT * FROM rfq_requests {$query_where} ORDER BY id DESC LIMIT 200");
+            $query_where = "WHERE r.created_at >= '" . $db_conn->real_escape_string($start_date_limit) . " 00:00:00'";
+            $res = $db_conn->query("SELECT r.*, COALESCE(q.status, 'masuk') AS status FROM rfq_requests r LEFT JOIN quotations q ON q.rfq_id = r.id {$query_where} ORDER BY r.id DESC LIMIT 200");
             if ($res && $res->num_rows > 0) {
                 $data = [];
                 while ($row = $res->fetch_assoc()) {
@@ -1082,7 +1076,7 @@ try {
             }
 
             // Fallback: Query any recent RFQs if strict date filter returned 0
-            $res_all = $db_conn->query("SELECT * FROM rfq_requests WHERE ai_classification != 'junk' OR ai_classification IS NULL ORDER BY id DESC LIMIT 100");
+            $res_all = $db_conn->query("SELECT * FROM rfq_requests ORDER BY id DESC LIMIT 100");
             if ($res_all && $res_all->num_rows > 0) {
                 $data = [];
                 while ($row = $res_all->fetch_assoc()) {
@@ -1530,6 +1524,9 @@ try {
                         $rfq_num = 'RFQ-' . $email_number;
                         $stmt->bind_param("sssssssssisss", $rfq_num, $sender_name, $sender_email, $recipient_email, $sender_name, $subject, $clean_body, $item_requested, $current_status, $ai_verified, $ai_classification, $ai_error, $attachment_url_val);
                         $stmt->execute();
+                        if ($stmt->affected_rows === 1) {
+                            addSystemNotification($db_conn, "Email RFQ Baru Masuk ({$rfq_num})", "Email dari {$sender_name} ({$sender_email}) dengan subjek \"{$subject}\" telah diterima.", 'info', 'email', 'inbox');
+                        }
                         $stmt->close();
                     }
                 }
@@ -1541,16 +1538,10 @@ try {
 
     // ⚡ After syncing, query the complete local DB cache (200 records limit) to ensure older and updated statuses are all returned to UI
     if ($db_conn && !$db_conn->connect_error) {
-        $db_conn->query("UPDATE rfq_requests r 
-                         INNER JOIN quotations q ON q.rfq_id = r.id
-                         SET r.status = CASE 
-                             WHEN q.status = 'Approved' OR q.status = 'acc' THEN 'deal'
-                             WHEN q.status = 'Sent' OR q.status = 'done_send' THEN 'penawaran_terkirim'
-                             ELSE 'diproses'
-                         END");
 
-        $query_where = "WHERE created_at >= '" . $db_conn->real_escape_string($start_date_limit) . " 00:00:00' AND (ai_classification != 'junk' OR ai_classification IS NULL)";
-        $res = $db_conn->query("SELECT * FROM rfq_requests {$query_where} ORDER BY id DESC LIMIT 200");
+
+        $query_where = "WHERE r.created_at >= '" . $db_conn->real_escape_string($start_date_limit) . " 00:00:00'";
+        $res = $db_conn->query("SELECT r.*, COALESCE(q.status, 'masuk') AS status FROM rfq_requests r LEFT JOIN quotations q ON q.rfq_id = r.id {$query_where} ORDER BY r.id DESC LIMIT 200");
         if ($res && $res->num_rows > 0) {
             $data = [];
             while ($row = $res->fetch_assoc()) {

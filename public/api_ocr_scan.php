@@ -30,14 +30,15 @@ if (php_sapi_name() !== 'cli' || isset($_SERVER['REQUEST_METHOD'])) {
 try {
     require_once __DIR__ . '/db_connect.php';
 
-    // ── GET: Return existing scan result ──────────────────────────────────────
-    if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'GET') {
-        $quo_id = isset($_GET['quo_id']) ? trim($_GET['quo_id']) : '';
-        if (empty($quo_id)) {
-            ob_end_clean();
-            echo json_encode(['status' => 'error', 'message' => 'quo_id required']);
-            exit;
-        }
+    if (!defined('MASTER_CRON_MODE')) {
+        // ── GET: Return existing scan result ──────────────────────────────────────
+        if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'GET') {
+            $quo_id = isset($_GET['quo_id']) ? trim($_GET['quo_id']) : '';
+            if (empty($quo_id)) {
+                ob_end_clean();
+                echo json_encode(['status' => 'error', 'message' => 'quo_id required']);
+                exit;
+            }
         $s = $db_conn->prepare("SELECT ocr_scan_status, ocr_scan_result FROM quotations WHERE id = ?");
         if ($s) {
             $s->bind_param('s', $quo_id);
@@ -71,16 +72,16 @@ try {
             exit;
         }
 
-        // Load quotation + its rfq attachment_url
+        // Load quotation + its rfq attachment_url & email context
         $s = $db_conn->prepare("
-            SELECT q.id, q.rfq_id, q.ocr_scan_status,
-                   r.attachment_url, r.client_name, r.client_email, r.subject
+            SELECT q.id, q.rfq_id, q.ocr_scan_status, q.company_name, q.category_name, q.impa_code,
+                   r.attachment_url, r.client_name, r.client_email, r.subject, r.item_requested, r.quantity_requested, r.message_body
             FROM quotations q
             LEFT JOIN rfq_requests r ON r.id = q.rfq_id
             WHERE q.id = ?
             LIMIT 1
         ");
-        if (!$s) throw new Exception('DB prepare error');
+        if (!$s) throw new Exception('DB prepare error: ' . $db_conn->error);
         $s->bind_param('s', $quo_id);
         $s->execute();
         $res = $s->get_result();
@@ -96,7 +97,8 @@ try {
         // Mark as processing
         $db_conn->query("UPDATE quotations SET ocr_scan_status = 'processing' WHERE id = '" . $db_conn->real_escape_string($quo_id) . "'");
 
-        $attachment_url = $quo['attachment_url'] ?? '';
+        $raw_att = $quo['attachment_url'] ?? '';
+        $attachment_url = (!empty($raw_att) && !in_array(strtoupper(trim($raw_att)), ['NONE', 'NULL', ''])) ? $raw_att : '';
 
 
         // Load DEDICATED OCR Gemini API Keys from gemini_api_keys table
@@ -119,6 +121,9 @@ try {
         }
         $key_list = array_values(array_unique($key_list));
 
+        // Flag when no active AI keys are available — scan will proceed with native fallback only
+        $all_keys_disabled = empty($key_list);
+
         // PRIORITY CONTROL: Set manual_scan lock in MySQL to halt background daemons
         $db_conn->query("INSERT INTO system_locks (lock_key, lock_value) VALUES ('manual_scan_active', '" . time() . "') ON DUPLICATE KEY UPDATE lock_value = '" . time() . "'");
 
@@ -128,14 +133,23 @@ try {
         // Clear manual_scan lock after completion
         $db_conn->query("DELETE FROM system_locks WHERE lock_key = 'manual_scan_active'");
 
-        // Store result
-        $result_json = json_encode($scan_result, JSON_UNESCAPED_UNICODE);
-        // Derive status from inner scan_status:
-        //   'done'        = success (AI or native fallback, both acceptable)
-        //   'low_quality' = partial — still mark as done so user can see data
-        //   anything else = error
+        // Store result & derive status from items count and scan result
+        $item_count = isset($scan_result['items']) && is_array($scan_result['items']) ? count($scan_result['items']) : 0;
         $inner_status = $scan_result['scan_status'] ?? 'error';
-        $new_status = in_array($inner_status, ['done', 'low_quality']) ? 'done' : (in_array($inner_status, ['waiting', 'waiting_ai_limit']) ? 'waiting_ai_limit' : 'error');
+
+        if ($item_count > 0) {
+            $new_status = in_array($inner_status, ['done', 'low_quality']) ? 'done' : 'error';
+        } else {
+            // 0 items extracted — DO NOT mark as 'done'
+            if (in_array($inner_status, ['waiting', 'waiting_ai_limit']) || ($scan_result['ai_rate_limited'] ?? false)) {
+                $new_status = 'waiting_ai_limit';
+            } else {
+                $new_status = 'error';
+                $scan_result['scan_status'] = 'error';
+                $scan_result['reason'] = 'No items could be extracted from attachment or email text.';
+            }
+        }
+        $result_json = json_encode($scan_result, JSON_UNESCAPED_UNICODE);
 
         // Also update client_phone & delivery_email / client_email in quotations table if extracted by OCR
         $extracted_phone = isset($scan_result['phone']) && !empty($scan_result['phone']) ? trim($scan_result['phone']) : null;
@@ -213,10 +227,11 @@ try {
         $ai_note    = $scan_result['ai_rate_limited'] ?? false
             ? ' [AI rate-limited — waiting retry]'
             : (strpos($confidence, 'Native') !== false ? ' [native text fallback]' : ' [Gemini AI]');
-        $log_action_label = ($new_status === 'waiting_ai_limit') ? 'Menunggu AI (Limit)' : 'Manual OCR Scan';
+        $log_action_label = ($new_status === 'waiting_ai_limit') ? 'Waiting AI (Limit)' : 'Manual OCR Scan';
+        $log_details_suffix = $all_keys_disabled ? ' (All AI keys disabled — native text fallback only)' : '';
         $log_details = ($new_status === 'waiting_ai_limit')
-            ? 'Tesseract OCR scan selesai. Menunggu AI (Limit) reset kuota untuk ekstraksi terstruktur 100% via Gemini AI.'
-            : ('Manual OCR scan diproses oleh pengguna. Status: ' . strtoupper($new_status) . '. Ekstraksi item: ' . $item_count . ' item.');
+            ? 'OCR scan completed via native engine. Waiting for AI quota reset to perform structured extraction via Gemini AI.'
+            : ('Manual OCR scan processed by user. Status: ' . strtoupper($new_status) . '. Items extracted: ' . $item_count . '.' . $log_details_suffix);
         appendQuotationHistoryLog(
             $db_conn,
             $quo_id,
@@ -230,14 +245,18 @@ try {
         echo json_encode([
             'status' => 'success',
             'ocr_scan_status' => $new_status,
-            'ocr_scan_result' => $scan_result
+            'ocr_scan_result' => $scan_result,
+            'all_keys_disabled' => $all_keys_disabled,
         ]);
         exit;
     }
+}
 
 } catch (Exception $e) {
-    ob_end_clean();
-    echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    if (!defined('MASTER_CRON_MODE')) {
+        ob_end_clean();
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    }
 }
 
 /**
@@ -352,10 +371,13 @@ function performOCRScan(string $file_url, array $key_list, array $quo_context): 
             }
         }
 
-        // 3. Fallback to external HTTP request if not found locally
+        // 3. Fallback to HTTP request if not found in local attachment folders
         if ($file_data === false || strlen((string)$file_data) < 100) {
             $target_url = $file_url;
-            if (preg_match('/^https?:\/\//i', $target_url) && strpos($target_url, '127.0.0.1') === false && strpos($target_url, 'localhost') === false) {
+            if (strpos($target_url, '/') === 0) {
+                $target_url = 'http://127.0.0.1:8000' . $target_url;
+            }
+            if (preg_match('/^https?:\/\//i', $target_url)) {
                 $ch_dl = curl_init($target_url);
                 curl_setopt_array($ch_dl, [
                     CURLOPT_RETURNTRANSFER => true,
@@ -721,7 +743,7 @@ PROMPT;
         }
     }
 
-    // ── Step 5: Native Regex Text Extraction Fallback (Guaranteed Completion) ────────────────
+    // ── Step 5: Native Regex Text Extraction Fallback ────────────────
     $fallback_items = [];
     if (!empty($ctx_item_req) && strtolower($ctx_item_req) !== 'none') {
         $fallback_items[] = [
@@ -738,16 +760,50 @@ PROMPT;
         ];
     }
 
+    // Secondary fallback: Extract items line-by-line from OCR text or clean email body if still empty
+    if (empty($fallback_items)) {
+        $text_to_parse = !empty(trim($raw_text)) ? $raw_text : $clean_msg;
+        if (!empty($text_to_parse)) {
+            $lines = explode("\n", $text_to_parse);
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (strlen($line) > 5 && preg_match('/^(\d+[\.\)]\s*)?([A-Za-0-9\s\-\/\.\(\)]{3,50})\s+(\d+(?:\.\d+)?)\s*(PCS|BOXES|SETS|BOTTLES|KG|MTR|PKGS|UNIT|QTY|PACKAGE)?/i', $line, $m)) {
+                    $item_desc = trim($m[2]);
+                    if (strlen($item_desc) >= 3 && !preg_match('/^(page|total|date|subtotal|table|order|invoice|notis|notice|sekian|terima)/i', $item_desc)) {
+                        $fallback_items[] = [
+                            'qty' => !empty($m[3]) ? (float)$m[3] : 1.0,
+                            'unit' => !empty($m[4]) ? strtoupper($m[4]) : 'Pcs',
+                            'description' => $item_desc,
+                            'specification' => $line,
+                            'product_code' => null,
+                            'unit_price' => null,
+                            'discount_percent' => null,
+                            'subtotal' => null,
+                            'tax' => null,
+                            'total' => null
+                        ];
+                        if (count($fallback_items) >= 20) break;
+                    }
+                }
+            }
+        }
+    }
+
+    $final_status = (count($fallback_items) > 0) ? 'done' : 'error';
+    $final_notes  = (count($fallback_items) > 0)
+        ? 'Automated OCR text extraction completed.'
+        : 'Scan complete but 0 items extracted. No item list found in document attachment or email text.';
+
     return [
-        'scan_status'     => 'done',
-        'scan_confidence' => 'medium (Native Text & OCR Fallback)',
+        'scan_status'     => $final_status,
+        'scan_confidence' => (count($fallback_items) > 0) ? 'medium (Native Text & OCR Fallback)' : 'low (No Items Extracted)',
         'document_type'   => 'RFQ Requisition Form',
         'category_name'   => $quo_context['category_name'] ?? null,
         'impa_code'       => null,
         'company_name'    => $quo_context['client_company'] ?? null,
         'client_name'     => $quo_context['client_name']    ?? null,
         'delivery_email'  => null,
-        'notes'           => 'Automated OCR text extraction completed.',
+        'notes'           => $final_notes,
         'items'           => $fallback_items,
         'scanned_at'      => $scanned_at,
         'file_url'        => $file_url

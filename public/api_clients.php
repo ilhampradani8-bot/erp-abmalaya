@@ -101,7 +101,7 @@ function autoSyncClientsFromRfqsAndQuotations($connection) {
     }
 
     // 1. Sync from rfq_requests (STRICTLY ai_classification = 'quotation', EXCLUDE 'iklan' and 'waiting', AND DATE >= INBOX_RULE_START_DATE)
-    $resRfq = @$connection->query("SELECT company, sender_name, sender_email, phone FROM rfq_requests WHERE (ai_classification = 'quotation' OR (status IN ('masuk', 'diproses', 'penawaran_terkirim', 'deal') AND ai_classification != 'iklan' AND ai_classification != 'waiting')) AND (DATE(created_at) >= '$startDate' OR DATE(date_received) >= '$startDate')");
+    $resRfq = @$connection->query("SELECT r.client_company AS company, r.client_name AS sender_name, r.client_email AS sender_email, r.client_phone AS phone FROM rfq_requests r LEFT JOIN quotations q ON q.rfq_id = r.id WHERE (r.ai_classification = 'client_rfq' OR (COALESCE(q.status, 'masuk') IN ('masuk', 'diproses', 'in_progress', 'penawaran_terkirim', 'deal') AND r.ai_classification != 'junk' AND r.ai_classification != 'other')) AND DATE(r.created_at) >= '$startDate'");
     if ($resRfq) {
         while ($row = $resRfq->fetch_assoc()) {
             $comp = trim($row['company'] ?? '');
