@@ -238,15 +238,18 @@ try {
                 }
             }
 
-            if (!$attach_pdf_path && !empty($quo_id)) {
+            if (!$attach_pdf_path && !empty($quo_id) && function_exists('exec')) {
                 $tmp_pdf = sys_get_temp_dir() . '/SPH_' . preg_replace('/[^a-zA-Z0-9_-]/', '', $quo_id) . '_' . time() . '.pdf';
-                $node_cmd = 'node ' . escapeshellarg(__DIR__ . '/../scripts/generate_pdf_puppeteer.cjs') . ' ' . escapeshellarg($quo_id) . ' quotation ' . escapeshellarg($tmp_pdf) . ' 2>&1';
-                exec($node_cmd, $node_out, $node_code);
+                $node_script = __DIR__ . '/../scripts/generate_pdf_puppeteer.cjs';
+                if (file_exists($node_script)) {
+                    $node_cmd = 'node ' . escapeshellarg($node_script) . ' ' . escapeshellarg($quo_id) . ' quotation ' . escapeshellarg($tmp_pdf) . ' 2>&1';
+                    @exec($node_cmd, $node_out, $node_code);
 
-                if ($node_code === 0 && file_exists($tmp_pdf) && filesize($tmp_pdf) > 0) {
-                    $attach_pdf_path = $tmp_pdf;
-                    $attach_pdf_name = 'Surat_Penawaran_Harga_' . ($quo_num ? $quo_num : $quo_id) . '.pdf';
-                    $is_temp_file = true;
+                    if (file_exists($tmp_pdf) && filesize($tmp_pdf) > 0) {
+                        $attach_pdf_path = $tmp_pdf;
+                        $attach_pdf_name = 'Surat_Penawaran_Harga_' . ($quo_num ? $quo_num : $quo_id) . '.pdf';
+                        $is_temp_file = true;
+                    }
                 }
             }
 
