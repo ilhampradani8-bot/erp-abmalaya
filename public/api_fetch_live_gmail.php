@@ -928,22 +928,21 @@ try {
                 $ai_classification = isset($row['ai_classification']) ? $row['ai_classification'] : '';
 
                 $labels = [];
-                if ($ai_verified === 1) {
+                if (!empty($ai_classification) || $ai_verified === 1) {
                     if ($ai_classification === 'client_rfq') {
                         $labels[] = 'Primary RFQ';
                         $labels[] = 'AI: Requisition';
+                    } elseif ($ai_classification === 'general_inquiry') {
+                        $labels[] = 'General Inquiry';
+                        $labels[] = 'AI: General Inquiry';
                     } else {
                         $labels[] = 'AI: Iklan / Sampah';
                     }
                 } else {
-                    if (!empty($active_gemini_key) || !empty($gemini_key)) {
-                        $labels[] = 'Waiting AI Detection';
-                    } else {
-                        $labels[] = 'Primary RFQ';
-                    }
-                    if (count($attachments) > 0) {
-                        $labels[] = 'Has File';
-                    }
+                    $labels[] = 'Waiting AI Detection';
+                }
+                if (count($attachments) > 0) {
+                    $labels[] = 'Has File';
                 }
 
                 $clean_body = formatEmailBodyText($row['message_body']);
@@ -1561,18 +1560,21 @@ try {
                 $ai_classification = isset($row['ai_classification']) ? $row['ai_classification'] : '';
 
                 $labels = [];
-                if ($ai_verified === 1) {
+                if (!empty($ai_classification) || $ai_verified === 1) {
                     if ($ai_classification === 'client_rfq') {
                         $labels[] = 'Primary RFQ';
                         $labels[] = 'AI: Requisition';
+                    } elseif ($ai_classification === 'general_inquiry') {
+                        $labels[] = 'General Inquiry';
+                        $labels[] = 'AI: General Inquiry';
                     } else {
                         $labels[] = 'AI: Iklan / Sampah';
                     }
                 } else {
                     $labels[] = 'Waiting AI Detection';
-                    if (count($attachments) > 0) {
-                        $labels[] = 'Has File';
-                    }
+                }
+                if (count($attachments) > 0) {
+                    $labels[] = 'Has File';
                 }
 
                 $data[] = [

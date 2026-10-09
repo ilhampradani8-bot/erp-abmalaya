@@ -1129,21 +1129,34 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
                       {/* AI Classification & Detection Status Badge */}
                       {(() => {
-                        const isWaiting = item.ai_verified === 0 || (!item.ai_verified && item.ai_verified !== 1) || item.labels?.includes('Waiting AI Detection') || item.labels?.includes('Pending AI Scan');
-                        if (isWaiting) {
+                        const classification = (item.ai_classification || '').trim().toLowerCase();
+                        const isVerified = item.ai_verified === 1;
+                        const hasClassification = Boolean(classification);
+
+                        if (!hasClassification && !isVerified) {
                           return (
                             <span className="px-1.5 py-0.2 text-[9px] font-extrabold rounded-sm border bg-amber-50 text-amber-800 border-amber-300 animate-pulse">
                               Waiting AI Detection
                             </span>
                           );
                         }
-                        if (item.ai_classification === 'client_rfq' || item.labels?.includes('AI: Requisition') || item.labels?.includes('AI: Permintaan Klien')) {
+
+                        if (classification === 'client_rfq' || item.labels?.includes('AI: Requisition') || item.labels?.includes('AI: Permintaan Klien')) {
                           return (
                             <span className="px-1.5 py-0.2 text-[9px] font-bold rounded-sm border bg-emerald-50 text-emerald-800 border-emerald-300">
                               AI: Requisition
                             </span>
                           );
                         }
+
+                        if (classification === 'general_inquiry' || item.labels?.includes('AI: General Inquiry')) {
+                          return (
+                            <span className="px-1.5 py-0.2 text-[9px] font-bold rounded-sm border bg-sky-50 text-sky-800 border-sky-300">
+                              AI: General Inquiry
+                            </span>
+                          );
+                        }
+
                         return (
                           <span className="px-1.5 py-0.2 text-[9px] font-bold rounded-sm border bg-rose-50 text-rose-800 border-rose-300">
                             AI: Other / Junk
@@ -1252,21 +1265,34 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                     </span>
                     {/* AI Classification & Detection Status Badge */}
                     {(() => {
-                      const isWaiting = selectedRfq.ai_verified === 0 || (!selectedRfq.ai_verified && selectedRfq.ai_verified !== 1) || selectedRfq.labels?.includes('Waiting AI Detection') || selectedRfq.labels?.includes('Pending AI Scan');
-                      if (isWaiting) {
+                      const classification = (selectedRfq.ai_classification || '').trim().toLowerCase();
+                      const isVerified = selectedRfq.ai_verified === 1;
+                      const hasClassification = Boolean(classification);
+
+                      if (!hasClassification && !isVerified) {
                         return (
                           <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-sm border bg-amber-50 text-amber-800 border-amber-300 animate-pulse">
                             Waiting AI Detection
                           </span>
                         );
                       }
-                      if (selectedRfq.ai_classification === 'client_rfq' || selectedRfq.labels?.includes('AI: Requisition') || selectedRfq.labels?.includes('AI: Permintaan Klien')) {
+
+                      if (classification === 'client_rfq' || selectedRfq.labels?.includes('AI: Requisition') || selectedRfq.labels?.includes('AI: Permintaan Klien')) {
                         return (
                           <span className="text-[9px] font-bold px-2 py-0.5 rounded-sm border bg-emerald-50 text-emerald-800 border-emerald-300">
                             AI: Requisition
                           </span>
                         );
                       }
+
+                      if (classification === 'general_inquiry' || selectedRfq.labels?.includes('AI: General Inquiry')) {
+                        return (
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-sm border bg-sky-50 text-sky-800 border-sky-300">
+                            AI: General Inquiry
+                          </span>
+                        );
+                      }
+
                       return (
                         <span className="text-[9px] font-bold px-2 py-0.5 rounded-sm border bg-rose-50 text-rose-800 border-rose-300">
                           AI: Other / Junk
