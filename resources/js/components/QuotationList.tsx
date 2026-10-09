@@ -167,6 +167,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   const [selectedAlertQuotation, setSelectedAlertQuotation] = useState<Quotation | null>(null);
   const [isAlertModalOpen, setIsAlertModalOpen] = useState<boolean>(false);
 
+  // Guide / Cara Penggunaan popup modal state
+  const [isGuideModalOpen, setIsGuideModalOpen] = useState<boolean>(false);
+  const [guideTab, setGuideTab] = useState<'workflow' | 'columns' | 'dispatch'>('workflow');
+
   // Row-specific kebab dropdown state & Info modal state
   const [openRowActionId, setOpenRowActionId] = useState<string | null>(null);
   const [selectedInfoQuotation, setSelectedInfoQuotation] = useState<Quotation | null>(null);
@@ -1131,6 +1135,17 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               </div>
             )}
           </div>
+
+          {/* User Guide / SOP Quotation Button (!) */}
+          <button
+            type="button"
+            onClick={() => setIsGuideModalOpen(true)}
+            className="p-1.5 px-2 bg-gradient-to-b from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 border border-amber-300 text-amber-900 rounded-md shadow-inner transition cursor-pointer flex items-center justify-center font-black gap-1 shrink-0 group"
+            title="Quotation Guide & Dispatch SOP"
+          >
+            <span className="w-4 h-4 bg-amber-500 group-hover:bg-amber-600 text-white rounded-full flex items-center justify-center text-[10px] font-black leading-none shadow-2xs">!</span>
+            <span className="text-[10px] font-bold text-amber-900 hidden sm:inline">Guide</span>
+          </button>
         </div>
 
       </div>
@@ -3716,6 +3731,263 @@ onClick={() => {
                   <CheckCircle2 className="w-3.5 h-3.5" />
                 )}
                 <span>{isSendingQuotation ? 'Updating...' : 'Mark Done / Sent'}</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* QUOTATION USER GUIDE & DISPATCH SOP MODAL POPUP */}
+      {isGuideModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-[9999] flex items-center justify-center p-3 sm:p-4 font-sans animate-in fade-in">
+          <div className="bg-white border border-slate-300 w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden rounded-xl animate-in zoom-in-95">
+            
+            {/* Modal Header */}
+            <div className="px-5 py-3.5 bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 text-white flex items-center justify-between border-b border-blue-900 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center border border-white/20 shadow-inner">
+                  <Info className="w-5 h-5 text-amber-300 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base tracking-wide flex items-center gap-2">
+                    <span>Quotation Module User Guide (SPH)</span>
+                    <span className="bg-amber-400 text-slate-900 text-[10px] font-black px-1.5 py-0.5 rounded uppercase">SOP & Workflow</span>
+                  </h3>
+                  <p className="text-[11px] text-blue-200">End-to-end guidance from incoming RFQ emails, column explanations, to official client dispatch.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsGuideModalOpen(false)}
+                className="p-1.5 text-blue-200 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer"
+                title="Close Guide"
+              >
+                <CloseIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Tabs Navigation */}
+            <div className="flex border-b border-slate-200 bg-slate-50 px-5 pt-2 gap-2 shrink-0 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setGuideTab('workflow')}
+                className={`pb-2.5 px-3 text-xs font-extrabold transition cursor-pointer border-b-2 flex items-center gap-1.5 whitespace-nowrap ${
+                  guideTab === 'workflow'
+                    ? 'border-blue-600 text-blue-700 bg-white rounded-t-lg border-t border-x border-slate-200 shadow-2xs'
+                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Activity className="w-3.5 h-3.5 text-blue-600" />
+                <span>1. End-to-End Workflow</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setGuideTab('columns')}
+                className={`pb-2.5 px-3 text-xs font-extrabold transition cursor-pointer border-b-2 flex items-center gap-1.5 whitespace-nowrap ${
+                  guideTab === 'columns'
+                    ? 'border-blue-600 text-blue-700 bg-white rounded-t-lg border-t border-x border-slate-200 shadow-2xs'
+                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Database className="w-3.5 h-3.5 text-indigo-600" />
+                <span>2. Column Explanations & Statuses</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setGuideTab('dispatch')}
+                className={`pb-2.5 px-3 text-xs font-extrabold transition cursor-pointer border-b-2 flex items-center gap-1.5 whitespace-nowrap ${
+                  guideTab === 'dispatch'
+                    ? 'border-blue-600 text-blue-700 bg-white rounded-t-lg border-t border-x border-slate-200 shadow-2xs'
+                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Send className="w-3.5 h-3.5 text-emerald-600" />
+                <span>3. SOP & Dispatch Prerequisites</span>
+              </button>
+            </div>
+
+            {/* Modal Body Content */}
+            <div className="p-5 overflow-y-auto space-y-4 text-xs text-slate-800 flex-1 bg-[#fcfcfd]">
+              
+              {/* TAB 1: END-TO-END WORKFLOW */}
+              {guideTab === 'workflow' && (
+                <div className="space-y-4 animate-in fade-in">
+                  <div className="bg-blue-50 border-l-4 border-blue-600 p-3.5 rounded-r-lg text-slate-700 space-y-1">
+                    <p className="font-extrabold text-blue-900 text-xs">Quotation Automation Principles</p>
+                    <p className="text-[11.5px] leading-relaxed">
+                      AB Malaya ERP is built semi-automatically: Incoming price inquiries are parsed by AI, quotation draft numbers are generated by background daemons, and staff simply populate item pricing before dispatching the formal proposal to the client.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-3 pt-1">
+                    {/* Step 1 */}
+                    <div className="p-3.5 bg-white border border-slate-200 rounded-lg shadow-2xs space-y-2 relative">
+                      <div className="w-6 h-6 rounded-full bg-blue-600 text-white font-black text-[11px] flex items-center justify-center">1</div>
+                      <h4 className="font-extrabold text-slate-900 text-xs">Incoming Email (RFQ)</h4>
+                      <p className="text-[11px] text-slate-500 leading-normal">
+                        Client sends an inquiry to company Gmail. Daemons ingest message content & attachments into <strong>RFQ Inbox</strong>.
+                      </p>
+                    </div>
+
+                    {/* Step 2 */}
+                    <div className="p-3.5 bg-white border border-slate-200 rounded-lg shadow-2xs space-y-2 relative">
+                      <div className="w-6 h-6 rounded-full bg-indigo-600 text-white font-black text-[11px] flex items-center justify-center">2</div>
+                      <h4 className="font-extrabold text-slate-900 text-xs">AI Scan & Draft Creation</h4>
+                      <p className="text-[11px] text-slate-500 leading-normal">
+                        AI verifies the inquiry as a <em>Requisition</em> and auto-provisions a quotation draft in <strong>Quotations List</strong>.
+                      </p>
+                    </div>
+
+                    {/* Step 3 */}
+                    <div className="p-3.5 bg-white border border-slate-200 rounded-lg shadow-2xs space-y-2 relative">
+                      <div className="w-6 h-6 rounded-full bg-amber-600 text-white font-black text-[11px] flex items-center justify-center">3</div>
+                      <h4 className="font-extrabold text-slate-900 text-xs">Pricing & Builder</h4>
+                      <p className="text-[11px] text-slate-500 leading-normal">
+                        Open the draft & click <strong>Edit / Builder</strong> to fill in part numbers, quantities, unit prices, and discounts.
+                      </p>
+                    </div>
+
+                    {/* Step 4 */}
+                    <div className="p-3.5 bg-white border border-slate-200 rounded-lg shadow-2xs space-y-2 relative">
+                      <div className="w-6 h-6 rounded-full bg-purple-600 text-white font-black text-[11px] flex items-center justify-center">4</div>
+                      <h4 className="font-extrabold text-slate-900 text-xs">Internal ACC Approval</h4>
+                      <p className="text-[11px] text-slate-500 leading-normal">
+                        Management or authorized staff approve the draft in the <strong>ACC</strong> tab. Status updates to <em>Ready to Send</em>.
+                      </p>
+                    </div>
+
+                    {/* Step 5 */}
+                    <div className="p-3.5 bg-white border border-slate-200 rounded-lg shadow-2xs space-y-2 relative">
+                      <div className="w-6 h-6 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center">5</div>
+                      <h4 className="font-extrabold text-slate-900 text-xs">Client Dispatch</h4>
+                      <p className="text-[11px] text-slate-500 leading-normal">
+                        Click <strong>Send Quotation</strong> to send the official reply email with attached quotation PDF via Gmail SMTP.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: COLUMN EXPLANATIONS & STATUSES */}
+              {guideTab === 'columns' && (
+                <div className="space-y-4 animate-in fade-in">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {/* Identity Columns */}
+                    <div className="p-4 bg-white border border-slate-200 rounded-lg shadow-2xs space-y-2.5">
+                      <h4 className="font-extrabold text-slate-900 text-xs uppercase tracking-wide text-blue-700 flex items-center gap-1.5 border-b pb-1.5 border-slate-100">
+                        <Database className="w-3.5 h-3.5" />
+                        <span>Core Data Columns</span>
+                      </h4>
+                      <ul className="space-y-2 text-[11px] text-slate-600">
+                        <li><strong>Quotation # / SPH:</strong> Unique quotation reference identifier (e.g. <code>QUO-ABM/MY/2026/0690</code>).</li>
+                        <li><strong>Client / Company:</strong> Sender contact name and corporate client or vessel name.</li>
+                        <li><strong>Date Issued & Valid:</strong> Issuance date and price validity expiration period (default 14 days).</li>
+                        <li><strong>Grand Total:</strong> Cumulative valuation of all line items including 11% VAT and net of discounts.</li>
+                        <li><strong>PDF Status:</strong> Indicates whether the official printable document <code>.pdf</code> has been generated and ready.</li>
+                      </ul>
+                    </div>
+
+                    {/* Database Status Explanations */}
+                    <div className="p-4 bg-white border border-slate-200 rounded-lg shadow-2xs space-y-2.5">
+                      <h4 className="font-extrabold text-slate-900 text-xs uppercase tracking-wide text-indigo-700 flex items-center gap-1.5 border-b pb-1.5 border-slate-100">
+                        <Tag className="w-3.5 h-3.5" />
+                        <span>Workflow Status Meanings (DB Status)</span>
+                      </h4>
+                      <ul className="space-y-2 text-[11px] text-slate-600">
+                        <li className="flex items-start gap-2">
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-blue-50 text-blue-800 border border-blue-200 shrink-0 uppercase">Received / Draft</span>
+                          <span>Newly captured inquiry or newly created manual quotation draft.</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-50 text-amber-800 border border-amber-300 shrink-0 uppercase">In Progress</span>
+                          <span>Currently undergoing item specification review, pricing, or sourcing.</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-purple-50 text-purple-800 border border-purple-300 shrink-0 uppercase">Ready to Send</span>
+                          <span>Internally approved (ACC granted) and cleared for dispatch to the client.</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-indigo-50 text-indigo-800 border border-indigo-200 shrink-0 uppercase">Sent / Done Send</span>
+                          <span>Formal quotation proposal successfully emailed to the client via SMTP.</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-300 shrink-0 uppercase">Done / Deal</span>
+                          <span>Proposal accepted by client / transaction successfully closed (Won Deal).</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: DISPATCH PREREQUISITES & SOP */}
+              {guideTab === 'dispatch' && (
+                <div className="space-y-4 animate-in fade-in">
+                  <div className="bg-emerald-50 border-l-4 border-emerald-600 p-3.5 rounded-r-lg text-slate-700 space-y-1">
+                    <p className="font-extrabold text-emerald-950 text-xs">Mandatory Prerequisites Before Dispatching Quotation</p>
+                    <p className="text-[11.5px] leading-relaxed text-emerald-900">
+                      The <strong>Send Quotation</strong> action enforces strict validation so staff do not accidentally dispatch empty or unapproved drafts. Follow these 4 steps:
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="p-3.5 bg-white border border-slate-200 rounded-lg flex items-start gap-3 shadow-2xs">
+                      <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-xs flex items-center justify-center shrink-0 mt-0.5">1</div>
+                      <div className="space-y-1">
+                        <p className="font-extrabold text-slate-900 text-xs">Populate Line Items & Unit Pricing</p>
+                        <p className="text-[11px] text-slate-500">
+                          Click <strong>Edit Quotation / Builder</strong>. Enter item descriptions, quantities, units (e.g. pcs/set), and unit prices. Ensure Grand Total is greater than 0.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 bg-white border border-slate-200 rounded-lg flex items-start gap-3 shadow-2xs">
+                      <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-xs flex items-center justify-center shrink-0 mt-0.5">2</div>
+                      <div className="space-y-1">
+                        <p className="font-extrabold text-slate-900 text-xs">Grant ACC Approval in Side Drawer</p>
+                        <p className="text-[11px] text-slate-500">
+                          Open the <strong>ACC</strong> tab in the right drawer $\rightarrow$ click <strong>Grant ACC & Mark Ready to Send</strong>. The quotation status changes to <em>Ready to Send</em> and activates the <em>Send Quotation</em> button.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 bg-white border border-slate-200 rounded-lg flex items-start gap-3 shadow-2xs">
+                      <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-xs flex items-center justify-center shrink-0 mt-0.5">3</div>
+                      <div className="space-y-1">
+                        <p className="font-extrabold text-slate-900 text-xs">Generate Official PDF Document</p>
+                        <p className="text-[11px] text-slate-500">
+                          Click <strong>Create Quotation / View PDF</strong> to review and render the formal PDF document. This PDF will be attached to the outbound email.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 bg-white border border-slate-200 rounded-lg flex items-start gap-3 shadow-2xs">
+                      <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-xs flex items-center justify-center shrink-0 mt-0.5">4</div>
+                      <div className="space-y-1">
+                        <p className="font-extrabold text-slate-900 text-xs">Click "Send Quotation" & Send via Gmail SMTP</p>
+                        <p className="text-[11px] text-slate-500">
+                          Click the blue <strong>Send Quotation</strong> button $\rightarrow$ select <em>Open in Email Client</em> to inspect the reply draft $\rightarrow$ click <strong>Send Email</strong>. The proposal is dispatched directly to the client's inbox via authenticated Google SMTP!
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between shrink-0">
+              <span className="text-[11px] text-slate-500 font-medium">ABM Malaya ERP &copy; 2026 — Marine & Industrial Automation</span>
+              <button
+                type="button"
+                onClick={() => setIsGuideModalOpen(false)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-lg shadow-sm transition cursor-pointer"
+              >
+                Got it / Close
               </button>
             </div>
 
