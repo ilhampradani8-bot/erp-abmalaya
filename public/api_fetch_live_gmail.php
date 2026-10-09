@@ -161,31 +161,37 @@ if (isset($_GET['download']) || isset($_GET['preview'])) {
 
     // 3. If not found on local disk, try IMAP download
     $cache_file = $cache_dir . "/msg_{$msgno}_part_{$part_no}_{$safe_fn}";
-    if ($msgno > 0) {
-        $inbox = @imap_open($hostname, $username, $password, OP_READONLY, 1, array('DISABLE_AUTHENTICATOR' => 'GSSAPI'));
-        if ($inbox) {
-            $raw_attachment = @imap_fetchbody($inbox, $msgno, $part_no);
-            if (empty($raw_attachment) || strlen($raw_attachment) < 50) {
-                $raw_attachment = @imap_fetchbody($inbox, $msgno, "2");
-            }
-            if (empty($raw_attachment) || strlen($raw_attachment) < 50) {
-                $raw_attachment = @imap_fetchbody($inbox, $msgno, "1.2");
-            }
+    if ($msgno > 0 && function_exists('imap_open')) {
+        try {
+            $inbox = @imap_open($hostname, $username, $password, OP_READONLY, 1, array('DISABLE_AUTHENTICATOR' => 'GSSAPI'));
+            if ($inbox) {
+                $raw_attachment = function_exists('imap_fetchbody') ? @imap_fetchbody($inbox, $msgno, $part_no) : '';
+                if (empty($raw_attachment) || strlen($raw_attachment) < 50) {
+                    $raw_attachment = function_exists('imap_fetchbody') ? @imap_fetchbody($inbox, $msgno, "2") : '';
+                }
+                if (empty($raw_attachment) || strlen($raw_attachment) < 50) {
+                    $raw_attachment = function_exists('imap_fetchbody') ? @imap_fetchbody($inbox, $msgno, "1.2") : '';
+                }
 
-            $decoded_attachment = base64_decode($raw_attachment, true);
-            if ($decoded_attachment === false || strlen($decoded_attachment) < 20) {
-                $decoded_attachment = quoted_printable_decode($raw_attachment);
-            }
-            if (empty($decoded_attachment)) {
-                $decoded_attachment = $raw_attachment;
-            }
+                $decoded_attachment = base64_decode($raw_attachment, true);
+                if ($decoded_attachment === false || strlen($decoded_attachment) < 20) {
+                    $decoded_attachment = function_exists('quoted_printable_decode') ? quoted_printable_decode($raw_attachment) : $raw_attachment;
+                }
+                if (empty($decoded_attachment)) {
+                    $decoded_attachment = $raw_attachment;
+                }
 
-            @imap_close($inbox);
+                if (function_exists('imap_close')) {
+                    @imap_close($inbox);
+                }
 
-            if (!empty($decoded_attachment) && strlen($decoded_attachment) > 100) {
-                @file_put_contents($cache_file, $decoded_attachment);
-                $streamFile($cache_file, $filename, $ext, 'MISS-SAVED-TO-CACHE');
+                if (!empty($decoded_attachment) && strlen($decoded_attachment) > 100) {
+                    @file_put_contents($cache_file, $decoded_attachment);
+                    $streamFile($cache_file, $filename, $ext, 'MISS-SAVED-TO-CACHE');
+                }
             }
+        } catch (Throwable $e) {
+            // Gracefully catch any IMAP errors
         }
     }
 
@@ -1020,7 +1026,14 @@ try {
     }
 
     // 🔄 LIVE GMAIL IMAP SYNC PATH
-    $inbox = @imap_open($hostname, $username, $password, OP_READONLY, 1, array('DISABLE_AUTHENTICATOR' => 'GSSAPI'));
+    $inbox = null;
+    if (function_exists('imap_open')) {
+        try {
+            $inbox = @imap_open($hostname, $username, $password, OP_READONLY, 1, array('DISABLE_AUTHENTICATOR' => 'GSSAPI'));
+        } catch (Throwable $e) {
+            $inbox = null;
+        }
+    }
     if (!$inbox) {
         // Fallback gracefully to DB cache if IMAP connection fails or times out
         if ($db_conn && !$db_conn->connect_error) {
