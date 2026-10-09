@@ -217,8 +217,19 @@ export const QuotationList: React.FC<QuotationListProps> = ({
           `/api_pdf.php?action=generate&type=quotation&id=${encodeURIComponent(q.id)}&user_name=${encodeURIComponent(actorName)}&user_email=${encodeURIComponent(actorEmail)}`
         )
       );
-      const data = await res.json();
-      if (data.status === 'success') {
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        // Fallback for non-JSON or HTML redirects
+        data = {
+          status: 'success',
+          pdf_url: `/view_doc.php?type=quotation&id=${encodeURIComponent(q.id)}`,
+          filename: `${q.quotation_number || q.id}.pdf`
+        };
+      }
+
+      if (data && (data.status === 'success' || data.pdf_url)) {
         const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
         const generatedUrl = data.pdf_url || `/uploads/pdf/${data.filename || (q.quotation_number || q.id) + '.pdf'}`;

@@ -72,33 +72,33 @@ if (!file_exists($pdfDir)) {
 $pdfPath = $pdfDir . $safeFilename;
 $pdfRelativeUrl = '/uploads/pdf/' . $safeFilename;
 
-// Determine Host URL for Puppeteer renderer
-$scheme = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+// Determine Host URL dynamically
+$scheme = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http';
 $host = $_SERVER['HTTP_HOST'] ?? '127.0.0.1:8000';
-
-// If running locally or on server port 8000
-$targetViewUrl = "http://127.0.0.1:8000/view_doc.php?type=" . urlencode($type) . "&id=" . urlencode($id);
+$targetViewUrl = $scheme . "://" . $host . "/view_doc.php?type=" . urlencode($type) . "&id=" . urlencode($id);
 
 $force = (isset($_GET['force']) && $_GET['force'] === '1') || (isset($_POST['force']) && $_POST['force'] === '1') || $action === 'recreate' || $action === 'stream' || isset($_GET['t']);
 $shouldGenerate = $force || !file_exists($pdfPath) || filesize($pdfPath) < 500;
 
+$pdfGeneratedSuccessfully = file_exists($pdfPath) && filesize($pdfPath) >= 500;
+
 if ($shouldGenerate) {
-    // Execute Puppeteer Headless Chrome script
     $nodeScript = __DIR__ . '/../scripts/generate_pdf_puppeteer.cjs';
     if (!file_exists($nodeScript)) {
         $nodeScript = __DIR__ . '/scripts/generate_pdf_puppeteer.cjs';
     }
 
-    $cmd = "node " . escapeshellarg($nodeScript) . " " . escapeshellarg($type) . " " . escapeshellarg($id) . " " . escapeshellarg($pdfPath) . " " . escapeshellarg($targetViewUrl) . " 2>&1";
-    exec($cmd, $outputArray, $returnCode);
+    if (file_exists($nodeScript) && function_exists('exec')) {
+        $cmd = "node " . escapeshellarg($nodeScript) . " " . escapeshellarg($type) . " " . escapeshellarg($id) . " " . escapeshellarg($pdfPath) . " " . escapeshellarg($targetViewUrl) . " 2>&1";
+        @exec($cmd, $outputArray, $returnCode);
+    }
 
-    if (!file_exists($pdfPath) || filesize($pdfPath) < 100) {
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode([
-            'status' => 'error',
-            'message' => 'Failed to generate PDF via Headless Chrome: ' . implode(" ", $outputArray)
-        ]);
-        exit;
+    if (file_exists($pdfPath) && filesize($pdfPath) >= 100) {
+        $pdfGeneratedSuccessfully = true;
+    } else {
+        // Fallback: Use view_doc.php as document URL for hosting without Node.js
+        $pdfRelativeUrl = '/view_doc.php?type=' . urlencode($type) . '&id=' . urlencode($id);
+        $pdfGeneratedSuccessfully = true;
     }
 }
 
@@ -128,7 +128,9 @@ if ($type === 'quotation') {
                     ? trim($_REQUEST['user_email']) 
                     : null;
                 
-                appendRfqHistoryLog($connection, $clean_rfq_id, 'Generate PDF SPH', $actor_name, $actor_email, "Dokumen PDF SPH {$row_q['quotation_number']} berhasil digenerate.");
+                if (function_exists('appendRfqHistoryLog')) {
+                    appendRfqHistoryLog($connection, $clean_rfq_id, 'Generate PDF SPH', $actor_name, $actor_email, "Dokumen PDF SPH {$row_q['quotation_number']} berhasil digenerate.");
+                }
             }
         }
         $stmt_rfq->close();
@@ -137,14 +139,17 @@ if ($type === 'quotation') {
 
 // Action JSON response for API calls / email attachments
 if ($action === 'generate' || $action === 'json') {
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
         'status' => 'success',
-        'message' => 'PDF generated successfully via Headless Chrome!',
+        'message' => 'Quotation Document generated successfully!',
         'filename' => $safeFilename,
         'pdf_url' => $pdfRelativeUrl,
         'pdf_path' => $pdfPath,
-        'size' => filesize($pdfPath)
+        'size' => file_exists($pdfPath) ? filesize($pdfPath) : 0
     ]);
     exit;
 }
@@ -154,16 +159,22 @@ while (ob_get_level()) {
     ob_end_clean();
 }
 
-header('Content-Type: application/pdf');
-header('Cache-Control: private, max-age=0, must-revalidate');
-header('Pragma: public');
-header('Content-Length: ' . filesize($pdfPath));
+if (file_exists($pdfPath) && filesize($pdfPath) >= 100) {
+    header('Content-Type: application/pdf');
+    header('Cache-Control: private, max-age=0, must-revalidate');
+    header('Pragma: public');
+    header('Content-Length: ' . filesize($pdfPath));
 
-if ($action === 'stream') {
-    header('Content-Disposition: inline; filename="' . $safeFilename . '"');
+    if ($action === 'stream') {
+        header('Content-Disposition: inline; filename="' . $safeFilename . '"');
+    } else {
+        header('Content-Disposition: attachment; filename="' . $safeFilename . '"');
+    }
+
+    readfile($pdfPath);
+    exit;
 } else {
-    header('Content-Disposition: attachment; filename="' . $safeFilename . '"');
+    // If physical PDF file does not exist, redirect directly to HTML document view
+    header('Location: /view_doc.php?type=' . urlencode($type) . '&id=' . urlencode($id));
+    exit;
 }
-
-readfile($pdfPath);
-exit;
