@@ -404,18 +404,29 @@ function performOCRScan(string $file_url, array $key_list, array $quo_context): 
                     file_put_contents($tmp_pdf, $file_data);
                     $raw_text = (string) @shell_exec('pdftotext -layout ' . escapeshellarg($tmp_pdf) . ' - 2>/dev/null');
 
+                    // If text is minimal (e.g. scanned image PDF), convert up to 10 pages to images and OCR with Tesseract
                     if (strlen(trim($raw_text)) < 80 && @shell_exec('which pdftoppm 2>/dev/null')) {
                         $tmp_png_base = $tmp_base . '_page';
-                        @shell_exec('pdftoppm -r 200 -l 1 -png ' . escapeshellarg($tmp_pdf) . ' ' . escapeshellarg($tmp_png_base) . ' 2>/dev/null');
+                        @shell_exec('pdftoppm -r 200 -l 10 -png ' . escapeshellarg($tmp_pdf) . ' ' . escapeshellarg($tmp_png_base) . ' 2>/dev/null');
                         $png_files = glob($tmp_png_base . '*.png');
                         if (!empty($png_files)) {
-                            $tess_txt_path = $tmp_base . '_tess';
-                            @shell_exec('tesseract ' . escapeshellarg($png_files[0]) . ' ' . escapeshellarg($tess_txt_path) . ' -l eng --oem 3 --psm 6 2>/dev/null');
-                            if (file_exists($tess_txt_path . '.txt')) {
-                                $raw_text = (string) file_get_contents($tess_txt_path . '.txt');
-                                @unlink($tess_txt_path . '.txt');
+                            sort($png_files);
+                            $combined_tess = '';
+                            foreach ($png_files as $idx => $pf) {
+                                $tess_txt_path = $tmp_base . '_tess_' . $idx;
+                                @shell_exec('tesseract ' . escapeshellarg($pf) . ' ' . escapeshellarg($tess_txt_path) . ' -l eng+ind --oem 3 --psm 6 2>/dev/null');
+                                if (file_exists($tess_txt_path . '.txt')) {
+                                    $page_text = (string) file_get_contents($tess_txt_path . '.txt');
+                                    if (!empty(trim($page_text))) {
+                                        $combined_tess .= "\n--- Page " . ($idx + 1) . " ---\n" . trim($page_text) . "\n";
+                                    }
+                                    @unlink($tess_txt_path . '.txt');
+                                }
+                                @unlink($pf);
                             }
-                            foreach ($png_files as $pf) { @unlink($pf); }
+                            if (!empty(trim($combined_tess))) {
+                                $raw_text = $combined_tess;
+                            }
                         }
                     }
                     @unlink($tmp_pdf);
@@ -423,7 +434,7 @@ function performOCRScan(string $file_url, array $key_list, array $quo_context): 
                     $tmp_img = $tmp_base . '.' . $ext;
                     file_put_contents($tmp_img, $file_data);
                     $tess_txt_path = $tmp_base . '_tess';
-                    @shell_exec('tesseract ' . escapeshellarg($tmp_img) . ' ' . escapeshellarg($tess_txt_path) . ' -l eng --oem 3 --psm 6 2>/dev/null');
+                    @shell_exec('tesseract ' . escapeshellarg($tmp_img) . ' ' . escapeshellarg($tess_txt_path) . ' -l eng+ind --oem 3 --psm 6 2>/dev/null');
                     if (file_exists($tess_txt_path . '.txt')) {
                         $raw_text = (string) file_get_contents($tess_txt_path . '.txt');
                         @unlink($tess_txt_path . '.txt');
@@ -431,6 +442,31 @@ function performOCRScan(string $file_url, array $key_list, array $quo_context): 
                     @unlink($tmp_img);
                 }
                 @unlink($tmp_base);
+            }
+
+            // Pure-PHP basic FlateDecode fallback if raw_text is still empty
+            if (empty(trim($raw_text)) && $ext === 'pdf' && function_exists('gzuncompress')) {
+                if (preg_match_all('/stream[\r\n]+(.*?)[\r\n]+endstream/s', $file_data, $streams)) {
+                    $extracted_php_text = '';
+                    foreach ($streams[1] as $stream) {
+                        $decomp = @gzuncompress($stream);
+                        if ($decomp !== false) {
+                            if (preg_match_all('/\((.*?)\)\s*Tj/s', $decomp, $tj_matches)) {
+                                $extracted_php_text .= implode(' ', $tj_matches[1]) . "\n";
+                            } elseif (preg_match_all('/\[(.*?)\]\s*TJ/s', $decomp, $tj_arr)) {
+                                foreach ($tj_arr[1] as $chunk) {
+                                    if (preg_match_all('/\((.*?)\)/s', $chunk, $in_c)) {
+                                        $extracted_php_text .= implode('', $in_c[1]) . ' ';
+                                    }
+                                }
+                                $extracted_php_text .= "\n";
+                            }
+                        }
+                    }
+                    if (strlen(trim($extracted_php_text)) > 50) {
+                        $raw_text = $extracted_php_text;
+                    }
+                }
             }
         } else {
             $has_file = false;
@@ -480,13 +516,15 @@ Your task: extract structured procurement data from {$source_desc}.
 {$file_text_block}
 
 === EXTRACTION RULES ===
-1. "items": Extract EVERY item request found. Each item MUST be cleanly split:
-   - "description": SHORT core item title ONLY (MAX 4-8 WORDS, e.g. "VALVE POSITION INDICATOR", "CLOTHING & LINEN", or "TOLUENE ANALYTICAL REAGENT"). NEVER put long Maker/Model/Specs text in description!
-   - "specification": ALL technical details — Maker/Manufacturer, Model Number, Size, Grade, Formula, Cylinder Capacity, Voltage, Serial Number, and notes.
-   - "qty": numeric quantity (float, e.g. 1.0, 5.0). Default 1.0 if not specified.
-   - "unit": unit of measure (PCS, BOXES, SETS, BOTTLES, KG, MTR, PKGS, PACKAGE, etc.). Default "Pcs" or "Package".
-   - "product_code": article no / CAS no / part no if present. If none, null.
-   - "unit_price", "discount_percent", "total": set from document/text if present, else null.
+1. "items": CRITICAL REQUIREMENT — If the document or email contains multiple items (e.g. a table, numbered list 1..N, multiple rows, or multiple part numbers), YOU MUST EXTRACT EVERY SINGLE ITEM INDIVIDUALLY.
+   - NEVER combine, merge, or collapse multiple distinct items into a single item.
+   - Each item MUST be cleanly split:
+     * "description": SHORT core item title ONLY (MAX 4-8 WORDS, e.g. "VALVE POSITION INDICATOR", "SHELL GADINIA AL 40", "TOLUENE ANALYTICAL REAGENT"). NEVER put long Maker/Model/Specs text in description!
+     * "specification": ALL technical details — Maker/Manufacturer, Model Number, Size, Grade, Formula, Cylinder Capacity, Voltage, Serial Number, and notes.
+     * "qty": numeric quantity (float, e.g. 1.0, 5.0, 20.0). Default 1.0 if not specified.
+     * "unit": unit of measure (PCS, DRUM, PAIL, CAN, BTL, BOX, SET, KG, LTR, MTR, PKG, etc.). Default "Pcs".
+     * "product_code": IMPA code / Article no / Part no / CAS no if present. If none, null.
+     * "unit_price", "discount_percent", "total": set from document/text if present, else null.
 
 2. "notes": Capture special remarks, dispatch instructions, or submission notes printed verbatim.
 3. "delivery_email": Extract ONLY if a dispatch/fleet/delivery email address is EXPLICITLY PRINTED (e.g. fleet@domain.com). If not found, set null.
@@ -745,7 +783,36 @@ PROMPT;
 
     // ── Step 5: Native Regex Text Extraction Fallback ────────────────
     $fallback_items = [];
-    if (!empty($ctx_item_req) && strtolower($ctx_item_req) !== 'none') {
+    $text_to_parse = !empty(trim($raw_text)) ? $raw_text : $clean_msg;
+    
+    // 1. Primary: Extract line-by-line from OCR document text or email body
+    if (!empty($text_to_parse)) {
+        $lines = explode("\n", $text_to_parse);
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (strlen($line) > 5 && preg_match('/^(\d+[\.\)]\s*)?([A-Za-0-9\s\-\/\.\(\)]{3,50})\s+(\d+(?:\.\d+)?)\s*(PCS|BOXES|SETS|BOTTLES|KG|MTR|PKGS|UNIT|QTY|PACKAGE|DRUM|PAIL|CAN|LTR)?/i', $line, $m)) {
+                $item_desc = trim($m[2]);
+                if (strlen($item_desc) >= 3 && !preg_match('/^(page|total|date|subtotal|table|order|invoice|notis|notice|sekian|terima|jumlah|unit|ekar|kp|mp)/i', $item_desc)) {
+                    $fallback_items[] = [
+                        'qty' => !empty($m[3]) ? (float)$m[3] : 1.0,
+                        'unit' => !empty($m[4]) ? strtoupper($m[4]) : 'Pcs',
+                        'description' => $item_desc,
+                        'specification' => $line,
+                        'product_code' => null,
+                        'unit_price' => null,
+                        'discount_percent' => null,
+                        'subtotal' => null,
+                        'tax' => null,
+                        'total' => null
+                    ];
+                    if (count($fallback_items) >= 20) break;
+                }
+            }
+        }
+    }
+
+    // 2. Secondary fallback: Single item from RFQ metadata if no lines parsed
+    if (empty($fallback_items) && !empty($ctx_item_req) && strtolower($ctx_item_req) !== 'none') {
         $fallback_items[] = [
             'qty' => !empty($ctx_qty_req) && is_numeric($ctx_qty_req) ? (float)$ctx_qty_req : 1.0,
             'unit' => 'Package',
@@ -758,35 +825,6 @@ PROMPT;
             'tax' => null,
             'total' => null
         ];
-    }
-
-    // Secondary fallback: Extract items line-by-line from OCR text or clean email body if still empty
-    if (empty($fallback_items)) {
-        $text_to_parse = !empty(trim($raw_text)) ? $raw_text : $clean_msg;
-        if (!empty($text_to_parse)) {
-            $lines = explode("\n", $text_to_parse);
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if (strlen($line) > 5 && preg_match('/^(\d+[\.\)]\s*)?([A-Za-0-9\s\-\/\.\(\)]{3,50})\s+(\d+(?:\.\d+)?)\s*(PCS|BOXES|SETS|BOTTLES|KG|MTR|PKGS|UNIT|QTY|PACKAGE)?/i', $line, $m)) {
-                    $item_desc = trim($m[2]);
-                    if (strlen($item_desc) >= 3 && !preg_match('/^(page|total|date|subtotal|table|order|invoice|notis|notice|sekian|terima)/i', $item_desc)) {
-                        $fallback_items[] = [
-                            'qty' => !empty($m[3]) ? (float)$m[3] : 1.0,
-                            'unit' => !empty($m[4]) ? strtoupper($m[4]) : 'Pcs',
-                            'description' => $item_desc,
-                            'specification' => $line,
-                            'product_code' => null,
-                            'unit_price' => null,
-                            'discount_percent' => null,
-                            'subtotal' => null,
-                            'tax' => null,
-                            'total' => null
-                        ];
-                        if (count($fallback_items) >= 20) break;
-                    }
-                }
-            }
-        }
     }
 
     $final_status = (count($fallback_items) > 0) ? 'done' : 'error';
