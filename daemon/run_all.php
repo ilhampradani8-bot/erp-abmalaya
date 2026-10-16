@@ -34,10 +34,15 @@ daemon_log('[2/6] Running AI Inbox Scan...');
 $scan_inbox_out = shell_exec(escapeshellarg($php) . ' ' . escapeshellarg($base . '/scan_inbox.php') . ' 2>&1');
 daemon_log($scan_inbox_out ?? 'No output from scan_inbox.php');
 
-// Step 3: Auto-sync verified AI Requisition emails to Quotations table
-daemon_log('[3/6] Syncing Verified AI Requisition emails to Quotations...');
+// Step 3: Auto-sync verified AI Requisition emails to Quotations table & generate Quotation PDFs
+daemon_log('[3/8] Syncing Verified AI Requisition emails to Quotations & generating PDFs...');
 $sync_quo_out = shell_exec(escapeshellarg($php) . ' ' . escapeshellarg($base . '/sync_quotations.php') . ' 2>&1');
 daemon_log($sync_quo_out ?? 'No output from sync_quotations.php');
+
+// Step 4: Auto-sync sent Quotations to Invoices table & generate Invoice PDFs
+daemon_log('[4/8] Running Invoice Auto-Sync & PDF Generation Daemon...');
+$sync_inv_out = shell_exec(escapeshellarg($php) . ' ' . escapeshellarg($base . '/sync_invoices.php') . ' 2>&1');
+daemon_log($sync_inv_out ?? 'No output from sync_invoices.php');
     
 // Step 3: Run AI Vision OCR on pending attachments
 daemon_log('[3/5] Running AI Vision OCR Scan...');

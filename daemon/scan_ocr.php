@@ -62,16 +62,17 @@ if (empty($key_list)) {
 }
 daemon_log('Loaded ' . count($key_list) . ' Gemini OCR API key(s).');
 
-// Find pending/skipped OCR quotations (includes both text-only RFQs and attachment RFQs)
+// Find pending/skipped/waiting OCR quotations (includes both text-only RFQs and attachment RFQs)
 $res = $db_conn->query("
     SELECT q.id, q.client_name, q.client_email,
            r.attachment_url, r.subject, r.message_body, r.item_requested, r.quantity_requested, r.client_company, r.client_phone
     FROM quotations q
     INNER JOIN rfq_requests r ON r.id = q.rfq_id
-    WHERE q.ocr_scan_status IN ('pending', 'skipped', 'waiting', 'waiting_ai_limit')
+    WHERE (q.ocr_scan_status IN ('pending', 'skipped', 'waiting', 'waiting_ai_limit', 'processing', 'failed') OR q.ocr_scan_status IS NULL OR q.ocr_scan_result LIKE '%waiting_ai_limit%')
+      AND (q.ocr_scan_status != 'done')
     ORDER BY q.created_at ASC
-    LIMIT " . SCAN_LIMIT
-);
+    LIMIT 50
+");
 
 if (!$res || $res->num_rows === 0) {
     daemon_log('No pending, skipped, or waiting SPH Quotations to scan. Exiting.');
@@ -193,8 +194,8 @@ while ($row = $res->fetch_assoc()) {
     if ($new_status === 'error') {
         $log_details .= ". Reason: " . ($scan_result['reason'] ?? 'Unknown error');
     }
-    $actor_name = !empty($row['created_by']) ? $row['created_by'] : 'Sesi Daemon Otomatis';
-    $actor_email = 'daemon@abmalaya.com';
+    $actor_name = 'Sistem Daemon';
+    $actor_email = null;
     appendQuotationHistoryLog($db_conn, $quo_id, 'OCR / Text AI Scan', $actor_name, $actor_email, $log_details);
     
     daemon_log("Finished scan for {$quo_id}. Status: " . strtoupper($new_status) . " ({$item_count} items extracted)");

@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS `quotations` (
   `tax_amount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
   `grand_total` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
   `notes` TEXT DEFAULT NULL,
+  `source_file` TEXT DEFAULT NULL,
+  `quotation_file` TEXT DEFAULT NULL,
   `status` VARCHAR(50) NOT NULL DEFAULT 'draft',
   `ocr_scan_status` VARCHAR(20) DEFAULT 'pending',
   `ocr_scan_result` LONGTEXT DEFAULT NULL,
@@ -82,6 +84,57 @@ CREATE TABLE IF NOT EXISTS `quotation_items` (
   `discount_percent` DECIMAL(5, 2) DEFAULT 0.00,
   `total` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
   FOREIGN KEY (`quotation_id`) REFERENCES `quotations`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 4b. Table: invoices (Official Invoices / Faktur Tagihan)
+CREATE TABLE IF NOT EXISTS `invoices` (
+  `id` VARCHAR(50) NOT NULL PRIMARY KEY,
+  `invoice_number` VARCHAR(50) NOT NULL UNIQUE,
+  `quotation_id` VARCHAR(50) DEFAULT NULL,
+  `po_number` VARCHAR(100) DEFAULT NULL,
+  `invoice_date` DATE NOT NULL,
+  `due_date` DATE DEFAULT NULL,
+  `client_name` VARCHAR(100) NOT NULL,
+  `client_email` VARCHAR(100) NOT NULL,
+  `client_phone` VARCHAR(50) DEFAULT NULL,
+  `company_name` VARCHAR(100) NOT NULL,
+  `billing_address` TEXT DEFAULT NULL,
+  `delivery_company` VARCHAR(100) DEFAULT NULL,
+  `delivery_address` TEXT DEFAULT NULL,
+  `delivery_pic` VARCHAR(100) DEFAULT NULL,
+  `delivery_phone` VARCHAR(50) DEFAULT NULL,
+  `subtotal` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `discount_total` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `tax_percent` DECIMAL(5, 2) NOT NULL DEFAULT 11.00,
+  `tax_amount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `grand_total` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `bank_name` VARCHAR(100) DEFAULT 'PUBLIC BANK',
+  `bank_account_number` VARCHAR(100) DEFAULT '3818192115',
+  `bank_account_name` VARCHAR(255) DEFAULT 'AB MALAYA INDUSTRY',
+  `bank_email` VARCHAR(100) DEFAULT 'abmalayaindustry@gmail.com',
+  `notes` TEXT DEFAULT NULL,
+  `status` VARCHAR(50) NOT NULL DEFAULT 'unpaid',
+  `created_by` VARCHAR(100) DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (`quotation_id`) REFERENCES `quotations`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 4c. Table: invoice_items (Line Items Detail for Invoices)
+CREATE TABLE IF NOT EXISTS `invoice_items` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `invoice_id` VARCHAR(50) NOT NULL,
+  `product_code` VARCHAR(100) DEFAULT NULL,
+  `description` TEXT NOT NULL,
+  `specification` TEXT DEFAULT NULL,
+  `quantity` DECIMAL(12, 2) NOT NULL DEFAULT 1.00,
+  `unit` VARCHAR(50) DEFAULT 'Unit',
+  `unit_price` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `discount_percent` DECIMAL(5, 2) DEFAULT 0.00,
+  `total` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `image_url` TEXT DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`invoice_id`) REFERENCES `invoices`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
@@ -153,10 +206,77 @@ CREATE TABLE IF NOT EXISTS `spreadsheet_backups` (
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 10. Table: system_paper_settings (Dedicated Paper, Letterhead, Company Branding & Stamp Settings)
+CREATE TABLE IF NOT EXISTS `system_paper_settings` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `company_name` VARCHAR(255) DEFAULT 'AB MALAYA SDN. BHD.',
+  `company_address` TEXT,
+  `phone` VARCHAR(100) DEFAULT '+60 3-8000 1234',
+  `email` VARCHAR(100) DEFAULT 'sales@abmalaya.com',
+  `logo_url` LONGTEXT,
+  `stamp_url` LONGTEXT,
+  `signature_url` LONGTEXT DEFAULT NULL,
+  `header_image_url` LONGTEXT DEFAULT NULL,
+  `header_title` VARCHAR(255) DEFAULT 'SURAT PENAWARAN HARGA (SPH) / COMMERCIAL QUOTATION',
+  `footer_terms` TEXT,
+  `header_color` VARCHAR(50) DEFAULT '#0080d0',
+  `default_notes` TEXT,
+  `header_template` VARCHAR(50) DEFAULT 'default',
+  `table_header_bg` VARCHAR(50) DEFAULT '#0f172a',
+  `table_header_text_color` VARCHAR(50) DEFAULT '#ffffff',
+  `paper_size` VARCHAR(20) DEFAULT 'A4',
+  `margin_top` INT DEFAULT 18,
+  `margin_bottom` INT DEFAULT 18,
+  `margin_left` INT DEFAULT 14,
+  `margin_right` INT DEFAULT 14,
+  `font_size` INT DEFAULT 9,
+  `layout_offsets` LONGTEXT DEFAULT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 11. Table: system_invoice_settings (Dedicated Invoice Paper, Bank & Customization Settings)
+CREATE TABLE IF NOT EXISTS `system_invoice_settings` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `company_name` VARCHAR(255) DEFAULT 'AB MALAYA INDUSTRY',
+  `company_reg_no` VARCHAR(100) DEFAULT '003320457-D',
+  `company_address` TEXT,
+  `phone` VARCHAR(100) DEFAULT '+60 3-8000 1234',
+  `email` VARCHAR(100) DEFAULT 'abmalayaindustry@gmail.com',
+  `logo_url` LONGTEXT,
+  `stamp_url` LONGTEXT,
+  `signature_url` LONGTEXT DEFAULT NULL,
+  `header_image_url` LONGTEXT DEFAULT NULL,
+  `invoice_title` VARCHAR(255) DEFAULT 'OFFICIAL INVOICE',
+  `bank_name` VARCHAR(100) DEFAULT 'PUBLIC BANK',
+  `bank_account_number` VARCHAR(100) DEFAULT '3818192115',
+  `bank_account_name` VARCHAR(255) DEFAULT 'AB MALAYA INDUSTRY',
+  `bank_email` VARCHAR(100) DEFAULT 'abmalayaindustry@gmail.com',
+  `remarks_text` TEXT,
+  `authorised_by_name` VARCHAR(255) DEFAULT 'Muhammad Aimanuddin Bin Mohd Zaki',
+  `authorised_by_title` VARCHAR(255) DEFAULT 'Procurement Manager / Head of Sales',
+  `received_by_label` VARCHAR(255) DEFAULT 'Received by,',
+  `table_header_bg` VARCHAR(50) DEFAULT '#0070c0',
+  `table_header_text_color` VARCHAR(50) DEFAULT '#ffffff',
+  `paper_size` VARCHAR(20) DEFAULT 'A4',
+  `margin_top` INT DEFAULT 18,
+  `margin_bottom` INT DEFAULT 18,
+  `margin_left` INT DEFAULT 14,
+  `margin_right` INT DEFAULT 14,
+  `font_size` INT DEFAULT 9,
+  `layout_offsets` LONGTEXT DEFAULT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Initial Seed Data
 INSERT IGNORE INTO `users` (`id`, `name`, `email`, `password`, `role`, `department`, `status`) VALUES
 ('USR-001', 'Ilham Pradani, S.T.', 'ilham@abmalaya.com', '$2y$10$e8w3.U1u...demo_password_hash', 'Admin', 'Sales', 'Active'),
 ('USR-002', 'Sales Executive', 'sales@abmalaya.com', '$2y$10$e8w3.U1u...demo_password_hash', 'Sales Engineer', 'Sales', 'Active');
+
+INSERT IGNORE INTO `system_paper_settings` (`id`, `company_name`, `company_address`, `phone`, `email`, `logo_url`, `stamp_url`, `header_title`, `footer_terms`, `header_color`, `default_notes`, `header_template`, `table_header_bg`, `table_header_text_color`) VALUES
+(1, 'AB MALAYA SDN. BHD.', '2-2-40, 2nd Floor Wisma Rampai, Jalan 34/26, Taman Sri Rampai, 53300 Kuala Lumpur.', '+60 3-8000 1234', 'sales@abmalaya.com', '/favicon.png', '', 'SURAT PENAWARAN HARGA (SPH) / COMMERCIAL QUOTATION', '1. 50% DP payment required after PO is issued.\n2. Remaining 50% payment upon delivery completion.\n3. Quotation valid for 14 days from issue date.', '#0080d0', 'Price excludes transport tax unless explicitly stated. All goods remain property of AB Malaya until fully paid.', 'default', '#0f172a', '#ffffff');
+
 
 INSERT IGNORE INTO `company_profile` (`id`, `company_name`, `company_address`, `phone`, `email`, `company_logo_url`, `company_stamp_url`) VALUES
 (1, 'PT ABMALAYA NUSA SEJAHTERA (MALAYSIA)', 'Kuala Lumpur Tech Park, Block B-12, Wilayah Persekutuan Kuala Lumpur', '+60 3-8900 4455', 'sales@abmalaya.com', 'https://via.placeholder.com/160x60?text=ABMALAYA+LOGO', 'https://via.placeholder.com/120x120?text=STAMP+SEAL');
