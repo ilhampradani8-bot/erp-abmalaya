@@ -1101,22 +1101,9 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                                     <span>Move to Requisition</span>
                                   </button>
                                 )}
-
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveListKebabId(null);
-                                    handleOpenDeleteModal(item);
-                                  }}
-                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-rose-700 hover:bg-rose-50 font-semibold text-left border-t border-slate-100 cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                                  <span>Hapus / Blacklist</span>
-                                </button>
-                              </div>
-                            </>
-                          )}
+                                </div>
+                              </>
+                            )}
                         </div>
                       </div>
                     </div>
@@ -1307,14 +1294,14 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                     <span>Process RFQ to SPH</span>
                   </button>
 
-                  {/* Delete / Blacklist Button */}
+                  {/* Hapus Perusahaan / Blacklist Button in Chat View */}
                   <button
                     onClick={() => handleOpenDeleteModal(selectedRfq)}
-                    className="flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-extrabold text-xs px-3 py-1.5 rounded-md shadow-xs cursor-pointer transition"
-                    title="Hapus RFQ atau Blacklist Email Pengirim"
+                    className="flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-extrabold text-xs px-3.5 py-1.5 rounded-md shadow-xs cursor-pointer transition"
+                    title="Hapus data perusahaan ini atau blacklist email perusahaan"
                   >
                     <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                    <span className="hidden sm:inline">Delete / Blacklist</span>
+                    <span>Hapus Perusahaan</span>
                   </button>
 
                   <div className="relative">
@@ -1367,7 +1354,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                             className="w-full px-3 py-2 text-left hover:bg-rose-50 flex items-center gap-2 text-rose-700 border-t border-slate-100 cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                            <span>Hapus / Blacklist</span>
+                            <span>Hapus Perusahaan / Blacklist</span>
                           </button>
                         </div>
                       </>
@@ -1390,9 +1377,20 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                     <span><strong>To:</strong> <span className="font-bold text-emerald-900">{(selectedRfq as any).recipient_email || 'mijdigital2026@gmail.com'}</span></span>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <Building className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    <span><strong>Company:</strong> {selectedRfq.company || selectedRfq.sender_name}</span>
+                  <div className="flex items-center justify-between sm:col-span-2 bg-slate-100/90 px-3 py-2 rounded-md border border-slate-200">
+                    <div className="flex items-center gap-2">
+                      <Building className="w-4 h-4 text-blue-700 shrink-0" />
+                      <span><strong>Perusahaan:</strong> <span className="font-extrabold text-slate-900">{selectedRfq.company || selectedRfq.sender_name}</span> ({selectedRfq.sender_email})</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenDeleteModal(selectedRfq)}
+                      className="px-2.5 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 rounded font-bold text-[11px] shadow-2xs flex items-center gap-1.5 transition cursor-pointer"
+                      title="Hapus perusahaan ini atau blacklist email perusahaan"
+                    >
+                      <Trash2 className="w-3 h-3 text-rose-600" />
+                      <span>Hapus Perusahaan</span>
+                    </button>
                   </div>
 
                   <div className="flex items-center gap-1.5">
@@ -2265,8 +2263,8 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                   <ShieldAlert className="w-5 h-5 text-rose-400" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-sm text-white">Konfirmasi Hapus / Blacklist</h3>
-                  <p className="text-[11px] text-slate-300">Pilih tindakan manajemen pengirim & inbox</p>
+                  <h3 className="font-extrabold text-sm text-white">Konfirmasi Hapus Perusahaan / Blacklist Email</h3>
+                  <p className="text-[11px] text-slate-300">Pilih tindakan manajemen perusahaan di inbox & chat</p>
                 </div>
               </div>
               <button
@@ -2281,10 +2279,12 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
             <div className="p-5 space-y-4 text-xs font-sans">
               {/* Target Info */}
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
-                <div className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">Target Email:</div>
-                <div className="font-mono font-bold text-xs text-slate-900 break-all">{deleteModalRfq.sender_email}</div>
-                <div className="text-slate-700 text-[11px]">
-                  <strong>Pengirim:</strong> {deleteModalRfq.sender_name} {deleteModalRfq.company ? `(${deleteModalRfq.company})` : ''}
+                <div className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">Target Perusahaan & Email:</div>
+                <div className="font-bold text-xs text-slate-900">
+                  {deleteModalRfq.company || deleteModalRfq.sender_name}
+                </div>
+                <div className="font-mono text-[11px] text-slate-700 break-all">
+                  <strong>Email:</strong> {deleteModalRfq.sender_email}
                 </div>
                 <div className="text-slate-600 text-[11px] truncate">
                   <strong>Subjek:</strong> {deleteModalRfq.subject}
@@ -2295,7 +2295,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
               <div className="space-y-2.5">
                 <label className="text-xs font-bold text-slate-800 block">Pilih Opsi Tindakan:</label>
 
-                {/* Option 1: Hapus Item / Perusahaan Saja */}
+                {/* Option 1: Hapus Perusahaan Saja */}
                 <div
                   onClick={() => setDeleteType('delete_only')}
                   className={`p-3 rounded-lg border-2 cursor-pointer transition flex items-start gap-3 ${
@@ -2313,18 +2313,18 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                   />
                   <div className="space-y-1 flex-1">
                     <div className="flex items-center justify-between">
-                      <span className="font-extrabold text-xs text-slate-900">1. Hapus Perusahaan / Item Ini Saja</span>
+                      <span className="font-extrabold text-xs text-slate-900">1. Hapus Perusahaan Ini Saja</span>
                       <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-300">
-                        Pesan Baru Bisa Masuk
+                        Pesan Baru Masih Bisa Masuk
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-600 leading-relaxed">
-                      Status item ini diubah menjadi <strong>deleted</strong>. Jika pengirim ini mengirim email baru lagi di masa depan, pesan baru <strong>tetap diizinkan masuk normal</strong> ke inbox.
+                      Status pesan saat ini diubah menjadi <strong>deleted</strong>. Jika perusahaan ini mengirim email/pesan baru lagi di masa depan, pesan baru <strong>masih bisa masuk normal</strong> ke chat & inbox.
                     </p>
                   </div>
                 </div>
 
-                {/* Option 2: Blacklist Permanen */}
+                {/* Option 2: Blacklist Perusahaan Permanen */}
                 <div
                   onClick={() => setDeleteType('blacklist')}
                   className={`p-3 rounded-lg border-2 cursor-pointer transition flex items-start gap-3 ${
@@ -2344,14 +2344,14 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                     <div className="flex items-center justify-between">
                       <span className="font-extrabold text-xs text-rose-900 flex items-center gap-1.5">
                         <Ban className="w-3.5 h-3.5 text-rose-600" />
-                        2. Blacklist Email Permanen
+                        2. Blacklist Email Perusahaan Permanen
                       </span>
                       <span className="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-300">
                         Otomatis Dihapus Mesin
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-600 leading-relaxed">
-                      Email ini dicatat ke daftar <strong>Blacklist</strong>. Kedepannya jika ada email masuk dari alamat ini, sistem mesin akan <strong>otomatis menghapus (status: deleted) & AI akan langsung mengabaikannya</strong> tanpa membuang token.
+                      Email perusahaan dicatat ke daftar <strong>Blacklist</strong>. Kedepannya jika ada email masuk dari alamat ini, sistem mesin akan <strong>otomatis menghapus (status: deleted) & AI akan langsung mengabaikannya di inbox/chat</strong> tanpa disentuh AI / membuang token.
                     </p>
                   </div>
                 </div>
@@ -2362,17 +2362,17 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 <div className="space-y-1.5 p-3 bg-amber-50/80 border border-amber-300 rounded-lg animate-in fade-in">
                   <label className="block text-xs font-bold text-amber-950 flex items-center gap-1.5">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    <span>Alasan Blacklist (Wajib diisi untuk catatan AI & Mesin):</span>
+                    <span>Alasan Blacklist Perusahaan (Wajib diisi untuk catatan AI & Mesin):</span>
                   </label>
                   <textarea
                     value={blacklistReason}
                     onChange={(e) => setBlacklistReason(e.target.value)}
-                    placeholder="Contoh: Email penipuan / spam promosi / kompetitor / tidak relevan..."
+                    placeholder="Contoh: Perusahaan fiktif / spam marketing / penipuan / tidak relevan..."
                     rows={2}
                     className="w-full bg-white border border-amber-400 rounded-md p-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans"
                   />
                   <p className="text-[10px] text-amber-800">
-                    Alasan ini akan disimpan di basis data blacklist agar AI & mesin dapat mengabaikan email sejenis dengan alasan spesifik.
+                    Alasan ini disimpan di basis data blacklist agar AI & mesin dapat mengabaikan email dari perusahaan ini dengan alasan spesifik.
                   </p>
                 </div>
               )}
@@ -2406,7 +2406,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 ) : (
                   <>
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>{deleteType === 'blacklist' ? 'Konfirmasi Blacklist' : 'Konfirmasi Hapus'}</span>
+                    <span>{deleteType === 'blacklist' ? 'Konfirmasi Blacklist Perusahaan' : 'Konfirmasi Hapus Perusahaan'}</span>
                   </>
                 )}
               </button>
