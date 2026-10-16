@@ -589,6 +589,23 @@ try {
                 $ai_error = null;
                 $item_requested = null;
 
+                $bl_chk = isEmailBlacklisted($db_conn, $p_sender);
+                if ($bl_chk['blacklisted']) {
+                    $ai_classification = 'blacklisted';
+                    $ai_verified = 1;
+                    $bl_reason_val = $bl_chk['reason'];
+                    $ai_error = 'Otomatis diabaikan oleh mesin: Email pengirim terdaftar dalam Blacklist (' . $bl_reason_val . ')';
+                    $db_conn->query("UPDATE rfq_requests SET status = 'deleted', is_blacklisted = 1, blacklist_reason = '" . $db_conn->real_escape_string($bl_reason_val) . "', ai_verified = 1, ai_classification = 'blacklisted', ai_error = '" . $db_conn->real_escape_string($ai_error) . "' WHERE rfq_number = '" . $db_conn->real_escape_string($p_rfq_num) . "'");
+                    $scanned_results[] = [
+                        'rfq_number' => $p_rfq_num,
+                        'subject' => $p_subject,
+                        'classification' => 'blacklisted',
+                        'verified' => 1,
+                        'error' => $ai_error
+                    ];
+                    continue;
+                }
+
                 if (isObviousJunkEmail($p_subject, $p_body, $p_sender)) {
                     $ai_classification = 'junk';
                     $ai_verified = 1;
@@ -751,7 +768,8 @@ try {
                              WHEN q.status = 'Approved' OR q.status = 'acc' THEN 'deal'
                              WHEN q.status = 'Sent' OR q.status = 'done_send' THEN 'penawaran_terkirim'
                              ELSE 'diproses'
-                         END");
+                         END
+                         WHERE r.status != 'deleted'");
         $st_res = $db_conn->query("SELECT id, rfq_number, status, subject, client_email, recipient_email, reply_body, reply_date, reply_sender FROM rfq_requests");
         if ($st_res && $st_res->num_rows > 0) {
             while ($s_row = $st_res->fetch_assoc()) {
@@ -844,8 +862,26 @@ try {
                             ];
                         }
 
+                        $is_bl_cache = isset($cached_row['is_blacklisted']) ? (int)$cached_row['is_blacklisted'] : 0;
+                        $bl_reason_cache = isset($cached_row['blacklist_reason']) ? $cached_row['blacklist_reason'] : '';
+
+                        // Recheck blacklist if not yet marked
+                        if ($is_bl_cache === 0) {
+                            $dyn_bl = isEmailBlacklisted($db_conn, $cached_row['client_email']);
+                            if ($dyn_bl['blacklisted']) {
+                                $is_bl_cache = 1;
+                                $bl_reason_cache = $dyn_bl['reason'];
+                                $cached_row['status'] = 'deleted';
+                                $ai_c = 'blacklisted';
+                                $ai_v = 1;
+                                $db_conn->query("UPDATE rfq_requests SET status = 'deleted', is_blacklisted = 1, blacklist_reason = '" . $db_conn->real_escape_string($bl_reason_cache) . "', ai_verified = 1, ai_classification = 'blacklisted' WHERE id = " . intval($cached_row['id']));
+                            }
+                        }
+
                         $labels = [];
-                        if ($ai_v === 1) {
+                        if ($is_bl_cache === 1 || $ai_c === 'blacklisted') {
+                            $labels[] = 'AI: Blacklisted / Mesin Abaikan';
+                        } else if ($ai_v === 1) {
                             if ($ai_c === 'client_rfq') {
                                 $labels[] = 'Primary RFQ';
                                 $labels[] = 'AI Verified';
@@ -875,6 +911,8 @@ try {
                             'budget_estimate' => extractRealBudgetEstimate($cached_row['message_body']),
                             'date_received' => date('Y-m-d H:i', strtotime($cached_row['created_at'])),
                             'status' => $cached_row['status'],
+                            'is_blacklisted' => $is_bl_cache,
+                            'blacklist_reason' => $bl_reason_cache,
                             'ai_verified' => $ai_v,
                             'ai_classification' => $ai_c,
                             'labels' => $labels,
@@ -1091,8 +1129,19 @@ try {
                 $ai_verified = 0;
                 $ai_classification = '';
                 $ai_error = null;
+                $is_blacklisted = 0;
+                $blacklist_reason = '';
 
-                if (isObviousJunkEmail($subject, $clean_body, $sender_email)) {
+                // ⚡ BLACKLIST CHECK: If sender is in blacklist, auto mark status as deleted and skip AI
+                $bl_check = isEmailBlacklisted($db_conn, $sender_email);
+                if ($bl_check['blacklisted']) {
+                    $current_status = 'deleted';
+                    $ai_classification = 'blacklisted';
+                    $ai_verified = 1;
+                    $is_blacklisted = 1;
+                    $blacklist_reason = $bl_check['reason'];
+                    $ai_error = 'Otomatis diabaikan oleh mesin: Email pengirim terdaftar dalam Blacklist (' . $blacklist_reason . ')';
+                } else if (isObviousJunkEmail($subject, $clean_body, $sender_email)) {
                     $ai_classification = 'junk';
                     $ai_verified = 1;
                 } else if (!empty($key_list)) {
@@ -1112,7 +1161,9 @@ try {
                 }
 
                 $labels = [];
-                if ($ai_verified === 1) {
+                if ($is_blacklisted === 1 || $ai_classification === 'blacklisted') {
+                    $labels[] = 'AI: Blacklisted / Mesin Abaikan';
+                } else if ($ai_verified === 1) {
                     if ($ai_classification === 'client_rfq') {
                         $labels[] = 'Primary RFQ';
                         $labels[] = 'AI: Requisition';
@@ -1146,6 +1197,8 @@ try {
                     'budget_estimate' => $budget_estimate,
                     'date_received' => $date,
                     'status' => $current_status,
+                    'is_blacklisted' => $is_blacklisted,
+                    'blacklist_reason' => $blacklist_reason,
                     'ai_verified' => $ai_verified,
                     'ai_classification' => $ai_classification,
                     'ai_error' => $ai_error,
@@ -1159,10 +1212,10 @@ try {
                 // Sync to MySQL Database without overwriting status
                 if ($db_conn && !$db_conn->connect_error) {
                     $attachment_url_val = count($attachments) > 0 ? $attachments[0]['url'] : 'NONE';
-                    $stmt = $db_conn->prepare("INSERT INTO rfq_requests (rfq_number, client_name, client_email, recipient_email, client_company, subject, message_body, item_requested, status, ai_verified, ai_classification, ai_error, attachment_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE message_body=VALUES(message_body), recipient_email=VALUES(recipient_email), ai_verified=VALUES(ai_verified), ai_classification=VALUES(ai_classification), ai_error=VALUES(ai_error), item_requested=VALUES(item_requested), attachment_url=VALUES(attachment_url)");
+                    $stmt = $db_conn->prepare("INSERT INTO rfq_requests (rfq_number, client_name, client_email, recipient_email, client_company, subject, message_body, item_requested, status, ai_verified, ai_classification, ai_error, is_blacklisted, blacklist_reason, attachment_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE message_body=VALUES(message_body), recipient_email=VALUES(recipient_email), ai_verified=VALUES(ai_verified), ai_classification=VALUES(ai_classification), ai_error=VALUES(ai_error), is_blacklisted=VALUES(is_blacklisted), blacklist_reason=VALUES(blacklist_reason), item_requested=VALUES(item_requested), attachment_url=VALUES(attachment_url)");
                     if ($stmt) {
                         $rfq_num = 'RFQ-' . $email_number;
-                        $stmt->bind_param("sssssssssisss", $rfq_num, $sender_name, $sender_email, $recipient_email, $sender_name, $subject, $clean_body, $item_requested, $current_status, $ai_verified, $ai_classification, $ai_error, $attachment_url_val);
+                        $stmt->bind_param("sssssssssisssis", $rfq_num, $sender_name, $sender_email, $recipient_email, $sender_name, $subject, $clean_body, $item_requested, $current_status, $ai_verified, $ai_classification, $ai_error, $is_blacklisted, $blacklist_reason, $attachment_url_val);
                         $stmt->execute();
                         $stmt->close();
                     }
@@ -1181,7 +1234,8 @@ try {
                              WHEN q.status = 'Approved' OR q.status = 'acc' THEN 'deal'
                              WHEN q.status = 'Sent' OR q.status = 'done_send' THEN 'penawaran_terkirim'
                              ELSE 'diproses'
-                         END");
+                         END
+                         WHERE r.status != 'deleted'");
 
         $res = $db_conn->query("SELECT * FROM rfq_requests ORDER BY id DESC LIMIT 200");
         if ($res && $res->num_rows > 0) {
@@ -1201,9 +1255,26 @@ try {
 
                 $ai_verified = isset($row['ai_verified']) ? (int)$row['ai_verified'] : 0;
                 $ai_classification = isset($row['ai_classification']) ? $row['ai_classification'] : '';
+                $is_bl = isset($row['is_blacklisted']) ? (int)$row['is_blacklisted'] : 0;
+                $bl_reason = isset($row['blacklist_reason']) ? $row['blacklist_reason'] : '';
+
+                // Check dynamic blacklist if not marked
+                if ($is_bl === 0) {
+                    $dyn_bl2 = isEmailBlacklisted($db_conn, $row['client_email']);
+                    if ($dyn_bl2['blacklisted']) {
+                        $is_bl = 1;
+                        $bl_reason = $dyn_bl2['reason'];
+                        $row['status'] = 'deleted';
+                        $ai_classification = 'blacklisted';
+                        $ai_verified = 1;
+                        $db_conn->query("UPDATE rfq_requests SET status = 'deleted', is_blacklisted = 1, blacklist_reason = '" . $db_conn->real_escape_string($bl_reason) . "', ai_verified = 1, ai_classification = 'blacklisted' WHERE id = " . intval($row['id']));
+                    }
+                }
 
                 $labels = [];
-                if ($ai_verified === 1) {
+                if ($is_bl === 1 || $ai_classification === 'blacklisted') {
+                    $labels[] = 'AI: Blacklisted / Mesin Abaikan';
+                } else if ($ai_verified === 1) {
                     if ($ai_classification === 'client_rfq') {
                         $labels[] = 'Primary RFQ';
                         $labels[] = 'AI: Requisition';
@@ -1232,6 +1303,8 @@ try {
                     'budget_estimate' => extractRealBudgetEstimate($row['message_body']),
                     'date_received' => date('Y-m-d H:i', strtotime($row['created_at'])),
                     'status' => $row['status'] ?: 'masuk',
+                    'is_blacklisted' => $is_bl,
+                    'blacklist_reason' => $bl_reason,
                     'ai_verified' => $ai_verified,
                     'ai_classification' => $ai_classification,
                     'ai_error' => isset($row['ai_error']) ? $row['ai_error'] : null,

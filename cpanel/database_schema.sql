@@ -31,13 +31,28 @@ CREATE TABLE IF NOT EXISTS `rfq_requests` (
   `item_requested` VARCHAR(255) NOT NULL,
   `quantity_requested` VARCHAR(50) DEFAULT '1 Package',
   `budget_estimate` DECIMAL(15, 2) DEFAULT 0.00,
-  `attachment_url` VARCHAR(255) DEFAULT NULL,
-  `status` ENUM('masuk', 'diproses', 'penawaran_terkirim', 'deal', 'batal') NOT NULL DEFAULT 'masuk',
+  `status` VARCHAR(50) NOT NULL DEFAULT 'masuk',
   `ai_verified` TINYINT(1) DEFAULT 0,
   `ai_classification` VARCHAR(50) DEFAULT NULL,
   `ai_error` TEXT DEFAULT NULL,
+  `is_blacklisted` TINYINT(1) DEFAULT 0,
+  `blacklist_reason` TEXT DEFAULT NULL,
+  `reply_body` LONGTEXT DEFAULT NULL,
+  `reply_date` DATETIME DEFAULT NULL,
+  `reply_sender` VARCHAR(150) DEFAULT NULL,
+  `history_log` LONGTEXT DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 2b. Table: email_blacklist (Blacklisted Senders Ignored by Machine & Auto-Deleted)
+CREATE TABLE IF NOT EXISTS `email_blacklist` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `email` VARCHAR(150) NOT NULL UNIQUE,
+  `company_name` VARCHAR(150) DEFAULT NULL,
+  `reason` TEXT DEFAULT NULL,
+  `created_by` VARCHAR(100) DEFAULT 'Admin',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 3. Table: quotations (Surat Penawaran Harga / SPH Output)

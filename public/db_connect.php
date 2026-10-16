@@ -169,3 +169,39 @@ if (!function_exists('addSystemNotification')) {
     }
 }
 
+if (!function_exists('isEmailBlacklisted')) {
+    function isEmailBlacklisted($db_conn, $email) {
+        if (!$db_conn || $db_conn->connect_error) {
+            return ['blacklisted' => false, 'reason' => null];
+        }
+        $clean = strtolower(trim((string)$email));
+        if (empty($clean)) {
+            return ['blacklisted' => false, 'reason' => null];
+        }
+
+        // Support extraction from "Name <email@domain.com>"
+        if (preg_match('/<([^>]+)>/', $clean, $m)) {
+            $clean = trim($m[1]);
+        }
+
+        $stmt = $db_conn->prepare("SELECT email, company_name, reason FROM email_blacklist WHERE LOWER(email) = ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param("s", $clean);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res && $res->num_rows > 0) {
+                $row = $res->fetch_assoc();
+                $stmt->close();
+                return [
+                    'blacklisted' => true,
+                    'email' => $row['email'],
+                    'company_name' => $row['company_name'],
+                    'reason' => !empty($row['reason']) ? $row['reason'] : 'Blacklisted by administrator'
+                ];
+            }
+            $stmt->close();
+        }
+        return ['blacklisted' => false, 'reason' => null];
+    }
+}
+

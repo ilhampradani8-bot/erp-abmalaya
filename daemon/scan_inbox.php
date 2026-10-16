@@ -361,6 +361,19 @@ while ($row = $res->fetch_assoc()) {
     $verified = 0;
     $ai_error = null;
 
+    // ⚡ Blacklist check: If blacklisted, auto mark as deleted and bypass AI
+    $bl_check = isEmailBlacklisted($db_conn, $sender);
+    if ($bl_check['blacklisted']) {
+        $classification = 'blacklisted';
+        $verified       = 1;
+        $bl_reason      = $bl_check['reason'];
+        $ai_error       = 'Otomatis diabaikan oleh mesin: Email masuk dalam daftar Blacklist (' . $bl_reason . ')';
+        $db_conn->query("UPDATE rfq_requests SET status = 'deleted', is_blacklisted = 1, blacklist_reason = '" . $db_conn->real_escape_string($bl_reason) . "', ai_verified = 1, ai_classification = 'blacklisted', ai_error = '" . $db_conn->real_escape_string($ai_error) . "' WHERE id = " . intval($row['id']));
+        daemon_log("  [BLACKLIST-FILTER] #{$rfq_num} — Ignored by machine. Reason: {$bl_reason}");
+        $success++;
+        continue;
+    }
+
     if (isObviousJunk($subject, $body, $sender)) {
         $classification = 'junk';
         $verified       = 1;

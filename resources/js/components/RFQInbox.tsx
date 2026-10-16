@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { RFQ, RFQStatus, EmailAttachment } from '../types/erp';
-import { Search, Mail, Send, CheckCircle2, Clock, Building, User, Phone, Loader2, Paperclip, Eye, ShieldCheck, RefreshCw, PlusCircle, FileType, Image as ImageIcon, Maximize2, AlertTriangle, X, ExternalLink, ChevronDown, ChevronUp, MoreVertical, Menu, Sparkles, Settings, Info, ArrowRightLeft, Copy, Download, Terminal, FileText } from 'lucide-react';
+import { Search, Mail, Send, CheckCircle2, Clock, Building, User, Phone, Loader2, Paperclip, Eye, ShieldCheck, RefreshCw, PlusCircle, FileType, Image as ImageIcon, Maximize2, AlertTriangle, X, ExternalLink, ChevronDown, ChevronUp, MoreVertical, Menu, Sparkles, Settings, Info, ArrowRightLeft, Copy, Download, Terminal, FileText, Trash2, Ban, ShieldAlert } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
 interface RFQInboxProps {
@@ -129,6 +129,64 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
   const [dbErrors, setDbErrors] = useState<any[]>([]);
   const [activeLogTab, setActiveLogTab] = useState<string>('all');
   const [isLoadingLogs, setIsLoadingLogs] = useState<boolean>(false);
+
+  // Delete & Blacklist Modal State
+  const [deleteModalRfq, setDeleteModalRfq] = useState<RFQ | null>(null);
+  const [deleteType, setDeleteType] = useState<'delete_only' | 'blacklist'>('delete_only');
+  const [blacklistReason, setBlacklistReason] = useState<string>('');
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  const handleOpenDeleteModal = (rfq: RFQ) => {
+    setDeleteModalRfq(rfq);
+    setDeleteType('delete_only');
+    setBlacklistReason('');
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deleteModalRfq) return;
+    if (deleteType === 'blacklist' && !blacklistReason.trim()) {
+      alert('Silakan masukkan alasan blacklist agar mesin & AI dapat mengetahuinya.');
+      return;
+    }
+
+    setIsDeleting(true);
+    fetch(getApiUrl('/api_rfq_status.php'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rfq_id: deleteModalRfq.id,
+        action: 'delete_rfq',
+        delete_type: deleteType,
+        reason: blacklistReason.trim(),
+        user_name: currentUser?.name || 'Admin',
+        user_email: currentUser?.email || 'admin@abmalaya.com',
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setIsDeleting(false);
+        if (data.status === 'success') {
+          setNotificationText(
+            deleteType === 'blacklist'
+              ? `Pengirim ${deleteModalRfq.sender_email} berhasil diblacklist permanen. Pesan masa depan akan otomatis dihapus mesin!`
+              : `RFQ dari ${deleteModalRfq.sender_name} berhasil dipindahkan ke status deleted.`
+          );
+          setShowNotificationBanner(true);
+          setTimeout(() => setShowNotificationBanner(false), 5000);
+          setDeleteModalRfq(null);
+          if (onRefreshLiveEmails) {
+            onRefreshLiveEmails();
+          }
+        } else {
+          alert('Gagal menghapus: ' + (data.message || 'Terjadi kesalahan sistem'));
+        }
+      })
+      .catch((err) => {
+        setIsDeleting(false);
+        console.error('Delete RFQ error:', err);
+        alert('Terjadi kesalahan koneksi saat menghapus RFQ.');
+      });
+  };
 
   const fetchLiveLogs = () => {
     setIsLoadingLogs(true);
@@ -1043,6 +1101,19 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                                     <span>Move to Requisition</span>
                                   </button>
                                 )}
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveListKebabId(null);
+                                    handleOpenDeleteModal(item);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-rose-700 hover:bg-rose-50 font-semibold text-left border-t border-slate-100 cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                                  <span>Hapus / Blacklist</span>
+                                </button>
                               </div>
                             </>
                           )}
@@ -1072,6 +1143,9 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                         } else if (st === 'batal' || st === 'cancelled') {
                           labelText = 'Cancelled';
                           badgeClass = 'bg-slate-50 text-slate-600 border-slate-350';
+                        } else if (st === 'deleted') {
+                          labelText = item.is_blacklisted ? 'Blacklisted (Mesin Abaikan)' : 'Deleted';
+                          badgeClass = 'bg-rose-100 text-rose-900 border-rose-400 font-extrabold';
                         }
                         return (
                           <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-sm border uppercase ${badgeClass}`}>
@@ -1079,6 +1153,12 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                           </span>
                         );
                       })()}
+
+                      {item.blacklist_reason && (
+                        <span className="px-1.5 py-0.2 text-[9px] font-bold rounded-sm border bg-amber-50 text-amber-900 border-amber-300" title={item.blacklist_reason}>
+                          Alasan: {item.blacklist_reason}
+                        </span>
+                      )}
 
                       {item.labels && item.labels.filter(l => l !== 'Primary RFQ' && l !== 'AI Verified').map((lbl, lIdx) => (
                         <span
@@ -1227,6 +1307,16 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                     <span>Process RFQ to SPH</span>
                   </button>
 
+                  {/* Delete / Blacklist Button */}
+                  <button
+                    onClick={() => handleOpenDeleteModal(selectedRfq)}
+                    className="flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-extrabold text-xs px-3 py-1.5 rounded-md shadow-xs cursor-pointer transition"
+                    title="Hapus RFQ atau Blacklist Email Pengirim"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                    <span className="hidden sm:inline">Delete / Blacklist</span>
+                  </button>
+
                   <div className="relative">
                     <button
                       onClick={() => setIsPreviewActionsOpen(!isPreviewActionsOpen)}
@@ -1268,6 +1358,16 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                           >
                             <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                             <span>Error & AI Log</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setIsPreviewActionsOpen(false);
+                              handleOpenDeleteModal(selectedRfq);
+                            }}
+                            className="w-full px-3 py-2 text-left hover:bg-rose-50 flex items-center gap-2 text-rose-700 border-t border-slate-100 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                            <span>Hapus / Blacklist</span>
                           </button>
                         </div>
                       </>
@@ -2146,6 +2246,169 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-extrabold text-xs cursor-pointer rounded-lg transition"
               >
                 Close Terminal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL KONFIRMASI HAPUS & BLACKLIST EMAIL */}
+      {deleteModalRfq && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div
+            className="bg-white rounded-xl shadow-2xl border border-slate-300 max-w-lg w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-rose-500/20 rounded-lg border border-rose-500/30">
+                  <ShieldAlert className="w-5 h-5 text-rose-400" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-white">Konfirmasi Hapus / Blacklist</h3>
+                  <p className="text-[11px] text-slate-300">Pilih tindakan manajemen pengirim & inbox</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isDeleting && setDeleteModalRfq(null)}
+                className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs font-sans">
+              {/* Target Info */}
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
+                <div className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">Target Email:</div>
+                <div className="font-mono font-bold text-xs text-slate-900 break-all">{deleteModalRfq.sender_email}</div>
+                <div className="text-slate-700 text-[11px]">
+                  <strong>Pengirim:</strong> {deleteModalRfq.sender_name} {deleteModalRfq.company ? `(${deleteModalRfq.company})` : ''}
+                </div>
+                <div className="text-slate-600 text-[11px] truncate">
+                  <strong>Subjek:</strong> {deleteModalRfq.subject}
+                </div>
+              </div>
+
+              {/* Options */}
+              <div className="space-y-2.5">
+                <label className="text-xs font-bold text-slate-800 block">Pilih Opsi Tindakan:</label>
+
+                {/* Option 1: Hapus Item / Perusahaan Saja */}
+                <div
+                  onClick={() => setDeleteType('delete_only')}
+                  className={`p-3 rounded-lg border-2 cursor-pointer transition flex items-start gap-3 ${
+                    deleteType === 'delete_only'
+                      ? 'border-blue-500 bg-blue-50/70 shadow-xs'
+                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="delete_type"
+                    checked={deleteType === 'delete_only'}
+                    onChange={() => setDeleteType('delete_only')}
+                    className="mt-1 cursor-pointer text-blue-600"
+                  />
+                  <div className="space-y-1 flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-xs text-slate-900">1. Hapus Perusahaan / Item Ini Saja</span>
+                      <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-300">
+                        Pesan Baru Bisa Masuk
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Status item ini diubah menjadi <strong>deleted</strong>. Jika pengirim ini mengirim email baru lagi di masa depan, pesan baru <strong>tetap diizinkan masuk normal</strong> ke inbox.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Option 2: Blacklist Permanen */}
+                <div
+                  onClick={() => setDeleteType('blacklist')}
+                  className={`p-3 rounded-lg border-2 cursor-pointer transition flex items-start gap-3 ${
+                    deleteType === 'blacklist'
+                      ? 'border-rose-500 bg-rose-50/70 shadow-xs'
+                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="delete_type"
+                    checked={deleteType === 'blacklist'}
+                    onChange={() => setDeleteType('blacklist')}
+                    className="mt-1 cursor-pointer text-rose-600"
+                  />
+                  <div className="space-y-1 flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-xs text-rose-900 flex items-center gap-1.5">
+                        <Ban className="w-3.5 h-3.5 text-rose-600" />
+                        2. Blacklist Email Permanen
+                      </span>
+                      <span className="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-300">
+                        Otomatis Dihapus Mesin
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Email ini dicatat ke daftar <strong>Blacklist</strong>. Kedepannya jika ada email masuk dari alamat ini, sistem mesin akan <strong>otomatis menghapus (status: deleted) & AI akan langsung mengabaikannya</strong> tanpa membuang token.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Blacklist Reason Input */}
+              {deleteType === 'blacklist' && (
+                <div className="space-y-1.5 p-3 bg-amber-50/80 border border-amber-300 rounded-lg animate-in fade-in">
+                  <label className="block text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>Alasan Blacklist (Wajib diisi untuk catatan AI & Mesin):</span>
+                  </label>
+                  <textarea
+                    value={blacklistReason}
+                    onChange={(e) => setBlacklistReason(e.target.value)}
+                    placeholder="Contoh: Email penipuan / spam promosi / kompetitor / tidak relevan..."
+                    rows={2}
+                    className="w-full bg-white border border-amber-400 rounded-md p-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans"
+                  />
+                  <p className="text-[10px] text-amber-800">
+                    Alasan ini akan disimpan di basis data blacklist agar AI & mesin dapat mengabaikan email sejenis dengan alasan spesifik.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="bg-slate-100 px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setDeleteModalRfq(null)}
+                className="px-4 py-1.5 bg-white border border-slate-300 text-slate-700 font-bold text-xs rounded-md hover:bg-slate-50 transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting || (deleteType === 'blacklist' && !blacklistReason.trim())}
+                onClick={handleConfirmDelete}
+                className={`px-4 py-1.5 font-bold text-xs text-white rounded-md shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+                  deleteType === 'blacklist'
+                    ? 'bg-rose-600 hover:bg-rose-700'
+                    : 'bg-slate-800 hover:bg-slate-900'
+                }`}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Memproses...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{deleteType === 'blacklist' ? 'Konfirmasi Blacklist' : 'Konfirmasi Hapus'}</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

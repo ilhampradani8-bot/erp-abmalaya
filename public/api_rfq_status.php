@@ -86,6 +86,92 @@ try {
             exit;
         }
 
+        if ($action === 'delete_rfq') {
+            $delete_type = isset($input['delete_type']) ? $input['delete_type'] : 'delete_only'; // 'delete_only' or 'blacklist'
+            $reason = isset($input['reason']) ? trim($input['reason']) : '';
+
+            // 1. Fetch current RFQ details (email, company, subject)
+            $rfq_data = null;
+            $stmt_load = $db_conn->prepare("SELECT * FROM rfq_requests WHERE id = ? OR rfq_number = ?");
+            if ($stmt_load) {
+                $stmt_load->bind_param("is", $clean_id, $rfq_num);
+                $stmt_load->execute();
+                $res_load = $stmt_load->get_result();
+                if ($res_load && $res_load->num_rows > 0) {
+                    $rfq_data = $res_load->fetch_assoc();
+                }
+                $stmt_load->close();
+            }
+
+            if (!$rfq_data) {
+                ob_end_clean();
+                echo json_encode(['status' => 'error', 'message' => 'RFQ record not found']);
+                exit;
+            }
+
+            $sender_email = trim($rfq_data['client_email']);
+            $sender_company = trim($rfq_data['client_company'] ?: $rfq_data['client_name']);
+
+            if ($delete_type === 'blacklist') {
+                if (empty($reason)) {
+                    $reason = 'Blacklisted by Admin via RFQ Inbox';
+                }
+
+                // 2. Insert or update blacklist entry
+                if (!empty($sender_email)) {
+                    $stmt_bl = $db_conn->prepare("INSERT INTO email_blacklist (email, company_name, reason, created_by, created_at) VALUES (?, ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE company_name = VALUES(company_name), reason = VALUES(reason), created_by = VALUES(created_by)");
+                    if ($stmt_bl) {
+                        $stmt_bl->bind_param("ssss", $sender_email, $sender_company, $reason, $user_name);
+                        $stmt_bl->execute();
+                        $stmt_bl->close();
+                    }
+                }
+
+                // 3. Update all existing RFQs from this email to deleted and blacklisted
+                $stmt_up = $db_conn->prepare("UPDATE rfq_requests SET status = 'deleted', is_blacklisted = 1, blacklist_reason = ?, ai_verified = 1, ai_classification = 'blacklisted', ai_error = 'Otomatis diabaikan oleh mesin: Email masuk dalam daftar Blacklist' WHERE LOWER(client_email) = LOWER(?) OR id = ? OR rfq_number = ?");
+                if ($stmt_up) {
+                    $stmt_up->bind_param("ssis", $reason, $sender_email, $clean_id, $rfq_num);
+                    $stmt_up->execute();
+                    $stmt_up->close();
+                }
+
+                // 4. Log history
+                appendRfqHistoryLog($db_conn, $clean_id, 'Blacklist Pengirim Permanen', $user_name, $user_email, "Email pengirim ({$sender_email}) diblacklist secara permanen. Alasan: {$reason}. Semua pesan masa depan akan otomatis dihapus & diabaikan oleh mesin.");
+
+                ob_end_clean();
+                echo json_encode([
+                    'status' => 'success',
+                    'message' => "Pengirim {$sender_email} berhasil diblacklist secara permanen. Status RFQ diubah menjadi deleted.",
+                    'delete_type' => 'blacklist',
+                    'email' => $sender_email,
+                    'rfq_id' => $rfq_id_raw,
+                    'new_status' => 'deleted'
+                ]);
+                exit;
+            } else {
+                // Delete only (Hapus perusahaan / item RFQ saja, tanpa blacklist)
+                $stmt_up = $db_conn->prepare("UPDATE rfq_requests SET status = 'deleted', is_blacklisted = 0, blacklist_reason = NULL WHERE id = ? OR rfq_number = ?");
+                if ($stmt_up) {
+                    $stmt_up->bind_param("is", $clean_id, $rfq_num);
+                    $stmt_up->execute();
+                    $stmt_up->close();
+                }
+
+                appendRfqHistoryLog($db_conn, $clean_id, 'Hapus dari Inbox (Tanpa Blacklist)', $user_name, $user_email, "RFQ berhasil dipindahkan ke status deleted. Pengirim tidak diblacklist dan email masa depan tetap diizinkan masuk.");
+
+                ob_end_clean();
+                echo json_encode([
+                    'status' => 'success',
+                    'message' => "RFQ berhasil dihapus dari inbox. Email masa depan dari pengirim ini tetap dapat masuk.",
+                    'delete_type' => 'delete_only',
+                    'email' => $sender_email,
+                    'rfq_id' => $rfq_id_raw,
+                    'new_status' => 'deleted'
+                ]);
+                exit;
+            }
+        }
+
         // Default status update action with optional reply details saving
         $reply_body = isset($input['reply_body']) ? trim($input['reply_body']) : null;
         $reply_sender = isset($input['reply_sender']) ? trim($input['reply_sender']) : null;

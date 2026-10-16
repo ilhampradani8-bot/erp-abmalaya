@@ -1,4 +1,4 @@
-export type RFQStatus = 'masuk' | 'diproses' | 'penawaran_terkirim' | 'deal' | 'ditolak';
+export type RFQStatus = 'masuk' | 'diproses' | 'penawaran_terkirim' | 'deal' | 'ditolak' | 'deleted' | 'in_progress' | 'batal';
 
 export interface EmailAttachment {
   id: string;
@@ -28,6 +28,11 @@ export interface RFQ {
   budget_estimate?: string;
   date_received: string;
   status: RFQStatus;
+  is_blacklisted?: number | boolean;
+  blacklist_reason?: string;
+  ai_verified?: number;
+  ai_classification?: string;
+  ai_error?: string | null;
   labels?: string[];
   attachments?: EmailAttachment[];
   notes?: string;
