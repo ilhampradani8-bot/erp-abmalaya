@@ -72,8 +72,8 @@ if ($uri !== '/' && file_exists($rootFile) && !is_dir($rootFile)) {
 }
 
 // 3. Serve static assets from dist/
-if ($uri !== '/' && file_exists(__DIR__ . '/../dist' . $uri) && !is_dir(__DIR__ . '/../dist' . $uri)) {
-    $file = __DIR__ . '/../dist' . $uri;
+if ($uri !== '/' && file_exists(__DIR__ . '/dist' . $uri) && !is_dir(__DIR__ . '/dist' . $uri)) {
+    $file = __DIR__ . '/dist' . $uri;
     $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
     $mimes = [
         'js' => 'application/javascript',
@@ -92,8 +92,8 @@ if ($uri !== '/' && file_exists(__DIR__ . '/../dist' . $uri) && !is_dir(__DIR__ 
     exit;
 }
 
-// 4. Serve React SPA Frontend (dist/index.html or public/index.html)
-$distIndex = __DIR__ . '/../dist/index.html';
+// 4. Serve React SPA Frontend (dist/index.html or root index.html)
+$distIndex = __DIR__ . '/dist/index.html';
 $publicIndex = __DIR__ . '/index.html';
 
 if ($uri === '/' || strpos($uri, 'adminer') === false) {
