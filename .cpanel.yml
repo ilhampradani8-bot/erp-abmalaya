@@ -1,0 +1,8 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/abmalaya/erp.abmalaya.com/
+    - /bin/cp -R dist/* $DEPLOYPATH
+    - /bin/cp -R public/* $DEPLOYPATH
+    - /bin/cp -R daemon/* /home/abmalaya/daemon/
+    - /bin/chmod 755 $DEPLOYPATH/api_*.php

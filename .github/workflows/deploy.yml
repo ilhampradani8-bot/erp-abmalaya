@@ -1,0 +1,25 @@
+name: Deploy ERP AB Malaya to cPanel
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy via FTP to cPanel Hosting
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER || '110.4.45.199' }}
+          username: ${{ secrets.FTP_USERNAME || 'erp@abmalaya.com' }}
+          password: ${{ secrets.FTP_PASSWORD || 'Abmalaya2021' }}
+          server-dir: ${{ secrets.FTP_REMOTE_DIR || '/' }}
+          local-dir: ./dist/
+          dangerous-clean-slate: false
