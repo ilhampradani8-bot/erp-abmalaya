@@ -1,306 +1,645 @@
--- ABMALAYA ERP Database Schema (cPanel & Local Production)
--- Database Target: abmalaya_erp
+/*M!999999\- enable the sandbox mode */ 
+-- MariaDB dump 10.19  Distrib 10.6.23-MariaDB, for debian-linux-gnu (x86_64)
+--
+-- Host: localhost    Database: abmalaya_erp
+-- ------------------------------------------------------
+-- Server version	10.6.23-MariaDB-0ubuntu0.22.04.1
 
-CREATE DATABASE IF NOT EXISTS `abmalaya_erp` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `abmalaya_erp`;
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
--- 1. Table: users (Account & System Access)
-CREATE TABLE IF NOT EXISTS `users` (
-  `id` VARCHAR(50) NOT NULL PRIMARY KEY,
-  `name` VARCHAR(100) NOT NULL,
-  `email` VARCHAR(100) NOT NULL UNIQUE,
-  `password` VARCHAR(255) NOT NULL,
-  `role` ENUM('Admin', 'Sales Engineer', 'Manager', 'Finance') NOT NULL DEFAULT 'Sales Engineer',
-  `department` VARCHAR(50) DEFAULT 'Sales',
-  `status` ENUM('Active', 'Inactive', 'Suspended') NOT NULL DEFAULT 'Active',
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+--
+-- Table structure for table `api_credentials`
+--
 
--- 2. Table: rfq_requests (Incoming Live RFQs & Customer Inquiries)
-CREATE TABLE IF NOT EXISTS `rfq_requests` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `rfq_number` VARCHAR(50) NOT NULL UNIQUE,
-  `client_name` VARCHAR(100) NOT NULL,
-  `client_email` VARCHAR(100) NOT NULL,
-  `recipient_email` VARCHAR(100) DEFAULT 'abmalayaindustry@gmail.com',
-  `client_company` VARCHAR(100) NOT NULL,
-  `client_phone` VARCHAR(30) DEFAULT NULL,
-  `subject` VARCHAR(255) NOT NULL,
-  `message_body` TEXT NOT NULL,
-  `item_requested` VARCHAR(255) NOT NULL,
-  `quantity_requested` VARCHAR(50) DEFAULT '1 Package',
-  `budget_estimate` DECIMAL(15, 2) DEFAULT 0.00,
-  `status` VARCHAR(50) NOT NULL DEFAULT 'masuk',
-  `ai_verified` TINYINT(1) DEFAULT 0,
-  `ai_classification` VARCHAR(50) DEFAULT NULL,
-  `ai_error` TEXT DEFAULT NULL,
-  `is_blacklisted` TINYINT(1) DEFAULT 0,
-  `blacklist_reason` TEXT DEFAULT NULL,
-  `reply_body` LONGTEXT DEFAULT NULL,
-  `reply_date` DATETIME DEFAULT NULL,
-  `reply_sender` VARCHAR(150) DEFAULT NULL,
-  `history_log` LONGTEXT DEFAULT NULL,
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+DROP TABLE IF EXISTS `api_credentials`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `api_credentials` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `credential_key` varchar(100) NOT NULL,
+  `credential_value` text NOT NULL,
+  `service_name` varchar(100) NOT NULL,
+  `created_at` datetime DEFAULT current_timestamp(),
+  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `credential_key` (`credential_key`)
+) ENGINE=InnoDB AUTO_INCREMENT=5633 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
--- 2b. Table: email_blacklist (Blacklisted Senders Ignored by Machine & Auto-Deleted)
-CREATE TABLE IF NOT EXISTS `email_blacklist` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `email` VARCHAR(150) NOT NULL UNIQUE,
-  `company_name` VARCHAR(150) DEFAULT NULL,
-  `reason` TEXT DEFAULT NULL,
-  `created_by` VARCHAR(100) DEFAULT 'Admin',
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+--
+-- Table structure for table `client_signatories`
+--
 
--- 3. Table: quotations (Surat Penawaran Harga / SPH Output)
-CREATE TABLE IF NOT EXISTS `quotations` (
-  `id` VARCHAR(50) NOT NULL PRIMARY KEY,
-  `quotation_number` VARCHAR(50) NOT NULL UNIQUE,
-  `rfq_id` INT DEFAULT NULL,
-  `client_name` VARCHAR(100) NOT NULL,
-  `client_email` VARCHAR(100) NOT NULL,
-  `client_phone` VARCHAR(50) DEFAULT NULL,
-  `company_name` VARCHAR(100) NOT NULL,
-  `date_issued` DATE NOT NULL,
-  `valid_until` DATE NOT NULL,
-  `subtotal` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
-  `discount_total` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
-  `tax_percent` DECIMAL(5, 2) NOT NULL DEFAULT 11.00,
-  `tax_amount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
-  `grand_total` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
-  `notes` TEXT DEFAULT NULL,
-  `source_file` TEXT DEFAULT NULL,
-  `quotation_file` TEXT DEFAULT NULL,
-  `status` VARCHAR(50) NOT NULL DEFAULT 'draft',
-  `ocr_scan_status` VARCHAR(20) DEFAULT 'pending',
-  `ocr_scan_result` LONGTEXT DEFAULT NULL,
-  `approved_by` TEXT DEFAULT NULL,
-  `history_log` TEXT DEFAULT NULL,
-  `created_by` VARCHAR(50) DEFAULT NULL,
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (`rfq_id`) REFERENCES `rfq_requests`(`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+DROP TABLE IF EXISTS `client_signatories`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `client_signatories` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `client_id` int(11) DEFAULT 0,
+  `company_name` varchar(255) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `designation` varchar(255) DEFAULT NULL,
+  `is_default` tinyint(1) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_client_id` (`client_id`),
+  KEY `idx_company_name` (`company_name`(100))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
--- 4. Table: quotation_items (Line Items Detail for SPH)
-CREATE TABLE IF NOT EXISTS `quotation_items` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `quotation_id` VARCHAR(50) NOT NULL,
-  `product_code` VARCHAR(100) DEFAULT NULL,
-  `category_code` VARCHAR(50) DEFAULT NULL,
-  `impa_code` VARCHAR(50) DEFAULT NULL,
-  `description` TEXT NOT NULL,
-  `specification` TEXT DEFAULT NULL,
-  `quantity` DECIMAL(10, 2) NOT NULL DEFAULT 1.00,
-  `unit` VARCHAR(30) DEFAULT 'Unit',
-  `unit_price` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
-  `discount_percent` DECIMAL(5, 2) DEFAULT 0.00,
-  `total` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
-  FOREIGN KEY (`quotation_id`) REFERENCES `quotations`(`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+--
+-- Table structure for table `clients`
+--
 
--- 4b. Table: invoices (Official Invoices / Faktur Tagihan)
-CREATE TABLE IF NOT EXISTS `invoices` (
-  `id` VARCHAR(50) NOT NULL PRIMARY KEY,
-  `invoice_number` VARCHAR(50) NOT NULL UNIQUE,
-  `quotation_id` VARCHAR(50) DEFAULT NULL,
-  `po_number` VARCHAR(100) DEFAULT NULL,
-  `invoice_date` DATE NOT NULL,
-  `due_date` DATE DEFAULT NULL,
-  `client_name` VARCHAR(100) NOT NULL,
-  `client_email` VARCHAR(100) NOT NULL,
-  `client_phone` VARCHAR(50) DEFAULT NULL,
-  `company_name` VARCHAR(100) NOT NULL,
-  `billing_address` TEXT DEFAULT NULL,
-  `delivery_company` VARCHAR(100) DEFAULT NULL,
-  `delivery_address` TEXT DEFAULT NULL,
-  `delivery_pic` VARCHAR(100) DEFAULT NULL,
-  `delivery_phone` VARCHAR(50) DEFAULT NULL,
-  `subtotal` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
-  `discount_total` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
-  `tax_percent` DECIMAL(5, 2) NOT NULL DEFAULT 11.00,
-  `tax_amount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
-  `grand_total` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
-  `bank_name` VARCHAR(100) DEFAULT 'PUBLIC BANK',
-  `bank_account_number` VARCHAR(100) DEFAULT '3818192115',
-  `bank_account_name` VARCHAR(255) DEFAULT 'AB MALAYA INDUSTRY',
-  `bank_email` VARCHAR(100) DEFAULT 'abmalayaindustry@gmail.com',
-  `notes` TEXT DEFAULT NULL,
-  `status` VARCHAR(50) NOT NULL DEFAULT 'unpaid',
-  `created_by` VARCHAR(100) DEFAULT NULL,
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (`quotation_id`) REFERENCES `quotations`(`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+DROP TABLE IF EXISTS `clients`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `clients` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `company_name` varchar(255) NOT NULL,
+  `client_name` varchar(255) DEFAULT NULL,
+  `email` text DEFAULT NULL,
+  `phone` varchar(100) DEFAULT NULL,
+  `address_line1` text DEFAULT NULL,
+  `address_line2` text DEFAULT NULL,
+  `city` varchar(100) DEFAULT NULL,
+  `state` varchar(100) DEFAULT NULL,
+  `postal_code` varchar(50) DEFAULT NULL,
+  `country` varchar(100) DEFAULT 'Malaysia',
+  `tax_id` varchar(100) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `received_by_name` varchar(255) DEFAULT NULL,
+  `received_by_designation` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
--- 4c. Table: invoice_items (Line Items Detail for Invoices)
-CREATE TABLE IF NOT EXISTS `invoice_items` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `invoice_id` VARCHAR(50) NOT NULL,
-  `product_code` VARCHAR(100) DEFAULT NULL,
-  `description` TEXT NOT NULL,
-  `specification` TEXT DEFAULT NULL,
-  `quantity` DECIMAL(12, 2) NOT NULL DEFAULT 1.00,
-  `unit` VARCHAR(50) DEFAULT 'Unit',
-  `unit_price` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
-  `discount_percent` DECIMAL(5, 2) DEFAULT 0.00,
-  `total` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
-  `image_url` TEXT DEFAULT NULL,
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (`invoice_id`) REFERENCES `invoices`(`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+--
+-- Table structure for table `company_profile`
+--
 
+DROP TABLE IF EXISTS `company_profile`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `company_profile` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `company_name` varchar(150) NOT NULL,
+  `company_address` text NOT NULL,
+  `phone` varchar(50) NOT NULL,
+  `email` varchar(100) NOT NULL,
+  `company_logo_url` varchar(255) DEFAULT NULL,
+  `company_stamp_url` varchar(255) DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
--- 5. Table: company_profile (Company Branding, Logo & Official Stamp)
-CREATE TABLE IF NOT EXISTS `company_profile` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `company_name` VARCHAR(150) NOT NULL,
-  `company_address` TEXT NOT NULL,
-  `phone` VARCHAR(50) NOT NULL,
-  `email` VARCHAR(100) NOT NULL,
-  `company_logo_url` VARCHAR(255) DEFAULT NULL,
-  `company_stamp_url` VARCHAR(255) DEFAULT NULL,
-  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+--
+-- Table structure for table `email_blacklist`
+--
 
--- 6. Table: api_credentials (API Keys, Tokens & System Service Passwords)
-CREATE TABLE IF NOT EXISTS `api_credentials` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `credential_key` VARCHAR(100) UNIQUE NOT NULL,
-  `credential_value` TEXT NOT NULL,
-  `service_name` VARCHAR(100) NOT NULL,
-  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+DROP TABLE IF EXISTS `email_blacklist`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `email_blacklist` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `email` varchar(150) NOT NULL,
+  `company_name` varchar(150) DEFAULT NULL,
+  `reason` text DEFAULT NULL,
+  `created_by` varchar(100) DEFAULT 'Admin',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `email` (`email`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
--- 7. Table: products (Master Product Catalog & Pricing Database)
-CREATE TABLE IF NOT EXISTS `products` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `product_code` VARCHAR(100) UNIQUE NOT NULL,
-  `product_name` VARCHAR(255) NOT NULL,
-  `description` TEXT,
-  `specification` TEXT,
-  `offer` TEXT DEFAULT NULL,
-  `unit` VARCHAR(50) DEFAULT 'Unit',
-  `unit_price` DECIMAL(15,2) DEFAULT 0.00,
-  `capital` DECIMAL(15,2) DEFAULT 0.00,
-  `image_url` TEXT,
-  `category` VARCHAR(100) DEFAULT 'Equipment',
-  `supplier_name` VARCHAR(255) DEFAULT NULL,
-  `status` VARCHAR(20) DEFAULT 'active',
-  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+--
+-- Table structure for table `gemini_api_keys`
+--
 
+DROP TABLE IF EXISTS `gemini_api_keys`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `gemini_api_keys` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `key_alias` varchar(100) NOT NULL,
+  `api_key` text NOT NULL,
+  `pool_type` enum('inbox','ocr') NOT NULL DEFAULT 'inbox',
+  `status` enum('active','disabled') NOT NULL DEFAULT 'active',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=47 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
--- 8. Table: system_notifications (Notification Log & Sync Activity History)
-CREATE TABLE IF NOT EXISTS `system_notifications` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `title` VARCHAR(150) NOT NULL,
-  `message` TEXT NOT NULL,
-  `type` ENUM('warning', 'info', 'success', 'danger') NOT NULL DEFAULT 'info',
-  `category` VARCHAR(50) DEFAULT 'sync',
-  `is_read` TINYINT(1) DEFAULT 0,
-  `action_link` VARCHAR(255) DEFAULT NULL,
-  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+--
+-- Table structure for table `invoice_items`
+--
 
--- 9. Table: spreadsheet_backups (Multi-Spreadsheet Cloud Backup Target Configuration)
-CREATE TABLE IF NOT EXISTS `spreadsheet_backups` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `title` VARCHAR(255) NOT NULL,
-  `spreadsheet_id` VARCHAR(255) NOT NULL,
-  `sheet_name` VARCHAR(100) DEFAULT 'Sheet1',
-  `service_account_email` VARCHAR(255) DEFAULT 'erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com',
-  `key_filename` VARCHAR(255) DEFAULT 'erp-abmalaya-connect-0fc0c4cb6314.json',
-  `is_primary` TINYINT(1) DEFAULT 1,
-  `status` VARCHAR(20) DEFAULT 'active',
-  `last_synced_at` DATETIME NULL,
-  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+DROP TABLE IF EXISTS `invoice_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `invoice_items` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `invoice_id` varchar(50) NOT NULL,
+  `product_code` varchar(100) DEFAULT NULL,
+  `description` text NOT NULL,
+  `specification` text DEFAULT NULL,
+  `offer` text DEFAULT NULL,
+  `quantity` decimal(12,2) NOT NULL DEFAULT 1.00,
+  `unit` varchar(50) DEFAULT 'Unit',
+  `unit_price` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `discount_percent` decimal(5,2) DEFAULT 0.00,
+  `total` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `image_url` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `invoice_id` (`invoice_id`),
+  CONSTRAINT `invoice_items_ibfk_1` FOREIGN KEY (`invoice_id`) REFERENCES `invoices` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
--- 10. Table: system_paper_settings (Dedicated Paper, Letterhead, Company Branding & Stamp Settings)
-CREATE TABLE IF NOT EXISTS `system_paper_settings` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `company_name` VARCHAR(255) DEFAULT 'AB MALAYA SDN. BHD.',
-  `company_address` TEXT,
-  `phone` VARCHAR(100) DEFAULT '+60 3-8000 1234',
-  `email` VARCHAR(100) DEFAULT 'sales@abmalaya.com',
-  `logo_url` LONGTEXT,
-  `stamp_url` LONGTEXT,
-  `signature_url` LONGTEXT DEFAULT NULL,
-  `header_image_url` LONGTEXT DEFAULT NULL,
-  `header_title` VARCHAR(255) DEFAULT 'SURAT PENAWARAN HARGA (SPH) / COMMERCIAL QUOTATION',
-  `footer_terms` TEXT,
-  `header_color` VARCHAR(50) DEFAULT '#0080d0',
-  `default_notes` TEXT,
-  `header_template` VARCHAR(50) DEFAULT 'default',
-  `table_header_bg` VARCHAR(50) DEFAULT '#0f172a',
-  `table_header_text_color` VARCHAR(50) DEFAULT '#ffffff',
-  `paper_size` VARCHAR(20) DEFAULT 'A4',
-  `margin_top` INT DEFAULT 18,
-  `margin_bottom` INT DEFAULT 18,
-  `margin_left` INT DEFAULT 14,
-  `margin_right` INT DEFAULT 14,
-  `font_size` INT DEFAULT 9,
-  `layout_offsets` LONGTEXT DEFAULT NULL,
-  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+--
+-- Table structure for table `invoices`
+--
 
--- 11. Table: system_invoice_settings (Dedicated Invoice Paper, Bank & Customization Settings)
-CREATE TABLE IF NOT EXISTS `system_invoice_settings` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `company_name` VARCHAR(255) DEFAULT 'AB MALAYA INDUSTRY',
-  `company_reg_no` VARCHAR(100) DEFAULT '003320457-D',
-  `company_address` TEXT,
-  `phone` VARCHAR(100) DEFAULT '+60 3-8000 1234',
-  `email` VARCHAR(100) DEFAULT 'abmalayaindustry@gmail.com',
-  `logo_url` LONGTEXT,
-  `stamp_url` LONGTEXT,
-  `signature_url` LONGTEXT DEFAULT NULL,
-  `header_image_url` LONGTEXT DEFAULT NULL,
-  `invoice_title` VARCHAR(255) DEFAULT 'OFFICIAL INVOICE',
-  `bank_name` VARCHAR(100) DEFAULT 'PUBLIC BANK',
-  `bank_account_number` VARCHAR(100) DEFAULT '3818192115',
-  `bank_account_name` VARCHAR(255) DEFAULT 'AB MALAYA INDUSTRY',
-  `bank_email` VARCHAR(100) DEFAULT 'abmalayaindustry@gmail.com',
-  `remarks_text` TEXT,
-  `authorised_by_name` VARCHAR(255) DEFAULT 'Muhammad Aimanuddin Bin Mohd Zaki',
-  `authorised_by_title` VARCHAR(255) DEFAULT 'Procurement Manager / Head of Sales',
-  `received_by_label` VARCHAR(255) DEFAULT 'Received by,',
-  `table_header_bg` VARCHAR(50) DEFAULT '#0070c0',
-  `table_header_text_color` VARCHAR(50) DEFAULT '#ffffff',
-  `paper_size` VARCHAR(20) DEFAULT 'A4',
-  `margin_top` INT DEFAULT 18,
-  `margin_bottom` INT DEFAULT 18,
-  `margin_left` INT DEFAULT 14,
-  `margin_right` INT DEFAULT 14,
-  `font_size` INT DEFAULT 9,
-  `layout_offsets` LONGTEXT DEFAULT NULL,
-  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+DROP TABLE IF EXISTS `invoices`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `invoices` (
+  `id` varchar(50) NOT NULL,
+  `invoice_number` varchar(50) NOT NULL,
+  `quotation_id` varchar(50) DEFAULT NULL,
+  `po_number` varchar(100) DEFAULT NULL,
+  `invoice_date` date NOT NULL,
+  `due_date` date DEFAULT NULL,
+  `client_name` varchar(100) NOT NULL,
+  `client_email` varchar(100) NOT NULL,
+  `client_phone` varchar(50) DEFAULT NULL,
+  `company_name` varchar(100) NOT NULL,
+  `billing_address` text DEFAULT NULL,
+  `delivery_company` varchar(100) DEFAULT NULL,
+  `delivery_address` text DEFAULT NULL,
+  `delivery_pic` varchar(100) DEFAULT NULL,
+  `delivery_phone` varchar(50) DEFAULT NULL,
+  `subtotal` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `discount_total` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `tax_percent` decimal(5,2) NOT NULL DEFAULT 11.00,
+  `tax_amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `grand_total` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `bank_name` varchar(100) DEFAULT 'PUBLIC BANK',
+  `bank_account_number` varchar(100) DEFAULT '3818192115',
+  `bank_account_name` varchar(255) DEFAULT 'AB MALAYA INDUSTRY',
+  `bank_email` varchar(100) DEFAULT 'abmalayaindustry@gmail.com',
+  `notes` text DEFAULT NULL,
+  `footer_text` text DEFAULT NULL,
+  `received_by_name` varchar(255) DEFAULT NULL,
+  `received_by_designation` varchar(255) DEFAULT NULL,
+  `received_by_date` varchar(50) DEFAULT NULL,
+  `status` varchar(50) NOT NULL DEFAULT 'unpaid',
+  `invoice_file` text DEFAULT NULL,
+  `pdf_created` tinyint(1) DEFAULT 0,
+  `pdf_created_at` datetime DEFAULT NULL,
+  `created_by` varchar(100) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `invoice_number` (`invoice_number`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
--- Initial Seed Data
-INSERT IGNORE INTO `users` (`id`, `name`, `email`, `password`, `role`, `department`, `status`) VALUES
-('USR-001', 'Ilham Pradani, S.T.', 'ilham@abmalaya.com', '$2y$10$e8w3.U1u...demo_password_hash', 'Admin', 'Sales', 'Active'),
-('USR-002', 'Sales Executive', 'sales@abmalaya.com', '$2y$10$e8w3.U1u...demo_password_hash', 'Sales Engineer', 'Sales', 'Active');
+--
+-- Table structure for table `product_categories`
+--
 
-INSERT IGNORE INTO `system_paper_settings` (`id`, `company_name`, `company_address`, `phone`, `email`, `logo_url`, `stamp_url`, `header_title`, `footer_terms`, `header_color`, `default_notes`, `header_template`, `table_header_bg`, `table_header_text_color`) VALUES
-(1, 'AB MALAYA SDN. BHD.', '2-2-40, 2nd Floor Wisma Rampai, Jalan 34/26, Taman Sri Rampai, 53300 Kuala Lumpur.', '+60 3-8000 1234', 'sales@abmalaya.com', '/favicon.png', '', 'SURAT PENAWARAN HARGA (SPH) / COMMERCIAL QUOTATION', '1. 50% DP payment required after PO is issued.\n2. Remaining 50% payment upon delivery completion.\n3. Quotation valid for 14 days from issue date.', '#0080d0', 'Price excludes transport tax unless explicitly stated. All goods remain property of AB Malaya until fully paid.', 'default', '#0f172a', '#ffffff');
+DROP TABLE IF EXISTS `product_categories`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `product_categories` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `category_code` varchar(50) NOT NULL,
+  `category_name` varchar(255) NOT NULL,
+  `internal_category` varchar(255) NOT NULL,
+  `subcategories` text NOT NULL,
+  `description_en` text NOT NULL,
+  `description_my` text NOT NULL,
+  `classification_rules` text NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `category_code` (`category_code`)
+) ENGINE=InnoDB AUTO_INCREMENT=36 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
+--
+-- Table structure for table `product_change_logs`
+--
 
-INSERT IGNORE INTO `company_profile` (`id`, `company_name`, `company_address`, `phone`, `email`, `company_logo_url`, `company_stamp_url`) VALUES
-(1, 'PT ABMALAYA NUSA SEJAHTERA (MALAYSIA)', 'Kuala Lumpur Tech Park, Block B-12, Wilayah Persekutuan Kuala Lumpur', '+60 3-8900 4455', 'sales@abmalaya.com', 'https://via.placeholder.com/160x60?text=ABMALAYA+LOGO', 'https://via.placeholder.com/120x120?text=STAMP+SEAL');
+DROP TABLE IF EXISTS `product_change_logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `product_change_logs` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `product_id` int(11) NOT NULL,
+  `product_code` varchar(100) NOT NULL,
+  `action_type` varchar(50) NOT NULL,
+  `actor_name` varchar(100) NOT NULL,
+  `actor_email` varchar(100) NOT NULL,
+  `changes_json` longtext DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
-INSERT INTO `api_credentials` (`credential_key`, `credential_value`, `service_name`) VALUES
-('GEMINI_API_KEY', 'AIzaSyAmuYOX2WFAiT0sACEq8LUqqSx4qJf0DWU', 'Google Gemini AI')
-ON DUPLICATE KEY UPDATE `credential_value` = VALUES(`credential_value`);
+--
+-- Table structure for table `products`
+--
 
-INSERT IGNORE INTO `products` (`product_code`, `product_name`, `description`, `unit`, `unit_price`, `image_url`, `category`) VALUES
-('PRD-001', 'RO WATER MAKER HIGH PRESSURE HOSE - Ref: PD-ENG-2026-059', 'High Pressure Flexible Rubber Hose with SS316 Fitting Ends. Operating Pressure: 350 BAR.', 'Package', 45000000.00, 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&q=80', 'Hose & Fitting'),
-('PRD-002', 'SS316 STAINLESS STEEL FITTING ENDS 2 INCH', 'Marine Grade Stainless Steel 316 Fitting Ends for High Pressure Hose 350 BAR', 'Pcs', 7500000.00, 'https://images.unsplash.com/photo-1581092335397-9583fe92d232?w=300&q=80', 'Fitting'),
-('PRD-003', 'HEAVY DUTY INDUSTRIAL WATER MAKER MEMBRANE', 'Reverse Osmosis Desalination Membrane Element 8040 High Rejection', 'Unit', 65000000.00, 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=300&q=80', 'Membrane');
+DROP TABLE IF EXISTS `products`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `products` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `product_code` varchar(100) NOT NULL,
+  `impa_code` varchar(50) DEFAULT NULL,
+  `product_name` varchar(255) NOT NULL,
+  `description` text DEFAULT NULL,
+  `specification` text DEFAULT NULL,
+  `offer` text DEFAULT NULL,
+  `unit` varchar(50) DEFAULT 'Unit',
+  `unit_price` decimal(15,2) DEFAULT 0.00,
+  `capital` decimal(15,2) DEFAULT 0.00,
+  `stock_quantity` int(11) DEFAULT 50,
+  `discount_percent` decimal(5,2) DEFAULT 0.00,
+  `image_url` text DEFAULT NULL,
+  `category` varchar(100) DEFAULT 'Equipment',
+  `supplier_name` varchar(255) DEFAULT NULL,
+  `status` varchar(20) DEFAULT 'active',
+  `created_at` datetime DEFAULT current_timestamp(),
+  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `product_code` (`product_code`)
+) ENGINE=InnoDB AUTO_INCREMENT=54 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `quotation_items`
+--
+
+DROP TABLE IF EXISTS `quotation_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `quotation_items` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `quotation_id` varchar(50) NOT NULL,
+  `product_code` varchar(100) DEFAULT NULL,
+  `category_code` varchar(50) DEFAULT NULL,
+  `impa_code` varchar(50) DEFAULT NULL,
+  `description` text NOT NULL,
+  `specification` text DEFAULT NULL,
+  `offer` text DEFAULT NULL,
+  `quantity` decimal(10,2) NOT NULL DEFAULT 1.00,
+  `unit` varchar(30) DEFAULT 'Unit',
+  `unit_price` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `discount_percent` decimal(5,2) DEFAULT 0.00,
+  `total` decimal(15,2) NOT NULL DEFAULT 0.00,
+  PRIMARY KEY (`id`),
+  KEY `quotation_id` (`quotation_id`),
+  CONSTRAINT `quotation_items_ibfk_1` FOREIGN KEY (`quotation_id`) REFERENCES `quotations` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=443 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `quotations`
+--
+
+DROP TABLE IF EXISTS `quotations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `quotations` (
+  `id` varchar(50) NOT NULL,
+  `quotation_number` varchar(50) NOT NULL,
+  `rfq_id` int(11) DEFAULT NULL,
+  `client_name` varchar(100) NOT NULL,
+  `client_email` text DEFAULT NULL,
+  `client_phone` varchar(50) DEFAULT NULL,
+  `company_name` varchar(100) NOT NULL,
+  `company_address` text DEFAULT NULL,
+  `category_name` varchar(100) DEFAULT NULL,
+  `impa_code` varchar(20) DEFAULT NULL,
+  `date_issued` date NOT NULL,
+  `valid_until` varchar(50) DEFAULT '14 Days',
+  `subtotal` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `discount_total` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `tax_percent` decimal(5,2) NOT NULL DEFAULT 11.00,
+  `tax_amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `grand_total` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `notes` text DEFAULT NULL,
+  `footer_text` text DEFAULT NULL,
+  `status` varchar(50) NOT NULL DEFAULT 'draft',
+  `ocr_scan_status` varchar(20) DEFAULT 'pending',
+  `ocr_scan_result` longtext DEFAULT NULL,
+  `approved_by` text DEFAULT NULL,
+  `history_log` text DEFAULT NULL,
+  `created_by` varchar(50) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `source_file` text DEFAULT NULL,
+  `quotation_file` text DEFAULT NULL,
+  `pdf_created` tinyint(1) DEFAULT 0,
+  `pdf_created_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `quotation_number` (`quotation_number`),
+  KEY `rfq_id` (`rfq_id`),
+  CONSTRAINT `quotations_ibfk_1` FOREIGN KEY (`rfq_id`) REFERENCES `rfq_requests` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `rfq_replies`
+--
+
+DROP TABLE IF EXISTS `rfq_replies`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `rfq_replies` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `rfq_id` int(11) DEFAULT NULL,
+  `rfq_number` varchar(100) DEFAULT NULL,
+  `reply_body` text DEFAULT NULL,
+  `reply_sender` varchar(255) DEFAULT NULL,
+  `client_email` varchar(255) DEFAULT NULL,
+  `quotation_id` varchar(100) DEFAULT NULL,
+  `quotation_number` varchar(100) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `attachment_file` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `rfq_requests`
+--
+
+DROP TABLE IF EXISTS `rfq_requests`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `rfq_requests` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `rfq_number` varchar(50) NOT NULL,
+  `client_name` varchar(100) NOT NULL,
+  `client_email` varchar(100) NOT NULL,
+  `recipient_email` varchar(100) DEFAULT 'abmalayaindustry@gmail.com',
+  `client_company` varchar(100) NOT NULL,
+  `client_phone` varchar(30) DEFAULT NULL,
+  `subject` varchar(255) NOT NULL,
+  `message_body` text NOT NULL,
+  `item_requested` varchar(255) NOT NULL,
+  `quantity_requested` varchar(50) DEFAULT '1 Package',
+  `budget_estimate` decimal(15,2) DEFAULT 0.00,
+  `attachment_url` varchar(255) DEFAULT NULL,
+  `status` varchar(50) NOT NULL DEFAULT 'masuk',
+  `ai_verified` tinyint(1) DEFAULT 0,
+  `ai_classification` varchar(50) DEFAULT NULL,
+  `ai_error` text DEFAULT NULL,
+  `is_blacklisted` tinyint(1) DEFAULT 0,
+  `blacklist_reason` text DEFAULT NULL,
+  `reply_body` longtext DEFAULT NULL,
+  `reply_date` datetime DEFAULT NULL,
+  `reply_sender` varchar(150) DEFAULT NULL,
+  `history_log` longtext DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `rfq_number` (`rfq_number`)
+) ENGINE=InnoDB AUTO_INCREMENT=107 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `spreadsheet_backups`
+--
+
+DROP TABLE IF EXISTS `spreadsheet_backups`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `spreadsheet_backups` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `title` varchar(255) NOT NULL,
+  `spreadsheet_id` varchar(255) NOT NULL,
+  `sheet_name` varchar(100) DEFAULT 'Sheet1',
+  `service_account_email` varchar(255) DEFAULT 'erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com',
+  `key_filename` varchar(255) DEFAULT 'erp-abmalaya-connect-0fc0c4cb6314.json',
+  `is_primary` tinyint(1) DEFAULT 1,
+  `status` varchar(20) DEFAULT 'active',
+  `last_synced_at` datetime DEFAULT NULL,
+  `created_at` datetime DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `system_invoice_settings`
+--
+
+DROP TABLE IF EXISTS `system_invoice_settings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `system_invoice_settings` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `company_name` varchar(255) DEFAULT 'AB MALAYA INDUSTRY',
+  `company_reg_no` varchar(100) DEFAULT '003320457-D',
+  `company_address` text DEFAULT NULL,
+  `phone` varchar(100) DEFAULT '+60 3-8000 1234',
+  `email` varchar(100) DEFAULT 'abmalayaindustry@gmail.com',
+  `website` varchar(150) DEFAULT 'abmalaya.com',
+  `logo_url` longtext DEFAULT NULL,
+  `stamp_url` longtext DEFAULT NULL,
+  `signature_url` longtext DEFAULT NULL,
+  `header_image_url` longtext DEFAULT NULL,
+  `invoice_title` varchar(255) DEFAULT 'OFFICIAL INVOICE',
+  `bank_name` varchar(100) DEFAULT 'PUBLIC BANK',
+  `bank_account_number` varchar(100) DEFAULT '3818192115',
+  `bank_account_name` varchar(255) DEFAULT 'AB MALAYA INDUSTRY',
+  `bank_email` varchar(100) DEFAULT 'abmalayaindustry@gmail.com',
+  `remarks_text` text DEFAULT NULL,
+  `footer_text` text DEFAULT NULL,
+  `authorised_by_name` varchar(255) DEFAULT 'Muhammad Aimanuddin Bin Mohd Zaki',
+  `authorised_by_title` varchar(255) DEFAULT 'Procurement Manager / Head of Sales',
+  `received_by_label` varchar(255) DEFAULT 'Received by,',
+  `received_by_name_label` varchar(255) DEFAULT 'Name / Designation: ______________________',
+  `received_by_date_label` varchar(255) DEFAULT 'Date: ____ / ____ / ________',
+  `table_header_bg` varchar(50) DEFAULT '#0070c0',
+  `table_header_text_color` varchar(50) DEFAULT '#ffffff',
+  `layout_offsets` longtext DEFAULT NULL,
+  `paper_size` varchar(50) DEFAULT 'A4',
+  `margin_top` int(11) DEFAULT 18,
+  `margin_bottom` int(11) DEFAULT 18,
+  `margin_left` int(11) DEFAULT 14,
+  `margin_right` int(11) DEFAULT 14,
+  `font_size` int(11) DEFAULT 9,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `system_locks`
+--
+
+DROP TABLE IF EXISTS `system_locks`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `system_locks` (
+  `lock_key` varchar(50) NOT NULL,
+  `lock_value` varchar(255) DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`lock_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `system_notifications`
+--
+
+DROP TABLE IF EXISTS `system_notifications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `system_notifications` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `title` varchar(150) NOT NULL,
+  `message` text NOT NULL,
+  `type` enum('warning','info','success','danger') NOT NULL DEFAULT 'info',
+  `category` varchar(50) DEFAULT 'sync',
+  `is_read` tinyint(1) DEFAULT 0,
+  `action_link` varchar(255) DEFAULT NULL,
+  `created_at` datetime DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `system_paper_settings`
+--
+
+DROP TABLE IF EXISTS `system_paper_settings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `system_paper_settings` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `company_name` varchar(255) DEFAULT 'AB MALAYA SDN. BHD.',
+  `company_address` text DEFAULT NULL,
+  `phone` varchar(100) DEFAULT '+60 3-8000 1234',
+  `email` varchar(100) DEFAULT 'sales@abmalaya.com',
+  `logo_url` longtext DEFAULT NULL,
+  `stamp_url` longtext DEFAULT NULL,
+  `signature_url` longtext DEFAULT NULL,
+  `header_image_url` longtext DEFAULT NULL,
+  `bank_name` varchar(100) DEFAULT 'PUBLIC BANK',
+  `bank_account_number` varchar(100) DEFAULT '3818192115',
+  `bank_account_name` varchar(255) DEFAULT 'AB MALAYA INDUSTRY',
+  `bank_email` varchar(100) DEFAULT 'abmalayaindustry@gmail.com',
+  `header_title` varchar(255) DEFAULT 'SURAT PENAWARAN HARGA (SPH) / QUOTATION',
+  `footer_terms` text DEFAULT NULL,
+  `footer_text` text DEFAULT NULL,
+  `header_color` varchar(50) DEFAULT '#0080d0',
+  `default_notes` text DEFAULT NULL,
+  `header_template` varchar(50) DEFAULT 'default',
+  `table_header_bg` varchar(50) DEFAULT '#0f172a',
+  `table_header_text_color` varchar(50) DEFAULT '#ffffff',
+  `layout_offsets` longtext DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `paper_size` varchar(50) DEFAULT 'A4',
+  `margin_top` int(11) DEFAULT 18,
+  `margin_bottom` int(11) DEFAULT 18,
+  `margin_left` int(11) DEFAULT 14,
+  `margin_right` int(11) DEFAULT 14,
+  `font_size` int(11) DEFAULT 9,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `user_activity_logs`
+--
+
+DROP TABLE IF EXISTS `user_activity_logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `user_activity_logs` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_name` varchar(100) NOT NULL,
+  `user_email` varchar(100) NOT NULL,
+  `action_type` varchar(50) NOT NULL DEFAULT 'LOGIN',
+  `details` text DEFAULT NULL,
+  `ip_address` varchar(50) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `user_sessions`
+--
+
+DROP TABLE IF EXISTS `user_sessions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `user_sessions` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `token` varchar(128) NOT NULL,
+  `role` varchar(50) NOT NULL DEFAULT 'Admin',
+  `device_info` text DEFAULT NULL,
+  `ip_address` varchar(50) DEFAULT NULL,
+  `expires_at` datetime NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `token` (`token`),
+  KEY `token_2` (`token`),
+  KEY `expires_at` (`expires_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `users`
+--
+
+DROP TABLE IF EXISTS `users`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `users` (
+  `id` varchar(50) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `email` varchar(100) NOT NULL,
+  `password` varchar(255) NOT NULL,
+  `role` enum('Admin','Sales Engineer','Manager','Finance') NOT NULL DEFAULT 'Sales Engineer',
+  `department` varchar(50) DEFAULT 'Sales',
+  `status` enum('Active','Inactive','Suspended') NOT NULL DEFAULT 'Active',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2026-10-19 19:49:50
