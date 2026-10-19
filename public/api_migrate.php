@@ -120,6 +120,7 @@ $connection->query("ALTER TABLE quotations MODIFY valid_until VARCHAR(50) DEFAUL
 $results['quotations'][] = "Modified valid_until to VARCHAR(50)";
 
 $quo_cols = [
+    'company_address' => "ALTER TABLE quotations ADD COLUMN company_address TEXT DEFAULT NULL AFTER company_name",
     'footer_text' => "ALTER TABLE quotations ADD COLUMN footer_text TEXT DEFAULT NULL AFTER notes",
     'source_file' => "ALTER TABLE quotations ADD COLUMN source_file TEXT DEFAULT NULL AFTER notes",
     'quotation_file' => "ALTER TABLE quotations ADD COLUMN quotation_file TEXT DEFAULT NULL AFTER source_file",
@@ -134,6 +135,14 @@ foreach ($quo_cols as $col => $sql) {
         $results['quotations'][] = "Added column $col";
     }
 }
+
+// 3b. Ensure quotation_items has offer column
+$res_qi_offer = $connection->query("SHOW COLUMNS FROM quotation_items LIKE 'offer'");
+if ($res_qi_offer && $res_qi_offer->num_rows === 0) {
+    $connection->query("ALTER TABLE quotation_items ADD COLUMN offer TEXT DEFAULT NULL AFTER specification");
+    $results['quotation_items'][] = "Added column offer";
+}
+
 
 // 4. clients table for client companies database (TEXT for multi-email support)
 $connection->query("CREATE TABLE IF NOT EXISTS clients (

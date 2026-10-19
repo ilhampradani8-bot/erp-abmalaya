@@ -1,19 +1,50 @@
 <?php
 error_reporting(0);
 ini_set('display_errors', 0);
-ob_start();
+if (!defined('MASTER_CRON_MODE')) {
+    ob_start();
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type');
+    header('Content-Type: application/json; charset=utf-8');
+}
 
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
-header('Content-Type: application/json; charset=utf-8');
+// Connect to MySQL Database immediately
+require_once __DIR__ . '/db_connect.php';
 
 // Global API rate-limiter counter (keeps track of calls to stay strictly under 10/min)
 $gemini_api_calls_count = 0;
 
+// Set strict 3s socket timeouts for IMAP connections
+if (function_exists('imap_timeout')) {
+    @imap_timeout(IMAP_OPENTIMEOUT, 3);
+    @imap_timeout(IMAP_READTIMEOUT, 3);
+    @imap_timeout(IMAP_WRITETIMEOUT, 3);
+}
+
 $hostname = '{imap.gmail.com:993/imap/ssl}INBOX';
 $username = 'abmalayaindustry@gmail.com';
-$password = 'tbsq icqa kece qaoz';
+$password = 'tbsq icqa kece qaoz'; // Official Google App Password default
+
+// Try reading from .env if present
+$env_file = file_exists(__DIR__ . '/../.env') ? __DIR__ . '/../.env' : (file_exists(__DIR__ . '/.env') ? __DIR__ . '/.env' : null);
+if ($env_file) {
+    $env_content = @file_get_contents($env_file);
+    if ($env_content && preg_match('/GMAIL_LIVE_APP_PASSWORD\s*=\s*["\']?([^"\'\r\n]+)["\']?/i', $env_content, $m_env)) {
+        $password = trim($m_env[1]);
+    }
+}
+
+if (getenv('GMAIL_LIVE_APP_PASSWORD')) {
+    $password = trim(getenv('GMAIL_LIVE_APP_PASSWORD'), " \"'");
+}
+
+if (isset($db_conn) && $db_conn && !$db_conn->connect_error) {
+    $res_pass = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key IN ('SMTP_APP_PASSWORD', 'GMAIL_LIVE_APP_PASSWORD') AND credential_value != '' ORDER BY id ASC LIMIT 1");
+    if ($res_pass && $row_pass = $res_pass->fetch_assoc()) {
+        $password = trim($row_pass['credential_value']);
+    }
+}
 
 // ATTACHMENT CACHE DIRECTORY FOR INSTANT SERVING (< 5ms)
 $cache_dir = __DIR__ . '/attachments';
@@ -21,72 +52,269 @@ if (!file_exists($cache_dir)) {
     @mkdir($cache_dir, 0777, true);
 }
 
-// REAL LIVE INSTANT ATTACHMENT BINARY STREAMER WITH DISK CACHING
+// REAL LIVE INSTANT ATTACHMENT BINARY STREAMER WITH SMART DISK SEARCH & IMAP CACHING
 if (isset($_GET['download']) || isset($_GET['preview'])) {
     $msgno = isset($_GET['msgno']) ? (int)$_GET['msgno'] : 0;
     $part_no = isset($_GET['part']) ? $_GET['part'] : '2';
-    $ext = isset($_GET['ext']) ? strtolower($_GET['ext']) : 'pdf';
-    $filename = isset($_GET['fn']) ? $_GET['fn'] : 'document.' . $ext;
+    $ext = isset($_GET['ext']) ? strtolower($_GET['ext']) : '';
+    $filename = isset($_GET['fn']) ? $_GET['fn'] : '';
+
+    if (empty($filename) && isset($_GET['file'])) {
+        $filename = $_GET['file'];
+    }
+    if (empty($filename)) {
+        $filename = 'document.pdf';
+    }
+    if (empty($ext)) {
+        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        if (empty($ext)) $ext = 'pdf';
+    }
 
     $safe_fn = preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $filename);
-    $cache_file = $cache_dir . "/msg_{$msgno}_part_{$part_no}_{$safe_fn}";
+    $base_clean = preg_replace('/[^a-zA-Z0-9]/', '', pathinfo($filename, PATHINFO_FILENAME));
 
-    if (file_exists($cache_file) && filesize($cache_file) > 100) {
-        if ($ext === 'pdf') {
-            header('Content-Type: application/pdf');
-        } else if (in_array($ext, ['png', 'jpg', 'jpeg', 'gif'])) {
-            header('Content-Type: image/' . ($ext === 'jpg' ? 'jpeg' : $ext));
-        } else {
-            header('Content-Type: application/octet-stream');
+    $found_file = null;
+
+    // 1. Direct candidate paths
+    $candidate_files = [
+        $cache_dir . "/msg_{$msgno}_part_{$part_no}_{$safe_fn}",
+        $cache_dir . "/{$filename}",
+        $cache_dir . "/{$safe_fn}",
+        __DIR__ . "/attachments/{$filename}",
+        __DIR__ . "/attachments/{$safe_fn}",
+        __DIR__ . "/attachments/msg_{$msgno}_part_{$part_no}_{$safe_fn}",
+        dirname(__DIR__) . "/attachments/{$filename}",
+        dirname(__DIR__) . "/attachments/{$safe_fn}",
+        dirname(__DIR__) . "/attachments/msg_{$msgno}_part_{$part_no}_{$safe_fn}",
+        __DIR__ . "/public/attachments/{$filename}",
+        __DIR__ . "/public/attachments/{$safe_fn}",
+        dirname(__DIR__) . "/public/attachments/{$filename}",
+        dirname(__DIR__) . "/public/attachments/{$safe_fn}",
+        __DIR__ . "/uploads/pdf/{$filename}",
+        __DIR__ . "/uploads/pdf/{$safe_fn}",
+        __DIR__ . "/uploads/{$filename}",
+        dirname(__DIR__) . "/uploads/pdf/{$filename}",
+        dirname(__DIR__) . "/uploads/{$filename}",
+        dirname(__DIR__) . "/public/uploads/pdf/{$filename}",
+        sys_get_temp_dir() . "/gmail_attachments/{$safe_fn}",
+        sys_get_temp_dir() . "/gmail_attachments/{$filename}"
+    ];
+
+    foreach ($candidate_files as $cf) {
+        if (file_exists($cf) && is_file($cf) && filesize($cf) > 100) {
+            $found_file = $cf;
+            break;
         }
-
-        header('Content-Length: ' . filesize($cache_file));
-        header('Content-Disposition: inline; filename="' . basename($filename) . '"');
-        header('X-Cache-Status: HIT-LOCAL-DISK');
-        ob_end_clean();
-        readfile($cache_file);
-        exit;
     }
 
-    $inbox = @imap_open($hostname, $username, $password, OP_READONLY, 1, array('DISABLE_AUTHENTICATOR' => 'GSSAPI'));
-    if ($inbox && $msgno > 0) {
-        $raw_attachment = @imap_fetchbody($inbox, $msgno, $part_no);
-        if (empty($raw_attachment) || strlen($raw_attachment) < 50) {
-            $raw_attachment = @imap_fetchbody($inbox, $msgno, "2");
-        }
-        if (empty($raw_attachment) || strlen($raw_attachment) < 50) {
-            $raw_attachment = @imap_fetchbody($inbox, $msgno, "1.2");
-        }
-
-        $decoded_attachment = base64_decode($raw_attachment, true);
-        if ($decoded_attachment === false || strlen($decoded_attachment) < 20) {
-            $decoded_attachment = quoted_printable_decode($raw_attachment);
-        }
-        if (empty($decoded_attachment)) {
-            $decoded_attachment = $raw_attachment;
-        }
-
-        @imap_close($inbox);
-
-        if (!empty($decoded_attachment)) {
-            @file_put_contents($cache_file, $decoded_attachment);
-
-            if ($ext === 'pdf') {
-                header('Content-Type: application/pdf');
-            } else if (in_array($ext, ['png', 'jpg', 'jpeg', 'gif'])) {
-                header('Content-Type: image/' . ($ext === 'jpg' ? 'jpeg' : $ext));
-            } else {
-                header('Content-Type: application/octet-stream');
+    // 2. Fuzzy disk search in cache_dir, attachments, and uploads/pdf/ if exact path not matched
+    if (!$found_file && !empty($base_clean)) {
+        $search_dirs = [
+            $cache_dir,
+            __DIR__ . '/attachments',
+            dirname(__DIR__) . '/attachments',
+            __DIR__ . '/public/attachments',
+            dirname(__DIR__) . '/public/attachments',
+            __DIR__ . '/uploads/pdf',
+            __DIR__ . '/uploads',
+            dirname(__DIR__) . '/uploads/pdf',
+            dirname(__DIR__) . '/uploads',
+            dirname(__DIR__) . '/public/uploads/pdf',
+            sys_get_temp_dir() . '/gmail_attachments'
+        ];
+        foreach ($search_dirs as $sdir) {
+            if (is_dir($sdir)) {
+                $dir_files = @scandir($sdir);
+                if ($dir_files) {
+                    foreach ($dir_files as $df) {
+                        if ($df === '.' || $df === '..') continue;
+                        $df_clean = preg_replace('/[^a-zA-Z0-9]/', '', pathinfo($df, PATHINFO_FILENAME));
+                        if (!empty($df_clean) && (strpos($df_clean, $base_clean) !== false || strpos($base_clean, $df_clean) !== false || (strlen($base_clean) > 8 && strpos($df, substr($safe_fn, 0, 15)) !== false))) {
+                            $full_df = $sdir . '/' . $df;
+                            if (is_file($full_df) && filesize($full_df) > 100) {
+                                $found_file = $full_df;
+                                break 2;
+                            }
+                        }
+                    }
+                }
             }
-
-            header('Content-Length: ' . strlen($decoded_attachment));
-            header('Content-Disposition: inline; filename="' . basename($filename) . '"');
-            header('X-Cache-Status: MISS-SAVED-TO-CACHE');
-            ob_end_clean();
-            echo $decoded_attachment;
-            exit;
         }
     }
+
+    // Helper to stream binary file
+    $streamFile = function($filePath, $displayFn, $fileExt, $cacheStatus = 'HIT-LOCAL-DISK') {
+        $mimes = [
+            'pdf' => 'application/pdf',
+            'png' => 'image/png',
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'gif' => 'image/gif',
+            'svg' => 'image/svg+xml',
+            'zip' => 'application/zip',
+            'txt' => 'text/plain'
+        ];
+        $contentType = isset($mimes[$fileExt]) ? $mimes[$fileExt] : 'application/octet-stream';
+        
+        while (ob_get_level() > 0) {
+            @ob_end_clean();
+        }
+
+        header('Access-Control-Allow-Origin: *');
+        header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+        header('Access-Control-Allow-Headers: Content-Type');
+        header('Content-Type: ' . $contentType);
+        header('Content-Length: ' . filesize($filePath));
+        header('Content-Disposition: inline; filename="' . rawurlencode(basename($displayFn)) . '"; filename*=UTF-8\'\'' . rawurlencode(basename($displayFn)));
+        header('X-Cache-Status: ' . $cacheStatus);
+        header('Cache-Control: public, max-age=86400');
+        readfile($filePath);
+        exit;
+    };
+
+    if ($found_file) {
+        $streamFile($found_file, $filename, $ext, 'HIT-LOCAL-DISK');
+    }
+
+    // 3. If not found on local disk, try IMAP download
+    $cache_file = $cache_dir . "/msg_{$msgno}_part_{$part_no}_{$safe_fn}";
+    $saved_attachment_path = null;
+
+    // 3a. Try PHP imap_open if extension is loaded
+    if ($msgno > 0 && function_exists('imap_open')) {
+        try {
+            $inbox = @imap_open($hostname, $username, $password, OP_READONLY, 1, array('DISABLE_AUTHENTICATOR' => 'GSSAPI'));
+            if ($inbox) {
+                $raw_attachment = function_exists('imap_fetchbody') ? @imap_fetchbody($inbox, $msgno, $part_no) : '';
+                if (empty($raw_attachment) || strlen($raw_attachment) < 50) {
+                    $raw_attachment = function_exists('imap_fetchbody') ? @imap_fetchbody($inbox, $msgno, "2") : '';
+                }
+                if (empty($raw_attachment) || strlen($raw_attachment) < 50) {
+                    $raw_attachment = function_exists('imap_fetchbody') ? @imap_fetchbody($inbox, $msgno, "1.2") : '';
+                }
+
+                $decoded_attachment = base64_decode($raw_attachment, true);
+                if ($decoded_attachment === false || strlen($decoded_attachment) < 20) {
+                    $decoded_attachment = function_exists('quoted_printable_decode') ? quoted_printable_decode($raw_attachment) : $raw_attachment;
+                }
+                if (empty($decoded_attachment)) {
+                    $decoded_attachment = $raw_attachment;
+                }
+
+                if (function_exists('imap_close')) {
+                    @imap_close($inbox);
+                }
+
+                if (!empty($decoded_attachment) && strlen($decoded_attachment) > 100) {
+                    @file_put_contents($cache_file, $decoded_attachment);
+                    $saved_attachment_path = $cache_file;
+                }
+            }
+        } catch (Throwable $e) {
+            // Gracefully catch any IMAP errors
+        }
+    }
+
+    // 3b. Socket-based IMAP fallback (Works universally in all cPanel / FTP shared PHP hosts without requiring ext-imap)
+    if (!$saved_attachment_path && !empty($username) && !empty($password)) {
+        try {
+            $imap_host = "imap.gmail.com";
+            $imap_port = 993;
+            $sock = @fsockopen("ssl://{$imap_host}", $imap_port, $sErrNo, $sErrStr, 10);
+            if ($sock) {
+                stream_set_timeout($sock, 15);
+                $sSend = function($cmd) use ($sock) { fwrite($sock, $cmd . "\r\n"); };
+                $sReadTag = function($tag) use ($sock) {
+                    $buf = "";
+                    while (!feof($sock)) {
+                        $line = fgets($sock, 4096);
+                        if ($line === false) break;
+                        $buf .= $line;
+                        if (strpos($line, $tag . " ") === 0) break;
+                    }
+                    return $buf;
+                };
+
+                fgets($sock, 1024); // banner
+                $sSend("SK1 LOGIN " . $username . " \"" . str_replace(['\\', '"'], ['\\\\', '\\"'], $password) . "\"");
+                $lRes = $sReadTag("SK1");
+
+                if (strpos($lRes, "SK1 OK") !== false) {
+                    $sSend("SK2 SELECT INBOX");
+                    $sReadTag("SK2");
+
+                    $targetMsg = $msgno;
+                    $cleanFn = preg_replace('/[^a-zA-Z0-9]/', '', pathinfo($filename, PATHINFO_FILENAME));
+                    if (strlen($cleanFn) >= 4) {
+                        $searchTerm = substr($cleanFn, 0, 24);
+                        $sSend("SK3 SEARCH TEXT \"{$searchTerm}\"");
+                        $srchRes = $sReadTag("SK3");
+                        if (preg_match('/\* SEARCH\s+([0-9\s]+)/i', $srchRes, $sm)) {
+                            $sNums = array_filter(explode(" ", trim($sm[1])));
+                            if (!empty($sNums)) {
+                                $targetMsg = (int)end($sNums);
+                            }
+                        }
+                    }
+
+                    if ($targetMsg > 0) {
+                        $partsToTry = [$part_no, 2, "1.2", 1];
+                        $partsToTry = array_unique(array_filter($partsToTry));
+                        $skTagIdx = 4;
+
+                        foreach ($partsToTry as $pt) {
+                            $skTag = "SK" . ($skTagIdx++);
+                            $sSend("{$skTag} FETCH {$targetMsg} BODY[{$pt}]");
+                            $firstLine = fgets($sock);
+                            if ($firstLine && preg_match('/\{(\d+)\}\s*$/', $firstLine, $lm)) {
+                                $litBytes = (int)$lm[1];
+                                $rawLit = "";
+                                while ($litBytes > 0 && !feof($sock)) {
+                                    $chunk = fread($sock, min(8192, $litBytes));
+                                    if ($chunk === false || strlen($chunk) === 0) break;
+                                    $rawLit .= $chunk;
+                                    $litBytes -= strlen($chunk);
+                                }
+                                $sReadTag($skTag); // drain trailer
+                                $decData = base64_decode(trim($rawLit), true);
+                                if (!$decData || strlen($decData) < 50) {
+                                    $decData = quoted_printable_decode(trim($rawLit));
+                                }
+                                if ($decData && strlen($decData) > 100) {
+                                    @file_put_contents($cache_file, $decData);
+                                    $permDir = __DIR__ . '/attachments';
+                                    if (!is_dir($permDir)) @mkdir($permDir, 0755, true);
+                                    @file_put_contents($permDir . '/' . $safe_fn, $decData);
+                                    $saved_attachment_path = $cache_file;
+                                    break;
+                                }
+                            } else {
+                                $sReadTag($skTag);
+                            }
+                        }
+                    }
+                    $sSend("SK_QUIT LOGOUT");
+                }
+                @fclose($sock);
+            }
+        } catch (Throwable $se) {
+            // Socket fallback safe fail
+        }
+    }
+
+    if ($saved_attachment_path && file_exists($saved_attachment_path) && filesize($saved_attachment_path) > 100) {
+        $streamFile($saved_attachment_path, $filename, $ext, 'MISS-SAVED-TO-CACHE');
+    }
+
+    // 4. File not found: Return clean 404 text or SVG placeholder, NEVER dump the RFQs list JSON!
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+    http_response_code(404);
+    header('Access-Control-Allow-Origin: *');
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Attachment Not Found</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#94a3b8;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;padding:20px;box-sizing:border-box}.box{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:32px;max-width:440px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.5)}.icon{font-size:40px;margin-bottom:12px}h2{color:#f8fafc;font-size:16px;margin:0 0 8px 0}p{font-size:12px;margin:0 0 16px 0;line-height:1.5}code{display:block;background:#0f172a;padding:8px;border-radius:6px;font-size:11px;color:#38bdf8;word-break:break-all;margin-bottom:16px}</style></head><body><div class="box"><div class="icon">📎</div><h2>File Preview Not Available</h2><p>This attachment has not been downloaded to the server yet or the email session was refreshed.</p><code>' . htmlspecialchars($filename) . '</code><p style="font-size:11px;color:#64748b">Please click "Download File to Server" in the RFQ Inbox or check the email in Gmail.</p></div></body></html>';
+    exit;
 }
 
 header('Content-Type: application/json; charset=utf-8');
@@ -94,13 +322,48 @@ header('Content-Type: application/json; charset=utf-8');
 function formatEmailBodyText($text) {
     if (empty($text)) return '';
 
+    // 1. If text contains base64 MIME blocks (like Outlook / Exchange MIME parts), decode them!
+    $lines = explode("\n", $text);
+    $processed = [];
+    $b64Buffer = [];
+
+    $flushB64 = function() use (&$b64Buffer, &$processed) {
+        if (empty($b64Buffer)) return;
+        $combined = implode("", $b64Buffer);
+        $b64Buffer = [];
+        $decoded = @base64_decode($combined, true);
+        if ($decoded !== false && strlen($decoded) > 10 && preg_match('/[a-zA-Z0-9\s]{6,}/', $decoded)) {
+            $processed[] = $decoded;
+        }
+    };
+
+    foreach ($lines as $line) {
+        $trimmed = trim($line);
+        // Base64 line check (4+ chars, base64 alphabet, no space)
+        if (strlen($trimmed) >= 4 && preg_match('/^[A-Za-z0-9+\/]+=*$/', $trimmed)) {
+            $b64Buffer[] = $trimmed;
+        } else {
+            $flushB64();
+            $processed[] = $line;
+        }
+    }
+    $flushB64();
+    $text = implode("\n", $processed);
+
+    // 2. Remove binary inline images and long base64 lines
     $text = preg_replace('/iVBORw0KGgo[A-Za-z0-9+\/=\s]+/', '', $text);
     $text = preg_replace('/[A-Za-z0-9+\/]{120,}[=]{0,2}/', '', $text);
 
+    // 3. Remove MIME boundaries and headers
     $text = preg_replace('/--[0-9a-fA-F]{12,}(--)?/i', '', $text);
     $text = preg_replace('/--[A-Za-z0-9\-_]{12,}(--)?/i', '', $text);
+    $text = preg_replace('/boundary="[^"]*"/i', '', $text);
+    $text = preg_replace('/boundary=[a-zA-Z0-9-@._]+/i', '', $text);
 
     $text = preg_replace('/Content-Disposition:[^\n]+/i', '', $text);
+    $text = preg_replace('/Content-Description:[^\n]+/i', '', $text);
+    $text = preg_replace('/creation-date="[^"]*";?/i', '', $text);
+    $text = preg_replace('/modification-date="[^"]*";?/i', '', $text);
     $text = preg_replace('/Content-ID:[^\n]+/i', '', $text);
     $text = preg_replace('/Content-Type:[^\n]+/i', '', $text);
     $text = preg_replace('/Content-Transfer-Encoding:[^\n]+/i', '', $text);
@@ -110,10 +373,32 @@ function formatEmailBodyText($text) {
         $text = quoted_printable_decode($text);
     }
 
+    // 4. Strip style, script and format tags
+    $text = preg_replace('/<style[\s\S]*?<\/style>/i', '', $text);
+    $text = preg_replace('/<script[\s\S]*?<\/script>/i', '', $text);
     $text = preg_replace('/<br\s*\/?>/i', "\n", $text);
     $text = preg_replace('/<\/p>/i', "\n\n", $text);
     $text = strip_tags($text);
     $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+    // 5. Remove leftover raw base64 snippets or boundary debris lines
+    $finalLines = [];
+    foreach (explode("\n", $text) as $l) {
+        $tr = trim($l);
+        if ($tr === '') {
+            $finalLines[] = '';
+            continue;
+        }
+        if (preg_match('/^[A-Za-z0-9+\/]{4,}={0,2}$/', $tr) && strpos($tr, ' ') === false) {
+            continue;
+        }
+        if (preg_match('/^--[A-Za-z0-9-_]+(--)?$/', $tr) || strpos($tr, '_000_') === 0) {
+            continue;
+        }
+        $finalLines[] = $l;
+    }
+    $text = implode("\n", $finalLines);
+    $text = preg_replace("/\n{3,}/", "\n\n", $text);
 
     return trim($text);
 }
@@ -156,7 +441,7 @@ function getEmailAttachmentsIMAP($inbox, $email_number, $raw_body) {
                         'filename' => $filename,
                         'filesize' => $bytes . ' KB',
                         'filetype' => $ext ?: 'pdf',
-                        'url' => "http://localhost:8000/api_fetch_live_gmail.php?preview=1&msgno={$email_number}&part={$part_num}&ext={$ext}&fn=" . urlencode($filename)
+                        'url' => "/api_fetch_live_gmail.php?preview=1&msgno={$email_number}&part={$part_num}&ext={$ext}&fn=" . urlencode($filename)
                     ];
                 }
             }
@@ -176,7 +461,7 @@ function getEmailAttachmentsIMAP($inbox, $email_number, $raw_body) {
                     'filename' => $fn,
                     'filesize' => rand(600, 2800) . ' KB',
                     'filetype' => $ext,
-                    'url' => "http://localhost:8000/api_fetch_live_gmail.php?preview=1&msgno={$email_number}&part={$part_num}&ext={$ext}&fn=" . urlencode($fn)
+                    'url' => "/api_fetch_live_gmail.php?preview=1&msgno={$email_number}&part={$part_num}&ext={$ext}&fn=" . urlencode($fn)
                 ];
             }
         }
@@ -365,8 +650,8 @@ function appendGoogleDriveAttachments(&$attachments, $message_body, $rfq_id) {
         
         $downloaded = file_exists($dest_path);
         $local_url = ($clean_id > 0)
-            ? "http://localhost:8000/file_inbox/rfq-{$clean_id}/{$local_filename}"
-            : "http://localhost:8000/file_inbox/live/{$local_filename}";
+            ? "/file_inbox/rfq-{$clean_id}/{$local_filename}"
+            : "/file_inbox/live/{$local_filename}";
         
         // ── AUTO-DOWNLOAD: silently attempt to cache if not yet downloaded ──────
         if (!$downloaded) {
@@ -399,8 +684,10 @@ function appendGoogleDriveAttachments(&$attachments, $message_body, $rfq_id) {
                     curl_close($ch2);
                 }
                 
-                // Only save if it looks like a real file (not HTML error page)
-                if ($http_code === 200 && !empty($data) && !(strpos($data, '<html') !== false && strpos($data, 'Access Denied') !== false)) {
+                // Only save if it looks like a real binary file (not HTML login / error page)
+                $is_html_err = (strpos($data, '<html') !== false || strpos($data, '<!DOCTYPE') !== false) && 
+                               (strpos($data, 'Access Denied') !== false || strpos($data, 'accounts.google.com') !== false || strpos($data, 'ServiceLogin') !== false || strpos($data, 'You need access') !== false || strpos($data, 'permission') !== false);
+                if ($http_code === 200 && !empty($data) && !$is_html_err && strlen($data) > 100) {
                     @file_put_contents($dest_path, $data);
                     $downloaded = file_exists($dest_path);
                 }
@@ -469,64 +756,187 @@ function classifyEmailWithGeminiWithRetry($subject, $body, $attachments, $key_li
             . "  \"item_requested\": \"...\"\n"
             . "}";
 
-    $max_attempts = min(3, count($key_list));
+    $candidate_models = function_exists('getGeminiActiveModels') ? getGeminiActiveModels($key_list) : ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.6-flash'];
+    $max_attempts = min(5, count($key_list));
     $errors = [];
 
     for ($attempt = 0; $attempt < $max_attempts; $attempt++) {
         $api_key = $key_list[$attempt];
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . urlencode($api_key);
-        $payload = [
-            'contents' => [
-                [
-                    'parts' => [
-                        ['text' => $prompt]
-                    ]
-                ]
-            ],
-            'generationConfig' => [
-                'responseMimeType' => 'application/json'
-            ]
-        ];
+        $key_suffix = substr($api_key, -6);
+        $success = false;
 
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        $response = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curl_err = curl_error($ch);
-        curl_close($ch);
-
-        if ($http_code === 200 && !empty($response)) {
-            $res_json = json_decode($response, true);
-            $text = $res_json['candidates'][0]['content']['parts'][0]['text'] ?? '';
-            $clean_text = trim($text);
-            $parsed = json_decode($clean_text, true);
-            if ($parsed && isset($parsed['classification'])) {
-                return [
-                    'classification' => $parsed['classification'],
-                    'item_requested' => $parsed['item_requested'] ?? null,
-                    'verified' => 1,
-                    'error' => null
+        // 🚀 1. Check if Key is a Groq API Key (starts with gsk_)
+        if (strpos($api_key, 'gsk_') === 0) {
+            $groq_url = "https://api.groq.com/openai/v1/chat/completions";
+            $groq_models = function_exists('getGroqActiveModels') ? getGroqActiveModels([$api_key]) : ['openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-120b'];
+            
+            foreach ($groq_models as $g_model) {
+                $groq_payload = [
+                    'model' => $g_model,
+                    'messages' => [
+                        ['role' => 'system', 'content' => "You are an AI Email Classifier. You MUST respond with ONLY valid JSON with keys: classification ('client_rfq' or 'junk'), reason, item_requested."],
+                        ['role' => 'user', 'content' => $prompt]
+                    ],
+                    'temperature' => 0.1,
+                    'response_format' => ['type' => 'json_object']
                 ];
+
+                $ch = curl_init($groq_url);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($groq_payload));
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Authorization: Bearer ' . $api_key,
+                    'Content-Type: application/json',
+                    'User-Agent: ERP-ABM/1.0'
+                ]);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+                curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+                $response = curl_exec($ch);
+                $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curl_err = curl_error($ch);
+                curl_close($ch);
+
+                if ($http_code === 200 && !empty($response)) {
+                    $res_json = json_decode($response, true);
+                    $text = $res_json['choices'][0]['message']['content'] ?? '';
+                    $clean_text = trim($text);
+                    $parsed = json_decode($clean_text, true);
+                    if ($parsed && isset($parsed['classification'])) {
+                        return [
+                            'classification' => $parsed['classification'],
+                            'item_requested' => $parsed['item_requested'] ?? null,
+                            'verified' => 1,
+                            'error' => null
+                        ];
+                    }
+                }
+
+                $err_msg = "Attempt " . ($attempt + 1) . " (Groq Key .." . $key_suffix . ", Model " . $g_model . ") failed. Code: $http_code. Curl Err: $curl_err.";
+                if (!empty($response)) {
+                    $err_msg .= " Resp: " . substr($response, 0, 150);
+                }
+                $errors[] = $err_msg;
             }
+            continue;
         }
 
-        // If failed, record error and retry
-        $err_msg = "Attempt " . ($attempt + 1) . " (Key Ending " . substr($api_key, -6) . ") failed. Code: $http_code. Curl Err: $curl_err.";
-        if (!empty($response)) {
-            $err_msg .= " Resp: " . substr($response, 0, 150);
+        // 🌐 1.5. Check if Key is an OpenRouter API Key (starts with sk-or-)
+        if (strpos($api_key, 'sk-or-') === 0) {
+            $or_url = "https://openrouter.ai/api/v1/chat/completions";
+            $or_models = function_exists('getOpenRouterActiveModels') ? getOpenRouterActiveModels([$api_key]) : ['liquid/lfm-2.5-2.6b:free', 'nvidia/nemotron-3.5-lightning:free'];
+            
+            foreach ($or_models as $o_model) {
+                $or_payload = [
+                    'model' => $o_model,
+                    'messages' => [
+                        ['role' => 'system', 'content' => "You are an AI Email Classifier. You MUST respond with ONLY valid JSON with keys: classification ('client_rfq' or 'junk'), reason, item_requested."],
+                        ['role' => 'user', 'content' => $prompt]
+                    ],
+                    'temperature' => 0.1,
+                    'response_format' => ['type' => 'json_object']
+                ];
+
+                $ch = curl_init($or_url);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($or_payload));
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Authorization: Bearer ' . $api_key,
+                    'Content-Type: application/json',
+                    'HTTP-Referer: https://erp.abmalaya.com',
+                    'X-Title: ABM ERP'
+                ]);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+                curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                $response = curl_exec($ch);
+                $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curl_err = curl_error($ch);
+                curl_close($ch);
+
+                if ($http_code === 200 && !empty($response)) {
+                    $res_json = json_decode($response, true);
+                    $text = $res_json['choices'][0]['message']['content'] ?? '';
+                    $clean_text = trim($text);
+                    $parsed = json_decode($clean_text, true);
+                    if ($parsed && isset($parsed['classification'])) {
+                        return [
+                            'classification' => $parsed['classification'],
+                            'item_requested' => $parsed['item_requested'] ?? null,
+                            'verified' => 1,
+                            'error' => null
+                        ];
+                    }
+                }
+
+                $err_msg = "Attempt " . ($attempt + 1) . " (OpenRouter Key .." . $key_suffix . ", Model " . $o_model . ") failed. Code: $http_code. Curl Err: $curl_err.";
+                if (!empty($response)) {
+                    $err_msg .= " Resp: " . substr($response, 0, 150);
+                }
+                $errors[] = $err_msg;
+            }
+            continue;
         }
-        $errors[] = $err_msg;
+
+        // 🌟 2. Standard Gemini API Key Path
+        foreach ($candidate_models as $model_name) {
+            $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $model_name . ":generateContent?key=" . urlencode($api_key);
+            $payload = [
+                'contents' => [
+                    [
+                        'parts' => [
+                            ['text' => $prompt]
+                        ]
+                    ]
+                ],
+                'generationConfig' => [
+                    'responseMimeType' => 'application/json'
+                ]
+            ];
+
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+            $response = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curl_err = curl_error($ch);
+            curl_close($ch);
+
+            if ($http_code === 200 && !empty($response)) {
+                $res_json = json_decode($response, true);
+                $text = $res_json['candidates'][0]['content']['parts'][0]['text'] ?? '';
+                $clean_text = trim($text);
+                $parsed = json_decode($clean_text, true);
+                if ($parsed && isset($parsed['classification'])) {
+                    return [
+                        'classification' => $parsed['classification'],
+                        'item_requested' => $parsed['item_requested'] ?? null,
+                        'verified' => 1,
+                        'error' => null
+                    ];
+                }
+            }
+
+            if ($http_code === 404) {
+                // Model not found for this version, try next candidate model immediately
+                continue;
+            }
+
+            // If rate limited or other error, record error and break to try next API key
+            $err_msg = "Attempt " . ($attempt + 1) . " (Key Ending " . $key_suffix . ", Model " . $model_name . ") failed. Code: $http_code. Curl Err: $curl_err.";
+            if (!empty($response)) {
+                $err_msg .= " Resp: " . substr($response, 0, 150);
+            }
+            $errors[] = $err_msg;
+            break;
+        }
 
         if ($attempt < $max_attempts - 1) {
-            if ($http_code === 429) {
-                sleep(10); // Wait 10 seconds for rate limit to clear
-            } else {
-                sleep(2); // Wait 2 seconds before retry
-            }
+            usleep(500000); // 0.5s wait before rotating to next key
         }
     }
 
@@ -540,8 +950,16 @@ function classifyEmailWithGeminiWithRetry($subject, $body, $attachments, $key_li
 try {
     require_once __DIR__ . '/db_connect.php';
 
+    // Check Master AI Switch in api_credentials table
+    $ai_master_res = ($db_conn && !$db_conn->connect_error) ? $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key = 'AI_SYSTEM_ENABLED' LIMIT 1") : null;
+    $ai_system_enabled = true; // default enabled
+    if ($ai_master_res && $ai_master_res->num_rows > 0) {
+        $row_m = $ai_master_res->fetch_assoc();
+        $ai_system_enabled = ($row_m['credential_value'] === 'true' || $row_m['credential_value'] === '1' || $row_m['credential_value'] === 'active');
+    }
+
     $key_list = [];
-    if ($db_conn && !$db_conn->connect_error) {
+    if ($ai_system_enabled && $db_conn && !$db_conn->connect_error) {
         $res_keys = $db_conn->query("SELECT api_key FROM gemini_api_keys WHERE status = 'active' AND pool_type = 'inbox' ORDER BY id ASC");
         if ($res_keys && $res_keys->num_rows > 0) {
             while ($row_key = $res_keys->fetch_assoc()) {
@@ -553,14 +971,18 @@ try {
         }
     }
     $key_list = array_values(array_unique($key_list));
-    $active_gemini_key = !empty($key_list) ? $key_list[array_rand($key_list)] : getEnvValue('GEMINI_API_KEY', '');
+    // STRICT DEV QUOTA PROTECTION: When AI is disabled or key_list is empty, NEVER fallback to getEnvValue('GEMINI_API_KEY')!
+    $active_gemini_key = (!empty($key_list) && $ai_system_enabled) ? $key_list[array_rand($key_list)] : '';
 
-    $start_date_limit = '';
+    $start_date_limit = '2026-08-27';
     if ($db_conn && !$db_conn->connect_error) {
-        $res_start = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key IN ('INBOX_RULE_START_DATE', 'imap_start_date', 'info_start_date') AND credential_value != '' ORDER BY id DESC LIMIT 1");
+        $res_start = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key IN ('INBOX_RULE_START_DATE', 'CLIENT_CHAT_START_DATE', 'CLIENT_EMAIL_START_DATE', 'imap_start_date', 'info_start_date') AND credential_value != '' ORDER BY FIELD(credential_key, 'INBOX_RULE_START_DATE', 'CLIENT_CHAT_START_DATE', 'CLIENT_EMAIL_START_DATE', 'imap_start_date', 'info_start_date') ASC LIMIT 1");
         if ($res_start && $res_start->num_rows > 0) {
             $row_start = $res_start->fetch_assoc();
-            $start_date_limit = trim($row_start['credential_value']);
+            $val = trim($row_start['credential_value']);
+            if (!empty($val)) {
+                $start_date_limit = $val;
+            }
         }
     }
 
@@ -632,12 +1054,12 @@ try {
                     $up_stmt->close();
                 }
 
-                if ($ai_verified === 1 && $ai_classification === 'client_rfq') {
-                    $db_conn->query("UPDATE rfq_requests SET status = 'in_progress' WHERE rfq_number = '" . $db_conn->real_escape_string($p_rfq_num) . "'");
-                    $rfq_res = $db_conn->query("SELECT * FROM rfq_requests WHERE rfq_number = '" . $db_conn->real_escape_string($p_rfq_num) . "'");
+                if ($ai_verified === 1 && $ai_classification === 'client_rfq' && $p_row['status'] !== 'deleted') {
+                    $db_conn->query("UPDATE rfq_requests SET status = 'in_progress' WHERE rfq_number = '" . $db_conn->real_escape_string($p_rfq_num) . "' AND status != 'deleted'");
+                    $rfq_res = $db_conn->query("SELECT * FROM rfq_requests WHERE rfq_number = '" . $db_conn->real_escape_string($p_rfq_num) . "' AND status != 'deleted'");
                     if ($rfq_res && $rfq_res->num_rows > 0) {
                         $rfq_row = $rfq_res->fetch_assoc();
-                        require_once __DIR__ . '/../daemon/scan_ai.php';
+                        require_once __DIR__ . '/auto_quotation_helper.php';
                         $items = [];
                         if (!empty($item_requested)) {
                             $items[] = ['description' => $item_requested, 'quantity' => 1.00, 'unit' => 'Unit'];
@@ -667,83 +1089,140 @@ try {
         exit;
     }
 
-    $is_sync = isset($_GET['sync']) && $_GET['sync'] == '1';
+    $is_sync = (isset($_GET['sync']) && $_GET['sync'] == '1') || (isset($_GET['cron']) && $_GET['cron'] == '1') || defined('MASTER_CRON_MODE');
 
-    // ⚡ INSTANT FAST RESPONSE (< 20ms): Query MySQL Cache First if NOT syncing
+    // ⚡ INSTANT FAST RESPONSE (< 5ms): Query MySQL Cache First if NOT syncing
     if (!$is_sync && $db_conn && !$db_conn->connect_error) {
-        // Sync RFQ statuses based on linked quotations
-        $db_conn->query("UPDATE rfq_requests r 
-                         INNER JOIN quotations q ON q.rfq_id = r.id
-                         SET r.status = CASE 
-                             WHEN q.status = 'Approved' OR q.status = 'acc' THEN 'deal'
-                             WHEN q.status = 'Sent' OR q.status = 'done_send' THEN 'penawaran_terkirim'
-                             ELSE 'diproses'
-                         END");
+        $query_where = "WHERE r.created_at >= '" . $db_conn->real_escape_string($start_date_limit) . " 00:00:00'";
+        $all_replies = [];
+        $chk_rep = $db_conn->query("SHOW TABLES LIKE 'rfq_replies'");
+        if ($chk_rep && $chk_rep->num_rows > 0) {
+            $r_res = $db_conn->query("SELECT * FROM rfq_replies ORDER BY id ASC");
+            if ($r_res) {
+                while ($r_row = $r_res->fetch_assoc()) {
+                    $rep_obj = [
+                        'id' => (int)$r_row['id'],
+                        'body' => $r_row['reply_body'],
+                        'date' => date('Y-m-d H:i', strtotime($r_row['created_at'])),
+                        'sender' => $r_row['reply_sender'] ?: 'sales@abmalaya.com',
+                        'quotation_id' => $r_row['quotation_id'] ?? null,
+                        'quotation_number' => $r_row['quotation_number'] ?? null,
+                        'attachment_file' => $r_row['attachment_file'] ?? null,
+                        'has_file' => !empty($r_row['attachment_file'])
+                    ];
+                    $r_id = (int)($r_row['rfq_id'] ?? 0);
+                    $r_num = trim($r_row['rfq_number'] ?? '');
+                    if ($r_id > 0) $all_replies['id_' . $r_id][] = $rep_obj;
+                    if (!empty($r_num)) $all_replies['num_' . $r_num][] = $rep_obj;
+                }
+            }
+        }
 
-        $res = $db_conn->query("SELECT * FROM rfq_requests ORDER BY id DESC LIMIT 200");
+        $res = $db_conn->query("SELECT r.*, COALESCE(q.status, r.status, 'masuk') AS status, q.id AS quotation_id, q.quotation_number, q.status AS quotation_status, q.approved_by, q.grand_total AS quotation_grand_total FROM rfq_requests r LEFT JOIN quotations q ON (q.rfq_id = r.id OR q.rfq_id = r.rfq_number) {$query_where} ORDER BY r.id DESC LIMIT 200");
         if ($res && $res->num_rows > 0) {
             $data = [];
             while ($row = $res->fetch_assoc()) {
                 $attachments = [];
-                if (preg_match('/(requisition|PD-ENG|RO WATER|specification|quotation)/i', $row['subject'] . ' ' . $row['message_body'])) {
+                
+                // 1. Real attachments stored in database
+                if (!empty($row['attachment_url']) && $row['attachment_url'] !== 'NONE') {
+                    $att_url = trim($row['attachment_url']);
+                    $fn = 'Document.pdf';
+                    $ext = 'pdf';
+                    if (preg_match('/fn=([^&]+)/i', $att_url, $m_fn)) {
+                        $fn = urldecode($m_fn[1]);
+                        $ext = strtolower(pathinfo($fn, PATHINFO_EXTENSION)) ?: 'pdf';
+                    } else {
+                        $fn = basename($att_url);
+                        $ext = strtolower(pathinfo($fn, PATHINFO_EXTENSION)) ?: 'pdf';
+                    }
                     $attachments[] = [
-                        'id' => 'att-fast-' . $row['id'],
-                        'filename' => 'PD-ENG-2026-059_Requisition_Spec.pdf',
-                        'filesize' => '2.4 MB',
-                        'filetype' => 'pdf',
-                        'url' => "http://localhost:8000/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
+                        'id' => 'att-db-' . $row['id'],
+                        'filename' => $fn,
+                        'filesize' => 'PDF Doc',
+                        'filetype' => $ext,
+                        'url' => $att_url
                     ];
                 }
+
+                // 2. Google Drive attachments in body
+                appendGoogleDriveAttachments($attachments, $row['message_body'], $row['id']);
 
                 $ai_verified = isset($row['ai_verified']) ? (int)$row['ai_verified'] : 0;
                 $ai_classification = isset($row['ai_classification']) ? $row['ai_classification'] : '';
 
                 $labels = [];
-                if ($ai_verified === 1) {
+                if (!empty($ai_classification) || $ai_verified === 1) {
                     if ($ai_classification === 'client_rfq') {
                         $labels[] = 'Primary RFQ';
                         $labels[] = 'AI: Requisition';
+                    } elseif ($ai_classification === 'general_inquiry') {
+                        $labels[] = 'General Inquiry';
+                        $labels[] = 'AI: General Inquiry';
                     } else {
                         $labels[] = 'AI: Iklan / Sampah';
                     }
                 } else {
-                    if (!empty($active_gemini_key) || !empty($gemini_key)) {
-                        $labels[] = 'Waiting AI Detection';
-                    } else {
-                        $labels[] = 'Primary RFQ';
-                    }
-                    if (count($attachments) > 0) {
-                        $labels[] = 'Has File';
+                    $labels[] = 'Waiting AI Detection';
+                }
+                if (count($attachments) > 0) {
+                    $labels[] = 'Has File';
+                }
+
+                $clean_body = formatEmailBodyText($row['message_body']);
+
+                $is_acc = false;
+                $q_id = !empty($row['quotation_id']) ? $row['quotation_id'] : null;
+                if (!empty($q_id)) {
+                    $q_st = strtolower($row['quotation_status'] ?? '');
+                    if (!empty($row['approved_by']) || in_array($q_st, ['approved', 'acc', 'disetujui', 'ready_send', 'done_send', 'penawaran_terkirim', 'sent', 'terkirim'])) {
+                        $is_acc = true;
                     }
                 }
 
                 $data[] = [
                     'id' => str_replace('RFQ-', 'GMAIL-LIVE-', $row['rfq_number']),
+                    'db_id' => (int)$row['id'],
+                    'rfq_number' => $row['rfq_number'],
                     'sender_name' => $row['client_name'] ?: 'Gmail Client',
                     'sender_email' => $row['client_email'] ?: 'abmalayaindustry@gmail.com',
                     'recipient_email' => isset($row['recipient_email']) && !empty($row['recipient_email']) ? $row['recipient_email'] : 'abmalayaindustry@gmail.com',
                     'company' => $row['client_company'] ?: $row['client_name'],
+                    'client_company' => $row['client_company'] ?? '',
                     'phone' => '',
                     'subject' => $row['subject'],
-                    'message_body' => $row['message_body'],
-                    'original_body' => $row['message_body'],
-                    'item_requested' => $row['item_requested'] ?: extractRealRequestedItem($row['subject'], $row['message_body']),
+                    'message_body' => $clean_body,
+                    'original_body' => $clean_body,
+                    'item_requested' => $row['item_requested'] ?: extractRealRequestedItem($row['subject'], $clean_body),
                     'quantity_requested' => '1 Package',
-                    'budget_estimate' => extractRealBudgetEstimate($row['message_body']),
+                    'budget_estimate' => extractRealBudgetEstimate($clean_body),
                     'date_received' => date('Y-m-d H:i', strtotime($row['created_at'])),
                     'status' => $row['status'] ?: 'masuk',
                     'ai_verified' => $ai_verified,
                     'ai_classification' => $ai_classification,
                     'ai_error' => isset($row['ai_error']) ? $row['ai_error'] : null,
+                    'quotation_id' => $q_id,
+                    'quotation_number' => $row['quotation_number'] ?? null,
+                    'quotation_status' => $row['quotation_status'] ?? null,
+                    'approved_by' => $row['approved_by'] ?? null,
+                    'is_acc_approved' => $is_acc,
+                    'quotation_grand_total' => isset($row['quotation_grand_total']) ? (float)$row['quotation_grand_total'] : 0.0,
                     'labels' => $labels,
                     'attachments' => $attachments,
-                    'replies' => !empty($row['reply_body']) ? [
+                    'reply_body' => $row['reply_body'] ?? null,
+                    'reply_date' => $row['reply_date'] ?? null,
+                    'reply_sender' => $row['reply_sender'] ?? null,
+                    'is_replied' => (!empty($row['reply_body']) || (isset($all_replies['id_' . (int)$row['id']]) && count($all_replies['id_' . (int)$row['id']]) > 0) || (isset($all_replies['num_' . trim($row['rfq_number'])]) && count($all_replies['num_' . trim($row['rfq_number'])]) > 0) || in_array($row['status'], ['penawaran_terkirim', 'done_send', 'deal', 'sent'])),
+                    'replies' => !empty($row['id']) && isset($all_replies['id_' . (int)$row['id']]) ? $all_replies['id_' . (int)$row['id']] : (!empty($row['rfq_number']) && isset($all_replies['num_' . trim($row['rfq_number'])]) ? $all_replies['num_' . trim($row['rfq_number'])] : (!empty($row['reply_body']) ? [
                         [
+                            'id' => (int)$row['id'],
                             'body' => $row['reply_body'],
-                            'date' => $row['reply_date'],
-                            'sender' => $row['reply_sender'] ?: ($row['recipient_email'] ?: 'abmalayaindustry@gmail.com')
+                            'date' => $row['reply_date'] ?: $row['created_at'],
+                            'sender' => $row['reply_sender'] ?: ($row['recipient_email'] ?: 'sales@abmalaya.com'),
+                            'quotation_id' => $row['quotation_id'] ?? null,
+                            'quotation_number' => $row['quotation_number'] ?? null
                         ]
-                    ] : []
+                    ] : []))
                 ];
             }
 
@@ -762,15 +1241,8 @@ try {
     $saved_statuses = [];
     $saved_replies = [];
     if ($db_conn && !$db_conn->connect_error) {
-        $db_conn->query("UPDATE rfq_requests r 
-                         INNER JOIN quotations q ON q.rfq_id = r.id
-                         SET r.status = CASE 
-                             WHEN q.status = 'Approved' OR q.status = 'acc' THEN 'deal'
-                             WHEN q.status = 'Sent' OR q.status = 'done_send' THEN 'penawaran_terkirim'
-                             ELSE 'diproses'
-                         END
-                         WHERE r.status != 'deleted'");
-        $st_res = $db_conn->query("SELECT id, rfq_number, status, subject, client_email, recipient_email, reply_body, reply_date, reply_sender FROM rfq_requests");
+
+        $st_res = $db_conn->query("SELECT r.id, r.rfq_number, COALESCE(q.status, 'masuk') AS status, r.subject, r.client_email, r.recipient_email, r.reply_body, r.reply_date, r.reply_sender FROM rfq_requests r LEFT JOIN quotations q ON q.rfq_id = r.id");
         if ($st_res && $st_res->num_rows > 0) {
             while ($s_row = $st_res->fetch_assoc()) {
                 $status_val = $s_row['status'];
@@ -794,9 +1266,121 @@ try {
     }
 
     // 🔄 LIVE GMAIL IMAP SYNC PATH
-    $inbox = @imap_open($hostname, $username, $password, OP_READONLY, 1, array('DISABLE_AUTHENTICATOR' => 'GSSAPI'));
+    $inbox = null;
+    if (function_exists('imap_open')) {
+        try {
+            $inbox = @imap_open($hostname, $username, $password, OP_READONLY, 1, array('DISABLE_AUTHENTICATOR' => 'GSSAPI'));
+        } catch (Throwable $e) {
+            $inbox = null;
+        }
+    }
     if (!$inbox) {
-        throw new Exception('Cannot connect to Gmail: ' . imap_last_error());
+        // Fallback gracefully to DB cache if IMAP connection fails or times out
+        if ($db_conn && !$db_conn->connect_error) {
+            $query_where = "WHERE r.created_at >= '" . $db_conn->real_escape_string($start_date_limit) . " 00:00:00'";
+            $res = $db_conn->query("SELECT r.*, COALESCE(q.status, 'masuk') AS status FROM rfq_requests r LEFT JOIN quotations q ON q.rfq_id = r.id {$query_where} ORDER BY r.id DESC LIMIT 200");
+            if ($res && $res->num_rows > 0) {
+                $data = [];
+                while ($row = $res->fetch_assoc()) {
+                    $attachments = [];
+                    appendGoogleDriveAttachments($attachments, $row['message_body'], $row['id']);
+                    $data[] = [
+                        'id' => str_replace('RFQ-', 'GMAIL-LIVE-', $row['rfq_number']),
+                        'db_id' => (int)$row['id'],
+                        'rfq_number' => $row['rfq_number'],
+                        'sender_name' => $row['client_name'] ?: 'Gmail Client',
+                        'sender_email' => $row['client_email'] ?: 'abmalayaindustry@gmail.com',
+                        'recipient_email' => isset($row['recipient_email']) && !empty($row['recipient_email']) ? $row['recipient_email'] : 'abmalayaindustry@gmail.com',
+                        'company' => $row['client_company'] ?: $row['client_name'],
+                        'client_company' => $row['client_company'] ?? '',
+                        'phone' => '',
+                        'subject' => $row['subject'],
+                        'message_body' => $row['message_body'],
+                        'original_body' => $row['message_body'],
+                        'item_requested' => $row['item_requested'] ?: extractRealRequestedItem($row['subject'], $row['message_body']),
+                        'quantity_requested' => '1 Package',
+                        'budget_estimate' => extractRealBudgetEstimate($row['message_body']),
+                        'date_received' => date('Y-m-d H:i', strtotime($row['created_at'])),
+                        'status' => $row['status'] ?: 'masuk',
+                        'ai_verified' => isset($row['ai_verified']) ? (int)$row['ai_verified'] : 0,
+                        'ai_classification' => isset($row['ai_classification']) ? $row['ai_classification'] : '',
+                        'ai_error' => isset($row['ai_error']) ? $row['ai_error'] : null,
+                        'labels' => ['Primary RFQ'],
+                        'attachments' => $attachments,
+                        'replies' => !empty($row['reply_body']) ? [
+                            [
+                                'body' => $row['reply_body'],
+                                'date' => $row['reply_date'],
+                                'sender' => $row['reply_sender'] ?: ($row['recipient_email'] ?: 'abmalayaindustry@gmail.com')
+                            ]
+                        ] : []
+                    ];
+                }
+                ob_end_clean();
+                echo json_encode([
+                    'status' => 'success',
+                    'source' => 'local_db_cache_imap_fallback',
+                    'fetched_count' => count($data),
+                    'data' => $data,
+                    'notice' => 'IMAP connection timed out/failed, served from DB cache'
+                ], JSON_INVALID_UTF8_IGNORE | JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+
+            // Fallback: Query any recent RFQs if strict date filter returned 0
+            $res_all = $db_conn->query("SELECT * FROM rfq_requests ORDER BY id DESC LIMIT 100");
+            if ($res_all && $res_all->num_rows > 0) {
+                $data = [];
+                while ($row = $res_all->fetch_assoc()) {
+                    $attachments = [];
+                    appendGoogleDriveAttachments($attachments, $row['message_body'], $row['id']);
+                    $data[] = [
+                        'id' => str_replace('RFQ-', 'GMAIL-LIVE-', $row['rfq_number']),
+                        'db_id' => (int)$row['id'],
+                        'rfq_number' => $row['rfq_number'],
+                        'sender_name' => $row['client_name'] ?: 'Gmail Client',
+                        'sender_email' => $row['client_email'] ?: 'abmalayaindustry@gmail.com',
+                        'recipient_email' => isset($row['recipient_email']) && !empty($row['recipient_email']) ? $row['recipient_email'] : 'abmalayaindustry@gmail.com',
+                        'company' => $row['client_company'] ?: $row['client_name'],
+                        'client_company' => $row['client_company'] ?? '',
+                        'phone' => '',
+                        'subject' => $row['subject'],
+                        'message_body' => $row['message_body'],
+                        'original_body' => $row['message_body'],
+                        'item_requested' => $row['item_requested'] ?: extractRealRequestedItem($row['subject'], $row['message_body']),
+                        'quantity_requested' => '1 Package',
+                        'budget_estimate' => extractRealBudgetEstimate($row['message_body']),
+                        'date_received' => date('Y-m-d H:i', strtotime($row['created_at'])),
+                        'status' => $row['status'] ?: 'masuk',
+                        'ai_verified' => isset($row['ai_verified']) ? (int)$row['ai_verified'] : 0,
+                        'ai_classification' => isset($row['ai_classification']) ? $row['ai_classification'] : '',
+                        'ai_error' => isset($row['ai_error']) ? $row['ai_error'] : null,
+                        'labels' => ['Primary RFQ'],
+                        'attachments' => $attachments,
+                        'replies' => []
+                    ];
+                }
+                ob_end_clean();
+                echo json_encode([
+                    'status' => 'success',
+                    'source' => 'local_db_cache_fallback_recent',
+                    'fetched_count' => count($data),
+                    'data' => $data,
+                    'notice' => 'Served recent records from DB cache'
+                ], JSON_INVALID_UTF8_IGNORE | JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+        }
+
+        ob_end_clean();
+        echo json_encode([
+            'status' => 'success',
+            'source' => 'empty_fallback',
+            'fetched_count' => 0,
+            'data' => [],
+            'message' => 'No active emails found or IMAP offline'
+        ], JSON_INVALID_UTF8_IGNORE | JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
     $total_msgs = imap_num_msg($inbox);
@@ -833,7 +1417,7 @@ try {
 
                 // 2. Check if email already exists in Database (Skip IMAP fetch!)
                 if ($db_conn && !$db_conn->connect_error) {
-                    $check_stmt = $db_conn->prepare("SELECT * FROM rfq_requests WHERE rfq_number = ?");
+                    $check_stmt = $db_conn->prepare("SELECT r.*, COALESCE(q.status, r.status, 'masuk') AS resolved_status FROM rfq_requests r LEFT JOIN quotations q ON q.rfq_id = r.id WHERE r.rfq_number = ? LIMIT 1");
                     if ($check_stmt) {
                         $check_stmt->bind_param("s", $rfq_num);
                         $check_stmt->execute();
@@ -849,7 +1433,23 @@ try {
                 if ($already_exists && $cached_row) {
                     $ai_v = isset($cached_row['ai_verified']) ? (int)$cached_row['ai_verified'] : 0;
                     $ai_c = isset($cached_row['ai_classification']) ? $cached_row['ai_classification'] : '';
-                    if ($ai_v === 1 || empty($active_gemini_key)) {
+                    $is_bl_cache = isset($cached_row['is_blacklisted']) ? (int)$cached_row['is_blacklisted'] : 0;
+                    $bl_reason_cache = isset($cached_row['blacklist_reason']) ? $cached_row['blacklist_reason'] : '';
+
+                    // Dynamic blacklist re-verification
+                    if ($is_bl_cache === 0) {
+                        $dyn_bl = isEmailBlacklisted($db_conn, $cached_row['client_email']);
+                        if ($dyn_bl['blacklisted']) {
+                            $is_bl_cache = 1;
+                            $bl_reason_cache = $dyn_bl['reason'];
+                            $cached_row['status'] = 'deleted';
+                            $ai_c = 'blacklisted';
+                            $ai_v = 1;
+                            $db_conn->query("UPDATE rfq_requests SET status = 'deleted', is_blacklisted = 1, blacklist_reason = '" . $db_conn->real_escape_string($bl_reason_cache) . "', ai_verified = 1, ai_classification = 'blacklisted' WHERE id = " . intval($cached_row['id']));
+                        }
+                    }
+
+                    if ($ai_v === 1 || empty($active_gemini_key) || $is_bl_cache === 1) {
                         // Reuse cached DB record directly
                         $attachments = [];
                         if (preg_match('/(requisition|PD-ENG|RO WATER|specification|quotation)/i', $cached_row['subject'] . ' ' . $cached_row['message_body'])) {
@@ -858,29 +1458,14 @@ try {
                                 'filename' => 'PD-ENG-2026-059_Requisition_Spec.pdf',
                                 'filesize' => '2.4 MB',
                                 'filetype' => 'pdf',
-                                'url' => "http://localhost:8000/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
+                                'url' => "/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
                             ];
-                        }
-
-                        $is_bl_cache = isset($cached_row['is_blacklisted']) ? (int)$cached_row['is_blacklisted'] : 0;
-                        $bl_reason_cache = isset($cached_row['blacklist_reason']) ? $cached_row['blacklist_reason'] : '';
-
-                        // Recheck blacklist if not yet marked
-                        if ($is_bl_cache === 0) {
-                            $dyn_bl = isEmailBlacklisted($db_conn, $cached_row['client_email']);
-                            if ($dyn_bl['blacklisted']) {
-                                $is_bl_cache = 1;
-                                $bl_reason_cache = $dyn_bl['reason'];
-                                $cached_row['status'] = 'deleted';
-                                $ai_c = 'blacklisted';
-                                $ai_v = 1;
-                                $db_conn->query("UPDATE rfq_requests SET status = 'deleted', is_blacklisted = 1, blacklist_reason = '" . $db_conn->real_escape_string($bl_reason_cache) . "', ai_verified = 1, ai_classification = 'blacklisted' WHERE id = " . intval($cached_row['id']));
-                            }
                         }
 
                         $labels = [];
                         if ($is_bl_cache === 1 || $ai_c === 'blacklisted') {
                             $labels[] = 'AI: Blacklisted / Mesin Abaikan';
+                            $labels[] = 'Status: Deleted';
                         } else if ($ai_v === 1) {
                             if ($ai_c === 'client_rfq') {
                                 $labels[] = 'Primary RFQ';
@@ -898,10 +1483,13 @@ try {
 
                         $data[] = [
                             'id' => $live_key,
+                            'db_id' => (int)$cached_row['id'],
+                            'rfq_number' => $cached_row['rfq_number'] ?: ('RFQ-' . $email_number),
                             'sender_name' => $cached_row['client_name'] ?: 'Gmail Client',
                             'sender_email' => $cached_row['client_email'] ?: 'abmalayaindustry@gmail.com',
                             'recipient_email' => $cached_row['recipient_email'] ?: 'abmalayaindustry@gmail.com',
                             'company' => $cached_row['client_company'] ?: $cached_row['client_name'],
+                            'client_company' => $cached_row['client_company'] ?? '',
                             'phone' => $cached_row['client_phone'] ?: '',
                             'subject' => $cached_row['subject'],
                             'message_body' => $cached_row['message_body'],
@@ -910,7 +1498,7 @@ try {
                             'quantity_requested' => $cached_row['quantity_requested'] ?: '1 Package',
                             'budget_estimate' => extractRealBudgetEstimate($cached_row['message_body']),
                             'date_received' => date('Y-m-d H:i', strtotime($cached_row['created_at'])),
-                            'status' => $cached_row['status'],
+                            'status' => $is_bl_cache === 1 ? 'deleted' : ($cached_row['resolved_status'] ?? $cached_row['status']),
                             'is_blacklisted' => $is_bl_cache,
                             'blacklist_reason' => $bl_reason_cache,
                             'ai_verified' => $ai_v,
@@ -940,15 +1528,18 @@ try {
                                     'filename' => 'PD-ENG-2026-059_Requisition_Spec.pdf',
                                     'filesize' => '2.4 MB',
                                     'filetype' => 'pdf',
-                                    'url' => "http://localhost:8000/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
+                                    'url' => "/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
                                 ];
                             }
                             $data[] = [
                                 'id' => $live_key,
+                                'db_id' => (int)$cached_row['id'],
+                                'rfq_number' => $cached_row['rfq_number'] ?: ('RFQ-' . $email_number),
                                 'sender_name' => $cached_row['client_name'] ?: 'Gmail Client',
                                 'sender_email' => $cached_row['client_email'] ?: 'abmalayaindustry@gmail.com',
                                 'recipient_email' => $cached_row['recipient_email'] ?: 'abmalayaindustry@gmail.com',
                                 'company' => $cached_row['client_company'] ?: $cached_row['client_name'],
+                                'client_company' => $cached_row['client_company'] ?? '',
                                 'phone' => $cached_row['client_phone'] ?: '',
                                 'subject' => $cached_row['subject'],
                                 'message_body' => $cached_row['message_body'],
@@ -957,9 +1548,9 @@ try {
                                 'quantity_requested' => $cached_row['quantity_requested'] ?: '1 Package',
                                 'budget_estimate' => extractRealBudgetEstimate($cached_row['message_body']),
                                 'date_received' => date('Y-m-d H:i', strtotime($cached_row['created_at'])),
-                                'status' => $cached_row['status'],
-                                'ai_verified' => 0,
-                                'ai_classification' => null,
+                                'status' => $cached_row['resolved_status'] ?? $cached_row['status'],
+                                'ai_verified' => (int)($cached_row['ai_verified'] ?? 0),
+                                'ai_classification' => $cached_row['ai_classification'] ?? null,
                                 'labels' => count($attachments) > 0 ? ['Primary RFQ', 'Has File'] : ['Primary RFQ'],
                                 'attachments' => $attachments,
                                 'replies' => !empty($cached_row['reply_body']) ? [
@@ -990,7 +1581,7 @@ try {
                             'filename' => 'PD-ENG-2026-059_Requisition_Spec.pdf',
                             'filesize' => '2.4 MB',
                             'filetype' => 'pdf',
-                            'url' => "http://localhost:8000/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
+                            'url' => "/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
                         ];
                     }
                     appendGoogleDriveAttachments($attachments, $clean_body, $cached_row['id']);
@@ -999,7 +1590,14 @@ try {
                     $ai_classification = '';
                     $ai_error = null;
 
-                    if (isObviousJunkEmail($subject, $clean_body, $sender_email)) {
+                    $bl_check = isEmailBlacklisted($db_conn, $sender_email);
+                    if ($bl_check['blacklisted']) {
+                        $ai_classification = 'blacklisted';
+                        $ai_verified = 1;
+                        $bl_reason_val = $bl_check['reason'];
+                        $ai_error = 'Otomatis diabaikan oleh mesin: Email pengirim terdaftar dalam Blacklist (' . $bl_reason_val . ')';
+                        $db_conn->query("UPDATE rfq_requests SET status = 'deleted', is_blacklisted = 1, blacklist_reason = '" . $db_conn->real_escape_string($bl_reason_val) . "', ai_verified = 1, ai_classification = 'blacklisted', ai_error = '" . $db_conn->real_escape_string($ai_error) . "' WHERE rfq_number = '" . $db_conn->real_escape_string($rfq_num) . "'");
+                    } else if (isObviousJunkEmail($subject, $clean_body, $sender_email)) {
                         $ai_classification = 'junk';
                         $ai_verified = 1;
                     } else if (!empty($key_list)) {
@@ -1027,12 +1625,12 @@ try {
                             $stmt->close();
                         }
 
-                        if ($ai_verified === 1 && $ai_classification === 'client_rfq') {
-                            $db_conn->query("UPDATE rfq_requests SET status = 'in_progress' WHERE rfq_number = '" . $db_conn->real_escape_string($rfq_num) . "'");
-                            $rfq_res = $db_conn->query("SELECT * FROM rfq_requests WHERE rfq_number = '" . $db_conn->real_escape_string($rfq_num) . "'");
+                        if ($ai_verified === 1 && $ai_classification === 'client_rfq' && $cached_row['status'] !== 'deleted') {
+                            $db_conn->query("UPDATE rfq_requests SET status = 'in_progress' WHERE rfq_number = '" . $db_conn->real_escape_string($rfq_num) . "' AND status != 'deleted'");
+                            $rfq_res = $db_conn->query("SELECT * FROM rfq_requests WHERE rfq_number = '" . $db_conn->real_escape_string($rfq_num) . "' AND status != 'deleted'");
                             if ($rfq_res && $rfq_res->num_rows > 0) {
                                 $rfq_row = $rfq_res->fetch_assoc();
-                                require_once __DIR__ . '/../daemon/scan_ai.php';
+                                require_once __DIR__ . '/auto_quotation_helper.php';
                                 $items = [];
                                 if (!empty($item_requested)) {
                                     $items[] = ['description' => $item_requested, 'quantity' => 1.00, 'unit' => 'Unit'];
@@ -1062,10 +1660,13 @@ try {
 
                     $data[] = [
                         'id' => $live_key,
+                        'db_id' => (int)$cached_row['id'],
+                        'rfq_number' => $cached_row['rfq_number'] ?: ('RFQ-' . $email_number),
                         'sender_name' => $sender_name ?: 'Gmail Client',
                         'sender_email' => $sender_email ?: 'abmalayaindustry@gmail.com',
                         'recipient_email' => $recipient_email ?: 'abmalayaindustry@gmail.com',
                         'company' => $cached_row['client_company'] ?: $sender_name,
+                        'client_company' => $cached_row['client_company'] ?? '',
                         'phone' => $cached_row['client_phone'] ?: '',
                         'subject' => $subject,
                         'message_body' => $clean_body,
@@ -1097,10 +1698,19 @@ try {
                 $from = isset($overview->from) ? imap_utf8($overview->from) : 'Gmail Sender';
 
                 $sender_name = $from;
-                $sender_email = $username;
-                if (preg_match('/(.*)<(.*)>/', $from, $matches)) {
-                    $sender_name = trim($matches[1], ' "');
+                $sender_email = '';
+                if (preg_match('/(.*)<([^>]+)>/', $from, $matches)) {
+                    $sender_name = trim($matches[1], " \"'");
                     $sender_email = trim($matches[2]);
+                } else if (preg_match('/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/', $from, $matches)) {
+                    $sender_email = trim($matches[0]);
+                    $sender_name = trim(str_replace($sender_email, '', $from), " \"'<>");
+                    if (empty($sender_name)) {
+                        $sender_name = $sender_email;
+                    }
+                }
+                if (empty($sender_email)) {
+                    $sender_email = $username;
                 }
 
                 $recipient_email = 'abmalayaindustry@gmail.com';
@@ -1163,6 +1773,7 @@ try {
                 $labels = [];
                 if ($is_blacklisted === 1 || $ai_classification === 'blacklisted') {
                     $labels[] = 'AI: Blacklisted / Mesin Abaikan';
+                    $labels[] = 'Status: Deleted';
                 } else if ($ai_verified === 1) {
                     if ($ai_classification === 'client_rfq') {
                         $labels[] = 'Primary RFQ';
@@ -1184,6 +1795,7 @@ try {
                 $reply_match_key = strtolower(trim($subject)) . '_' . strtolower(trim($sender_email));
                 $data[] = [
                     'id' => $live_key,
+                    'rfq_number' => 'RFQ-' . $email_number,
                     'sender_name' => $sender_name ?: 'Gmail Client',
                     'sender_email' => $sender_email,
                     'recipient_email' => $recipient_email,
@@ -1212,11 +1824,14 @@ try {
                 // Sync to MySQL Database without overwriting status
                 if ($db_conn && !$db_conn->connect_error) {
                     $attachment_url_val = count($attachments) > 0 ? $attachments[0]['url'] : 'NONE';
-                    $stmt = $db_conn->prepare("INSERT INTO rfq_requests (rfq_number, client_name, client_email, recipient_email, client_company, subject, message_body, item_requested, status, ai_verified, ai_classification, ai_error, is_blacklisted, blacklist_reason, attachment_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE message_body=VALUES(message_body), recipient_email=VALUES(recipient_email), ai_verified=VALUES(ai_verified), ai_classification=VALUES(ai_classification), ai_error=VALUES(ai_error), is_blacklisted=VALUES(is_blacklisted), blacklist_reason=VALUES(blacklist_reason), item_requested=VALUES(item_requested), attachment_url=VALUES(attachment_url)");
+                    $stmt = $db_conn->prepare("INSERT INTO rfq_requests (rfq_number, client_name, client_email, recipient_email, client_company, subject, message_body, item_requested, status, is_blacklisted, blacklist_reason, ai_verified, ai_classification, ai_error, attachment_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE message_body=VALUES(message_body), recipient_email=VALUES(recipient_email), ai_verified=VALUES(ai_verified), ai_classification=VALUES(ai_classification), ai_error=VALUES(ai_error), item_requested=VALUES(item_requested), attachment_url=VALUES(attachment_url)");
                     if ($stmt) {
                         $rfq_num = 'RFQ-' . $email_number;
-                        $stmt->bind_param("sssssssssisssis", $rfq_num, $sender_name, $sender_email, $recipient_email, $sender_name, $subject, $clean_body, $item_requested, $current_status, $ai_verified, $ai_classification, $ai_error, $is_blacklisted, $blacklist_reason, $attachment_url_val);
+                        $stmt->bind_param("sssssssssisisss", $rfq_num, $sender_name, $sender_email, $recipient_email, $sender_name, $subject, $clean_body, $item_requested, $current_status, $is_blacklisted, $blacklist_reason, $ai_verified, $ai_classification, $ai_error, $attachment_url_val);
                         $stmt->execute();
+                        if ($stmt->affected_rows === 1) {
+                            addSystemNotification($db_conn, "Email RFQ Baru Masuk ({$rfq_num})", "Email dari {$sender_name} ({$sender_email}) dengan subjek \"{$subject}\" telah diterima.", 'info', 'email', 'inbox');
+                        }
                         $stmt->close();
                     }
                 }
@@ -1228,16 +1843,34 @@ try {
 
     // ⚡ After syncing, query the complete local DB cache (200 records limit) to ensure older and updated statuses are all returned to UI
     if ($db_conn && !$db_conn->connect_error) {
-        $db_conn->query("UPDATE rfq_requests r 
-                         INNER JOIN quotations q ON q.rfq_id = r.id
-                         SET r.status = CASE 
-                             WHEN q.status = 'Approved' OR q.status = 'acc' THEN 'deal'
-                             WHEN q.status = 'Sent' OR q.status = 'done_send' THEN 'penawaran_terkirim'
-                             ELSE 'diproses'
-                         END
-                         WHERE r.status != 'deleted'");
 
-        $res = $db_conn->query("SELECT * FROM rfq_requests ORDER BY id DESC LIMIT 200");
+
+        $query_where = "WHERE r.created_at >= '" . $db_conn->real_escape_string($start_date_limit) . " 00:00:00'";
+        $all_replies_sync = [];
+        $chk_rep_sync = $db_conn->query("SHOW TABLES LIKE 'rfq_replies'");
+        if ($chk_rep_sync && $chk_rep_sync->num_rows > 0) {
+            $r_res_sync = $db_conn->query("SELECT * FROM rfq_replies ORDER BY id ASC");
+            if ($r_res_sync) {
+                while ($r_row = $r_res_sync->fetch_assoc()) {
+                    $rep_obj = [
+                        'id' => (int)$r_row['id'],
+                        'body' => $r_row['reply_body'],
+                        'date' => date('Y-m-d H:i', strtotime($r_row['created_at'])),
+                        'sender' => $r_row['reply_sender'] ?: 'sales@abmalaya.com',
+                        'quotation_id' => $r_row['quotation_id'] ?? null,
+                        'quotation_number' => $r_row['quotation_number'] ?? null,
+                        'attachment_file' => $r_row['attachment_file'] ?? null,
+                        'has_file' => !empty($r_row['attachment_file'])
+                    ];
+                    $r_id = (int)($r_row['rfq_id'] ?? 0);
+                    $r_num = trim($r_row['rfq_number'] ?? '');
+                    if ($r_id > 0) $all_replies_sync['id_' . $r_id][] = $rep_obj;
+                    if (!empty($r_num)) $all_replies_sync['num_' . $r_num][] = $rep_obj;
+                }
+            }
+        }
+
+        $res = $db_conn->query("SELECT r.*, COALESCE(q.status, r.status, 'masuk') AS status FROM rfq_requests r LEFT JOIN quotations q ON (q.rfq_id = r.id AND r.status != 'deleted') {$query_where} ORDER BY r.id DESC LIMIT 200");
         if ($res && $res->num_rows > 0) {
             $data = [];
             while ($row = $res->fetch_assoc()) {
@@ -1248,7 +1881,7 @@ try {
                         'filename' => 'PD-ENG-2026-059_Requisition_Spec.pdf',
                         'filesize' => '2.4 MB',
                         'filetype' => 'pdf',
-                        'url' => "http://localhost:8000/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
+                        'url' => "/api_fetch_live_gmail.php?preview=1&msgno=403&part=2&ext=pdf&fn=PD-ENG-2026-059_Requisition_Spec.pdf"
                     ];
                 }
                 appendGoogleDriveAttachments($attachments, $row['message_body'], $row['id']);
@@ -1258,7 +1891,7 @@ try {
                 $is_bl = isset($row['is_blacklisted']) ? (int)$row['is_blacklisted'] : 0;
                 $bl_reason = isset($row['blacklist_reason']) ? $row['blacklist_reason'] : '';
 
-                // Check dynamic blacklist if not marked
+                // Dynamic blacklist verification for DB records
                 if ($is_bl === 0) {
                     $dyn_bl2 = isEmailBlacklisted($db_conn, $row['client_email']);
                     if ($dyn_bl2['blacklisted']) {
@@ -1274,26 +1907,33 @@ try {
                 $labels = [];
                 if ($is_bl === 1 || $ai_classification === 'blacklisted') {
                     $labels[] = 'AI: Blacklisted / Mesin Abaikan';
-                } else if ($ai_verified === 1) {
+                    $labels[] = 'Status: Deleted';
+                } else if (!empty($ai_classification) || $ai_verified === 1) {
                     if ($ai_classification === 'client_rfq') {
                         $labels[] = 'Primary RFQ';
                         $labels[] = 'AI: Requisition';
+                    } elseif ($ai_classification === 'general_inquiry') {
+                        $labels[] = 'General Inquiry';
+                        $labels[] = 'AI: General Inquiry';
                     } else {
                         $labels[] = 'AI: Iklan / Sampah';
                     }
                 } else {
                     $labels[] = 'Waiting AI Detection';
-                    if (count($attachments) > 0) {
-                        $labels[] = 'Has File';
-                    }
+                }
+                if (count($attachments) > 0) {
+                    $labels[] = 'Has File';
                 }
 
                 $data[] = [
                     'id' => str_replace('RFQ-', 'GMAIL-LIVE-', $row['rfq_number']),
+                    'db_id' => (int)$row['id'],
+                    'rfq_number' => $row['rfq_number'],
                     'sender_name' => $row['client_name'] ?: 'Gmail Client',
                     'sender_email' => $row['client_email'] ?: 'abmalayaindustry@gmail.com',
                     'recipient_email' => isset($row['recipient_email']) && !empty($row['recipient_email']) ? $row['recipient_email'] : 'abmalayaindustry@gmail.com',
                     'company' => $row['client_company'] ?: $row['client_name'],
+                    'client_company' => $row['client_company'] ?? '',
                     'phone' => '',
                     'subject' => $row['subject'],
                     'message_body' => $row['message_body'],
@@ -1302,7 +1942,7 @@ try {
                     'quantity_requested' => '1 Package',
                     'budget_estimate' => extractRealBudgetEstimate($row['message_body']),
                     'date_received' => date('Y-m-d H:i', strtotime($row['created_at'])),
-                    'status' => $row['status'] ?: 'masuk',
+                    'status' => ($is_bl === 1 || $row['status'] === 'deleted') ? 'deleted' : ($row['status'] ?: 'masuk'),
                     'is_blacklisted' => $is_bl,
                     'blacklist_reason' => $bl_reason,
                     'ai_verified' => $ai_verified,
@@ -1310,19 +1950,32 @@ try {
                     'ai_error' => isset($row['ai_error']) ? $row['ai_error'] : null,
                     'labels' => $labels,
                     'attachments' => $attachments,
-                    'replies' => !empty($row['reply_body']) ? [
+                    'reply_body' => $row['reply_body'] ?? null,
+                    'reply_date' => $row['reply_date'] ?? null,
+                    'reply_sender' => $row['reply_sender'] ?? null,
+                    'is_replied' => (!empty($row['reply_body']) || (isset($all_replies_sync['id_' . (int)$row['id']]) && count($all_replies_sync['id_' . (int)$row['id']]) > 0) || (isset($all_replies_sync['num_' . trim($row['rfq_number'])]) && count($all_replies_sync['num_' . trim($row['rfq_number'])]) > 0) || in_array($row['status'], ['penawaran_terkirim', 'done_send', 'deal', 'sent'])),
+                    'replies' => !empty($row['id']) && isset($all_replies_sync['id_' . (int)$row['id']]) ? $all_replies_sync['id_' . (int)$row['id']] : (!empty($row['rfq_number']) && isset($all_replies_sync['num_' . trim($row['rfq_number'])]) ? $all_replies_sync['num_' . trim($row['rfq_number'])] : (!empty($row['reply_body']) ? [
                         [
+                            'id' => (int)$row['id'],
                             'body' => $row['reply_body'],
-                            'date' => $row['reply_date'],
-                            'sender' => $row['reply_sender'] ?: ($row['recipient_email'] ?: 'abmalayaindustry@gmail.com')
+                            'date' => $row['reply_date'] ?: $row['created_at'],
+                            'sender' => $row['reply_sender'] ?: ($row['recipient_email'] ?: 'sales@abmalaya.com'),
+                            'quotation_id' => $row['quotation_id'] ?? null,
+                            'quotation_number' => $row['quotation_number'] ?? null
                         ]
-                    ] : []
+                    ] : []))
                 ];
             }
         }
     }
 
-    ob_end_clean();
+    if (defined('MASTER_CRON_MODE')) {
+        return;
+    }
+
+    if (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
     echo json_encode([
         'status' => 'success',
         'source' => 'gmail_live_imap_synced',
@@ -1331,8 +1984,8 @@ try {
         'data' => $data
     ], JSON_INVALID_UTF8_IGNORE | JSON_UNESCAPED_UNICODE);
 
-} catch (Exception $e) {
-    ob_end_clean();
+} catch (Throwable $e) {
+    @ob_end_clean();
     echo json_encode([
         'status' => 'error',
         'message' => $e->getMessage()

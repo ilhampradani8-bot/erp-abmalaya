@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import { Quotation, QuotationItem } from '../types/erp';
-import { Plus, Trash2, Send, FileCheck, X, Paperclip, FileType, CheckCircle2, Sparkles, Loader2, Terminal, Save, Eye, MoreVertical, Package, Image as ImageIcon, PlusCircle, Search, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, Send, FileCheck, X, Paperclip, FileType, CheckCircle2, Sparkles, Loader2, Save, Eye, MoreVertical, Package, Image as ImageIcon, PlusCircle, Search, RefreshCw, History, HelpCircle } from 'lucide-react';
 import { ProductItem } from './Product';
 import { getApiUrl } from '../utils/api';
 
@@ -23,6 +23,8 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
   const [savedQuotations, setSavedQuotations] = useState<Quotation[]>([]);
   const [productsCatalog, setProductsCatalog] = useState<ProductItem[]>([]);
   const [selectedQuoId, setSelectedQuoId] = useState<string>('');
+  const [isQuoDropdownOpen, setIsQuoDropdownOpen] = useState<boolean>(false);
+  const [quoSearchTerm, setQuoSearchTerm] = useState<string>('');
   const [activeRowIdx, setActiveRowIdx] = useState<number | null>(null);
   const [isSavingMySQL, setIsSavingMySQL] = useState<boolean>(false);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
@@ -52,16 +54,25 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
   const [pickerSearchTerm, setPickerSearchTerm] = useState<string>('');
   const [rowToReplaceIndex, setRowToReplaceIndex] = useState<number | null>(null);
 
+  const [isQuoLoading, setIsQuoLoading] = useState<boolean>(false);
+
   // Load list of saved quotations from MySQL database for dropdown selector
-  const loadQuotationsListFromMySQL = () => {
-    fetch(getApiUrl('/api_quotations.php'))
+  const loadQuotationsListFromMySQL = (activeQuo?: Quotation) => {
+    setIsQuoLoading(true);
+    fetch(getApiUrl(`/api_quotations.php?t=${Date.now()}`), { cache: 'no-store' })
       .then((res) => res.json())
       .then((resData) => {
-        if (resData.status === 'success' && resData.data) {
-          setSavedQuotations(resData.data);
+        if (resData.status === 'success' && Array.isArray(resData.data)) {
+          let list = resData.data;
+          const cur = activeQuo || quotation || initialQuotation;
+          if (cur && cur.id && !list.some((q: any) => q.id === cur.id)) {
+            list = [{ ...cur, quotation_number: cur.quotation_number || cur.id }, ...list];
+          }
+          setSavedQuotations(list);
         }
       })
-      .catch((err) => console.log('Load saved quotations error:', err));
+      .catch((err) => console.log('Load saved quotations error:', err))
+      .finally(() => setIsQuoLoading(false));
   };
 
   // Load products catalog from MySQL database
@@ -106,6 +117,13 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
         date_issued: initialQuotation.date_issued || new Date().toISOString().split('T')[0],
       });
       setSelectedQuoId(initialQuotation.id || '');
+      setSavedQuotations((prev) => {
+        if (initialQuotation.id && !prev.some((q) => q.id === initialQuotation.id)) {
+          return [{ ...initialQuotation, quotation_number: initialQuotation.quotation_number || initialQuotation.id }, ...prev];
+        }
+        return prev;
+      });
+      loadQuotationsListFromMySQL(initialQuotation);
     }
   }, [initialQuotation]);
 
@@ -170,14 +188,14 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
     setTimeout(() => setSaveSuccessMessage(null), 3000);
   };
 
-  // Add custom line items from table to Master Product Catalog database (PRESERVES FILLED PRICES)
+  // Add custom line items from table to Master Product Catalog (PRESERVES FILLED PRICES)
   const handleAddCustomItemsToProductCatalog = () => {
     const unregisteredItems = (quotation?.items || []).filter(
       (it) => it.description && it.description.trim() !== '' && !findCatalogMatch(it.description)
     );
 
     if (unregisteredItems.length === 0) {
-      setSaveSuccessMessage('All items in table are already registered in database.');
+      setSaveSuccessMessage('All items in the table are already in the product catalog.');
       setTimeout(() => setSaveSuccessMessage(null), 3000);
       return;
     }
@@ -202,7 +220,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
           if (resData.status === 'success') {
             savedCount++;
             if (savedCount === unregisteredItems.length) {
-              setSaveSuccessMessage(`${savedCount} custom item(s) saved to Master Product Catalog database with filled prices!`);
+              setSaveSuccessMessage(`${savedCount} item(s) saved to Product Catalog!`);
               setTimeout(() => setSaveSuccessMessage(null), 4000);
               loadProductsCatalogFromMySQL();
             }
@@ -211,7 +229,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
     });
   };
 
-  // Add multiple selected products from Product Catalog Modal into SPH Table (or Replace Row)
+  // Add multiple selected products from Product Catalog Modal into Quotation Table (or Replace Row)
   const handleAddSelectedProductsFromModal = () => {
     if (selectedProductIds.length === 0) return;
 
@@ -249,7 +267,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
     updateQuotationTotals(combinedItems, quotation?.tax_percent || 11);
     setSelectedProductIds([]);
     setIsProductPickerModalOpen(false);
-    setSaveSuccessMessage(`${newItems.length} products added from Master Database to SPH Table!`);
+    setSaveSuccessMessage(`${newItems.length} product(s) added to quotation!`);
     setTimeout(() => setSaveSuccessMessage(null), 4000);
   };
 
@@ -290,17 +308,24 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
   // Run Authentic Google Gemini AI PDF OCR Scanning via PHP backend
   const handleScanPdfWithGeminiAiInModal = () => {
     if (!quotation?.id) {
-      setScanOcrLog({ status: 'error', message: 'ID SPH Quotation tidak ditemukan.' });
+      setScanOcrLog({ status: 'error', message: 'Quotation ID not found.' });
       return;
     }
     setIsScanningModalOcr(true);
-    setScanOcrLog({ status: 'connecting', message: 'Scanning authentic PDF binary via Gemini AI Engine...' });
+    setScanOcrLog({ status: 'connecting', message: 'Analyzing document with AI...' });
 
     fetch(getApiUrl('/api_ocr_scan.php'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         quo_id: quotation.id,
+        rfq_id: quotation.rfq_id,
+        quotation_number: quotation.quotation_number,
+        client_name: quotation.client_name,
+        client_email: quotation.client_email,
+        company_name: quotation.company_name,
+        notes: quotation.notes,
+        attachment_url: (quotation as any).attachment_url || '',
         actor_name: currentUser?.name || currentUser?.email || 'Aiman Zaki',
         actor_email: currentUser?.email || null,
       })
@@ -334,7 +359,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
             impa_code: scanRes?.impa_code || prev.impa_code,
           }));
 
-          setSaveSuccessMessage(`Gemini AI PDF scan results (${formattedItems.length} items) populated into quotation table successfully!`);
+          setSaveSuccessMessage(`${formattedItems.length} item(s) extracted from document and added to quotation!`);
           setTimeout(() => setSaveSuccessMessage(null), 4000);
         } else if (resData.status === 'skipped') {
           setScanOcrLog({ status: 'skipped', message: resData.message || 'RFQ attachment file not found.' });
@@ -434,8 +459,8 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
     })
       .then((res) => res.json())
       .then((resData) => {
-        console.log('Save Quotation MySQL response:', resData);
-        setSaveSuccessMessage(`Quotation ${quo.quotation_number} saved successfully to MySQL database (abmalaya_erp.quotations)!`);
+        console.log('Save Quotation response:', resData);
+        setSaveSuccessMessage(`Quotation ${quo.quotation_number} saved successfully!`);
         setTimeout(() => setSaveSuccessMessage(null), 4000);
         loadQuotationsListFromMySQL();
         if (callback) callback();
@@ -467,6 +492,24 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
     (it) => it.description && it.description.trim() !== '' && !findCatalogMatch(it.description)
   );
 
+  const filteredSavedQuotations = savedQuotations.filter((q) => {
+    const term = quoSearchTerm.toLowerCase().trim();
+    if (!term) return true;
+    return (
+      (q.quotation_number || '').toLowerCase().includes(term) ||
+      (q.company_name || '').toLowerCase().includes(term) ||
+      (q.client_name || '').toLowerCase().includes(term) ||
+      (q.client_email || '').toLowerCase().includes(term) ||
+      String(q.rfq_id || '').toLowerCase().includes(term) ||
+      (q.id || '').toLowerCase().includes(term) ||
+      (q.notes || '').toLowerCase().includes(term)
+    );
+  });
+
+  const selectedQuoObj = savedQuotations.find((q) => q.id === selectedQuoId) || 
+    (quotation?.id === selectedQuoId ? quotation : null) || 
+    (initialQuotation?.id === selectedQuoId ? initialQuotation : null);
+
   return (
     <div className="w-full h-full bg-[#f0f0f0] overflow-y-auto flex flex-col font-sans p-0 m-0">
       
@@ -474,26 +517,149 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] px-4 py-2 border-b border-[#7b7b7b] shrink-0 w-full shadow-xs">
         
         <div className="flex items-center gap-3 text-xs">
-          <select
-            value={selectedQuoId}
-            onChange={(e) => handleSelectQuotationFromDropdown(e.target.value)}
-            className="bg-gradient-to-b from-[#fafafa] to-[#eaeaea] border border-[#a0a0a0] px-3 py-1 text-xs text-[#3d3d3d] font-bold rounded-md shadow-inner cursor-pointer max-w-xs focus:outline-none"
-          >
-            <option value="">-- Select Saved SPH / RFQ --</option>
-            {savedQuotations.map((q) => (
-              <option key={q.id} value={q.id}>
-                {q.quotation_number} • {q.company_name || q.client_name}
-              </option>
-            ))}
-          </select>
+          {/* SEARCHABLE SPH / RFQ DROPDOWN */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                const nextState = !isQuoDropdownOpen;
+                setIsQuoDropdownOpen(nextState);
+                if (nextState) {
+                  loadQuotationsListFromMySQL();
+                }
+              }}
+              className="bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-white border border-[#a0a0a0] px-3 py-1 text-xs text-[#3d3d3d] font-bold rounded-md shadow-inner cursor-pointer flex items-center justify-between gap-2 min-w-[240px] max-w-sm focus:outline-none transition"
+              title="Search & select quotation or RFQ"
+            >
+              <div className="flex items-center gap-1.5 truncate">
+                <Search className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <span className="truncate">
+                  {selectedQuoObj
+                    ? `${selectedQuoObj.quotation_number} • ${selectedQuoObj.company_name || selectedQuoObj.client_name || 'Client'}`
+                    : '-- Search / Select Quotation or RFQ --'}
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-500 shrink-0 font-mono">▼</span>
+            </button>
+
+            {isQuoDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => {
+                    setIsQuoDropdownOpen(false);
+                    setQuoSearchTerm('');
+                  }}
+                />
+                <div className="absolute left-0 top-8.5 w-88 sm:w-[460px] max-w-[95vw] bg-white border border-slate-300 rounded-lg shadow-2xl z-50 overflow-hidden font-sans text-xs flex flex-col animate-in fade-in duration-150 ring-1 ring-black/10">
+                  {/* Sticky Header with Search Input & Refresh Button */}
+                  <div className="p-2.5 border-b border-slate-200 bg-slate-50 flex items-center gap-2 shrink-0">
+                    <Search className="w-4 h-4 text-blue-600 shrink-0" />
+                    <input
+                      type="text"
+                      value={quoSearchTerm}
+                      onChange={(e) => setQuoSearchTerm(e.target.value)}
+                      placeholder="Cari SPH, nomor RFQ, klien, email, PT..."
+                      className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-semibold"
+                      autoFocus
+                    />
+                    {quoSearchTerm && (
+                      <button
+                        type="button"
+                        onClick={() => setQuoSearchTerm('')}
+                        className="text-slate-400 hover:text-slate-600 text-xs px-1 cursor-pointer font-bold"
+                        title="Hapus pencarian"
+                      >
+                        ✕
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => loadQuotationsListFromMySQL()}
+                      className="p-1.5 rounded hover:bg-slate-200 text-slate-500 hover:text-blue-600 transition shrink-0 cursor-pointer"
+                      title="Sync realtime dari database MySQL"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isQuoLoading ? 'animate-spin text-blue-600' : ''}`} />
+                    </button>
+                  </div>
+
+                  {/* Status & Count Sub-bar */}
+                  <div className="px-3 py-1 bg-slate-100/90 border-b border-slate-200/90 text-[10px] text-slate-500 flex items-center justify-between shrink-0 font-mono">
+                    <span>
+                      {isQuoLoading ? 'Memuat data...' : `${filteredSavedQuotations.length} dari ${savedQuotations.length} data tersimpan`}
+                    </span>
+                    <span className="flex items-center gap-1 text-[9px] text-emerald-600 font-semibold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> MySQL Realtime
+                    </span>
+                  </div>
+
+                  {/* Filtered Quotations List with deep scroll support */}
+                  <div className="max-h-[60vh] sm:max-h-[460px] overflow-y-auto overscroll-contain divide-y divide-slate-100">
+                    {filteredSavedQuotations.length === 0 ? (
+                      <div className="p-4 text-center text-slate-500 text-xs">
+                        No quotation or RFQ matching "{quoSearchTerm}".
+                      </div>
+                    ) : (
+                      filteredSavedQuotations.map((q) => {
+                        const isSelected = q.id === selectedQuoId;
+                        const itemsCount = (q.items || q.items_details || []).length;
+                        const gTotal = Number(q.grand_total || 0);
+                        return (
+                          <button
+                            key={q.id}
+                            type="button"
+                            onClick={() => {
+                              handleSelectQuotationFromDropdown(q.id);
+                              setIsQuoDropdownOpen(false);
+                              setQuoSearchTerm('');
+                            }}
+                            className={`w-full text-left px-3 py-2 transition flex items-start justify-between gap-2 cursor-pointer ${
+                              isSelected
+                                ? 'bg-blue-50/90 text-blue-900 font-bold border-l-4 border-blue-600'
+                                : 'hover:bg-slate-50 text-slate-800'
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-extrabold text-blue-700 text-xs font-mono">
+                                  {q.quotation_number || q.id}
+                                </span>
+                                {q.status && (
+                                  <span className="text-[9px] uppercase px-1.5 py-0.5 rounded font-mono bg-slate-200 text-slate-700">
+                                    {q.status}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-slate-600 truncate mt-0.5">
+                                {q.company_name || q.client_name || 'No Company'}
+                                {q.client_email ? ` • ${q.client_email}` : ''}
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0 text-[10px] text-slate-500">
+                              <div>{itemsCount} Item(s)</div>
+                              {gTotal > 0 && (
+                                <div className="font-bold text-slate-800 text-[11px]">
+                                  RM {gTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
 
           <button
             onClick={() => setIsSourceModalOpen(true)}
             className="flex items-center gap-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] border border-[#a0a0a0] text-[#3d3d3d] font-bold text-xs px-3 py-1 rounded-md shadow-inner transition cursor-pointer hover:bg-white"
-            title="View Original RFQ Source File / Message"
+            title={(!quotation?.source_file && !quotation?.rfq_id) ? "Source RFQ (No source file attached)" : "View Original RFQ Source File / Message"}
           >
-            <Paperclip className="w-3.5 h-3.5 text-[#0099ec]" />
-            <span>Source RFQ</span>
+            <Paperclip className={`w-3.5 h-3.5 ${(!quotation?.source_file && !quotation?.rfq_id) ? 'text-slate-400' : 'text-[#0099ec]'}`} />
+            <span>Source RFQ{(!quotation?.source_file && !quotation?.rfq_id) ? ' (No File)' : ''}</span>
           </button>
         </div>
 
@@ -587,7 +753,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-slate-800 hover:bg-amber-50 hover:text-amber-700 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
                 >
                   <Terminal className="w-4 h-4 text-amber-600" />
-                  <span>History Audit Trail Log</span>
+                  <span>Activity History</span>
                 </button>
 
                 <button
@@ -611,7 +777,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-slate-800 hover:bg-purple-50 hover:text-purple-700 font-semibold cursor-pointer text-left border-t border-slate-100 transition"
                 >
                   <Sliders className="w-4 h-4 text-purple-600" />
-                  <span>Advance SPH Settings</span>
+                  <span>Quotation Settings</span>
                 </button>
 
               </div>
@@ -640,7 +806,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                 ABM
               </div>
               <div>
-                <h2 className="font-extrabold text-base text-slate-900 tracking-tight">SURAT PENAWARAN HARGA (SPH) / QUOTATION</h2>
+                <h2 className="font-extrabold text-base text-slate-900 tracking-tight">OFFICIAL QUOTATION (SPH)</h2>
                 <p className="text-[11px] text-slate-500 font-mono">AB MALAYA SDN. BHD. • MALAYSIA INDUSTRIAL LOGISTICS</p>
               </div>
             </div>
@@ -665,7 +831,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
               <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
                 <span className="font-extrabold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                  <span>FROM (Pengirim Penawaran):</span>
+                  <span>FROM (Quotation Issuer):</span>
                 </span>
                 <span className="text-[10px] text-slate-500 font-mono">Official Provider</span>
               </div>
@@ -673,7 +839,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                 <p className="font-extrabold text-slate-900 text-xs">AB MALAYA SDN. BHD. (Reg: 202601001234)</p>
                 <p className="text-slate-600">No. 12, Jalan Industrial Park, 50000 Kuala Lumpur, Malaysia</p>
                 <p className="text-slate-600 font-mono">Email: sales@abmalaya.com | Tel: +60 3-8000 1234</p>
-                <p className="text-slate-500 text-[11px]">Dibuat Oleh: <span className="font-bold text-slate-700">{quotation?.created_by || currentUser?.name || 'Aiman Zaki'}</span></p>
+                <p className="text-slate-500 text-[11px]">Created By: <span className="font-bold text-slate-700">{quotation?.created_by || currentUser?.name || 'Aiman Zaki'}</span></p>
               </div>
             </div>
 
@@ -682,7 +848,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
               <div className="flex justify-between items-center border-b border-blue-200 pb-1.5">
                 <span className="font-extrabold text-xs text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
                   <Send className="w-3.5 h-3.5 text-blue-600" />
-                  <span>TO (Tujuan Penawaran / Klien):</span>
+                  <span>TO (Client / Recipient):</span>
                 </span>
                 <span className="text-[10px] text-blue-700 font-mono font-bold">Client Reply Target</span>
               </div>
@@ -700,7 +866,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Client Reply Email (JSON Selector):</label>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Client Email:</label>
                   {(() => {
                     let currentVal = quotation?.client_email || '';
                     let optionsList: Array<{ email: string; source: string }> = [];
@@ -754,14 +920,14 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                                 const val = (e.target as HTMLInputElement).value.trim();
                                 if (val && val.includes('@')) {
                                   const exists = optionsList.some(o => o.email.toLowerCase() === val.toLowerCase());
-                                  const updatedOpts = exists ? optionsList : [...optionsList, { email: val, source: 'Manual Added' }];
+                                  const updatedOpts = exists ? optionsList : [...optionsList, { email: val, source: 'Manual' }];
                                   updateEmailJson(val, updatedOpts);
                                   (e.target as HTMLInputElement).value = '';
                                 }
                               }
                             }}
                             className="w-full bg-white/80 border border-slate-300 rounded px-2 py-0.5 text-[10px] font-mono text-slate-700"
-                            title="Press Enter to add new email to JSON list"
+                            title="Press Enter to add email"
                           />
                         </div>
                       </div>
@@ -784,7 +950,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
 
           </div>
 
-          {/* Database Metadata Footer Line */}
+          {/* Quotation Details Footer Line */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200 text-[10px] text-slate-500 font-mono">
             <div>
               <span>Date Issued: <strong className="text-slate-700">{quotation?.date_issued || date}</strong></span> • 
@@ -792,27 +958,27 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
               <span> Created At: <strong className="text-slate-700">{quotation?.created_at || '—'}</strong></span>
             </div>
             <div>
-              <span>ACC Status: <strong className={quotation?.approved_by ? 'text-emerald-700 font-bold' : 'text-amber-700'}>{quotation?.approved_by ? 'ACC Approved' : 'Pending ACC'}</strong></span>
+              <span>Status: <strong className={quotation?.approved_by ? 'text-emerald-700 font-bold' : 'text-amber-700'}>{quotation?.approved_by ? 'Approved' : 'Pending Approval'}</strong></span>
             </div>
           </div>
 
         </div>
       </div>
 
-      {/* ITUNES TABLE-WRAP CONTAINER */}
+      {/* TABLE-WRAP CONTAINER */}
       <div className="flex-1 p-0 overflow-y-auto space-y-0 w-full bg-[#f0f0f0]">
         
         <div className="w-full">
           
-          {/* ITUNES PLAYLIST INFO BAR */}
+          {/* TABLE INFO BAR */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-2 bg-[#e9e9e9] border-b border-[#dbdbdb]">
             <div className="flex items-center gap-2">
               <span className="font-extrabold text-xs text-[#3d3d3d] uppercase tracking-wider">
-                SPH Item Specifications Table — {quotation?.quotation_number || 'SPH-ABM/MY/2026/0403'}
+                Quotation Items Table — {quotation?.quotation_number || 'Draft'}
               </span>
             </div>
 
-            {/* TWO ACTION BUTTONS: BLANK ITEM LINE OR PICK FROM PRODUCTS DATABASE (MULTI-SELECT) */}
+            {/* ACTION BUTTONS */}
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -823,7 +989,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                 className="flex items-center gap-1.5 bg-gradient-to-b from-[#00b4ff] to-[#0080d0] hover:from-[#00a2e8] hover:to-[#0070b8] text-white font-extrabold text-xs px-3 py-1 rounded-sm border border-[#0060b0] shadow-sm cursor-pointer transition"
               >
                 <Package className="w-3.5 h-3.5" />
-                <span>+ Select from Products Database (Multi-Select)</span>
+                <span>+ Select from Product Catalog</span>
               </button>
 
               <button
@@ -843,7 +1009,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
               <thead className="bg-gradient-to-b from-[#DFDFDF] to-[#EDEDED] border-b border-[rgba(0,0,0,0.15)] text-[#626262] font-semibold text-[11px] uppercase tracking-wide">
                 <tr>
                   <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-8 text-center">^</th>
-                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-8 text-center" title="Klik icon berputar ini pada baris mana saja untuk mengganti barang dari Katalog Produk">
+                  <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-8 text-center" title="Click this rotate icon on any row to replace item from Product Catalog">
                     <RefreshCw className="w-3.5 h-3.5 mx-auto text-[#626262]" />
                   </th>
                   <th className="p-2 border-r border-[rgba(0,0,0,0.1)] w-14 text-center">Photo</th>
@@ -892,7 +1058,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                             setIsProductPickerModalOpen(true);
                           }}
                           className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded transition cursor-pointer"
-                          title="Klik untuk mengganti barang baris ini dari Katalog Produk Master"
+                          title="Click to replace this row with an item from the catalog"
                         >
                           <RefreshCw className="w-3.5 h-3.5 mx-auto text-blue-600 hover:rotate-180 transition-transform duration-300" />
                         </button>
@@ -1051,7 +1217,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                     {unregisteredItems.map((it) => `"${it.description}"`).join(', ')}
                   </p>
                   <p className="text-[11px] text-slate-600">
-                    Unregistered products in the table above can be saved directly into the Master Product Catalog database (with specifications & pricing).
+                    Unregistered products in the table above can be saved directly into the Product Catalog (with specifications & pricing).
                   </p>
                 </div>
               </div>
@@ -1062,7 +1228,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                 className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs px-3.5 py-2 rounded cursor-pointer transition shadow-xs shrink-0"
               >
                 <PlusCircle className="w-4 h-4 text-amber-200" />
-                <span>+ Add {unregisteredItems.length} Custom Items to Database</span>
+                <span>+ Add {unregisteredItems.length} New Items to Catalog</span>
               </button>
             </div>
           )}
@@ -1124,9 +1290,9 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
           </div>
         </div>
 
-        {/* ITUNES FOOTER SUMMARY LINE */}
+        {/* FOOTER SUMMARY LINE */}
         <footer className="bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] border-t border-b border-[#7b7b7b] text-center py-1.5 text-[11px] text-[#3d3d3d] font-semibold w-full shrink-0">
-          <span>{(quotation?.items || []).length} Items Listed • Grand Total: {formatCurrency(quotation?.grand_total || 0)} • Live MySQL Connection (abmalaya_erp)</span>
+          <span>{(quotation?.items || []).length} Items Listed • Grand Total: {formatCurrency(quotation?.grand_total || 0)}</span>
         </footer>
 
       </div>
@@ -1230,7 +1396,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                                 type="button"
                                 className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] rounded cursor-pointer"
                               >
-                                Pilih
+                                Select
                               </button>
                             ) : (
                               <input
@@ -1335,7 +1501,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                     className="flex items-center gap-1.5 bg-gradient-to-b from-[#00b4ff] to-[#0080d0] hover:from-[#00a2e8] hover:to-[#0070b8] text-white font-extrabold text-xs px-4 py-1.5 rounded-sm border border-[#0060b0] shadow-sm cursor-pointer disabled:opacity-50 transition"
                   >
                     <PlusCircle className="w-4 h-4 text-white" />
-                    <span>Add {selectedProductIds.length} Selected Items to SPH</span>
+                    <span>Add {selectedProductIds.length} Selected Items to Quotation</span>
                   </button>
                 )}
               </div>
@@ -1353,7 +1519,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
               <div className="flex items-center gap-2">
                 <Paperclip className="w-4 h-4 text-[#0099ec]" />
                 <h3 className="font-extrabold text-xs text-[#3d3d3d]">
-                  Source RFQ Inspection & Gemini AI OCR Scanner — {quotation?.quotation_number}
+                  Source Document & AI Scanner — {quotation?.quotation_number}
                 </h3>
               </div>
               <button
@@ -1375,17 +1541,33 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => {
-                      if (quotation?.id) {
-                        window.open(getApiUrl(`/api_ocr_scan.php?quo_id=${encodeURIComponent(quotation.id)}`), '_blank');
-                      }
-                    }}
-                    className="flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-800 font-extrabold text-xs px-3.5 py-2 rounded-md border border-slate-300 shadow-xs cursor-pointer transition"
-                  >
-                    <Eye className="w-4 h-4 text-blue-600" />
-                    <span>View Scan Result</span>
-                  </button>
+                  {(() => {
+                    const hasScanOrSource = Boolean(
+                      quotation?.ocr_scan_result ||
+                      quotation?.source_file ||
+                      quotation?.quotation_file
+                    );
+                    return (
+                      <button
+                        type="button"
+                        disabled={!hasScanOrSource}
+                        onClick={() => {
+                          if (hasScanOrSource && quotation?.id) {
+                            window.open(getApiUrl(`/api_ocr_scan.php?quo_id=${encodeURIComponent(quotation.id)}`), '_blank');
+                          }
+                        }}
+                        className={`flex items-center gap-1.5 font-extrabold text-xs px-3.5 py-2 rounded-md border shadow-xs transition ${
+                          hasScanOrSource
+                            ? 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300 cursor-pointer'
+                            : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                        }`}
+                        title={hasScanOrSource ? 'View AI OCR Scan Result' : 'No source file or scan result available'}
+                      >
+                        <Eye className={`w-4 h-4 ${hasScanOrSource ? 'text-blue-600' : 'text-slate-400'}`} />
+                        <span>{hasScanOrSource ? 'View Scan Result' : 'No Scan File Available'}</span>
+                      </button>
+                    );
+                  })()}
 
 
                   <button
@@ -1396,12 +1578,12 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                     {isScanningModalOcr ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin text-white" />
-                        <span>Scanning via Gemini Flash AI...</span>
+                        <span>Analyzing document...</span>
                       </>
                     ) : (
                       <>
                         <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
-                        <span>Scan PDF dengan Gemini AI</span>
+                        <span>Scan Document with AI</span>
                       </>
                     )}
                   </button>
@@ -1409,51 +1591,84 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
               </div>
 
               {scanOcrLog && (
-                <div className="bg-slate-950 border border-slate-800 rounded-md p-4 space-y-2 text-emerald-400 text-[11px] shadow-lg animate-in fade-in" style={{ fontFamily: "'Eurostile', 'Microgramma D OT', 'Euro Stile', monospace" }}>
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-2 text-slate-400">
+                <div className="bg-slate-950 border border-slate-800 rounded-md p-4 space-y-2 text-slate-100 text-xs shadow-lg animate-in fade-in">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2 text-slate-300">
                     <span className="flex items-center gap-1.5 font-bold">
-                      <Terminal className="w-3.5 h-3.5 text-blue-400" />
-                      Google Gemini Flash AI Engine Execution Console
+                      <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                      AI Document Analysis
                     </span>
                   </div>
 
                   {isScanningModalOcr ? (
                     <div className="p-4 text-center space-y-2">
                       <Loader2 className="w-6 h-6 text-blue-400 animate-spin mx-auto" />
-                      <p className="text-slate-300 font-bold">Scanning authentic 159.7 KB PDF binary via Google Gemini Flash AI Engine...</p>
+                      <p className="text-slate-300 font-bold">Analyzing document specifications...</p>
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap justify-between text-slate-300 text-[10px] gap-2 border-b border-slate-800 pb-2">
-                        <span>Status: <strong className="text-emerald-400">{scanOcrLog.status}</strong></span>
-                        <span>Scanned File: <strong className="text-amber-300">{scanOcrLog.scanned_pdf_file}</strong></span>
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap justify-between text-slate-300 text-[11px] gap-2 border-b border-slate-800 pb-2">
+                        <span>Status: <strong className={scanOcrLog.status === 'error' ? 'text-rose-400' : 'text-emerald-400'}>{scanOcrLog.status}</strong></span>
+                        <span>Document: <strong className="text-amber-300">{scanOcrLog.scanned_pdf_file || (scanOcrLog as any).file_url || 'Email Specification'}</strong></span>
                       </div>
 
-                      {scanOcrLog.prompt_sent_to_gemini && (
-                        <div>
-                          <span className="text-slate-400 block font-bold mb-1">[1] System Prompt & Payload Sent to Gemini API:</span>
-                          <div className="bg-slate-900 p-2 rounded border border-slate-800 text-blue-300 text-[10px] whitespace-pre-wrap">
-                            {scanOcrLog.prompt_sent_to_gemini}
+                      {scanOcrLog.message && (
+                        <div className={`p-2.5 rounded border text-xs ${scanOcrLog.status === 'error' ? 'bg-rose-950/80 border-rose-800 text-rose-300' : 'bg-blue-950/80 border-blue-800 text-blue-300'}`}>
+                          <strong className="block font-bold mb-0.5">
+                            {scanOcrLog.status === 'error' ? 'Notice:' : 'System Information:'}
+                          </strong>
+                          <span>{scanOcrLog.message}</span>
+                          {scanOcrLog.status === 'error' && (scanOcrLog.error_code === 'ai_disabled' || (scanOcrLog as any).all_keys_disabled) && (
+                            <p className="mt-1.5 text-[11px] text-slate-300">
+                              💡 Tip: If AI scanning is unavailable, you can enter line items directly in the table, or verify your AI configuration in System Settings.
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {scanOcrLog.items && Array.isArray(scanOcrLog.items) && scanOcrLog.items.length > 0 && (
+                        <div className="space-y-1.5">
+                          <span className="text-slate-300 block font-bold text-xs">Extracted Items ({scanOcrLog.items.length}):</span>
+                          <div className="bg-slate-900 rounded border border-slate-800 overflow-hidden">
+                            <table className="w-full text-left text-xs">
+                              <thead className="bg-slate-800/80 text-slate-300 uppercase text-[10px]">
+                                <tr>
+                                  <th className="p-2 w-8 text-center">#</th>
+                                  <th className="p-2">Description</th>
+                                  <th className="p-2 w-20 text-center">Qty</th>
+                                  <th className="p-2 w-28 text-right">Unit Price</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-800 text-slate-200">
+                                {scanOcrLog.items.map((it: any, iIdx: number) => (
+                                  <tr key={iIdx} className="hover:bg-slate-800/40">
+                                    <td className="p-2 text-center text-slate-400 font-mono text-[10px]">{iIdx + 1}</td>
+                                    <td className="p-2 font-medium">{it.description || 'Item'}</td>
+                                    <td className="p-2 text-center font-mono text-[11px]">{it.qty || it.quantity || 1} {it.unit || 'Pcs'}</td>
+                                    <td className="p-2 text-right font-mono text-[11px]">{formatCurrency(it.unit_price || 0)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
                         </div>
                       )}
 
                       {scanOcrLog.extracted_raw_text && (
                         <div>
-                          <span className="text-slate-400 block font-bold mb-1">[2] Extracted Raw Specification Text:</span>
-                          <div className="bg-slate-900 p-2.5 rounded border border-slate-800 text-slate-200 text-[10px] leading-relaxed whitespace-pre-wrap max-h-32 overflow-y-auto">
+                          <span className="text-slate-400 block font-bold mb-1 text-[11px]">Extracted Document Text:</span>
+                          <div className="bg-slate-900 p-2.5 rounded border border-slate-800 text-slate-200 text-xs leading-relaxed whitespace-pre-wrap max-h-32 overflow-y-auto">
                             {scanOcrLog.extracted_raw_text}
                           </div>
                         </div>
                       )}
 
-                      {scanOcrLog.items && (
-                        <div>
-                          <span className="text-slate-400 block font-bold mb-1">[3] Gemini AI Structured Line Items Output:</span>
-                          <pre className="bg-slate-900 p-2.5 rounded border border-slate-800 text-amber-300 text-[10px] max-h-40 overflow-y-auto">
-                            {JSON.stringify(scanOcrLog.items, null, 2)}
-                          </pre>
-                        </div>
+                      {scanOcrLog.prompt_sent_to_gemini && (
+                        <details className="text-[10px] text-slate-400">
+                          <summary className="cursor-pointer hover:text-slate-200 transition font-mono">View technical prompt details</summary>
+                          <div className="mt-1 bg-slate-900 p-2 rounded border border-slate-800 text-blue-300 whitespace-pre-wrap max-h-32 overflow-y-auto font-mono text-[10px]">
+                            {scanOcrLog.prompt_sent_to_gemini}
+                          </div>
+                        </details>
                       )}
                     </div>
                   )}
@@ -1465,7 +1680,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                   Original Email Specification Text:
                 </h4>
                 <p className="whitespace-pre-line text-slate-800 leading-relaxed font-sans bg-slate-50 p-3 border border-slate-200">
-                  {quotation?.notes || 'Spesifikasi email belum diisi.'}
+                  {quotation?.notes || 'Email specification notes have not been provided.'}
                 </p>
               </div>
 
@@ -1490,9 +1705,9 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
             
             <div className="p-3 bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] text-[#3d3d3d] flex items-center justify-between border-b border-[#7b7b7b] shrink-0">
               <div className="flex items-center gap-2">
-                <Terminal className="w-4 h-4 text-amber-600" />
+                <History className="w-4 h-4 text-amber-600" />
                 <h3 className="font-extrabold text-xs text-[#3d3d3d]">
-                  History Audit Trail Log — {quotation?.quotation_number}
+                  Quotation Change History — {quotation?.quotation_number}
                 </h3>
               </div>
               <button
@@ -1506,8 +1721,8 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
             <div className="p-4 overflow-y-auto space-y-3 flex-1 bg-slate-50 text-xs">
               <div className="bg-slate-950 border border-slate-800 rounded-md p-4 space-y-2 text-slate-200 font-mono shadow-inner">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2 text-slate-400">
-                  <span className="font-bold text-amber-400">MySQL Audit Log Events</span>
-                  <span>ID SPH: {quotation?.id}</span>
+                  <span className="font-bold text-amber-400">Activity History</span>
+                  <span>Quotation ID: {quotation?.id}</span>
                 </div>
 
                 {quotation?.history_log ? (
@@ -1518,7 +1733,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                   </pre>
                 ) : (
                   <div className="py-6 text-center text-slate-500 font-sans">
-                    <p className="font-bold text-slate-400">No audit history log recorded yet.</p>
+                    <p className="font-bold text-slate-400">No activity history recorded yet.</p>
                     <p className="text-[11px]">Every creation, modification, manager approval, and email dispatch will be recorded here.</p>
                   </div>
                 )}
@@ -1530,7 +1745,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                 onClick={() => setIsHistoryLogModalOpen(false)}
                 className="px-4 py-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] text-[#3d3d3d] border border-[#a0a0a0] font-bold text-xs rounded-sm cursor-pointer hover:bg-white"
               >
-                Close Audit Log
+                Close History
               </button>
             </div>
 

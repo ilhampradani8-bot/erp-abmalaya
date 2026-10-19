@@ -6,6 +6,7 @@ import { Header } from './components/Header';
 import { RFQInbox } from './components/RFQInbox';
 import { QuotationList } from './components/QuotationList';
 import { QuotationBuilder } from './components/QuotationBuilder';
+import { InvoiceBuilder } from './components/InvoiceBuilder';
 import { QuotationDoc } from './components/QuotationDoc';
 import { Product } from './components/Product';
 import { EmailReplyModal } from './components/EmailReplyModal';
@@ -183,12 +184,12 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  const [viewMode, setViewModeState] = useState<'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads'>('inbox');
+  const [viewMode, setViewModeState] = useState<'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads'>('inbox');
   const [showEmailModal, setShowEmailModal] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const setViewMode = (mode: 'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads') => {
+  const setViewMode = (mode: 'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads') => {
     setIsLoading(true);
     setViewModeState(mode);
     setTimeout(() => {
@@ -240,11 +241,21 @@ export const App: React.FC = () => {
 
   const handleCreateQuotationFromRfq = (rfq: RFQ) => {
     setIsLoading(true);
+    const existingQuo = quotationsCache.find(
+      (q: Quotation) => (rfq.quotation_id && q.id === rfq.quotation_id) || String(q.rfq_id) === String(rfq.id)
+    );
+    if (existingQuo) {
+      setCurrentQuotation(existingQuo);
+      setViewModeState('builder');
+      setTimeout(() => setIsLoading(false), 300);
+      return;
+    }
+
     const newQuo: Quotation = {
       ...sampleQuotation,
-      id: `QUO-${Date.now().toString().slice(-4)}`,
-      rfq_id: rfq.id,
-      quotation_number: `SPH-ABM/MY/2026/0${Math.floor(Math.random() * 900 + 100)}`,
+      id: rfq.quotation_id || `QUO-${Date.now()}-${Math.floor(Math.random() * 9000 + 1000)}`,
+      rfq_id: (rfq as any).db_id || rfq.id,
+      quotation_number: rfq.quotation_number || `SPH-ABM/MY/2026/0${Math.floor(Math.random() * 900 + 100)}`,
       client_name: rfq.sender_name,
       client_email: rfq.sender_email,
       company_name: rfq.company,
@@ -268,6 +279,15 @@ export const App: React.FC = () => {
     };
 
     setCurrentQuotation(newQuo);
+    setQuotationsCache((prev) => {
+      const idx = prev.findIndex((q) => q.id === newQuo.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = newQuo;
+        return next;
+      }
+      return [newQuo, ...prev];
+    });
     setViewModeState('builder');
     setTimeout(() => setIsLoading(false), 300);
   };
@@ -494,6 +514,14 @@ export const App: React.FC = () => {
                   }}
                   onCancel={() => setViewMode('inbox')}
                   currentUser={currentUser}
+                />
+              )}
+
+              {viewMode === 'invoice_builder' && (
+                <InvoiceBuilder
+                  onBack={() => setViewMode('inbox')}
+                  onSendEmail={() => setShowEmailModal(true)}
+                  onNavigateView={(mode) => setViewMode(mode)}
                 />
               )}
 

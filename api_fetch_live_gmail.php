@@ -80,14 +80,24 @@ if (isset($_GET['download']) || isset($_GET['preview'])) {
         $cache_dir . "/msg_{$msgno}_part_{$part_no}_{$safe_fn}",
         $cache_dir . "/{$filename}",
         $cache_dir . "/{$safe_fn}",
+        __DIR__ . "/attachments/{$filename}",
+        __DIR__ . "/attachments/{$safe_fn}",
+        __DIR__ . "/attachments/msg_{$msgno}_part_{$part_no}_{$safe_fn}",
         dirname(__DIR__) . "/attachments/{$filename}",
         dirname(__DIR__) . "/attachments/{$safe_fn}",
         dirname(__DIR__) . "/attachments/msg_{$msgno}_part_{$part_no}_{$safe_fn}",
+        __DIR__ . "/public/attachments/{$filename}",
+        __DIR__ . "/public/attachments/{$safe_fn}",
+        dirname(__DIR__) . "/public/attachments/{$filename}",
+        dirname(__DIR__) . "/public/attachments/{$safe_fn}",
         __DIR__ . "/uploads/pdf/{$filename}",
         __DIR__ . "/uploads/pdf/{$safe_fn}",
         __DIR__ . "/uploads/{$filename}",
+        dirname(__DIR__) . "/uploads/pdf/{$filename}",
+        dirname(__DIR__) . "/uploads/{$filename}",
         dirname(__DIR__) . "/public/uploads/pdf/{$filename}",
-        dirname(__DIR__) . "/public/attachments/{$safe_fn}"
+        sys_get_temp_dir() . "/gmail_attachments/{$safe_fn}",
+        sys_get_temp_dir() . "/gmail_attachments/{$filename}"
     ];
 
     foreach ($candidate_files as $cf) {
@@ -97,13 +107,20 @@ if (isset($_GET['download']) || isset($_GET['preview'])) {
         }
     }
 
-    // 2. Fuzzy disk search in cache_dir and uploads/pdf/ if exact path not matched
+    // 2. Fuzzy disk search in cache_dir, attachments, and uploads/pdf/ if exact path not matched
     if (!$found_file && !empty($base_clean)) {
         $search_dirs = [
             $cache_dir,
+            __DIR__ . '/attachments',
             dirname(__DIR__) . '/attachments',
+            __DIR__ . '/public/attachments',
+            dirname(__DIR__) . '/public/attachments',
             __DIR__ . '/uploads/pdf',
-            __DIR__ . '/uploads'
+            __DIR__ . '/uploads',
+            dirname(__DIR__) . '/uploads/pdf',
+            dirname(__DIR__) . '/uploads',
+            dirname(__DIR__) . '/public/uploads/pdf',
+            sys_get_temp_dir() . '/gmail_attachments'
         ];
         foreach ($search_dirs as $sdir) {
             if (is_dir($sdir)) {
@@ -161,6 +178,9 @@ if (isset($_GET['download']) || isset($_GET['preview'])) {
 
     // 3. If not found on local disk, try IMAP download
     $cache_file = $cache_dir . "/msg_{$msgno}_part_{$part_no}_{$safe_fn}";
+    $saved_attachment_path = null;
+
+    // 3a. Try PHP imap_open if extension is loaded
     if ($msgno > 0 && function_exists('imap_open')) {
         try {
             $inbox = @imap_open($hostname, $username, $password, OP_READONLY, 1, array('DISABLE_AUTHENTICATOR' => 'GSSAPI'));
@@ -187,12 +207,103 @@ if (isset($_GET['download']) || isset($_GET['preview'])) {
 
                 if (!empty($decoded_attachment) && strlen($decoded_attachment) > 100) {
                     @file_put_contents($cache_file, $decoded_attachment);
-                    $streamFile($cache_file, $filename, $ext, 'MISS-SAVED-TO-CACHE');
+                    $saved_attachment_path = $cache_file;
                 }
             }
         } catch (Throwable $e) {
             // Gracefully catch any IMAP errors
         }
+    }
+
+    // 3b. Socket-based IMAP fallback (Works universally in all cPanel / FTP shared PHP hosts without requiring ext-imap)
+    if (!$saved_attachment_path && !empty($username) && !empty($password)) {
+        try {
+            $imap_host = "imap.gmail.com";
+            $imap_port = 993;
+            $sock = @fsockopen("ssl://{$imap_host}", $imap_port, $sErrNo, $sErrStr, 10);
+            if ($sock) {
+                stream_set_timeout($sock, 15);
+                $sSend = function($cmd) use ($sock) { fwrite($sock, $cmd . "\r\n"); };
+                $sReadTag = function($tag) use ($sock) {
+                    $buf = "";
+                    while (!feof($sock)) {
+                        $line = fgets($sock, 4096);
+                        if ($line === false) break;
+                        $buf .= $line;
+                        if (strpos($line, $tag . " ") === 0) break;
+                    }
+                    return $buf;
+                };
+
+                fgets($sock, 1024); // banner
+                $sSend("SK1 LOGIN " . $username . " \"" . str_replace(['\\', '"'], ['\\\\', '\\"'], $password) . "\"");
+                $lRes = $sReadTag("SK1");
+
+                if (strpos($lRes, "SK1 OK") !== false) {
+                    $sSend("SK2 SELECT INBOX");
+                    $sReadTag("SK2");
+
+                    $targetMsg = $msgno;
+                    $cleanFn = preg_replace('/[^a-zA-Z0-9]/', '', pathinfo($filename, PATHINFO_FILENAME));
+                    if (strlen($cleanFn) >= 4) {
+                        $searchTerm = substr($cleanFn, 0, 24);
+                        $sSend("SK3 SEARCH TEXT \"{$searchTerm}\"");
+                        $srchRes = $sReadTag("SK3");
+                        if (preg_match('/\* SEARCH\s+([0-9\s]+)/i', $srchRes, $sm)) {
+                            $sNums = array_filter(explode(" ", trim($sm[1])));
+                            if (!empty($sNums)) {
+                                $targetMsg = (int)end($sNums);
+                            }
+                        }
+                    }
+
+                    if ($targetMsg > 0) {
+                        $partsToTry = [$part_no, 2, "1.2", 1];
+                        $partsToTry = array_unique(array_filter($partsToTry));
+                        $skTagIdx = 4;
+
+                        foreach ($partsToTry as $pt) {
+                            $skTag = "SK" . ($skTagIdx++);
+                            $sSend("{$skTag} FETCH {$targetMsg} BODY[{$pt}]");
+                            $firstLine = fgets($sock);
+                            if ($firstLine && preg_match('/\{(\d+)\}\s*$/', $firstLine, $lm)) {
+                                $litBytes = (int)$lm[1];
+                                $rawLit = "";
+                                while ($litBytes > 0 && !feof($sock)) {
+                                    $chunk = fread($sock, min(8192, $litBytes));
+                                    if ($chunk === false || strlen($chunk) === 0) break;
+                                    $rawLit .= $chunk;
+                                    $litBytes -= strlen($chunk);
+                                }
+                                $sReadTag($skTag); // drain trailer
+                                $decData = base64_decode(trim($rawLit), true);
+                                if (!$decData || strlen($decData) < 50) {
+                                    $decData = quoted_printable_decode(trim($rawLit));
+                                }
+                                if ($decData && strlen($decData) > 100) {
+                                    @file_put_contents($cache_file, $decData);
+                                    $permDir = __DIR__ . '/attachments';
+                                    if (!is_dir($permDir)) @mkdir($permDir, 0755, true);
+                                    @file_put_contents($permDir . '/' . $safe_fn, $decData);
+                                    $saved_attachment_path = $cache_file;
+                                    break;
+                                }
+                            } else {
+                                $sReadTag($skTag);
+                            }
+                        }
+                    }
+                    $sSend("SK_QUIT LOGOUT");
+                }
+                @fclose($sock);
+            }
+        } catch (Throwable $se) {
+            // Socket fallback safe fail
+        }
+    }
+
+    if ($saved_attachment_path && file_exists($saved_attachment_path) && filesize($saved_attachment_path) > 100) {
+        $streamFile($saved_attachment_path, $filename, $ext, 'MISS-SAVED-TO-CACHE');
     }
 
     // 4. File not found: Return clean 404 text or SVG placeholder, NEVER dump the RFQs list JSON!
@@ -983,7 +1094,31 @@ try {
     // ⚡ INSTANT FAST RESPONSE (< 5ms): Query MySQL Cache First if NOT syncing
     if (!$is_sync && $db_conn && !$db_conn->connect_error) {
         $query_where = "WHERE r.created_at >= '" . $db_conn->real_escape_string($start_date_limit) . " 00:00:00'";
-        $res = $db_conn->query("SELECT r.*, COALESCE(q.status, 'masuk') AS status FROM rfq_requests r LEFT JOIN quotations q ON q.rfq_id = r.id {$query_where} ORDER BY r.id DESC LIMIT 200");
+        $all_replies = [];
+        $chk_rep = $db_conn->query("SHOW TABLES LIKE 'rfq_replies'");
+        if ($chk_rep && $chk_rep->num_rows > 0) {
+            $r_res = $db_conn->query("SELECT * FROM rfq_replies ORDER BY id ASC");
+            if ($r_res) {
+                while ($r_row = $r_res->fetch_assoc()) {
+                    $rep_obj = [
+                        'id' => (int)$r_row['id'],
+                        'body' => $r_row['reply_body'],
+                        'date' => date('Y-m-d H:i', strtotime($r_row['created_at'])),
+                        'sender' => $r_row['reply_sender'] ?: 'sales@abmalaya.com',
+                        'quotation_id' => $r_row['quotation_id'] ?? null,
+                        'quotation_number' => $r_row['quotation_number'] ?? null,
+                        'attachment_file' => $r_row['attachment_file'] ?? null,
+                        'has_file' => !empty($r_row['attachment_file'])
+                    ];
+                    $r_id = (int)($r_row['rfq_id'] ?? 0);
+                    $r_num = trim($r_row['rfq_number'] ?? '');
+                    if ($r_id > 0) $all_replies['id_' . $r_id][] = $rep_obj;
+                    if (!empty($r_num)) $all_replies['num_' . $r_num][] = $rep_obj;
+                }
+            }
+        }
+
+        $res = $db_conn->query("SELECT r.*, COALESCE(q.status, r.status, 'masuk') AS status, q.id AS quotation_id, q.quotation_number, q.status AS quotation_status, q.approved_by, q.grand_total AS quotation_grand_total FROM rfq_requests r LEFT JOIN quotations q ON (q.rfq_id = r.id OR q.rfq_id = r.rfq_number) {$query_where} ORDER BY r.id DESC LIMIT 200");
         if ($res && $res->num_rows > 0) {
             $data = [];
             while ($row = $res->fetch_assoc()) {
@@ -1036,6 +1171,15 @@ try {
 
                 $clean_body = formatEmailBodyText($row['message_body']);
 
+                $is_acc = false;
+                $q_id = !empty($row['quotation_id']) ? $row['quotation_id'] : null;
+                if (!empty($q_id)) {
+                    $q_st = strtolower($row['quotation_status'] ?? '');
+                    if (!empty($row['approved_by']) || in_array($q_st, ['approved', 'acc', 'disetujui', 'ready_send', 'done_send', 'penawaran_terkirim', 'sent', 'terkirim'])) {
+                        $is_acc = true;
+                    }
+                }
+
                 $data[] = [
                     'id' => str_replace('RFQ-', 'GMAIL-LIVE-', $row['rfq_number']),
                     'db_id' => (int)$row['id'],
@@ -1057,15 +1201,28 @@ try {
                     'ai_verified' => $ai_verified,
                     'ai_classification' => $ai_classification,
                     'ai_error' => isset($row['ai_error']) ? $row['ai_error'] : null,
+                    'quotation_id' => $q_id,
+                    'quotation_number' => $row['quotation_number'] ?? null,
+                    'quotation_status' => $row['quotation_status'] ?? null,
+                    'approved_by' => $row['approved_by'] ?? null,
+                    'is_acc_approved' => $is_acc,
+                    'quotation_grand_total' => isset($row['quotation_grand_total']) ? (float)$row['quotation_grand_total'] : 0.0,
                     'labels' => $labels,
                     'attachments' => $attachments,
-                    'replies' => !empty($row['reply_body']) ? [
+                    'reply_body' => $row['reply_body'] ?? null,
+                    'reply_date' => $row['reply_date'] ?? null,
+                    'reply_sender' => $row['reply_sender'] ?? null,
+                    'is_replied' => (!empty($row['reply_body']) || (isset($all_replies['id_' . (int)$row['id']]) && count($all_replies['id_' . (int)$row['id']]) > 0) || (isset($all_replies['num_' . trim($row['rfq_number'])]) && count($all_replies['num_' . trim($row['rfq_number'])]) > 0) || in_array($row['status'], ['penawaran_terkirim', 'done_send', 'deal', 'sent'])),
+                    'replies' => !empty($row['id']) && isset($all_replies['id_' . (int)$row['id']]) ? $all_replies['id_' . (int)$row['id']] : (!empty($row['rfq_number']) && isset($all_replies['num_' . trim($row['rfq_number'])]) ? $all_replies['num_' . trim($row['rfq_number'])] : (!empty($row['reply_body']) ? [
                         [
+                            'id' => (int)$row['id'],
                             'body' => $row['reply_body'],
-                            'date' => $row['reply_date'],
-                            'sender' => $row['reply_sender'] ?: ($row['recipient_email'] ?: 'abmalayaindustry@gmail.com')
+                            'date' => $row['reply_date'] ?: $row['created_at'],
+                            'sender' => $row['reply_sender'] ?: ($row['recipient_email'] ?: 'sales@abmalaya.com'),
+                            'quotation_id' => $row['quotation_id'] ?? null,
+                            'quotation_number' => $row['quotation_number'] ?? null
                         ]
-                    ] : []
+                    ] : []))
                 ];
             }
 
@@ -1689,6 +1846,30 @@ try {
 
 
         $query_where = "WHERE r.created_at >= '" . $db_conn->real_escape_string($start_date_limit) . " 00:00:00'";
+        $all_replies_sync = [];
+        $chk_rep_sync = $db_conn->query("SHOW TABLES LIKE 'rfq_replies'");
+        if ($chk_rep_sync && $chk_rep_sync->num_rows > 0) {
+            $r_res_sync = $db_conn->query("SELECT * FROM rfq_replies ORDER BY id ASC");
+            if ($r_res_sync) {
+                while ($r_row = $r_res_sync->fetch_assoc()) {
+                    $rep_obj = [
+                        'id' => (int)$r_row['id'],
+                        'body' => $r_row['reply_body'],
+                        'date' => date('Y-m-d H:i', strtotime($r_row['created_at'])),
+                        'sender' => $r_row['reply_sender'] ?: 'sales@abmalaya.com',
+                        'quotation_id' => $r_row['quotation_id'] ?? null,
+                        'quotation_number' => $r_row['quotation_number'] ?? null,
+                        'attachment_file' => $r_row['attachment_file'] ?? null,
+                        'has_file' => !empty($r_row['attachment_file'])
+                    ];
+                    $r_id = (int)($r_row['rfq_id'] ?? 0);
+                    $r_num = trim($r_row['rfq_number'] ?? '');
+                    if ($r_id > 0) $all_replies_sync['id_' . $r_id][] = $rep_obj;
+                    if (!empty($r_num)) $all_replies_sync['num_' . $r_num][] = $rep_obj;
+                }
+            }
+        }
+
         $res = $db_conn->query("SELECT r.*, COALESCE(q.status, r.status, 'masuk') AS status FROM rfq_requests r LEFT JOIN quotations q ON (q.rfq_id = r.id AND r.status != 'deleted') {$query_where} ORDER BY r.id DESC LIMIT 200");
         if ($res && $res->num_rows > 0) {
             $data = [];
@@ -1769,13 +1950,20 @@ try {
                     'ai_error' => isset($row['ai_error']) ? $row['ai_error'] : null,
                     'labels' => $labels,
                     'attachments' => $attachments,
-                    'replies' => !empty($row['reply_body']) ? [
+                    'reply_body' => $row['reply_body'] ?? null,
+                    'reply_date' => $row['reply_date'] ?? null,
+                    'reply_sender' => $row['reply_sender'] ?? null,
+                    'is_replied' => (!empty($row['reply_body']) || (isset($all_replies_sync['id_' . (int)$row['id']]) && count($all_replies_sync['id_' . (int)$row['id']]) > 0) || (isset($all_replies_sync['num_' . trim($row['rfq_number'])]) && count($all_replies_sync['num_' . trim($row['rfq_number'])]) > 0) || in_array($row['status'], ['penawaran_terkirim', 'done_send', 'deal', 'sent'])),
+                    'replies' => !empty($row['id']) && isset($all_replies_sync['id_' . (int)$row['id']]) ? $all_replies_sync['id_' . (int)$row['id']] : (!empty($row['rfq_number']) && isset($all_replies_sync['num_' . trim($row['rfq_number'])]) ? $all_replies_sync['num_' . trim($row['rfq_number'])] : (!empty($row['reply_body']) ? [
                         [
+                            'id' => (int)$row['id'],
                             'body' => $row['reply_body'],
-                            'date' => $row['reply_date'],
-                            'sender' => $row['reply_sender'] ?: ($row['recipient_email'] ?: 'abmalayaindustry@gmail.com')
+                            'date' => $row['reply_date'] ?: $row['created_at'],
+                            'sender' => $row['reply_sender'] ?: ($row['recipient_email'] ?: 'sales@abmalaya.com'),
+                            'quotation_id' => $row['quotation_id'] ?? null,
+                            'quotation_number' => $row['quotation_number'] ?? null
                         ]
-                    ] : []
+                    ] : []))
                 ];
             }
         }

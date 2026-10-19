@@ -254,10 +254,10 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            Log Aktivitas Sesi Login Pengguna (Live Audit Trail):
+            User Login Session Activity Log (Live Audit Trail):
           </h3>
           <span className="text-[10px] text-slate-500 font-mono font-bold">
-            Total Log: {activityLogs.length}
+            Total Logs: {activityLogs.length}
           </span>
         </div>
 
@@ -265,10 +265,10 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px]">
               <tr>
-                <th className="p-2.5">Waktu / Timestamp</th>
-                <th className="p-2.5">Nama & Email Pengguna</th>
-                <th className="p-2.5">Jenis Aktivitas</th>
-                <th className="p-2.5">Rincian Aktivitas</th>
+                <th className="p-2.5">Timestamp</th>
+                <th className="p-2.5">User Name & Email</th>
+                <th className="p-2.5">Activity Type</th>
+                <th className="p-2.5">Activity Details</th>
                 <th className="p-2.5 text-center">IP Address</th>
               </tr>
             </thead>
@@ -276,7 +276,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
               {isLoadingLogs ? (
                 <tr>
                   <td colSpan={5} className="p-6 text-center text-slate-400 font-bold">
-                    Memuat log aktivitas...
+                    Loading activity log...
                   </td>
                 </tr>
               ) : activityLogs.length === 0 ? (

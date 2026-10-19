@@ -2,7 +2,7 @@ import React from 'react';
 import { PlusCircle, Menu } from 'lucide-react';
 
 interface HeaderProps {
-  viewMode: 'inbox' | 'builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads';
+  viewMode: 'inbox' | 'builder' | 'invoice_builder' | 'doc_preview' | 'account_settings' | 'system_settings' | 'quotation_list' | 'product_catalog' | 'notification_log' | 'trash_quotation' | 'trash' | 'downloads';
   sentCount: number;
   dealCount: number;
   pendingCount: number;

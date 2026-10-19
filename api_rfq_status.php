@@ -31,19 +31,11 @@ try {
         }
 
         if ($action === 'move_to_requisition') {
-            // 1. Update status and classification in rfq_requests table
-            $stmt = $db_conn->prepare("UPDATE rfq_requests SET status = 'in_progress', ai_verified = 1, ai_classification = 'client_rfq' WHERE id = ? OR rfq_number = ?");
-            if ($stmt) {
-                $stmt->bind_param("is", $clean_id, $rfq_num);
-                $stmt->execute();
-                $stmt->close();
-            }
-
-            // 2. Fetch the updated row to pass to auto-generator
+            // First find the actual RFQ row in rfq_requests to get true integer ID
             $row = null;
-            $stmt_load = $db_conn->prepare("SELECT * FROM rfq_requests WHERE id = ? OR rfq_number = ?");
+            $stmt_load = $db_conn->prepare("SELECT * FROM rfq_requests WHERE id = ? OR rfq_number = ? OR rfq_number = ? LIMIT 1");
             if ($stmt_load) {
-                $stmt_load->bind_param("is", $clean_id, $rfq_num);
+                $stmt_load->bind_param("iss", $clean_id, $rfq_num, $rfq_id_raw);
                 $stmt_load->execute();
                 $res_load = $stmt_load->get_result();
                 if ($res_load && $res_load->num_rows > 0) {
@@ -52,11 +44,22 @@ try {
                 $stmt_load->close();
             }
 
+            $real_db_id = $row ? (int)$row['id'] : $clean_id;
+            $real_rfq_num = $row ? $row['rfq_number'] : $rfq_num;
+
+            // 1. Update status and classification in rfq_requests table
+            $stmt = $db_conn->prepare("UPDATE rfq_requests SET status = 'in_progress', ai_verified = 1, ai_classification = 'client_rfq' WHERE id = ? OR rfq_number = ?");
+            if ($stmt) {
+                $stmt->bind_param("is", $real_db_id, $real_rfq_num);
+                $stmt->execute();
+                $stmt->close();
+            }
+
             // 3. Find or Create Quotation record in MySQL database
             $quo_row = null;
-            $stmt_q = $db_conn->prepare("SELECT * FROM quotations WHERE rfq_id = ? OR rfq_id = ? ORDER BY id DESC LIMIT 1");
+            $stmt_q = $db_conn->prepare("SELECT * FROM quotations WHERE rfq_id = ? OR rfq_id = ? OR rfq_id = ? ORDER BY id DESC LIMIT 1");
             if ($stmt_q) {
-                $stmt_q->bind_param("is", $clean_id, $rfq_num);
+                $stmt_q->bind_param("iss", $real_db_id, $real_rfq_num, $clean_id);
                 $stmt_q->execute();
                 $res_q = $stmt_q->get_result();
                 if ($res_q && $res_q->num_rows > 0) {
@@ -147,37 +150,62 @@ try {
             exit;
         }
 
-        if ($action === 'delete_rfq') {
+        if ($action === 'delete_rfq' || $action === 'delete_company') {
             $delete_type = isset($input['delete_type']) ? $input['delete_type'] : 'delete_only'; // 'delete_only' or 'blacklist'
             $reason = isset($input['reason']) ? trim($input['reason']) : '';
+            $target_email = isset($input['target_client_email']) ? trim($input['target_client_email']) : '';
+            $company_name = isset($input['company_name']) ? trim($input['company_name']) : '';
+            $client_id = isset($input['client_id']) ? intval($input['client_id']) : 0;
 
-            // 1. Fetch current RFQ details (email, company, subject)
+            // 1. Fetch current RFQ details (email, company, subject) if rfq_id is provided
             $rfq_data = null;
-            $stmt_load = $db_conn->prepare("SELECT * FROM rfq_requests WHERE rfq_number = ? OR id = ? OR rfq_number = ? LIMIT 1");
-            if ($stmt_load) {
-                $stmt_load->bind_param("sis", $rfq_id_raw, $clean_id, $rfq_num);
-                $stmt_load->execute();
-                $res_load = $stmt_load->get_result();
-                if ($res_load && $res_load->num_rows > 0) {
-                    $rfq_data = $res_load->fetch_assoc();
+            if ($clean_id > 0 || !empty($rfq_id_raw)) {
+                $stmt_load = $db_conn->prepare("SELECT * FROM rfq_requests WHERE rfq_number = ? OR id = ? OR rfq_number = ? LIMIT 1");
+                if ($stmt_load) {
+                    $stmt_load->bind_param("sis", $rfq_id_raw, $clean_id, $rfq_num);
+                    $stmt_load->execute();
+                    $res_load = $stmt_load->get_result();
+                    if ($res_load && $res_load->num_rows > 0) {
+                        $rfq_data = $res_load->fetch_assoc();
+                    }
+                    $stmt_load->close();
                 }
-                $stmt_load->close();
             }
 
-            if (!$rfq_data) {
-                ob_end_clean();
-                echo json_encode(['status' => 'error', 'message' => 'RFQ record not found']);
-                exit;
+            $sender_email = !empty($target_email) ? $target_email : ($rfq_data ? trim($rfq_data['client_email']) : '');
+            $sender_company = !empty($company_name) ? $company_name : ($rfq_data ? trim($rfq_data['client_company'] ?: $rfq_data['client_name']) : '');
+            $real_id = $rfq_data ? (int)$rfq_data['id'] : 0;
+            $real_rfq_num = $rfq_data ? $rfq_data['rfq_number'] : '';
+
+            // Also find client_id from clients table if not passed
+            if ($client_id === 0 && (!empty($sender_email) || !empty($sender_company))) {
+                $stmt_c = $db_conn->prepare("SELECT id FROM clients WHERE (email LIKE ? AND email != '') OR (LOWER(TRIM(company_name)) = LOWER(TRIM(?)) AND company_name != '') LIMIT 1");
+                if ($stmt_c) {
+                    $eParam = '%' . $sender_email . '%';
+                    $stmt_c->bind_param("ss", $eParam, $sender_company);
+                    $stmt_c->execute();
+                    $r_c = $stmt_c->get_result();
+                    if ($r_c && $c_row = $r_c->fetch_assoc()) {
+                        $client_id = (int)$c_row['id'];
+                    }
+                    $stmt_c->close();
+                }
             }
 
-            $sender_email = trim($rfq_data['client_email']);
-            $sender_company = trim($rfq_data['client_company'] ?: $rfq_data['client_name']);
-            $real_id = (int)$rfq_data['id'];
-            $real_rfq_num = $rfq_data['rfq_number'];
+            // Remove or deactivate from clients & signatories table so it disappears from Client Emails list
+            if ($client_id > 0) {
+                @$db_conn->query("DELETE FROM client_signatories WHERE client_id = " . intval($client_id));
+                @$db_conn->query("DELETE FROM clients WHERE id = " . intval($client_id));
+            }
+            if (!empty($sender_company)) {
+                $esc_comp = $db_conn->real_escape_string($sender_company);
+                @$db_conn->query("DELETE FROM client_signatories WHERE LOWER(TRIM(company_name)) = LOWER(TRIM('$esc_comp'))");
+                @$db_conn->query("DELETE FROM clients WHERE LOWER(TRIM(company_name)) = LOWER(TRIM('$esc_comp'))");
+            }
 
             if ($delete_type === 'blacklist') {
                 if (empty($reason)) {
-                    $reason = 'Blacklisted by Admin via RFQ Inbox';
+                    $reason = 'Blacklisted by User via Client Email';
                 }
 
                 // 2. Insert or update blacklist entry
@@ -190,21 +218,22 @@ try {
                     }
                 }
 
-                // 3. Update all existing RFQs from this email to deleted and blacklisted
-                $stmt_up = $db_conn->prepare("UPDATE rfq_requests SET status = 'deleted', is_blacklisted = 1, blacklist_reason = ?, ai_verified = 1, ai_classification = 'blacklisted', ai_error = 'Otomatis diabaikan oleh mesin: Email masuk dalam daftar Blacklist' WHERE LOWER(client_email) = LOWER(?) OR id = ? OR rfq_number = ?");
+                // 3. Update all existing RFQs from this email or company to deleted and blacklisted
+                $stmt_up = $db_conn->prepare("UPDATE rfq_requests SET status = 'deleted', is_blacklisted = 1, blacklist_reason = ?, ai_verified = 1, ai_classification = 'blacklisted', ai_error = 'Otomatis diabaikan oleh mesin: Email masuk dalam daftar Blacklist' WHERE (LOWER(client_email) = LOWER(?) AND client_email != '') OR (LOWER(TRIM(company)) = LOWER(TRIM(?)) AND company != '') OR id = ? OR rfq_number = ?");
                 if ($stmt_up) {
-                    $stmt_up->bind_param("ssis", $reason, $sender_email, $real_id, $real_rfq_num);
+                    $stmt_up->bind_param("sssis", $reason, $sender_email, $sender_company, $real_id, $real_rfq_num);
                     $stmt_up->execute();
                     $stmt_up->close();
                 }
 
-                // 4. Log history
-                appendRfqHistoryLog($db_conn, $real_id, 'Blacklist Pengirim Permanen', $user_name, $user_email, "Email pengirim ({$sender_email}) diblacklist secara permanen. Alasan: {$reason}. Semua pesan masa depan akan otomatis dihapus & diabaikan oleh mesin.");
+                if ($real_id > 0) {
+                    appendRfqHistoryLog($db_conn, $real_id, 'Blacklist Perusahaan Permanen', $user_name, $user_email, "Perusahaan ({$sender_company}) / email ({$sender_email}) diblacklist secara permanen. Alasan: {$reason}. Semua pesan masa depan akan otomatis dihapus & diabaikan oleh mesin.");
+                }
 
                 ob_end_clean();
                 echo json_encode([
                     'status' => 'success',
-                    'message' => "Pengirim {$sender_email} berhasil diblacklist secara permanen. Status RFQ diubah menjadi deleted.",
+                    'message' => "Company {$sender_company} ({$sender_email}) has been permanently blacklisted.",
                     'delete_type' => 'blacklist',
                     'email' => $sender_email,
                     'rfq_id' => $rfq_id_raw,
@@ -213,19 +242,21 @@ try {
                 exit;
             } else {
                 // Delete only (Hapus perusahaan / item RFQ saja, tanpa blacklist)
-                $stmt_up = $db_conn->prepare("UPDATE rfq_requests SET status = 'deleted', is_blacklisted = 0, blacklist_reason = NULL WHERE id = ? OR rfq_number = ?");
+                $stmt_up = $db_conn->prepare("UPDATE rfq_requests SET status = 'deleted', is_blacklisted = 0, blacklist_reason = NULL WHERE (LOWER(client_email) = LOWER(?) AND client_email != '') OR (LOWER(TRIM(company)) = LOWER(TRIM(?)) AND company != '') OR id = ? OR rfq_number = ?");
                 if ($stmt_up) {
-                    $stmt_up->bind_param("is", $real_id, $real_rfq_num);
+                    $stmt_up->bind_param("ssis", $sender_email, $sender_company, $real_id, $real_rfq_num);
                     $stmt_up->execute();
                     $stmt_up->close();
                 }
 
-                appendRfqHistoryLog($db_conn, $real_id, 'Hapus dari Inbox (Tanpa Blacklist)', $user_name, $user_email, "RFQ berhasil dipindahkan ke status deleted. Pengirim tidak diblacklist dan email masa depan tetap diizinkan masuk.");
+                if ($real_id > 0) {
+                    appendRfqHistoryLog($db_conn, $real_id, 'Hapus Perusahaan (Tanpa Blacklist)', $user_name, $user_email, "Perusahaan ({$sender_company}) dihapus dari daftar aktif. Pengirim tidak diblacklist dan email masa depan tetap diizinkan masuk.");
+                }
 
                 ob_end_clean();
                 echo json_encode([
                     'status' => 'success',
-                    'message' => "RFQ berhasil dihapus dari inbox. Email masa depan dari pengirim ini tetap dapat masuk.",
+                    'message' => "Company {$sender_company} has been successfully deleted. Future emails will be allowed.",
                     'delete_type' => 'delete_only',
                     'email' => $sender_email,
                     'rfq_id' => $rfq_id_raw,
@@ -268,7 +299,7 @@ try {
             $quo_id = isset($input['quotation_id']) ? trim($input['quotation_id']) : '';
             $quo_num = null;
             if (empty($quo_id)) {
-                $stmt_q = $db_conn->prepare("SELECT id, quotation_number, client_email, company_name FROM quotations WHERE rfq_id = ? OR rfq_id = ? OR id = ? OR quotation_number = ? ORDER BY id DESC LIMIT 1");
+                $stmt_q = $db_conn->prepare("SELECT id, quotation_number, client_email, company_name, rfq_id FROM quotations WHERE rfq_id = ? OR rfq_id = ? OR id = ? OR quotation_number = ? ORDER BY id DESC LIMIT 1");
                 if ($stmt_q) {
                     $stmt_q->bind_param("ssss", $clean_id, $rfq_num, $rfq_id_raw, $rfq_id_raw);
                     $stmt_q->execute();
@@ -279,11 +310,23 @@ try {
                         if (empty($client_email) && !empty($q_row['client_email'])) {
                             $client_email = $q_row['client_email'];
                         }
+                        // If clean_id was 0 or RFQ row was not found, resolve from quotations.rfq_id!
+                        if (!empty($q_row['rfq_id']) && ($clean_id === 0 || empty($orig_subject))) {
+                            $real_rfq_id = (int)$q_row['rfq_id'];
+                            $chk_rfq = $db_conn->query("SELECT id, rfq_number, client_email, recipient_email, subject FROM rfq_requests WHERE id = {$real_rfq_id} LIMIT 1");
+                            if ($chk_rfq && $rfq_real = $chk_rfq->fetch_assoc()) {
+                                $clean_id = (int)$rfq_real['id'];
+                                $rfq_num = $rfq_real['rfq_number'];
+                                if (empty($client_email)) $client_email = $rfq_real['client_email'];
+                                if (empty($recipient_email)) $recipient_email = $rfq_real['recipient_email'];
+                                if (empty($orig_subject)) $orig_subject = $rfq_real['subject'];
+                            }
+                        }
                     }
                     $stmt_q->close();
                 }
             } else {
-                $stmt_q2 = $db_conn->prepare("SELECT quotation_number, client_email FROM quotations WHERE id = ? OR quotation_number = ? LIMIT 1");
+                $stmt_q2 = $db_conn->prepare("SELECT quotation_number, client_email, rfq_id FROM quotations WHERE id = ? OR quotation_number = ? LIMIT 1");
                 if ($stmt_q2) {
                     $stmt_q2->bind_param("ss", $quo_id, $quo_id);
                     $stmt_q2->execute();
@@ -293,8 +336,28 @@ try {
                         if (empty($client_email) && !empty($q2_row['client_email'])) {
                             $client_email = $q2_row['client_email'];
                         }
+                        // If clean_id was 0 or RFQ row was not found, resolve from quotations.rfq_id!
+                        if (!empty($q2_row['rfq_id']) && ($clean_id === 0 || empty($orig_subject))) {
+                            $real_rfq_id = (int)$q2_row['rfq_id'];
+                            $chk_rfq = $db_conn->query("SELECT id, rfq_number, client_email, recipient_email, subject FROM rfq_requests WHERE id = {$real_rfq_id} LIMIT 1");
+                            if ($chk_rfq && $rfq_real = $chk_rfq->fetch_assoc()) {
+                                $clean_id = (int)$rfq_real['id'];
+                                $rfq_num = $rfq_real['rfq_number'];
+                                if (empty($client_email)) $client_email = $rfq_real['client_email'];
+                                if (empty($recipient_email)) $recipient_email = $rfq_real['recipient_email'];
+                                if (empty($orig_subject)) $orig_subject = $rfq_real['subject'];
+                            }
+                        }
                     }
                     $stmt_q2->close();
+                }
+            }
+
+            // Extract plain email if client_email is JSON formatted
+            if (is_string($client_email) && (strpos($client_email, '{') === 0 || strpos($client_email, '[') === 0)) {
+                $parsed_json = json_decode($client_email, true);
+                if (is_array($parsed_json) && !empty($parsed_json['selected'])) {
+                    $client_email = trim($parsed_json['selected']);
                 }
             }
 
@@ -304,6 +367,7 @@ try {
             }
 
             // Check if quotation PDF or attached file should be attached
+            // Check if quotation PDF or attached file should be attached
             $attach_pdf_path = null;
             $attach_pdf_name = null;
             $is_temp_file = false;
@@ -312,7 +376,10 @@ try {
             if (!empty($custom_attach)) {
                 $possible_paths = [
                     __DIR__ . '/uploads/pdf/' . basename($custom_attach),
+                    __DIR__ . '/attachments/' . basename($custom_attach),
                     __DIR__ . '/uploads/' . basename($custom_attach),
+                    dirname(__DIR__) . '/attachments/' . basename($custom_attach),
+                    dirname(__DIR__) . '/uploads/pdf/' . basename($custom_attach),
                     __DIR__ . '/' . ltrim($custom_attach, '/'),
                     sys_get_temp_dir() . '/' . basename($custom_attach)
                 ];
@@ -326,17 +393,36 @@ try {
                 }
             }
 
-            if (!$attach_pdf_path && !empty($quo_id) && function_exists('exec')) {
-                $tmp_pdf = sys_get_temp_dir() . '/SPH_' . preg_replace('/[^a-zA-Z0-9_-]/', '', $quo_id) . '_' . time() . '.pdf';
-                $node_script = __DIR__ . '/../scripts/generate_pdf_puppeteer.cjs';
-                if (file_exists($node_script)) {
-                    $node_cmd = 'node ' . escapeshellarg($node_script) . ' ' . escapeshellarg($quo_id) . ' quotation ' . escapeshellarg($tmp_pdf) . ' 2>&1';
-                    @exec($node_cmd, $node_out, $node_code);
+            // If not found and quotation ID/number exists, look for quotation PDF or generate it automatically
+            if (!$attach_pdf_path && (!empty($quo_id) || !empty($quo_num))) {
+                $safe_qname = preg_replace('/[^A-Za-z0-9_\-]/', '_', $quo_num ?: $quo_id) . '.pdf';
+                $quo_candidates = [
+                    __DIR__ . '/uploads/pdf/' . $safe_qname,
+                    __DIR__ . '/uploads/pdf/' . $quo_id . '.pdf',
+                    __DIR__ . '/attachments/' . $safe_qname,
+                    dirname(__DIR__) . '/uploads/pdf/' . $safe_qname,
+                    dirname(__DIR__) . '/public/uploads/pdf/' . $safe_qname
+                ];
+                foreach ($quo_candidates as $qc) {
+                    if (file_exists($qc) && filesize($qc) > 0) {
+                        $attach_pdf_path = $qc;
+                        $attach_pdf_name = $safe_qname;
+                        break;
+                    }
+                }
 
-                    if (file_exists($tmp_pdf) && filesize($tmp_pdf) > 0) {
-                        $attach_pdf_path = $tmp_pdf;
-                        $attach_pdf_name = 'Surat_Penawaran_Harga_' . ($quo_num ? $quo_num : $quo_id) . '.pdf';
-                        $is_temp_file = true;
+                // If still not on disk, generate it dynamically with pure PHP
+                if (!$attach_pdf_path) {
+                    $target_file = __DIR__ . '/uploads/pdf/' . $safe_qname;
+                    $q_res = $connection->query("SELECT * FROM quotations WHERE id = '" . $connection->real_escape_string($quo_id) . "' OR quotation_number = '" . $connection->real_escape_string($quo_num) . "' LIMIT 1");
+                    if ($q_res && $q_row = $q_res->fetch_assoc()) {
+                        if (function_exists('createQuotationPdfFile')) {
+                            if (createQuotationPdfFile($target_file, $q_row)) {
+                                $attach_pdf_path = $target_file;
+                                $attach_pdf_name = $safe_qname;
+                                $connection->query("UPDATE quotations SET quotation_file = '/uploads/pdf/{$safe_qname}', pdf_created = 1 WHERE id = '" . $connection->real_escape_string($q_row['id']) . "'");
+                            }
+                        }
                     }
                 }
             }
@@ -391,6 +477,10 @@ try {
                 exit;
             }
 
+            if (empty($reply_body) && !empty($attach_pdf_name)) {
+                $reply_body = "Bersama email ini kami lampirkan dokumen resmi dari AB MALAYA INDUSTRY terkait penawaran harga.\n\nSilakan tinjau dokumen terlampir.";
+            }
+
             // Ensure rfq_replies table exists for multi-reply history
             $db_conn->query("CREATE TABLE IF NOT EXISTS rfq_replies (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -401,13 +491,17 @@ try {
                 client_email VARCHAR(255) DEFAULT NULL,
                 quotation_id VARCHAR(100) DEFAULT NULL,
                 quotation_number VARCHAR(100) DEFAULT NULL,
+                attachment_file VARCHAR(255) DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+            // Ensure column attachment_file exists if table was already created
+            @$db_conn->query("ALTER TABLE rfq_replies ADD COLUMN attachment_file VARCHAR(255) DEFAULT NULL");
+
             // Save this reply in rfq_replies table for thread history
-            $insReply = $db_conn->prepare("INSERT INTO rfq_replies (rfq_id, rfq_number, reply_body, reply_sender, client_email, quotation_id, quotation_number) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $insReply = $db_conn->prepare("INSERT INTO rfq_replies (rfq_id, rfq_number, reply_body, reply_sender, client_email, quotation_id, quotation_number, attachment_file) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
             if ($insReply) {
-                $insReply->bind_param("issssss", $clean_id, $rfq_num, $reply_body, $final_reply_sender, $client_email, $quo_id, $quo_num);
+                $insReply->bind_param("isssssss", $clean_id, $rfq_num, $reply_body, $final_reply_sender, $client_email, $quo_id, $quo_num, $attach_pdf_name);
                 $insReply->execute();
                 $insReply->close();
             }
@@ -481,6 +575,113 @@ try {
         'status' => 'error',
         'message' => $e->getMessage()
     ]);
+}
+
+if (!function_exists('createQuotationPdfFile')) {
+    function createQuotationPdfFile(string $filePath, array $quo): bool {
+        $qNum = $quo['quotation_number'] ?? 'QUO-001';
+        $cName = $quo['company_name'] ?? 'Client Company';
+        $pName = $quo['client_name'] ?? 'Sir/Madam';
+        $cEmail = $quo['client_email'] ?? '';
+        $date = $quo['date_issued'] ?? date('Y-m-d');
+        $total = number_format((float)($quo['grand_total'] ?? 0), 2);
+        
+        $items = [];
+        if (!empty($quo['items'])) {
+            $items = is_string($quo['items']) ? json_decode($quo['items'], true) : $quo['items'];
+        }
+        if (empty($items) && !empty($quo['items_details'])) {
+            $items = is_string($quo['items_details']) ? json_decode($quo['items_details'], true) : $quo['items_details'];
+        }
+        if (empty($items) || !is_array($items)) {
+            $items = [
+                [
+                    'description' => 'Commercial Product / Service Proposal as per RFQ',
+                    'quantity' => 1,
+                    'unit_price' => (float)($quo['grand_total'] ?? 0),
+                    'total' => (float)($quo['grand_total'] ?? 0)
+                ]
+            ];
+        }
+
+        $stream = "BT\n";
+        $stream .= "/F2 16 Tf\n 50 785 Td\n (AB MALAYA INDUSTRY) Tj\n";
+        $stream .= "/F1 9 Tf\n 0 -14 Td\n (Commercial Quotation & Engineering Solutions Provider) Tj\n";
+        $stream .= "0 -12 Td\n (Email: sales@abmalaya.com | Web: https://abmalaya.com) Tj\n";
+        $stream .= "ET\n";
+        $stream .= "0.5 w\n 50 745 m 545 745 l S\n";
+        $stream .= "BT\n";
+        $stream .= "/F2 13 Tf\n 50 720 Td\n (OFFICIAL COMMERCIAL QUOTATION (SPH)) Tj\n";
+        $stream .= "/F2 9 Tf\n 0 -18 Td\n (Quotation No : ) Tj\n /F1 9 Tf\n (" . addcslashes($qNum, "()\\") . ") Tj\n";
+        $stream .= "/F2 9 Tf\n 0 -14 Td\n (Date Issued  : ) Tj\n /F1 9 Tf\n (" . addcslashes($date, "()\\") . ") Tj\n";
+        $stream .= "/F2 9 Tf\n 0 -14 Td\n (Client Name  : ) Tj\n /F1 9 Tf\n (" . addcslashes($cName . ($pName ? " - Attn: " . $pName : ""), "()\\") . ") Tj\n";
+        if ($cEmail) {
+            $stream .= "/F2 9 Tf\n 0 -14 Td\n (Client Email : ) Tj\n /F1 9 Tf\n (" . addcslashes($cEmail, "()\\") . ") Tj\n";
+        }
+        $stream .= "ET\n";
+        $stream .= "0.9 0.92 0.95 rg\n 50 625 495 18 re f\n";
+        $stream .= "0 g\n";
+        $stream .= "BT\n";
+        $stream .= "/F2 8 Tf\n 55 630 Td\n (NO) Tj\n 25 0 Td\n (DESCRIPTION) Tj\n 260 0 Td\n (QTY) Tj\n 55 0 Td\n (UNIT PRICE (MYR)) Tj\n 85 0 Td\n (TOTAL (MYR)) Tj\n";
+        $stream .= "ET\n";
+        
+        $y = 608;
+        $idx = 1;
+        foreach ($items as $it) {
+            $desc = substr($it['description'] ?? $it['product_name'] ?? 'Item', 0, 48);
+            $qty = $it['quantity'] ?? 1;
+            $uPrice = number_format((float)($it['unit_price'] ?? 0), 2);
+            $iTot = number_format((float)($it['total'] ?? 0), 2);
+            
+            $stream .= "BT\n";
+            $stream .= "/F1 8 Tf\n 55 {$y} Td\n ({$idx}) Tj\n 25 0 Td\n (" . addcslashes($desc, "()\\") . ") Tj\n 260 0 Td\n ({$qty}) Tj\n 55 0 Td\n ({$uPrice}) Tj\n 85 0 Td\n ({$iTot}) Tj\n";
+            $stream .= "ET\n";
+            
+            $y -= 15;
+            $idx++;
+            if ($idx > 25) break;
+        }
+        
+        $stream .= "0.3 w\n 50 " . ($y + 8) . " m 545 " . ($y + 8) . " l S\n";
+        $stream .= "BT\n";
+        $stream .= "/F2 11 Tf\n 330 " . ($y - 12) . " Td\n (GRAND TOTAL : MYR {$total}) Tj\n";
+        $stream .= "/F2 8 Tf\n 50 110 Td\n (Terms & Conditions:) Tj\n";
+        $stream .= "/F1 8 Tf\n 0 -11 Td\n (1. Prices quoted in Malaysian Ringgit (MYR). Payment terms as per agreement.) Tj\n";
+        $stream .= "0 -10 Td\n (2. This is an electronically issued quotation verified by AB Malaya Industry ERP.) Tj\n";
+        $stream .= "/F2 8 Tf\n 380 90 Td\n (Authorized Signature:) Tj\n";
+        $stream .= "/F1 8 Tf\n 0 -24 Td\n (AB MALAYA SALES & COMMERCIAL TEAM) Tj\n";
+        $stream .= "ET\n";
+        
+        $objects = [];
+        $objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+        $objects[2] = "<< /Type /Pages /Kids [3 0 R] /Count 1 >>";
+        $objects[3] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 6 0 R /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> >>";
+        $objects[4] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
+        $objects[5] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>";
+        
+        $streamLen = strlen($stream);
+        $objects[6] = "<< /Length {$streamLen} >>\nstream\n{$stream}\nendstream";
+        
+        $out = "%PDF-1.4\n";
+        $xref = [];
+        $xref[0] = "0000000000 65535 f \n";
+        
+        for ($i = 1; $i <= 6; $i++) {
+            $xref[$i] = sprintf("%010d 00000 n \n", strlen($out));
+            $out .= "{$i} 0 obj\n" . $objects[$i] . "\nendobj\n";
+        }
+        
+        $xrefStart = strlen($out);
+        $out .= "xref\n0 7\n";
+        for ($i = 0; $i <= 6; $i++) {
+            $out .= $xref[$i];
+        }
+        $out .= "trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n{$xrefStart}\n%%EOF";
+        
+        @mkdir(dirname($filePath), 0755, true);
+        @file_put_contents($filePath, $out);
+        return file_exists($filePath) && filesize($filePath) > 100;
+    }
 }
 
 /**

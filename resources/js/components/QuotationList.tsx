@@ -398,7 +398,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               </div>
             </div>
             <div style="text-align: right;">
-              <span class="sph-title">SURAT PENAWARAN HARGA</span>
+              <span class="sph-title">OFFICIAL COMMERCIAL QUOTATION</span>
               <div style="font-family: monospace; font-weight: bold;">No: ${quo.quotation_number}</div>
               <div style="color: #666; font-size: 11px;">Date: ${quo.date_issued}</div>
             </div>
@@ -406,17 +406,17 @@ export const QuotationList: React.FC<QuotationListProps> = ({
           
           <div class="meta-grid">
             <div>
-              <span>Penerima Penawaran (Kepada Yth):</span>
+              <span>Recipient / Attention:</span>
               <strong>${quo.company_name}</strong>
-              <p style="margin: 4px 0 0 0;">U.p. Bpk/Ibu: <strong>${quo.client_name}</strong></p>
+              <p style="margin: 4px 0 0 0;">Attn: <strong>${quo.client_name}</strong></p>
               <p style="margin: 2px 0 0 0; color: #555;">Email: ${quo.client_email}</p>
             </div>
             <div style="text-align: right;">
-              <span>Detail Dokumen Penawaran:</span>
-              <p style="margin: 3px 0;">Tanggal Terbit: <strong>${quo.date_issued}</strong></p>
-              <p style="margin: 3px 0;">Masa Berlaku s.d: <strong style="color: #b45309;">${quo.valid_until || '14 Days'}</strong></p>
-              <p style="margin: 3px 0;">Mata Uang: <strong>MYR (Malaysian Ringgit)</strong></p>
-              <p style="margin: 3px 0;">Penanggung Jawab: <strong>${quo.created_by || currentUserRef.current?.name || currentUserRef.current?.email || 'Sesi Tidak Terdeteksi'}</strong></p>
+              <span>Document Details:</span>
+              <p style="margin: 3px 0;">Issue Date: <strong>${quo.date_issued}</strong></p>
+              <p style="margin: 3px 0;">Validity: <strong style="color: #b45309;">${quo.valid_until || '14 Days'}</strong></p>
+              <p style="margin: 3px 0;">Currency: <strong>MYR (Malaysian Ringgit)</strong></p>
+              <p style="margin: 3px 0;">Authorized Officer: <strong>${quo.created_by || currentUserRef.current?.name || currentUserRef.current?.email || 'Authorized Staff'}</strong></p>
             </div>
           </div>
           
@@ -429,23 +429,23 @@ export const QuotationList: React.FC<QuotationListProps> = ({
             <thead>
               <tr>
                 <th style="width: 40px; text-align: center;">No</th>
-                <th>Deskripsi Barang / Spesifikasi Layanan</th>
+                <th>Item Description / Service Specification</th>
                 <th style="width: 50px; text-align: center;">Qty</th>
-                <th style="width: 70px; text-align: center;">Satuan</th>
-                <th style="width: 120px; text-align: right;">Harga Satuan</th>
+                <th style="width: 70px; text-align: center;">Unit</th>
+                <th style="width: 120px; text-align: right;">Unit Price</th>
                 <th style="width: 50px; text-align: center;">Disc</th>
                 <th style="width: 120px; text-align: right;">Total (RM)</th>
               </tr>
             </thead>
             <tbody>
-              ${itemsHtml || '<tr><td colspan="7" style="text-align: center; padding: 20px;">No items defined in SPH.</td></tr>'}
+              ${itemsHtml || '<tr><td colspan="7" style="text-align: center; padding: 20px;">No items defined in Quotation.</td></tr>'}
             </tbody>
           </table>
           
           <div class="totals-box">
             <div style="width: 48%; font-size: 11px; background: #f9f9f9; padding: 10px; border: 1px solid #eee;">
-              <strong>Catatan Penawaran:</strong>
-              <p style="color: #666; margin: 4px 0 0 0; font-style: italic;">${quo.notes || 'Standard SPH terms apply.'}</p>
+              <strong>Quotation Notes:</strong>
+              <p style="color: #666; margin: 4px 0 0 0; font-style: italic;">${quo.notes || 'Standard terms apply.'}</p>
             </div>
             <div style="width: 48%; text-align: right; font-family: monospace;">
               <div style="margin: 4px 0;">Subtotal: ${fmt(sub)}</div>
@@ -457,18 +457,18 @@ export const QuotationList: React.FC<QuotationListProps> = ({
           
           <div class="footer-sigs">
             <div>
-              <p style="color: #888; margin: 0 0 5px 0;">Penerima / Pemesan,</p>
+              <p style="color: #888; margin: 0 0 5px 0;">Client / Ordered By,</p>
               <div style="height: 60px;"></div>
               <strong>(${quo.client_name})</strong>
               <p style="margin: 2px 0 0 0; color: #666;">${quo.company_name}</p>
             </div>
             <div style="text-align: right;">
-              <p style="color: #888; margin: 0 0 5px 0;">Hormat Kami,</p>
+              <p style="color: #888; margin: 0 0 5px 0;">Sincerely,</p>
               <strong>ABMALAYA.COM (MALAYSIA)</strong>
               <div style="display: flex; justify-content: flex-end; margin: 5px 0;">
                 <div class="stamp-box">[STAMP ABMALAYA]</div>
               </div>
-              <strong><u>${quo.created_by || currentUserRef.current?.name || currentUserRef.current?.email || 'Sesi Tidak Terdeteksi'}</u></strong>
+              <strong><u>${quo.created_by || currentUserRef.current?.name || currentUserRef.current?.email || 'Authorized Staff'}</u></strong>
               <p style="margin: 2px 0 0 0; color: #666;">Head of Sales & Business Development</p>
             </div>
           </div>
@@ -534,10 +534,12 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   useEffect(() => {
     fetchQuotationsFromMySQL(false);
 
-    // Silent background poll every 10 seconds — no loading toggle, no flicker
+    // Silent background poll every 60 seconds when document is visible
     const pollInterval = setInterval(() => {
-      fetchQuotationsFromMySQL(true);
-    }, 10000);
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchQuotationsFromMySQL(true);
+      }
+    }, 60000);
 
     return () => clearInterval(pollInterval);
   }, []);
@@ -735,9 +737,9 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               <option value="all">All Quotations ({tabCounts.all})</option>
               <option value="requisition">Requisition ({tabCounts.requisition})</option>
               <option value="draft">In Progress / Draft ({tabCounts.draft})</option>
-              <option value="quotation">Quotation / Penawaran ({tabCounts.quotation})</option>
+              <option value="quotation">Quotation ({tabCounts.quotation})</option>
               <option value="acc">ACC Approved ({tabCounts.acc})</option>
-              <option value="done">Done / Terkirim ({tabCounts.done})</option>
+              <option value="done">Done / Sent ({tabCounts.done})</option>
               <option value="junk">Trash / Junk ({tabCounts.junk})</option>
             </select>
             <Sliders className="w-3 h-3 text-slate-400 pointer-events-none ml-1 shrink-0" />
@@ -813,7 +815,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   <span>{isSelectionMode ? 'Exit Selection' : 'Select SPH Items'}</span>
                 </button>
 
-                {/* USER REQUESTED: Right below "Select SPH Items", add "Tampilkan Semua Kolom Database (Full)" */}
+                {/* Database Full Column Toggle */}
                 <button
                   onClick={() => {
                     setShowActionsMenu(false);
@@ -822,7 +824,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   className="w-full text-left px-3.5 py-2 hover:bg-gradient-to-b hover:from-[#00b4ff] hover:to-[#0080d0] hover:text-white transition flex items-center gap-2 cursor-pointer font-bold text-indigo-700 bg-indigo-50/60 border-t border-slate-100"
                 >
                   <Database className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>{showAllDbColumns ? 'Tampilan Tabel Standar' : 'Tampilkan Semua Kolom Database (Full)'}</span>
+                  <span>{showAllDbColumns ? 'Standard Table View' : 'Show All Database Columns (Full)'}</span>
                 </button>
 
                 <button
@@ -833,7 +835,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   className="w-full text-left px-3.5 py-2 hover:bg-gradient-to-b hover:from-[#00b4ff] hover:to-[#0080d0] hover:text-white transition flex items-center gap-2 cursor-pointer font-bold text-[#3d3d3d] border-t border-[#eee]"
                 >
                   <Info className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Info SPH & Kategori</span>
+                  <span>Quotation & Categories Info</span>
                 </button>
               </div>
             )}
@@ -937,7 +939,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-36">Notes</th>}
                   <th className="p-2.5 border-r border-slate-800 w-36 text-center">Status / Phase</th>
                   <th className="p-2.5 border-r border-slate-800 w-24 text-center">OCR Scan</th>
-                  <th className="p-2.5 border-r border-slate-800 w-48">Petugas & Aktivitas</th>
+                  <th className="p-2.5 border-r border-slate-800 w-48">Staff & Activity Log</th>
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-32 text-center">Approved By</th>}
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-28 text-center">Created By</th>}
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-36 text-center">Created At</th>}
@@ -1780,7 +1782,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                               {activeQuotation.impa_code ? `${activeQuotation.impa_code} — ` : ''}{activeQuotation.category_name}
                             </span>
                           ) : (
-                            <span className="text-slate-400 font-mono text-[10px] italic">Belum ditentukan</span>
+                            <span className="text-slate-400 font-mono text-[10px] italic">Unassigned</span>
                           )}
                         </div>
                         <div className="col-span-3 border-l-2 border-slate-300 pl-2.5">
@@ -2275,7 +2277,7 @@ onClick={() => {
             <div className="flex items-center justify-between px-5 py-3 bg-slate-900 text-white border-b border-slate-800 shrink-0">
               <span className="font-extrabold uppercase text-cyan-400 tracking-widest text-xs flex items-center gap-2">
                 <Sliders className="w-4 h-4 text-cyan-400" />
-                <span>PHP DAEMON AUTOMATION ENGINES & SYSTEM DIAGNOSTICS</span>
+                <span>Background Services & System Diagnostics</span>
               </span>
               <button 
                 onClick={() => setIsSystemInfoModalOpen(false)}
@@ -2288,9 +2290,9 @@ onClick={() => {
             {/* Modal Tab Headers */}
             <div className="flex border-b border-slate-200 bg-slate-100 px-3 py-1 shrink-0 gap-1">
               {[
-                { id: 'sph', label: 'Tabel Mesin Daemon PHP' },
+                { id: 'sph', label: 'Background Services' },
                 { id: 'categories', label: 'IMPA Category Blueprints' },
-                { id: 'errors', label: 'AI OCR Scan Error Logs' },
+                { id: 'errors', label: 'Document Scanning Activity' },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -2316,28 +2318,28 @@ onClick={() => {
                     <div>
                       <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
                         <Activity className="w-4 h-4 text-emerald-600 animate-pulse" />
-                        <span>Status Mesin Automasi Daemon PHP ({dynamicDaemons.length} Script Terdeteksi)</span>
+                        <span>Background Services Status ({dynamicDaemons.length} Active Services)</span>
                       </h4>
                       <p className="text-[10px] text-slate-500 mt-0.5">
-                        Real-time scan of <code className="text-blue-700 font-mono">daemon/</code> & <code className="text-blue-700 font-mono">public/api_*.php</code> directory — New scripts are automatically detected without code changes.
+                        Automated background tasks for email processing, document scanning, and synchronization.
                       </p>
                     </div>
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-300">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                      <span>PHP DAEMON ONLINE</span>
+                      <span>SERVICES ONLINE</span>
                     </span>
                   </div>
 
-                  {/* Tabel Mesin Daemon PHP (Padat & Profesional) */}
+                  {/* Services Table */}
                   <div className="bg-white border border-slate-200 rounded-none overflow-hidden shadow-2xs">
                     <table className="w-full text-left border-collapse text-[11px]">
                       <thead>
                         <tr className="bg-slate-900 text-white uppercase text-[10px] tracking-wider border-b border-slate-800 font-mono">
                           <th className="p-2.5 text-center w-12 border-r border-slate-800">NO</th>
                           <th className="p-2.5 text-center w-28 border-r border-slate-800">STATUS</th>
-                          <th className="p-2.5 w-52 border-r border-slate-800">FILE SCRIPT / DAEMON</th>
-                          <th className="p-2.5 border-r border-slate-800">DESKRIPSI MESIN</th>
-                          <th className="p-2.5">INFO DIAGNOSTIK & KONEKSI</th>
+                          <th className="p-2.5 w-52 border-r border-slate-800">SERVICE NAME</th>
+                          <th className="p-2.5 border-r border-slate-800">DESCRIPTION</th>
+                          <th className="p-2.5">STATUS & DETAILS</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
@@ -2386,12 +2388,12 @@ onClick={() => {
                                   {isErr ? (
                                     <span className="text-rose-600 font-bold flex items-center gap-1">
                                       <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-600" />
-                                      <span>{item.info_diag || 'Terdeteksi kendala eksekusi mesin.'}</span>
+                                      <span>{item.info_diag || 'Service issue detected.'}</span>
                                     </span>
                                   ) : (
                                     <span className="text-slate-600 flex items-center gap-1">
                                       <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
-                                      <span>{item.info_diag || 'Normal - Siap memproses data penawaran.'}</span>
+                                      <span>{item.info_diag || 'Operational - Ready to process requests.'}</span>
                                     </span>
                                   )}
                                 </td>
@@ -2402,7 +2404,7 @@ onClick={() => {
                           <tr>
                             <td colSpan={5} className="py-8 text-center text-slate-400">
                               <Loader2 className="w-5 h-5 animate-spin mx-auto text-blue-600 mb-2" />
-                              <span>Memindai tabel skrip daemon PHP...</span>
+                              <span>Checking background services...</span>
                             </td>
                           </tr>
                         )}
@@ -2410,50 +2412,50 @@ onClick={() => {
                     </table>
                   </div>
 
-                  {/* Realtime Terminal Log Console */}
+                  {/* System Activity & Service Log */}
                   <div className="border border-slate-800 bg-slate-950 rounded-none overflow-hidden shadow-lg mt-3 text-slate-100">
                     <div className="bg-slate-900 px-3.5 py-2 border-b border-slate-800 flex items-center justify-between">
                       <span className="font-mono text-[10px] font-extrabold text-slate-200 uppercase tracking-wider flex items-center gap-2">
                         <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Konsol Aktivitas Eksekusi & Log Error Mesin Daemon PHP</span>
+                        <span>System Activity & Service Log</span>
                       </span>
                       <span className="text-[9px] font-mono text-emerald-400 font-bold flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                        <span>PENJADWALAN CRON AKTIF</span>
+                        <span>AUTOMATION ACTIVE</span>
                       </span>
                     </div>
 
                     <div className="p-3 font-mono text-[10px] space-y-1.5 max-h-44 overflow-y-auto bg-[#070b14] text-slate-200 divide-y divide-slate-800/60">
-                      {/* Live Execution Trace */}
+                      {/* Activity Trace */}
                       <div className="pt-1 flex items-start gap-2">
-                        <span className="text-emerald-400 font-bold shrink-0">[CRON-PHP]</span>
-                        <span>Penjadwalan Cron panel host mengeksekusi <code className="text-cyan-300 font-bold">daemon/run_all.php</code> secara periodik.</span>
+                        <span className="text-emerald-400 font-bold shrink-0">[AUTOMATION]</span>
+                        <span>Background scheduler is running automated tasks periodically.</span>
                       </div>
                       <div className="pt-1 flex items-start gap-2">
-                        <span className="text-emerald-400 font-bold shrink-0">[IMAP-GMAIL]</span>
-                        <span><code className="text-emerald-300 font-bold">daemon/sync_gmail.php</code>: Active Gmail IMAP SSL connection (99 RFQs saved).</span>
+                        <span className="text-emerald-400 font-bold shrink-0">[EMAIL-SYNC]</span>
+                        <span>Email Service: Connected (RFQs synchronized).</span>
                       </div>
                       <div className="pt-1 flex items-start gap-2">
-                        <span className="text-cyan-400 font-bold shrink-0">[GEMINI-AI]</span>
-                        <span><code className="text-cyan-300 font-bold">daemon/scan_inbox.php</code>: Engine AI Gemini 3 API Key terkonfigurasi.</span>
+                        <span className="text-cyan-400 font-bold shrink-0">[AI-SERVICE]</span>
+                        <span>AI Document Service: Configured and active.</span>
                       </div>
 
                       {/* Display Real Database API Error Logs if any exist */}
                       {aiErrors && aiErrors.length > 0 ? (
                         aiErrors.map((errLog: any, idx: number) => (
                           <div key={idx} className="pt-1.5 text-amber-300 flex items-start gap-2">
-                            <span className="text-rose-400 font-bold shrink-0">[LOG-ERROR]</span>
+                            <span className="text-rose-400 font-bold shrink-0">[NOTICE]</span>
                             <div className="overflow-hidden">
                               <span className="font-bold text-amber-200">{errLog.rfq_number || 'SYSTEM'}: </span>
-                              <span className="text-rose-300 break-words">{errLog.ai_error || errLog.error || 'Pemeriksaan kuota rate limit / antrean scan latar belakang'}</span>
-                              {errLog.created_at && <span className="text-slate-500 text-[9px] block font-sans">Waktu: {errLog.created_at}</span>}
+                              <span className="text-rose-300 break-words">{errLog.ai_error || errLog.error || 'Temporary delay / queue processing'}</span>
+                              {errLog.created_at && <span className="text-slate-500 text-[9px] block font-sans">Timestamp: {errLog.created_at}</span>}
                             </div>
                           </div>
                         ))
                       ) : (
                         <div className="pt-1.5 flex items-start gap-2 text-emerald-400">
                           <span className="font-bold shrink-0">[STATUS-OK]</span>
-                          <span>Tidak terdeteksi error kritis. Seluruh skrip mesin daemon PHP berjalan lancar.</span>
+                          <span>All background services are operating normally.</span>
                         </div>
                       )}
                     </div>
@@ -2663,18 +2665,18 @@ onClick={() => {
               {/* Table 3: quotation_items Line Items */}
               <div className="bg-white border border-slate-200 rounded-none overflow-hidden shadow-2xs">
                 <div className="bg-slate-900 text-white px-3.5 py-2 font-bold uppercase text-[10px] tracking-wide flex justify-between items-center border-b border-slate-800">
-                  <span className="text-cyan-400">Rincian Item Penawaran ({selectedFullDbQuotation.items?.length || 0} Item)</span>
+                  <span className="text-cyan-400">Quotation Line Items ({selectedFullDbQuotation.items?.length || 0} Items)</span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-[11px] border-collapse">
                     <thead className="bg-slate-800 border-b border-slate-700 text-slate-200 font-bold uppercase">
                       <tr>
                         <th className="p-2 border-r border-slate-700 text-center w-10">#</th>
-                        <th className="p-2 border-r border-slate-700 w-32">Kode Item</th>
-                        <th className="p-2 border-r border-slate-700">Deskripsi Barang / Jasa</th>
+                        <th className="p-2 border-r border-slate-700 w-32">Item Code</th>
+                        <th className="p-2 border-r border-slate-700">Item Description / Services</th>
                         <th className="p-2 border-r border-slate-700 text-center w-16">Qty</th>
                         <th className="p-2 border-r border-slate-700 text-center w-16">Unit</th>
-                        <th className="p-2 border-r border-slate-700 text-right w-28">Harga Satuan</th>
+                        <th className="p-2 border-r border-slate-700 text-right w-28">Unit Price</th>
                         <th className="p-2 text-right w-28">Total</th>
                       </tr>
                     </thead>
@@ -2724,7 +2726,7 @@ onClick={() => {
                 onClick={() => setIsFullDbModalOpen(false)}
                 className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-1.5 rounded-none transition cursor-pointer text-xs uppercase tracking-wider"
               >
-                Tutup Full Data Viewer
+                Close Full Data Viewer
               </button>
             </div>
 

@@ -38,6 +38,12 @@ export interface RFQ {
   notes?: string;
   msgno?: number;
   recipient_email?: string;
+  quotation_id?: string;
+  quotation_number?: string;
+  quotation_status?: string;
+  approved_by?: string;
+  is_acc_approved?: boolean;
+  quotation_grand_total?: number;
   replies?: Array<{ body: string; date: string; sender: string }>;
 }
 
@@ -59,7 +65,7 @@ export interface QuotationItem {
 }
 
 
-export type QuotationStatus = 'draft' | 'terkirim' | 'disetujui' | 'ditolak' | 'siap_kirim' | 'quotation_build' | 'penawaran_terkirim' | 'deal' | 'masuk' | 'diproses';
+export type QuotationStatus = 'draft' | 'terkirim' | 'disetujui' | 'ditolak' | 'siap_kirim' | 'ready_send' | 'approved' | 'acc' | 'done_send' | 'sent' | 'quotation_build' | 'penawaran_terkirim' | 'deal' | 'masuk' | 'diproses';
 
 export interface Quotation {
   id: string;
@@ -137,3 +143,55 @@ export interface SMTPConfig {
   is_connected: boolean;
   email?: string;
 }
+
+export type InvoiceStatus = 'unpaid' | 'paid' | 'partially_paid' | 'overdue' | 'cancelled';
+
+export interface InvoiceItem {
+  id?: string | number;
+  invoice_id?: string;
+  product_code?: string;
+  description: string;
+  specification?: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  discount_percent?: number;
+  total: number;
+  image_url?: string;
+}
+
+export interface Invoice {
+  id: string;
+  invoice_number: string;
+  quotation_id?: string;
+  po_number?: string;
+  invoice_date: string;
+  due_date?: string;
+  client_name: string;
+  client_email: string;
+  client_phone?: string;
+  company_name: string;
+  billing_address?: string;
+  delivery_company?: string;
+  delivery_address?: string;
+  delivery_pic?: string;
+  delivery_phone?: string;
+  items: InvoiceItem[];
+  subtotal: number;
+  discount_total?: number;
+  tax_percent?: number;
+  tax_amount?: number;
+  grand_total: number;
+  currency?: string;
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_account_name?: string;
+  bank_swift_code?: string;
+  notes?: string;
+  status: InvoiceStatus;
+  created_by?: string;
+  created_at?: string;
+  updated_at?: string;
+  pdf_file?: string;
+}
+

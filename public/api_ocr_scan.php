@@ -69,25 +69,127 @@ try {
             exit;
         }
 
-        // Load quotation + its rfq attachment_url
+        // 1. Try finding existing quotation by id, quotation_number, or rfq_id
+        $quo = null;
         $s = $db_conn->prepare("
-            SELECT q.id, q.rfq_id, q.ocr_scan_status,
-                   r.attachment_url, r.client_name, r.client_email, r.subject
+            SELECT q.id, q.rfq_id, q.quotation_number, q.ocr_scan_status, q.company_name, q.category_name, q.impa_code,
+                   COALESCE(q.notes, '') as notes,
+                   r.attachment_url, r.client_name, r.client_email, r.subject, r.item_requested, r.quantity_requested, r.message_body
             FROM quotations q
             LEFT JOIN rfq_requests r ON r.id = q.rfq_id
-            WHERE q.id = ?
+            WHERE q.id = ? OR q.quotation_number = ? OR q.rfq_id = ?
             LIMIT 1
         ");
-        if (!$s) throw new Exception('DB prepare error');
-        $s->bind_param('s', $quo_id);
-        $s->execute();
-        $res = $s->get_result();
-        $quo = $res->fetch_assoc();
-        $s->close();
+        if ($s) {
+            $s->bind_param('sss', $quo_id, $quo_id, $quo_id);
+            $s->execute();
+            $res = $s->get_result();
+            $quo = $res->fetch_assoc();
+            $s->close();
+        }
+
+        // 2. If not found in quotations, check rfq_requests by rfq_id or extracted numeric id
+        if (!$quo) {
+            $candidate_rfq_id = trim((string)($input['rfq_id'] ?? ''));
+            if (empty($candidate_rfq_id)) {
+                if (preg_match('/(?:RFQ-?)?(\d+)/i', $quo_id, $m)) {
+                    $candidate_rfq_id = $m[1];
+                }
+            }
+            if (!empty($candidate_rfq_id)) {
+                $s_rfq = $db_conn->prepare("
+                    SELECT id, attachment_url, client_name, client_email, subject, item_requested, quantity_requested, message_body, company
+                    FROM rfq_requests WHERE id = ? LIMIT 1
+                ");
+                if ($s_rfq) {
+                    $s_rfq->bind_param('s', $candidate_rfq_id);
+                    $s_rfq->execute();
+                    $rfq_row = $s_rfq->get_result()->fetch_assoc();
+                    $s_rfq->close();
+                    if ($rfq_row) {
+                        $client_n = $rfq_row['client_name'] ?: ($input['client_name'] ?? 'Client');
+                        $client_e = $rfq_row['client_email'] ?: ($input['client_email'] ?? '');
+                        $company_n = $rfq_row['company'] ?: ($input['company_name'] ?? '');
+                        $quo_num = !empty($input['quotation_number']) ? $input['quotation_number'] : ('SPH-ABM/MY/2026/0' . rand(100, 999));
+                        $att_url = !empty($rfq_row['attachment_url']) ? $rfq_row['attachment_url'] : ($input['attachment_url'] ?? 'NONE');
+                        $notes_txt = !empty($input['notes']) ? $input['notes'] : ($rfq_row['item_requested'] ?: ($rfq_row['message_body'] ?? ''));
+
+                        $ins = $db_conn->prepare("
+                            INSERT INTO quotations (id, quotation_number, rfq_id, client_name, client_email, company_name, ocr_scan_status, date_issued, notes, created_at)
+                            VALUES (?, ?, ?, ?, ?, ?, 'processing', CURDATE(), ?, NOW())
+                            ON DUPLICATE KEY UPDATE ocr_scan_status = 'processing'
+                        ");
+                        if ($ins) {
+                            $ins->bind_param('sssssss', $quo_id, $quo_num, $rfq_row['id'], $client_n, $client_e, $company_n, $notes_txt);
+                            $ins->execute();
+                            $ins->close();
+                        }
+
+                        $quo = [
+                            'id' => $quo_id,
+                            'rfq_id' => $rfq_row['id'],
+                            'quotation_number' => $quo_num,
+                            'ocr_scan_status' => 'processing',
+                            'company_name' => $company_n,
+                            'category_name' => null,
+                            'impa_code' => null,
+                            'notes' => $notes_txt,
+                            'attachment_url' => $att_url,
+                            'client_name' => $client_n,
+                            'client_email' => $client_e,
+                            'subject' => $rfq_row['subject'] ?: 'RFQ Inquiry',
+                            'item_requested' => $rfq_row['item_requested'] ?: '',
+                            'quantity_requested' => $rfq_row['quantity_requested'] ?: '',
+                            'message_body' => $rfq_row['message_body'] ?: $notes_txt
+                        ];
+                    }
+                }
+            }
+        }
+
+        // 3. If still not found, create a draft quotation row from frontend payload
+        if (!$quo && !empty($quo_id)) {
+            $client_n = trim((string)($input['client_name'] ?? 'Client'));
+            $client_e = trim((string)($input['client_email'] ?? ''));
+            $company_n = trim((string)($input['company_name'] ?? ''));
+            $quo_num = trim((string)($input['quotation_number'] ?? ('SPH-ABM/MY/2026/0' . rand(100, 999))));
+            $att_url = trim((string)($input['attachment_url'] ?? 'NONE'));
+            $notes_txt = trim((string)($input['notes'] ?? ''));
+            $rfq_id_val = !empty($input['rfq_id']) ? $input['rfq_id'] : null;
+
+            $ins = $db_conn->prepare("
+                INSERT INTO quotations (id, quotation_number, rfq_id, client_name, client_email, company_name, ocr_scan_status, date_issued, notes, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'processing', CURDATE(), ?, NOW())
+                ON DUPLICATE KEY UPDATE ocr_scan_status = 'processing'
+            ");
+            if ($ins) {
+                $ins->bind_param('sssssss', $quo_id, $quo_num, $rfq_id_val, $client_n, $client_e, $company_n, $notes_txt);
+                $ins->execute();
+                $ins->close();
+            }
+
+            $quo = [
+                'id' => $quo_id,
+                'rfq_id' => $rfq_id_val,
+                'quotation_number' => $quo_num,
+                'ocr_scan_status' => 'processing',
+                'company_name' => $company_n,
+                'category_name' => null,
+                'impa_code' => null,
+                'notes' => $notes_txt,
+                'attachment_url' => $att_url,
+                'client_name' => $client_n,
+                'client_email' => $client_e,
+                'subject' => 'Quotation Inquiry',
+                'item_requested' => $notes_txt,
+                'quantity_requested' => '1',
+                'message_body' => $notes_txt
+            ];
+        }
 
         if (!$quo) {
             ob_end_clean();
-            echo json_encode(['status' => 'error', 'message' => 'Quotation not found']);
+            echo json_encode(['status' => 'error', 'message' => 'No quotation specifications or notes found to scan. Please add notes or select a quotation.']);
             exit;
         }
 
@@ -95,7 +197,6 @@ try {
         $db_conn->query("UPDATE quotations SET ocr_scan_status = 'processing' WHERE id = '" . $db_conn->real_escape_string($quo_id) . "'");
 
         $attachment_url = $quo['attachment_url'] ?? '';
-
 
         // Load DEDICATED OCR Gemini API Keys from gemini_api_keys table
         $key_list = [];
@@ -115,12 +216,29 @@ try {
                 }
             }
         }
+        if (empty($key_list)) {
+            $res_cred = $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key IN ('GEMINI_API_KEY_OCR', 'GEMINI_API_KEY', 'GEMINI_API_KEY_1', 'GEMINI_API_KEY_2', 'GEMINI_API_KEY_3', 'GEMINI_API_KEY_4')");
+            if ($res_cred && $res_cred->num_rows > 0) {
+                while ($rc = $res_cred->fetch_assoc()) {
+                    $parts = explode(',', $rc['credential_value']);
+                    foreach ($parts as $p) {
+                        $p = trim($p);
+                        if (!empty($p) && strpos($p, '...') === false) $key_list[] = $p;
+                    }
+                }
+            }
+        }
         $key_list = array_values(array_unique($key_list));
 
         if (empty($key_list)) {
             $db_conn->query("UPDATE quotations SET ocr_scan_status = 'error', ocr_scan_result = '{\"scan_status\":\"error\",\"reason\":\"No active OCR API key configured in gemini_api_keys table\"}' WHERE id = '" . $db_conn->real_escape_string($quo_id) . "'");
             ob_end_clean();
-            echo json_encode(['status' => 'error', 'message' => 'No active OCR API key found. Add active key in System Settings.']);
+            echo json_encode([
+                'status' => 'error',
+                'error_code' => 'ai_disabled',
+                'message' => 'AI scanning service is currently unavailable. Please check API keys in System Settings or enter items manually.',
+                'all_keys_disabled' => true
+            ]);
             exit;
         }
 

@@ -145,7 +145,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
   const handleConfirmDelete = () => {
     if (!deleteModalRfq) return;
     if (deleteType === 'blacklist' && !blacklistReason.trim()) {
-      alert('Silakan masukkan alasan blacklist agar mesin & AI dapat mengetahuinya.');
+      alert('Please enter a blacklist reason for AI & automated filtering.');
       return;
     }
 
@@ -168,8 +168,8 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
         if (data.status === 'success') {
           setNotificationText(
             deleteType === 'blacklist'
-              ? `Pengirim ${deleteModalRfq.sender_email} berhasil diblacklist permanen. Pesan masa depan akan otomatis dihapus mesin!`
-              : `RFQ dari ${deleteModalRfq.sender_name} berhasil dipindahkan ke status deleted.`
+              ? `Sender ${deleteModalRfq.sender_email} has been permanently blacklisted. Future emails will be rejected automatically!`
+              : `RFQ from ${deleteModalRfq.sender_name} moved to deleted status.`
           );
           setShowNotificationBanner(true);
           setTimeout(() => setShowNotificationBanner(false), 5000);
@@ -178,13 +178,66 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
             onRefreshLiveEmails();
           }
         } else {
-          alert('Gagal menghapus: ' + (data.message || 'Terjadi kesalahan sistem'));
+          alert('Failed to delete: ' + (data.message || 'System error occurred'));
         }
       })
       .catch((err) => {
         setIsDeleting(false);
         console.error('Delete RFQ error:', err);
-        alert('Terjadi kesalahan koneksi saat menghapus RFQ.');
+        alert('Connection error occurred while deleting RFQ.');
+      });
+  };
+
+  // ACC Approval Confirmation Modal State
+  const [accModalRfq, setAccModalRfq] = useState<RFQ | null>(null);
+  const [accNote, setAccNote] = useState<string>('');
+  const [isGrantingAcc, setIsGrantingAcc] = useState<boolean>(false);
+
+  const handleTriggerReply = (rfq: RFQ) => {
+    if (rfq.quotation_id && !rfq.is_acc_approved && rfq.quotation_status !== 'approved' && rfq.quotation_status !== 'acc' && rfq.quotation_status !== 'done_send') {
+      setAccModalRfq(rfq);
+      setAccNote('');
+      return;
+    }
+    onOpenEmailReply(rfq);
+  };
+
+  const handleConfirmAcc = () => {
+    if (!accModalRfq) return;
+    setIsGrantingAcc(true);
+    fetch(getApiUrl('/api_quotations.php'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'approve',
+        id: accModalRfq.quotation_id,
+        rfq_id: accModalRfq.id,
+        user_name: currentUser?.name || 'Admin',
+        user_email: currentUser?.email || 'admin@abmalaya.com',
+        note: accNote.trim() || 'Approved via Client Chat fast-track',
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setIsGrantingAcc(false);
+        if (data.status === 'success') {
+          accModalRfq.is_acc_approved = true;
+          accModalRfq.quotation_status = 'approved';
+          const target = accModalRfq;
+          setAccModalRfq(null);
+          setNotificationText(`Quotation SPH ${target.quotation_number || ''} approved (ACC)! Opening email reply editor...`);
+          setShowNotificationBanner(true);
+          setTimeout(() => setShowNotificationBanner(false), 4000);
+          onOpenEmailReply(target);
+          if (onRefreshLiveEmails) onRefreshLiveEmails();
+        } else {
+          alert('Failed to grant ACC approval: ' + (data.message || 'Error'));
+        }
+      })
+      .catch((err) => {
+        setIsGrantingAcc(false);
+        console.error(err);
+        alert('Connection error while granting ACC approval.');
       });
   };
 
@@ -203,8 +256,10 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
   };
 
   const handleMoveToRequisition = (rfq: RFQ) => {
+    if (!rfq) return;
     setIsOcrProcessing(true);
-    setNotificationText(`Moving "${rfq.subject}" to Requisition & generating SPH...`);
+    const subj = rfq.subject || rfq.rfq_number || rfq.sender_name || 'RFQ';
+    setNotificationText(`Processing "${subj}" & linking Quotation...`);
     setShowNotificationBanner(true);
 
     fetch(getApiUrl('/api_rfq_status.php'), {
@@ -220,20 +275,24 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
       .then((res) => res.json())
       .then((resData) => {
         if (resData.status === 'success') {
-          setNotificationText(`Successfully moved RFQ to Requisition! Opening Quotation Builder...`);
+          setNotificationText(`SPH ${resData.quotation?.quotation_number || ''} linked successfully!`);
           setShowNotificationBanner(true);
-          setTimeout(() => setShowNotificationBanner(false), 4000);
           if (onRefreshLiveEmails) {
             onRefreshLiveEmails();
           }
-          onCreateQuotationFromRfq(rfq);
         } else {
-          alert('Error moving RFQ: ' + resData.message);
+          setNotificationText(`Info: ${resData.message || 'Failed to process'}`);
+          setShowNotificationBanner(true);
         }
       })
-      .catch((err) => console.error('Error moving RFQ:', err))
+      .catch((err) => {
+        console.error('Error moving RFQ:', err);
+        setNotificationText('Failed to contact server.');
+        setShowNotificationBanner(true);
+      })
       .finally(() => {
         setIsOcrProcessing(false);
+        setTimeout(() => setShowNotificationBanner(false), 3500);
       });
   };
 
@@ -613,33 +672,43 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
   };
 
   const handleProcessRfqClick = (rfq: RFQ) => {
-    setPendingConfirmRfq(rfq);
+    if (rfq.quotation_id) {
+      setNotificationText(`SPH Quotation ${rfq.quotation_number || ''} sudah terhubung ke percakapan ini.`);
+      setShowNotificationBanner(true);
+      setTimeout(() => setShowNotificationBanner(false), 3000);
+      return;
+    }
+    // Directly process and open Quotation Builder
+    handleDirectProcessQuotation(rfq);
   };
 
-  const handleConfirmQuotationCreation = () => {
-    if (!pendingConfirmRfq) return;
+  const handleDirectProcessQuotation = (targetRfq: RFQ) => {
     setIsOcrProcessing(true);
 
     if (onUpdateRfqStatus) {
-      onUpdateRfqStatus(pendingConfirmRfq.id, 'in_progress');
+      onUpdateRfqStatus(targetRfq.id, 'in_progress');
     }
+
+    const uniqueQuoId = targetRfq.quotation_id || `QUO-${Date.now()}-${Math.floor(Math.random() * 9000 + 1000)}`;
+    const quoNumber = targetRfq.quotation_number || `SPH-ABM/MY/2026/0${Math.floor(Math.random() * 900 + 100)}`;
+    const rfqRefId = (targetRfq as any).db_id || targetRfq.id;
 
     fetch(getApiUrl('/api_quotations.php'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id: `QUO-${Date.now().toString().slice(-4)}`,
-        rfq_id: pendingConfirmRfq.id,
-        quotation_number: `SPH-ABM/MY/2026/0${Math.floor(Math.random() * 900 + 100)}`,
-        client_name: pendingConfirmRfq.sender_name,
-        client_email: pendingConfirmRfq.sender_email,
-        company_name: pendingConfirmRfq.company || pendingConfirmRfq.sender_name,
+        id: uniqueQuoId,
+        rfq_id: rfqRefId,
+        quotation_number: quoNumber,
+        client_name: targetRfq.sender_name,
+        client_email: targetRfq.sender_email,
+        company_name: targetRfq.company || targetRfq.sender_name,
         date_issued: new Date().toISOString().split('T')[0],
         status: 'in_progress',
         items: [
           {
             id: 'item-autogen-1',
-            description: pendingConfirmRfq.item_requested || 'Industrial Equipment Specification',
+            description: targetRfq.item_requested || 'Industrial Equipment Specification',
             quantity: 1,
             unit: 'Package',
             unit_price: 0,
@@ -652,24 +721,38 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
         tax_percent: 11,
         tax_amount: 0,
         grand_total: 0,
-        notes: `Extracted from RFQ: ${pendingConfirmRfq.subject || pendingConfirmRfq.message_body}`,
+        notes: `Extracted from RFQ: ${targetRfq.subject || targetRfq.message_body}`,
         user_name: currentUser?.name || 'Admin',
         user_email: currentUser?.email || 'admin@abmalaya.com',
       }),
     })
       .then((res) => res.json())
       .then((resData) => {
-        console.log('Processed RFQ saved to MySQL:', resData);
-        setNotificationText(`RFQ from ${pendingConfirmRfq.sender_name} processed and saved to MySQL! Opening Quotation Builder...`);
+        if (resData.status === 'error') {
+          alert('Failed to save quotation: ' + (resData.message || 'MySQL Error'));
+          return;
+        }
+        targetRfq.quotation_id = resData.id || targetRfq.quotation_id;
+        targetRfq.quotation_number = resData.quotation_number || targetRfq.quotation_number;
+        targetRfq.status = 'diproses';
+        setNotificationText(`RFQ from ${targetRfq.sender_name} in progress! Opening Quotation Builder...`);
         setShowNotificationBanner(true);
         setTimeout(() => setShowNotificationBanner(false), 4000);
-        onCreateQuotationFromRfq(pendingConfirmRfq);
+        onCreateQuotationFromRfq(targetRfq);
       })
-      .catch((err) => console.log('Error saving quotation to MySQL:', err))
+      .catch((err) => {
+        console.error('Error saving quotation to MySQL:', err);
+        alert('Failed to connect to MySQL database while processing RFQ.');
+      })
       .finally(() => {
         setIsOcrProcessing(false);
-        setPendingConfirmRfq(null);
       });
+  };
+
+  const handleConfirmQuotationCreation = () => {
+    if (!pendingConfirmRfq) return;
+    handleDirectProcessQuotation(pendingConfirmRfq);
+    setPendingConfirmRfq(null);
   };
 
   const getFileIcon = (filename?: string) => {
@@ -1053,7 +1136,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                                     e.stopPropagation();
                                     setActiveListKebabId(null);
                                     onSelectRfq(item);
-                                    onOpenEmailReply(item);
+                                    handleTriggerReply(item);
                                   }}
                                   className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-emerald-50 hover:text-emerald-700 font-semibold text-left border-t border-slate-100"
                                 >
@@ -1285,24 +1368,46 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
                 <div className="flex items-center gap-2 shrink-0 relative">
                   
-                  {/* Process RFQ to SPH Button */}
-                  <button
-                    onClick={() => handleProcessRfqClick(selectedRfq)}
-                    className="flex items-center gap-1.5 bg-gradient-to-b from-[#00b4ff] to-[#0080d0] hover:from-[#00a2e8] hover:to-[#0070b8] text-white font-extrabold text-xs px-3.5 py-1.5 rounded-md border border-[#0060b0] shadow-sm cursor-pointer transition"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-                    <span>Process RFQ to SPH</span>
-                  </button>
+                  {/* SPH ACC Status Badge in Chat Header */}
+                  {selectedRfq.quotation_number && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!selectedRfq.is_acc_approved && selectedRfq.quotation_status !== 'approved' && selectedRfq.quotation_status !== 'acc' && selectedRfq.quotation_status !== 'done_send') {
+                          setAccModalRfq(selectedRfq);
+                          setAccNote('');
+                        } else if (onNavigateView) {
+                          onNavigateView('quotation_list');
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 ${
+                        selectedRfq.is_acc_approved || selectedRfq.quotation_status === 'approved' || selectedRfq.quotation_status === 'acc' || selectedRfq.quotation_status === 'done_send'
+                          ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
+                          : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300 animate-pulse'
+                      } border font-extrabold text-xs px-3 py-1.5 rounded-md shadow-xs cursor-pointer transition`}
+                      title="Status ACC Approval SPH Quotation"
+                    >
+                      <span>
+                        {selectedRfq.is_acc_approved || selectedRfq.quotation_status === 'approved' || selectedRfq.quotation_status === 'acc' || selectedRfq.quotation_status === 'done_send'
+                          ? '✓ SPH ACC Approved'
+                          : '⚠️ SPH Belum di-ACC'}
+                      </span>
+                      <span className="text-[10px] font-mono opacity-80">({selectedRfq.quotation_number})</span>
+                    </button>
+                  )}
 
-                  {/* Hapus Perusahaan / Blacklist Button in Chat View */}
-                  <button
-                    onClick={() => handleOpenDeleteModal(selectedRfq)}
-                    className="flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-extrabold text-xs px-3.5 py-1.5 rounded-md shadow-xs cursor-pointer transition"
-                    title="Hapus data perusahaan ini atau blacklist email perusahaan"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                    <span>Hapus Perusahaan</span>
-                  </button>
+                  {/* Process RFQ to SPH Button (Only shown if quotation not created yet) */}
+                  {!selectedRfq.quotation_number && (
+                    <button
+                      onClick={() => handleProcessRfqClick(selectedRfq)}
+                      className="flex items-center gap-1.5 bg-gradient-to-b from-[#00b4ff] to-[#0080d0] hover:from-[#00a2e8] hover:to-[#0070b8] text-white font-extrabold text-xs px-3.5 py-1.5 rounded-md border border-[#0060b0] shadow-sm cursor-pointer transition"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                      <span>Process RFQ to SPH</span>
+                    </button>
+                  )}
+
+                  {/* More Actions Kebab */}
 
                   <div className="relative">
                     <button
@@ -1319,7 +1424,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                           <button
                             onClick={() => {
                               setIsPreviewActionsOpen(false);
-                              onOpenEmailReply(selectedRfq);
+                              handleTriggerReply(selectedRfq);
                             }}
                             className="w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer"
                           >
@@ -1345,16 +1450,6 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                           >
                             <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                             <span>Error & AI Log</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              setIsPreviewActionsOpen(false);
-                              handleOpenDeleteModal(selectedRfq);
-                            }}
-                            className="w-full px-3 py-2 text-left hover:bg-rose-50 flex items-center gap-2 text-rose-700 border-t border-slate-100 cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                            <span>Hapus Perusahaan / Blacklist</span>
                           </button>
                         </div>
                       </>
@@ -1382,15 +1477,6 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                       <Building className="w-4 h-4 text-blue-700 shrink-0" />
                       <span><strong>Perusahaan:</strong> <span className="font-extrabold text-slate-900">{selectedRfq.company || selectedRfq.sender_name}</span> ({selectedRfq.sender_email})</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenDeleteModal(selectedRfq)}
-                      className="px-2.5 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 rounded font-bold text-[11px] shadow-2xs flex items-center gap-1.5 transition cursor-pointer"
-                      title="Hapus perusahaan ini atau blacklist email perusahaan"
-                    >
-                      <Trash2 className="w-3 h-3 text-rose-600" />
-                      <span>Hapus Perusahaan</span>
-                    </button>
                   </div>
 
                   <div className="flex items-center gap-1.5">
@@ -2098,10 +2184,10 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 </div>
                 <div>
                   <h3 className="font-extrabold text-sm text-slate-100 flex items-center gap-2">
-                    <span>Live Daemon & System Execution Logs</span>
-                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded-full border border-emerald-500/30">FTP & Host Ready</span>
+                    <span>System Activity & Background Logs</span>
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded-full border border-emerald-500/30">System Active</span>
                   </h3>
-                  <p className="text-[11px] text-slate-400 font-medium">Realtime inspection for AI Gemini Scanner, Gmail Sync & System Errors</p>
+                  <p className="text-[11px] text-slate-400 font-medium">Activity overview for email processing and document scanning</p>
                 </div>
               </div>
 
@@ -2250,166 +2336,88 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
         </div>
       )}
 
-      {/* MODAL KONFIRMASI HAPUS & BLACKLIST EMAIL */}
-      {deleteModalRfq && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
-          <div
-            className="bg-white rounded-xl shadow-2xl border border-slate-300 max-w-lg w-full overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 text-white p-4 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-rose-500/20 rounded-lg border border-rose-500/30">
-                  <ShieldAlert className="w-5 h-5 text-rose-400" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-sm text-white">Konfirmasi Hapus Perusahaan / Blacklist Email</h3>
-                  <p className="text-[11px] text-slate-300">Pilih tindakan manajemen perusahaan di inbox & chat</p>
-                </div>
+
+      {/* ACC Approval Confirmation Modal */}
+      {accModalRfq && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="bg-amber-500 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-white" />
+                <h3 className="font-extrabold text-sm">Konfirmasi ACC Approval SPH</h3>
               </div>
               <button
                 type="button"
-                onClick={() => !isDeleting && setDeleteModalRfq(null)}
-                className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition cursor-pointer"
+                onClick={() => setAccModalRfq(null)}
+                className="text-white/80 hover:text-white text-lg font-bold cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                ×
               </button>
             </div>
 
-            <div className="p-5 space-y-4 text-xs font-sans">
-              {/* Target Info */}
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
-                <div className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">Target Perusahaan & Email:</div>
-                <div className="font-bold text-xs text-slate-900">
-                  {deleteModalRfq.company || deleteModalRfq.sender_name}
-                </div>
-                <div className="font-mono text-[11px] text-slate-700 break-all">
-                  <strong>Email:</strong> {deleteModalRfq.sender_email}
-                </div>
-                <div className="text-slate-600 text-[11px] truncate">
-                  <strong>Subjek:</strong> {deleteModalRfq.subject}
-                </div>
+            <div className="p-5 space-y-4 text-xs text-slate-700">
+              <p className="leading-relaxed">
+                <strong>SPH No: {accModalRfq.quotation_number || 'Draft'}</strong> for client{' '}
+                <strong>{accModalRfq.sender_name || accModalRfq.company || 'Client'}</strong>
+                {accModalRfq.quotation_grand_total
+                  ? ` with total RM ${Number(accModalRfq.quotation_grand_total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : ''}{' '}
+                has not been approved yet (Pending ACC Approval).
+              </p>
+
+              <div className="bg-amber-50 border-l-4 border-amber-500 p-3 text-amber-900 leading-relaxed rounded-r-md text-[11px]">
+                In accordance with system policy, Quotation SPH requires management ACC approval before being dispatched to the client via email.
               </div>
 
-              {/* Options */}
-              <div className="space-y-2.5">
-                <label className="text-xs font-bold text-slate-800 block">Pilih Opsi Tindakan:</label>
-
-                {/* Option 1: Hapus Perusahaan Saja */}
-                <div
-                  onClick={() => setDeleteType('delete_only')}
-                  className={`p-3 rounded-lg border-2 cursor-pointer transition flex items-start gap-3 ${
-                    deleteType === 'delete_only'
-                      ? 'border-blue-500 bg-blue-50/70 shadow-xs'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="delete_type"
-                    checked={deleteType === 'delete_only'}
-                    onChange={() => setDeleteType('delete_only')}
-                    className="mt-1 cursor-pointer text-blue-600"
-                  />
-                  <div className="space-y-1 flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-extrabold text-xs text-slate-900">1. Hapus Perusahaan Ini Saja</span>
-                      <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-300">
-                        Pesan Baru Masih Bisa Masuk
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-600 leading-relaxed">
-                      Status pesan saat ini diubah menjadi <strong>deleted</strong>. Jika perusahaan ini mengirim email/pesan baru lagi di masa depan, pesan baru <strong>masih bisa masuk normal</strong> ke chat & inbox.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Option 2: Blacklist Perusahaan Permanen */}
-                <div
-                  onClick={() => setDeleteType('blacklist')}
-                  className={`p-3 rounded-lg border-2 cursor-pointer transition flex items-start gap-3 ${
-                    deleteType === 'blacklist'
-                      ? 'border-rose-500 bg-rose-50/70 shadow-xs'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="delete_type"
-                    checked={deleteType === 'blacklist'}
-                    onChange={() => setDeleteType('blacklist')}
-                    className="mt-1 cursor-pointer text-rose-600"
-                  />
-                  <div className="space-y-1 flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-extrabold text-xs text-rose-900 flex items-center gap-1.5">
-                        <Ban className="w-3.5 h-3.5 text-rose-600" />
-                        2. Blacklist Email Perusahaan Permanen
-                      </span>
-                      <span className="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-300">
-                        Otomatis Dihapus Mesin
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-600 leading-relaxed">
-                      Email perusahaan dicatat ke daftar <strong>Blacklist</strong>. Kedepannya jika ada email masuk dari alamat ini, sistem mesin akan <strong>otomatis menghapus (status: deleted) & AI akan langsung mengabaikannya di inbox/chat</strong> tanpa disentuh AI / membuang token.
-                    </p>
-                  </div>
-                </div>
+              <div className="space-y-1.5">
+                <label className="block font-bold text-slate-800 text-[11px]">ACC Approval Notes (Optional):</label>
+                <textarea
+                  value={accNote}
+                  onChange={(e) => setAccNote(e.target.value)}
+                  placeholder="e.g., Approved by management via expedited fast-track..."
+                  rows={2}
+                  className="w-full bg-white border border-slate-300 rounded p-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
               </div>
-
-              {/* Blacklist Reason Input */}
-              {deleteType === 'blacklist' && (
-                <div className="space-y-1.5 p-3 bg-amber-50/80 border border-amber-300 rounded-lg animate-in fade-in">
-                  <label className="block text-xs font-bold text-amber-950 flex items-center gap-1.5">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    <span>Alasan Blacklist Perusahaan (Wajib diisi untuk catatan AI & Mesin):</span>
-                  </label>
-                  <textarea
-                    value={blacklistReason}
-                    onChange={(e) => setBlacklistReason(e.target.value)}
-                    placeholder="Contoh: Perusahaan fiktif / spam marketing / penipuan / tidak relevan..."
-                    rows={2}
-                    className="w-full bg-white border border-amber-400 rounded-md p-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans"
-                  />
-                  <p className="text-[10px] text-amber-800">
-                    Alasan ini disimpan di basis data blacklist agar AI & mesin dapat mengabaikan email dari perusahaan ini dengan alasan spesifik.
-                  </p>
-                </div>
-              )}
             </div>
 
-            {/* Modal Actions */}
-            <div className="bg-slate-100 px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
+            <div className="bg-slate-100 px-5 py-3 border-t border-slate-200 flex items-center justify-between gap-2">
               <button
                 type="button"
-                disabled={isDeleting}
-                onClick={() => setDeleteModalRfq(null)}
-                className="px-4 py-1.5 bg-white border border-slate-300 text-slate-700 font-bold text-xs rounded-md hover:bg-slate-50 transition cursor-pointer"
+                onClick={() => {
+                  setAccModalRfq(null);
+                  if (onNavigateView) onNavigateView('quotation_list');
+                }}
+                className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded cursor-pointer"
               >
-                Batal
+                Open in Quotation List
               </button>
-              <button
-                type="button"
-                disabled={isDeleting || (deleteType === 'blacklist' && !blacklistReason.trim())}
-                onClick={handleConfirmDelete}
-                className={`px-4 py-1.5 font-bold text-xs text-white rounded-md shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
-                  deleteType === 'blacklist'
-                    ? 'bg-rose-600 hover:bg-rose-700'
-                    : 'bg-slate-800 hover:bg-slate-900'
-                }`}
-              >
-                {isDeleting ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Memproses...</span>
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>{deleteType === 'blacklist' ? 'Konfirmasi Blacklist Perusahaan' : 'Konfirmasi Hapus Perusahaan'}</span>
-                  </>
-                )}
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isGrantingAcc}
+                  onClick={() => setAccModalRfq(null)}
+                  className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 font-bold text-xs rounded hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isGrantingAcc}
+                  onClick={handleConfirmAcc}
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isGrantingAcc ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Approving...</span>
+                    </>
+                  ) : (
+                    <span>✓ Grant ACC & Proceed to Send Email</span>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

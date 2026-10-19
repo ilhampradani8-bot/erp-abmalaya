@@ -173,47 +173,25 @@ if ($type === 'invoice') {
         }
     }
 
-    // Fallback 2: If no dedicated invoice record found, load quotation and render as Invoice automatically
+    // If no invoice record exists in the database, do not fabricate a fake invoice
     if (!$doc) {
-        $stmtQ = $connection->prepare("SELECT * FROM quotations WHERE id = ? OR quotation_number = ? LIMIT 1");
-        if ($stmtQ) {
-            $stmtQ->bind_param("ss", $id, $id);
-            $stmtQ->execute();
-            $rQ = $stmtQ->get_result();
-            if ($rQ && $rowQ = $rQ->fetch_assoc()) {
-                $doc = $rowQ;
-                $doc['invoice_number'] = strpos($id, 'ABM/INV') !== false ? $id : ('ABM/INV/' . date('Ymd') . '/' . ($doc['quotation_number'] ?? $doc['id']));
-                $doc['invoice_date'] = date('Y-m-d');
-                $doc['due_date'] = date('Y-m-d', strtotime('+14 days'));
-            }
-            $stmtQ->close();
-        }
-    }
-
-    // Fallback 3: Create live draft document object if not yet saved in DB
-    if (!$doc) {
-        $doc = [
-            'id' => $id,
-            'invoice_number' => strpos($id, 'ABM/INV') !== false ? $id : 'ABM/INV/' . date('Ymd') . '/' . rand(100, 999),
-            'client_name' => 'Valued Client',
-            'client_email' => 'client@abmalaya.com',
-            'client_phone' => '+60 3-8000 1234',
-            'company_name' => 'Client Company Sdn Bhd',
-            'billing_address' => 'Kuala Lumpur, Malaysia',
-            'delivery_company' => 'Client Warehouse',
-            'delivery_address' => 'Kuala Lumpur, Malaysia',
-            'date_issued' => date('Y-m-d'),
-            'invoice_date' => date('Y-m-d'),
-            'due_date' => date('Y-m-d', strtotime('+14 days')),
-            'subtotal' => 0.00,
-            'discount_total' => 0.00,
-            'tax_percent' => 11.00,
-            'tax_amount' => 0.00,
-            'grand_total' => 0.00,
-            'notes' => "1. Please make all payment crossed & payable to: PUBLIC BANK (3818192115)\n2. Payment terms: Net 14 days upon receipt.",
-            'status' => 'unpaid',
-            'created_by' => 'Muhammad Aimanuddin Bin Mohd Zaki'
-        ];
+        echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Invoice Not Found</title>
+        <style>
+        body{font-family:Inter,sans-serif;background:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+        .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:40px;max-width:480px;text-align:center;box-shadow:0 10px 25px rgba(0,0,0,0.05)}
+        .icon{font-size:48px;margin-bottom:16px}
+        h1{font-size:18px;font-weight:800;color:#1e293b;margin:0 0 8px}
+        p{font-size:13px;color:#64748b;line-height:1.6;margin-bottom:20px}
+        a{display:inline-block;background:#0070c0;color:#fff;font-weight:700;font-size:13px;padding:10px 24px;border-radius:8px;text-decoration:none}
+        </style></head><body>
+        <div class="card">
+          <div class="icon">🧾</div>
+          <h1>No Invoice Created Yet</h1>
+          <p>This invoice has not been created in the ERP system. Please create and save the invoice from the ERP system before viewing or printing.</p>
+          <a href="javascript:history.back()">← Go Back</a>
+        </div>
+        </body></html>';
+        exit;
     }
 } else {
     $stmt = $connection->prepare("SELECT * FROM quotations WHERE id = ? OR quotation_number = ? LIMIT 1");
@@ -226,10 +204,112 @@ if ($type === 'invoice') {
         }
         $stmt->close();
     }
+
+    // Fallback 1: Lookup by rfq_id
+    if (!$doc) {
+        $stmtRfq = $connection->prepare("SELECT * FROM quotations WHERE rfq_id = ? LIMIT 1");
+        if ($stmtRfq) {
+            $stmtRfq->bind_param("s", $id);
+            $stmtRfq->execute();
+            $rRfq = $stmtRfq->get_result();
+            if ($rRfq && $rowRfq = $rRfq->fetch_assoc()) {
+                $doc = $rowRfq;
+            }
+            $stmtRfq->close();
+        }
+    }
+
+    // Fallback 2: Suffix or partial match on quotations
+    if (!$doc && strlen($id) >= 4) {
+        $cleanId = preg_replace('/[^a-zA-Z0-9]/', '', $id);
+        $suffix = substr($cleanId, -6);
+        $stmtSuffix = $connection->prepare("SELECT * FROM quotations WHERE id LIKE ? OR quotation_number LIKE ? LIMIT 1");
+        if ($stmtSuffix) {
+            $likePattern = "%$suffix%";
+            $stmtSuffix->bind_param("ss", $likePattern, $likePattern);
+            $stmtSuffix->execute();
+            $rSuffix = $stmtSuffix->get_result();
+            if ($rSuffix && $rowSuffix = $rSuffix->fetch_assoc()) {
+                $doc = $rowSuffix;
+            }
+            $stmtSuffix->close();
+        }
+    }
+
+    // Fallback 3: Lookup in rfq_requests table and generate dynamic draft
+    if (!$doc) {
+        $stmtReq = $connection->prepare("SELECT * FROM rfq_requests WHERE id = ? OR rfq_number = ? LIMIT 1");
+        if ($stmtReq) {
+            $stmtReq->bind_param("ss", $id, $id);
+            $stmtReq->execute();
+            $rReq = $stmtReq->get_result();
+            if ($rReq && $rfqRow = $rReq->fetch_assoc()) {
+                $doc = [
+                    'id' => $id,
+                    'rfq_id' => $rfqRow['id'],
+                    'quotation_number' => strpos($id, 'QUO-') !== false ? $id : ('SPH-ABM/MY/' . date('Y') . '/' . rand(1000, 9999)),
+                    'client_name' => $rfqRow['client_name'] ?? 'Client',
+                    'client_email' => $rfqRow['client_email'] ?? '',
+                    'client_phone' => $rfqRow['client_phone'] ?? '',
+                    'company_name' => $rfqRow['client_company'] ?? 'Client Company',
+                    'date_issued' => date('Y-m-d'),
+                    'valid_until' => date('Y-m-d', strtotime('+14 days')),
+                    'subtotal' => 0.00,
+                    'discount_total' => 0.00,
+                    'tax_percent' => 11.00,
+                    'tax_amount' => 0.00,
+                    'grand_total' => 0.00,
+                    'notes' => $rfqRow['message_body'] ?? $rfqRow['subject'] ?? '',
+                    'status' => 'draft',
+                    'source_file' => $rfqRow['attachment_url'] ?? '',
+                    'created_by' => 'AB Malaya Sales Team'
+                ];
+                if (!empty($rfqRow['item_requested'])) {
+                    $items[] = [
+                        'id' => 'item-rfq-1',
+                        'quotation_id' => $id,
+                        'description' => $rfqRow['item_requested'],
+                        'quantity' => !empty($rfqRow['quantity_requested']) ? floatval($rfqRow['quantity_requested']) : 1,
+                        'unit' => 'Package',
+                        'unit_price' => !empty($rfqRow['budget_estimate']) ? floatval($rfqRow['budget_estimate']) : 0,
+                        'discount_percent' => 0,
+                        'total' => !empty($rfqRow['budget_estimate']) ? floatval($rfqRow['budget_estimate']) : 0
+                    ];
+                }
+            }
+            $stmtReq->close();
+        }
+    }
 }
 
 if (!$doc) {
-    die("Document record not found.");
+    ob_end_clean();
+    http_response_code(404);
+    echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Document Record Not Found - AB Malaya ERP</title>
+    <style>*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif}
+    body{background:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+    .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:36px;max-width:480px;width:100%;text-align:center;box-shadow:0 10px 25px -5px rgba(0,0,0,.08)}
+    .icon{font-size:48px;margin-bottom:16px}
+    h1{font-size:18px;font-weight:800;color:#0f172a;margin-bottom:8px}
+    p{font-size:13px;color:#64748b;line-height:1.6;margin-bottom:16px}
+    .ref{display:inline-block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;font-weight:700;background:#f1f5f9;color:#334155;padding:6px 12px;border-radius:6px;border:1px solid #e2e8f0;margin-bottom:24px;word-break:break-all}
+    .actions{display:flex;gap:10px;justify-content:center}
+    .btn{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:9px 18px;border-radius:8px;text-decoration:none;cursor:pointer;border:1px solid transparent}
+    .btn-primary{background:#0070c0;color:#fff}
+    .btn-secondary{background:#f1f5f9;color:#334155;border-color:#cbd5e1}
+    </style></head><body>
+    <div class="card">
+      <div class="icon">📁</div>
+      <h1>Document File Not Available</h1>
+      <p>The requested Quotation document has not been generated or does not have an active record in the database yet.</p>
+      <div class="ref">Reference ID: ' . htmlspecialchars($id) . '</div>
+      <div class="actions">
+        <button onclick="window.close()" class="btn btn-primary">Close Window</button>
+        <a href="javascript:history.back()" class="btn btn-secondary">← Go Back</a>
+      </div>
+    </div>
+    </body></html>';
+    exit;
 }
 
 // Fetch Items from DB Items Table (quotation_items / invoice_items)

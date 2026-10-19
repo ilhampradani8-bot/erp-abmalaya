@@ -96,9 +96,28 @@ if ($shouldGenerate) {
     if (file_exists($pdfPath) && filesize($pdfPath) >= 100) {
         $pdfGeneratedSuccessfully = true;
     } else {
-        // Fallback: Use view_doc.php as document URL for hosting without Node.js
-        $pdfRelativeUrl = '/view_doc.php?type=' . urlencode($type) . '&id=' . urlencode($id);
-        $pdfGeneratedSuccessfully = true;
+        // Fallback: Generate real PDF file with pure PHP generator (compatible with cPanel / shared FTP hosts)
+        require_once __DIR__ . '/api_rfq_status.php';
+        if ($type === 'quotation' && function_exists('createQuotationPdfFile')) {
+            $q_stmt = $connection->prepare("SELECT * FROM quotations WHERE id = ? OR quotation_number = ? LIMIT 1");
+            if ($q_stmt) {
+                $q_stmt->bind_param("ss", $id, $id);
+                $q_stmt->execute();
+                $q_res = $q_stmt->get_result();
+                if ($q_res && $q_row = $q_res->fetch_assoc()) {
+                    createQuotationPdfFile($pdfPath, $q_row);
+                }
+                $q_stmt->close();
+            }
+        }
+        if (file_exists($pdfPath) && filesize($pdfPath) >= 100) {
+            $pdfGeneratedSuccessfully = true;
+            $pdfRelativeUrl = '/uploads/pdf/' . $safeFilename;
+        } else {
+            // Fallback: Use view_doc.php as document URL for hosting without Node.js
+            $pdfRelativeUrl = '/view_doc.php?type=' . urlencode($type) . '&id=' . urlencode($id);
+            $pdfGeneratedSuccessfully = true;
+        }
     }
 }
 

@@ -312,7 +312,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
   const handleExecuteCSVUpload = (fileToUpload?: File) => {
     const file = fileToUpload || draggedFile;
     if (!file) {
-      alert('Pilih atau tarik (drag) file CSV terlebih dahulu!');
+      alert('Please select or drag a CSV file first!');
       return;
     }
 
@@ -1378,7 +1378,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                             setSelectedProductDetail(p);
                           }}
                           className="max-w-[200px] truncate text-slate-700 font-sans hover:text-blue-600 hover:underline cursor-pointer"
-                          title="Klik untuk lihat rincian & aksi produk"
+                          title="Click to view product details & actions"
                         >
                           {p.specification || p.description || 'Standard specification'}
                         </div>
@@ -1930,7 +1930,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
               <div className="flex items-center gap-2">
                 <ShieldAlert className="w-4 h-4 text-amber-600" />
                 <h3 className="font-extrabold text-xs text-slate-900">
-                  Rincian Perbedaan Data (MySQL Lokal vs Google Drive Backup)
+                  Data Discrepancy Details (Local MySQL vs Google Drive Backup)
                 </h3>
               </div>
               <button
@@ -1946,7 +1946,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                 <span>
-                  Sistem menemukan <strong>{conflictDiscrepancies.length} produk</strong> dengan rincian perbedaan harga/stok antara server MySQL dan file Google Drive Cloud Backup.
+                  The system detected <strong>{conflictDiscrepancies.length} products</strong> with price/stock differences between the MySQL server and Google Drive Cloud Backup.
                 </span>
               </div>
             </div>
@@ -1956,11 +1956,11 @@ export const Product: React.FC<ProductProps> = ({}) => {
               <table className="w-full text-left text-xs border-collapse bg-white border border-slate-300 shadow-2xs">
                 <thead className="bg-slate-100 text-slate-700 font-bold text-[11px] uppercase tracking-wide border-b border-slate-300">
                   <tr>
-                    <th className="p-2.5 border-r border-slate-200 w-28">Kode Produk</th>
-                    <th className="p-2.5 border-r border-slate-200">Nama / Spesifikasi Produk</th>
-                    <th className="p-2.5 border-r border-slate-200 w-36">Field Yang Berbeda</th>
-                    <th className="p-2.5 border-r border-slate-200 bg-blue-50 text-blue-900 w-32">Nilai MySQL Lokal</th>
-                    <th className="p-2.5 bg-emerald-50 text-emerald-900 w-32">Nilai Google Drive</th>
+                    <th className="p-2.5 border-r border-slate-200 w-28">Product Code</th>
+                    <th className="p-2.5 border-r border-slate-200">Product Name / Specification</th>
+                    <th className="p-2.5 border-r border-slate-200 w-36">Differing Field</th>
+                    <th className="p-2.5 border-r border-slate-200 bg-blue-50 text-blue-900 w-32">Local MySQL Value</th>
+                    <th className="p-2.5 bg-emerald-50 text-emerald-900 w-32">Google Drive Value</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 font-sans">
@@ -1989,9 +1989,9 @@ export const Product: React.FC<ProductProps> = ({}) => {
               </table>
 
               <div className="bg-white p-3 border border-slate-300 rounded space-y-1">
-                <span className="font-bold text-slate-800 text-xs block">Rekomendasi Pemulihan Data:</span>
+                <span className="font-bold text-slate-800 text-xs block">Data Recovery Recommendation:</span>
                 <p className="text-[11px] text-slate-600 leading-relaxed">
-                  Silakan tentukan versi mana yang paling akurat untuk dijadikan data utama. Memilih salah satu tombol di bawah akan langsung menyinkronkan seluruh database.
+                  Please select which version is the most accurate to be used as primary data. Choosing one of the buttons below will immediately synchronize the entire database.
                 </p>
               </div>
             </div>
@@ -2003,7 +2003,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                 onClick={() => setIsDiffDetailModalOpen(false)}
                 className="px-4 py-1.5 bg-gradient-to-b from-[#fafafa] to-[#eaeaea] text-[#3d3d3d] border border-[#a0a0a0] font-bold text-xs rounded-sm cursor-pointer hover:bg-white"
               >
-                Tutup
+                Close
               </button>
 
               <div className="flex items-center gap-2">
@@ -2014,7 +2014,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                   className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs px-3.5 py-1.5 rounded cursor-pointer transition shadow-xs disabled:opacity-50"
                 >
                   <HardDrive className="w-3.5 h-3.5 text-blue-200" />
-                  <span>Gunakan Versi MySQL Lokal (Timpa Drive)</span>
+                  <span>Use Local MySQL Version (Overwrite Drive)</span>
                 </button>
 
                 <button
@@ -2024,7 +2024,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                   className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-3.5 py-1.5 rounded cursor-pointer transition shadow-xs disabled:opacity-50"
                 >
                   <Cloud className="w-3.5 h-3.5 text-emerald-200" />
-                  <span>Gunakan Versi Google Drive (Tarik ke MySQL)</span>
+                  <span>Use Google Drive Version (Pull to MySQL)</span>
                 </button>
               </div>
             </div>
@@ -2450,9 +2450,9 @@ export const Product: React.FC<ProductProps> = ({}) => {
                   <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-300 font-bold text-slate-800 flex items-center justify-between text-[11px]">
                     <span className="flex items-center gap-1.5">
                       <Package className="w-3.5 h-3.5 text-[#0099ec]" />
-                      IDENTIFIKASI & METADATA PRODUK
+                      PRODUCT IDENTIFICATION & METADATA
                     </span>
-                    <span className="text-[10px] text-slate-500 font-normal">Detail Master Barang</span>
+                    <span className="text-[10px] text-slate-500 font-normal">Master Item Details</span>
                   </div>
 
                   <table className="w-full border-collapse text-xs">
@@ -2483,7 +2483,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                           </div>
                         </td>
                         <td className="w-28 bg-purple-50/80 px-2.5 py-1.5 font-bold text-purple-950 border-r border-slate-200 align-middle">
-                          Kode IMPA
+                          IMPA Code
                         </td>
                         <td className="p-1 align-middle">
                           <input
@@ -2505,7 +2505,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                             value={category}
                             onChange={(e) => {
                               if (e.target.value === '__custom__') {
-                                const custom = prompt('Masukkan nama kategori baru:');
+                                const custom = prompt('Enter new category name:');
                                 if (custom && custom.trim()) {
                                   setCategory(custom.trim());
                                 }
@@ -2535,7 +2535,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                                   {cat}
                                 </option>
                               ))}
-                            <option value="__custom__">+ Kategori Baru / Custom...</option>
+                            <option value="__custom__">+ New Category / Custom...</option>
                           </select>
                         </td>
                         <td className="bg-slate-50 px-2.5 py-1.5 font-bold text-slate-700 border-r border-slate-200 align-middle">
@@ -2635,7 +2635,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                                 }}
                                 className="text-[10px] text-rose-600 hover:text-rose-800 font-bold underline text-left cursor-pointer"
                               >
-                                Hapus / Batal
+                                Delete / Cancel
                               </button>
                             </div>
                           </td>
@@ -2644,7 +2644,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                               rows={2}
                               value={offerText}
                               onChange={(e) => setOfferText(e.target.value)}
-                              placeholder="Penawaran alternatif produk/merek jika spesifikasi sama (contoh: BRAND B - EQUIVALENT SPEC...)"
+                              placeholder="Alternative product/brand offer if specification is equivalent (e.g. BRAND B - EQUIVALENT SPEC...)"
                               className="w-full bg-emerald-50/20 focus:bg-white border border-emerald-300 focus:border-emerald-600 p-1.5 text-xs font-bold text-emerald-900 rounded-xs resize-y"
                             />
                           </td>
@@ -2655,7 +2655,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
 
                   {/* Section 3 Header */}
                   <div className="bg-slate-100 px-3 py-1.5 border-y border-slate-300 font-bold text-slate-800 flex items-center justify-between text-[11px]">
-                    <span>HARGA, HPP & STOK BARANG</span>
+                    <span>PRICE, CAPITAL COST & ITEM STOCK</span>
                   </div>
 
                   <div className="p-1 bg-slate-50">
@@ -3051,18 +3051,18 @@ export const Product: React.FC<ProductProps> = ({}) => {
           <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
           <div className="space-y-1 flex-1 text-xs">
             <div className="flex items-center justify-between font-extrabold text-amber-300 text-xs">
-              <span>Peringatan Sync Cloud</span>
+              <span>Cloud Sync Alert</span>
               <button
                 type="button"
                 onClick={() => setIsToastDismissed(true)}
                 className="p-0.5 text-slate-400 hover:text-white transition cursor-pointer"
-                title="Tutup Notifikasi"
+                title="Close Notification"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <p className="text-slate-200 text-[11px] leading-relaxed">
-              Terdapat perbedaan data stok/harga antara Google Drive Cloud & MySQL Lokal.
+              Discrepancies in stock/pricing detected between Google Drive Cloud & Local MySQL.
             </p>
             <div className="pt-1 flex items-center justify-between">
               <button
@@ -3070,7 +3070,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                 onClick={() => setIsDiffDetailModalOpen(true)}
                 className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold px-2.5 py-1 rounded text-[10px] cursor-pointer transition shadow-xs"
               >
-                Lihat Detail Perbedaan ➔
+                View Difference Details ➔
               </button>
 
               <button
@@ -3078,7 +3078,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                 onClick={() => setIsToastDismissed(true)}
                 className="text-[10px] text-slate-400 hover:text-slate-200 underline cursor-pointer"
               >
-                Tutup
+                Close
               </button>
             </div>
           </div>

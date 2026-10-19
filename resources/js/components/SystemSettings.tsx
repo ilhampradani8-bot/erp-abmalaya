@@ -126,7 +126,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
     email: 'sales@abmalaya.com',
     logoUrl: '/favicon.png',
     stampUrl: '',
-    headerTitle: 'SURAT PENAWARAN HARGA (SPH) / COMMERCIAL QUOTATION',
+    headerTitle: 'OFFICIAL COMMERCIAL QUOTATION',
     footerTerms: '1. 50% DP payment required after PO is issued.\n2. Remaining 50% payment upon delivery completion.\n3. Quotation valid for 14 days from issue date.',
     headerColor: '#0080d0',
     defaultNotes: 'Price excludes transport tax unless explicitly stated. All goods remain property of AB Malaya until fully paid.'
@@ -1325,7 +1325,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                         disabled={isSavingBackup}
                         className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded cursor-pointer disabled:opacity-50"
                       >
-                        {isSavingBackup ? 'Saving...' : 'Simpan Backup Target'}
+                        {isSavingBackup ? 'Saving...' : 'Save Backup Target'}
                       </button>
                     </div>
                   </form>
@@ -1918,13 +1918,13 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   className="bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-extrabold text-[10px] px-3 py-1.5 rounded shadow-xs cursor-pointer flex items-center gap-1.5 transition"
                 >
                   <Eye className="w-3.5 h-3.5 text-blue-200" />
-                  <span>Pratinjau Layout Header SPH (Live Preview)</span>
+                  <span>Preview Quotation Header Layout (Live Preview)</span>
                 </button>
               </div>
 
               {/* SPH Header Choice Selector */}
               <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-md space-y-2">
-                <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">Pilihan Template Layout Header SPH:</label>
+                <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">Quotation Header Layout Template Options:</label>
                 <div className="grid grid-cols-3 gap-3">
                   <button
                     type="button"
@@ -1934,7 +1934,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     }`}
                   >
                     <span className="block font-bold text-xs text-slate-900 mb-0.5">1. Official AB Malaya Default</span>
-                    <span className="block text-[10px] text-slate-500">Logo ABM Kiri, Metadata No SPH Kanan, From/To Kartu Ganda.</span>
+                    <span className="block text-[10px] text-slate-500">ABM Logo Left, Quotation No Metadata Right, From/To Dual Cards.</span>
                   </button>
 
                   <button
@@ -1945,7 +1945,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     }`}
                   >
                     <span className="block font-bold text-xs text-slate-900 mb-0.5">2. Modern Minimalist Executive</span>
-                    <span className="block text-[10px] text-slate-500">Clean Header Garis Tipis, Tipografi Inter Slate Modern.</span>
+                    <span className="block text-[10px] text-slate-500">Clean Thin Line Header, Modern Slate Typography.</span>
                   </button>
 
                   <button
@@ -1956,7 +1956,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     }`}
                   >
                     <span className="block font-bold text-xs text-slate-900 mb-0.5">3. Maritime Industrial Logistics</span>
-                    <span className="block text-[10px] text-slate-500">Aksen Biru Laut Tua, Badge IMPA & Kode Maritim Resmi.</span>
+                    <span className="block text-[10px] text-slate-500">Deep Navy Marine Accent, Official IMPA & Maritime Badge.</span>
                   </button>
                 </div>
               </div>
@@ -2436,12 +2436,12 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     <thead style={{ backgroundColor: tableHeaderBg, color: tableHeaderTextColor }} className="font-bold uppercase text-[10px]">
                       <tr>
                         <th className="p-2 border-r border-white/20 w-8 text-center">#</th>
-                        <th className="p-2 border-r border-white/20 w-28">Kode Barang</th>
-                        <th className="p-2 border-r border-white/20">Nama Produk</th>
-                        <th className="p-2 border-r border-white/20">Spesifikasi Detail</th>
+                        <th className="p-2 border-r border-white/20 w-28">Item Code</th>
+                        <th className="p-2 border-r border-white/20">Product Name</th>
+                        <th className="p-2 border-r border-white/20">Detailed Specification</th>
                         <th className="p-2 border-r border-white/20 w-16 text-center">Qty</th>
                         <th className="p-2 border-r border-white/20 w-20">Unit</th>
-                        <th className="p-2 border-r border-white/20 w-28 text-right">Harga (RM)</th>
+                        <th className="p-2 border-r border-white/20 w-28 text-right">Unit Price (RM)</th>
                         <th className="p-2 text-right w-32">Total (RM)</th>
                       </tr>
                     </thead>

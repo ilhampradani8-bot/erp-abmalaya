@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Quotation, RFQ } from '../types/erp';
-import { Mail, Send, Paperclip, CheckCircle2, X, Loader2, Sparkles } from 'lucide-react';
+import { Mail, Send, Paperclip, CheckCircle2, X, Loader2, Sparkles, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
 interface EmailReplyModalProps {
@@ -47,16 +47,87 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
   const [aiLanguage, setAiLanguage] = useState('English');
   const [generatingAI, setGeneratingAI] = useState(false);
 
-  const handleSend = () => {
+  // ACC Approval Check & Modal States
+  const [showAccModal, setShowAccModal] = useState(false);
+  const [accNote, setAccNote] = useState('');
+  const [isAccSubmitting, setIsAccSubmitting] = useState(false);
+
+  const isQuotationAcc = () => {
+    if (!quotation) return true;
+    let hasApproval = false;
+    try {
+      if (quotation.approved_by) {
+        const parsed = typeof quotation.approved_by === 'string' ? JSON.parse(quotation.approved_by) : quotation.approved_by;
+        if (Array.isArray(parsed) && parsed.length > 0) hasApproval = true;
+      }
+    } catch (e) {}
+    const st = (quotation.status || 'draft').toLowerCase();
+    return hasApproval || st === 'approved' || st === 'acc' || st === 'disetujui' || st === 'ready_send' || st === 'done_send' || st === 'sent' || st === 'penawaran_terkirim' || st === 'deal';
+  };
+
+  const handleInitiateSend = () => {
+    if (!isQuotationAcc()) {
+      setShowAccModal(true);
+      return;
+    }
+    handleSend();
+  };
+
+  const handleGrantAccAndSend = () => {
+    setIsAccSubmitting(true);
+    fetch(getApiUrl('/api_quotations.php'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'approve',
+        id: quotation.id,
+        rfq_id: rfq.id,
+        note: accNote.trim() || 'ACC Approval via Email Reply Modal',
+        user_name: 'Admin',
+        user_email: 'admin@abmalaya.com'
+      })
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setIsAccSubmitting(false);
+        if (data.status === 'success') {
+          quotation.status = 'ready_send';
+          quotation.approved_by = JSON.stringify([
+            {
+              timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+              user_name: 'Admin',
+              note: accNote.trim() || 'ACC Approval via Email Reply Modal'
+            }
+          ]);
+          setShowAccModal(false);
+          handleSend();
+        } else {
+          alert('Failed to grant ACC approval: ' + (data.message || 'Error'));
+        }
+      })
+      .catch((err) => {
+        setIsAccSubmitting(false);
+        console.error(err);
+        alert('Network error while recording ACC approval.');
+      });
+  };
+
+  const handleSend = (forceOnlyFile = false) => {
     setSending(true);
+    const finalBody = forceOnlyFile
+      ? (body.trim() || `Bersama email ini kami lampirkan dokumen penawaran harga resmi (${quotation.quotation_number}) dari AB Malaya Industry.`)
+      : body;
     fetch(getApiUrl('/api_rfq_status.php'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         rfq_id: rfq.id,
+        quotation_id: quotation.id,
         status: 'penawaran_terkirim',
-        reply_body: body,
+        reply_body: finalBody,
         reply_sender: fromEmail,
+        target_client_email: toEmail,
+        attachment_file: attachPdf ? `${quotation.quotation_number.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf` : null,
         user_name: 'Admin'
       })
     })
@@ -66,7 +137,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
         if (data.status === 'success') {
           setSentSuccess(true);
           setTimeout(() => {
-            onSuccessSend(body, fromEmail);
+            onSuccessSend(finalBody, fromEmail);
           }, 1500);
         } else {
           alert('Failed to send email: ' + data.message);
@@ -130,7 +201,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-white w-screen h-screen flex flex-col font-sans overflow-hidden animate-in fade-in">
-      
+
       {/* Header */}
       <div className="p-4 bg-slate-900 border-b border-slate-950 flex items-center justify-between text-white shrink-0">
         <div className="flex items-center gap-3">
@@ -142,11 +213,11 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
               Reply Email & Send Quotation SPH
             </h3>
             <p className="text-[10px] text-slate-400">
-              Compose email response to the client along with the SPH document attachments.
+              Compose email response to the client along with the official SPH document attachment.
             </p>
           </div>
         </div>
-        
+
         <button
           onClick={onClose}
           className="bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs px-3 py-1.5 rounded-sm border border-red-700 transition cursor-pointer flex items-center gap-1.5"
@@ -169,7 +240,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
       ) : (
         <div className="flex-1 overflow-y-auto bg-slate-50 p-6 w-full">
           <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            
+
             {/* Left side: Standard Email Form */}
             <div className="lg:col-span-7 bg-white border border-slate-200 shadow-sm rounded-lg p-5 space-y-4">
               <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2 flex items-center gap-1.5">
@@ -225,7 +296,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
               </div>
 
               {/* PDF Attachment Flag */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-md flex items-center justify-between">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-md flex items-center justify-between flex-wrap gap-2">
                 <label className="flex items-center gap-2.5 cursor-pointer select-none">
                   <input
                     type="checkbox"
@@ -238,9 +309,27 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
                     Attach PDF SPH Document ({quotation.quotation_number}.pdf)
                   </span>
                 </label>
-                <span className="text-[9px] text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded font-mono font-bold">
-                  Stamped PDF
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded font-mono font-bold">
+                    Stamped PDF
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isQuotationAcc()) {
+                        setShowAccModal(true);
+                        return;
+                      }
+                      handleSend(true);
+                    }}
+                    disabled={sending}
+                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold flex items-center gap-1 shadow-xs transition cursor-pointer disabled:opacity-50"
+                    title="Send only this official attached PDF without requiring message text"
+                  >
+                    <Send className="w-3 h-3 text-white" />
+                    <span>Send Only File</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -258,7 +347,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
                   rows={4}
                   value={aiPrompt}
                   onChange={(e) => setAiPrompt(e.target.value)}
-                  placeholder='e.g., "Request client to specify local port shipping date details, and thank them for choosing PT Abmalaya nusa sejahtera."'
+                  placeholder='e.g., "Request client to specify local port shipping date details, and thank them for choosing PT Abmalaya Nusa Sejahtera."'
                   className="w-full bg-white border border-slate-300 rounded-md p-2.5 text-xs text-slate-800 leading-relaxed focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
               </div>
@@ -272,7 +361,8 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
                   className="w-full bg-white border border-slate-300 rounded-md px-3 py-1.5 text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-semibold"
                 >
                   <option value="English">English (Recommended)</option>
-                  <option value="Bahasa Malaysia">Bahasa Malaysia / Melayu</option>
+                  <option value="Bahasa Malaysia">Bahasa Melayu / Malaysia</option>
+                  <option value="Bahasa Indonesia">Bahasa Indonesia</option>
                   <option value="Arabic">Arabic / العربية</option>
                   <option value="Chinese Simplified">Chinese Simplified / 简体中文</option>
                   <option value="Tamil">Tamil / தமிழ்</option>
@@ -321,7 +411,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
 
           <button
             type="button"
-            onClick={handleSend}
+            onClick={handleInitiateSend}
             disabled={sending}
             className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-5 py-2 rounded-md shadow-xs transition cursor-pointer disabled:opacity-50 text-xs"
           >
@@ -337,6 +427,107 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
               </>
             )}
           </button>
+        </div>
+      )}
+
+      {/* ── POPUP: ACC APPROVAL REQUIRED BEFORE SENDING ── */}
+      {showAccModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-none shadow-2xl border border-slate-700 max-w-md w-full overflow-hidden text-slate-800">
+            {/* Header */}
+            <div className="bg-slate-900 px-5 py-3.5 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-none bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <ShieldCheck className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-white">Quotation ACC Approval Required</h3>
+                  <p className="text-[10px] text-slate-400">Management ACC Approval Before Sending</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isAccSubmitting}
+                onClick={() => setShowAccModal(false)}
+                className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4 text-xs font-sans">
+              <div className="bg-amber-50 border border-amber-200 p-3 rounded space-y-1">
+                <div className="flex items-center gap-1.5 text-amber-900 font-bold">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Quotation Not Yet ACC Approved</span>
+                </div>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  This quotation is currently marked as <strong>Draft</strong> and has not received ACC authorization. Under system policy, quotations must be ACC approved before generating an invoice or sending to client email.
+                </p>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 p-3 space-y-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-medium">Quotation Number:</span>
+                  <span className="font-mono font-bold text-slate-900">{quotation.quotation_number || quotation.id}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-medium">Client / Company:</span>
+                  <span className="font-bold text-slate-900 truncate max-w-[200px]">{rfq.company || quotation.company_name}</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-slate-200 pt-1">
+                  <span className="text-slate-500 font-medium">Grand Total:</span>
+                  <span className="font-mono font-extrabold text-emerald-700 text-sm">
+                    RM {quotation.grand_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  ACC Notes (Optional):
+                </label>
+                <input
+                  type="text"
+                  value={accNote}
+                  onChange={(e) => setAccNote(e.target.value)}
+                  placeholder="e.g., Approved by management / price confirmed..."
+                  className="w-full bg-white border border-slate-300 rounded px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 font-sans"
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-slate-100 px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isAccSubmitting}
+                onClick={() => setShowAccModal(false)}
+                className="px-4 py-1.5 bg-white border border-slate-300 text-slate-700 font-bold text-xs rounded hover:bg-slate-50 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isAccSubmitting}
+                onClick={handleGrantAccAndSend}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isAccSubmitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Approving & Sending...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>ACC & Send Email Now</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
