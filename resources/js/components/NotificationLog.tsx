@@ -83,12 +83,29 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
       }).then(() => fetchNotificationsFromMySQL());
     }
 
-    if (item.category === 'sync' || item.title.toLowerCase().includes('sync') || item.title.toLowerCase().includes('gdrive')) {
+    if (!onNavigateView) return;
+
+    const link = (item.action_link || '').toLowerCase();
+    const cat = (item.category || '').toLowerCase();
+    const title = (item.title || '').toLowerCase();
+
+    // 1. Direct match on action_link with alias normalization
+    if (link === 'rfq_inbox' || link === 'inbox' || cat === 'rfq' || cat === 'inbox') {
+      onNavigateView('inbox');
+    } else if (link === 'quotations_list' || link === 'quotation_list' || cat === 'sph' || cat === 'quotation') {
+      onNavigateView('quotation_list');
+    } else if (link === 'invoice_builder' || cat === 'invoice') {
+      onNavigateView('invoice_builder');
+    } else if (link === 'product_catalog' || cat === 'product') {
+      onNavigateView('product_catalog');
+    } else if (link === 'system_settings' || cat === 'api' || cat === 'ai' || cat === 'system' || title.includes('api') || title.includes('gemini') || title.includes('imap')) {
+      onNavigateView('system_settings');
+    } else if (cat === 'sync' || title.includes('sync') || title.includes('gdrive')) {
       if (onOpenSyncConflictModal) onOpenSyncConflictModal();
-    } else if (item.category === 'rfq' && onNavigateView) {
-      onNavigateView('rfq_inbox');
-    } else if (item.category === 'sph' && onNavigateView) {
-      onNavigateView('quotations_list');
+      else onNavigateView('system_settings');
+    } else {
+      // Fallback: Default to inbox
+      onNavigateView('inbox');
     }
   };
 

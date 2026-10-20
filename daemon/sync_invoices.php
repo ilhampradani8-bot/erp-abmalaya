@@ -84,80 +84,7 @@ function syncAndGenerateInvoicePDFs($db_conn) {
 
     $processed = 0;
 
-    // 2. Auto-create Invoices from Sent Quotations
-    $quo_res = $db_conn->query("SELECT * FROM quotations WHERE status IN ('penawaran_terkirim', 'done_send', 'sent', 'deal', 'Approved', 'acc') OR pdf_created = 1");
-    if ($quo_res && $quo_res->num_rows > 0) {
-        while ($q = $quo_res->fetch_assoc()) {
-            $quo_id = $q['id'];
-            $quo_num = $q['quotation_number'] ?: $quo_id;
-
-            // Check if invoice already created for this quotation
-            $chk_inv = $db_conn->query("SELECT id FROM invoices WHERE quotation_id = '" . $db_conn->real_escape_string($quo_id) . "' OR po_number = '" . $db_conn->real_escape_string($quo_num) . "' LIMIT 1");
-            if (!$chk_inv || $chk_inv->num_rows === 0) {
-                $inv_id = 'INV-' . time() . '-' . rand(100, 999);
-                $inv_num = 'INV-ABM/MY/2026/0' . rand(100, 999);
-                $inv_date = date('Y-m-d');
-                $due_date = date('Y-m-d', strtotime('+14 days'));
-                
-                $c_name = $q['client_name'] ?: 'Valued Client';
-                $c_email = $q['client_email'] ?: 'abmalayaindustry@gmail.com';
-                $c_phone = $q['client_phone'] ?? '';
-                $comp_name = $q['company_name'] ?: $c_name;
-                $bill_addr = $q['address_line1'] ?? '';
-                $subtotal = floatval($q['subtotal'] ?? 0);
-                $disc_total = floatval($q['discount_total'] ?? 0);
-                $tax_pct = floatval($q['tax_percent'] ?? 11);
-                $tax_amt = floatval($q['tax_amount'] ?? 0);
-                $grand_total = floatval($q['grand_total'] ?? 0);
-                $notes = 'Commercial Invoice generated automatically from Quotation SPH #' . $quo_num;
-                $created_by = 'Automated Invoice Daemon Machine';
-
-                $stmt_inv = $db_conn->prepare("INSERT INTO invoices (
-                    id, invoice_number, quotation_id, po_number, invoice_date, due_date, 
-                    client_name, client_email, client_phone, company_name, billing_address, 
-                    subtotal, discount_total, tax_percent, tax_amount, grand_total, 
-                    notes, status, created_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unpaid', ?)");
-
-                if ($stmt_inv) {
-                    $stmt_inv->bind_param("sssssssssssddddsss", 
-                        $inv_id, $inv_num, $quo_id, $quo_num, $inv_date, $due_date, 
-                        $c_name, $c_email, $c_phone, $comp_name, $bill_addr, 
-                        $subtotal, $disc_total, $tax_pct, $tax_amt, $grand_total, 
-                        $notes, $created_by);
-                    if ($stmt_inv->execute()) {
-                        // Copy Items from quotation_items to invoice_items
-                        $q_items = $db_conn->query("SELECT * FROM quotation_items WHERE quotation_id = '" . $db_conn->real_escape_string($quo_id) . "'");
-                        if ($q_items && $q_items->num_rows > 0) {
-                            $stmt_item = $db_conn->prepare("INSERT INTO invoice_items (
-                                invoice_id, product_code, description, specification, offer, quantity, unit, unit_price, discount_percent, total, image_url
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                            while ($qi = $q_items->fetch_assoc()) {
-                                $p_code = $qi['product_code'] ?? '';
-                                $desc = $qi['description'] ?? 'Product Item';
-                                $spec = $qi['specification'] ?? '';
-                                $offer = $qi['offer'] ?? '';
-                                $qty = floatval($qi['quantity'] ?? 1);
-                                $unit = $qi['unit'] ?? 'Unit';
-                                $price = floatval($qi['unit_price'] ?? 0);
-                                $disc = floatval($qi['discount_percent'] ?? 0);
-                                $tot = floatval($qi['total'] ?? 0);
-                                $img = $qi['image_url'] ?? '';
-
-                                if ($stmt_item) {
-                                    $stmt_item->bind_param("sssssdsddds", $inv_id, $p_code, $desc, $spec, $offer, $qty, $unit, $price, $disc, $tot, $img);
-                                    $stmt_item->execute();
-                                }
-                            }
-                            if ($stmt_item) $stmt_item->close();
-                        }
-                        $processed++;
-                    }
-                    $stmt_inv->close();
-                }
-            }
-        }
-    }
+    // 2. Do NOT auto-create invoices from quotations without user action (invoices must only be created explicitly by user)
 
     // 3. Generate PDFs for pending Invoices
     $pdf_dir = __DIR__ . '/../public/uploads/pdf/';
@@ -183,6 +110,15 @@ function syncAndGenerateInvoicePDFs($db_conn) {
             $cmd = "node " . escapeshellarg($node_script) . " invoice " . escapeshellarg($inv_id) . " " . escapeshellarg($pdf_path) . " " . escapeshellarg($target_view_url) . " 2>&1";
 
             @exec($cmd, $out, $ret);
+
+            if (!file_exists($pdf_path) || filesize($pdf_path) < 100) {
+                if (file_exists(__DIR__ . '/../public/api_rfq_status.php')) {
+                    require_once __DIR__ . '/../public/api_rfq_status.php';
+                    if (function_exists('createInvoicePdfFile')) {
+                        createInvoicePdfFile($pdf_path, $inv_num, $inv['client_name'] ?? '', $inv['company_name'] ?? '', $inv['grand_total'] ?? 0);
+                    }
+                }
+            }
 
             if (file_exists($pdf_path) && filesize($pdf_path) > 100) {
                 $up = $db_conn->prepare("UPDATE invoices SET pdf_created = 1, pdf_created_at = NOW(), invoice_file = ? WHERE id = ?");
