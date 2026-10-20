@@ -47,15 +47,7 @@ try {
             $real_db_id = $row ? (int)$row['id'] : $clean_id;
             $real_rfq_num = $row ? $row['rfq_number'] : $rfq_num;
 
-            // 1. Update status and classification in rfq_requests table
-            $stmt = $db_conn->prepare("UPDATE rfq_requests SET status = 'in_progress', ai_verified = 1, ai_classification = 'client_rfq' WHERE id = ? OR rfq_number = ?");
-            if ($stmt) {
-                $stmt->bind_param("is", $real_db_id, $real_rfq_num);
-                $stmt->execute();
-                $stmt->close();
-            }
-
-            // 3. Find or Create Quotation record in MySQL database
+            // 1. Find or Create Quotation record in MySQL database first
             $quo_row = null;
             $stmt_q = $db_conn->prepare("SELECT * FROM quotations WHERE rfq_id = ? OR rfq_id = ? OR rfq_id = ? ORDER BY id DESC LIMIT 1");
             if ($stmt_q) {
@@ -97,7 +89,7 @@ try {
                     }
                 }
 
-                // Re-fetch created quotation
+                // Re-fetch created quotation to verify
                 $stmt_q2 = $db_conn->prepare("SELECT * FROM quotations WHERE id = ? LIMIT 1");
                 if ($stmt_q2) {
                     $stmt_q2->bind_param("s", $quo_id);
@@ -108,6 +100,39 @@ try {
                     }
                     $stmt_q2->close();
                 }
+            }
+
+            // 2. TWO-WAY VALIDATION: Verify that quotation row ACTUALLY exists in quotations table
+            if (!$quo_row) {
+                $v_err = "Validasi 2-Arah Gagal: Gagal membuat data penawaran di tabel quotations.";
+                $db_conn->query("UPDATE rfq_requests SET ai_error = '" . $db_conn->real_escape_string($v_err) . "' WHERE id = {$real_db_id}");
+                
+                // Log to system_notifications
+                $s_notif = $db_conn->prepare("INSERT INTO system_notifications (title, message, type, category, action_link) VALUES (?, ?, 'danger', 'daemon', 'inbox')");
+                if ($s_notif) {
+                    $t = "Validasi 2-Arah Gagal: RFQ #{$real_rfq_num}";
+                    $s_notif->bind_param("ss", $t, $v_err);
+                    $s_notif->execute();
+                    $s_notif->close();
+                }
+
+                ob_end_clean();
+                echo json_encode([
+                    'status' => 'error',
+                    'message' => $v_err,
+                    'error_type' => 'TWO_WAY_VALIDATION_FAILED'
+                ]);
+                exit;
+            }
+
+            // Two-Way Validation Passed! Confirmed exists in quotations list!
+            $final_quo_id = $quo_row['id'];
+            $final_quo_num = $quo_row['quotation_number'];
+            $stmt_up = $db_conn->prepare("UPDATE rfq_requests SET status = 'in_progress', quotation_id = ?, quotation_number = ?, ai_verified = 1, ai_classification = 'client_rfq', ai_error = NULL WHERE id = ? OR rfq_number = ?");
+            if ($stmt_up) {
+                $stmt_up->bind_param("ssis", $final_quo_id, $final_quo_num, $real_db_id, $real_rfq_num);
+                $stmt_up->execute();
+                $stmt_up->close();
             }
 
             // Load items for quotation

@@ -1230,6 +1230,21 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                         </span>
                       )}
 
+                      {item.ai_error && item.ai_error.trim() !== '' && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAiErrorModalData(item);
+                          }}
+                          className="px-1.5 py-0.2 text-[9px] font-extrabold rounded-sm border bg-rose-100 hover:bg-rose-200 text-rose-800 border-rose-300 flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                          title={`Error Log: ${item.ai_error}`}
+                        >
+                          <AlertTriangle className="w-2.5 h-2.5 text-rose-600 shrink-0" />
+                          <span className="truncate max-w-[140px]">Error: {item.ai_error}</span>
+                        </button>
+                      )}
+
                       {item.labels && item.labels.filter(l => l !== 'Primary RFQ' && l !== 'AI Verified').map((lbl, lIdx) => (
                         <span
                           key={lIdx}

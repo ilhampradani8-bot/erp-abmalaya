@@ -26,14 +26,12 @@ function syncVerifiedClientRfqsToQuotations($db_conn) {
         $rfq_id = (int)$row['id'];
         $rfq_num = $row['rfq_number'];
 
-        // Ensure status in rfq_requests is set to 'in_progress'
-        if ($row['status'] !== 'in_progress' && $row['status'] !== 'quotation_build' && $row['status'] !== 'siap_kirim' && $row['status'] !== 'done') {
-            $db_conn->query("UPDATE rfq_requests SET status = 'in_progress' WHERE id = {$rfq_id}");
-        }
+        // 1. Check if quotation entry already exists in quotations table
+        $check = $db_conn->query("SELECT id, quotation_number FROM quotations WHERE rfq_id = {$rfq_id} LIMIT 1");
+        $quo_exists = ($check && $check->num_rows > 0);
+        $insert_error = null;
 
-        // Check if quotation entry already exists in quotations table
-        $check = $db_conn->query("SELECT id FROM quotations WHERE rfq_id = {$rfq_id} LIMIT 1");
-        if (!$check || $check->num_rows === 0) {
+        if (!$quo_exists) {
             $quo_id = 'QUO-' . time() . '-' . rand(100, 999) . '-' . $processed;
             $quo_num = 'SPH-ABM/MY/2026/0' . rand(100, 999);
             
@@ -61,8 +59,42 @@ function syncVerifiedClientRfqsToQuotations($db_conn) {
                         $stmt_item->close();
                     }
                     $processed++;
+                } else {
+                    $insert_error = $stmt_quo->error ?: 'Unknown MySQL execution error on quotations table';
                 }
                 $stmt_quo->close();
+            } else {
+                $insert_error = $db_conn->error ?: 'Failed to prepare quotation insert statement';
+            }
+        }
+
+        // 2. TWO-WAY VALIDATION: Confirm directly from quotations table that the quotation really exists
+        $verify = $db_conn->query("SELECT id, quotation_number FROM quotations WHERE rfq_id = {$rfq_id} LIMIT 1");
+        if ($verify && $verify->num_rows > 0) {
+            $v_row = $verify->fetch_assoc();
+            $v_quo_id = $v_row['id'];
+            $v_quo_num = $v_row['quotation_number'];
+            
+            // Validated 2-way: Safe to mark in_progress in rfq_requests!
+            $up_stmt = $db_conn->prepare("UPDATE rfq_requests SET status = 'in_progress', quotation_id = ?, quotation_number = ?, ai_error = NULL WHERE id = ?");
+            if ($up_stmt) {
+                $up_stmt->bind_param("ssi", $v_quo_id, $v_quo_num, $rfq_id);
+                $up_stmt->execute();
+                $up_stmt->close();
+            }
+        } else {
+            // TWO-WAY VALIDATION FAILED: Quotation was NOT created!
+            // Do NOT mark in_progress! Record error into rfq_requests.ai_error and system_notifications
+            $daemon_err = "Daemon Error: Validasi 2-Arah Gagal - Data penawaran gagal masuk ke daftar quotations. " . ($insert_error ? "Detail: {$insert_error}" : "");
+            $db_conn->query("UPDATE rfq_requests SET ai_error = '" . $db_conn->real_escape_string($daemon_err) . "' WHERE id = {$rfq_id}");
+
+            // Log error to system_notifications
+            $notif_stmt = $db_conn->prepare("INSERT INTO system_notifications (title, message, type, category, action_link) VALUES (?, ?, 'danger', 'daemon', 'inbox')");
+            if ($notif_stmt) {
+                $n_title = "Daemon Error: RFQ #{$rfq_num}";
+                $notif_stmt->bind_param("ss", $n_title, $daemon_err);
+                $notif_stmt->execute();
+                $notif_stmt->close();
             }
         }
     }
