@@ -88,10 +88,10 @@ function syncVerifiedClientRfqsToQuotations($db_conn) {
             @exec($cmd, $out, $ret);
 
             if (!file_exists($pdf_path) || filesize($pdf_path) < 100) {
-                if (file_exists(__DIR__ . '/../public/api_rfq_status.php')) {
-                    require_once __DIR__ . '/../public/api_rfq_status.php';
+                if (file_exists(__DIR__ . '/../public/pdf_generator_helper.php')) {
+                    require_once __DIR__ . '/../public/pdf_generator_helper.php';
                     if (function_exists('createQuotationPdfFile')) {
-                        createQuotationPdfFile($pdf_path, $q_num, $q['client_name'] ?? '', $q['company_name'] ?? '', $q['grand_total'] ?? 0);
+                        createQuotationPdfFile($pdf_path, $q);
                     }
                 }
             }

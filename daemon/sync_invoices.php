@@ -112,10 +112,10 @@ function syncAndGenerateInvoicePDFs($db_conn) {
             @exec($cmd, $out, $ret);
 
             if (!file_exists($pdf_path) || filesize($pdf_path) < 100) {
-                if (file_exists(__DIR__ . '/../public/api_rfq_status.php')) {
-                    require_once __DIR__ . '/../public/api_rfq_status.php';
+                if (file_exists(__DIR__ . '/../public/pdf_generator_helper.php')) {
+                    require_once __DIR__ . '/../public/pdf_generator_helper.php';
                     if (function_exists('createInvoicePdfFile')) {
-                        createInvoicePdfFile($pdf_path, $inv_num, $inv['client_name'] ?? '', $inv['company_name'] ?? '', $inv['grand_total'] ?? 0);
+                        createInvoicePdfFile($pdf_path, $inv);
                     }
                 }
             }
