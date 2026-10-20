@@ -950,10 +950,22 @@ function classifyEmailWithGeminiWithRetry($subject, $body, $attachments, $key_li
 try {
     require_once __DIR__ . '/db_connect.php';
 
-    // Check Master AI Switch in api_credentials table
+    // Check Master AI Switch in api_credentials table & active keys in gemini_api_keys
     $ai_master_res = ($db_conn && !$db_conn->connect_error) ? $db_conn->query("SELECT credential_value FROM api_credentials WHERE credential_key = 'AI_SYSTEM_ENABLED' LIMIT 1") : null;
     $ai_system_enabled = true; // default enabled
-    if ($ai_master_res && $ai_master_res->num_rows > 0) {
+    
+    // Check if user has configured active keys in gemini_api_keys
+    $has_active_keys = false;
+    if ($db_conn && !$db_conn->connect_error) {
+        $chk_k = $db_conn->query("SELECT COUNT(*) AS cnt FROM gemini_api_keys WHERE status = 'active' AND pool_type = 'inbox'");
+        if ($chk_k && $r_k = $chk_k->fetch_assoc()) {
+            $has_active_keys = ((int)$r_k['cnt'] > 0);
+        }
+    }
+
+    if ($has_active_keys) {
+        $ai_system_enabled = true; // If user enabled keys in settings, honor it 100%!
+    } elseif ($ai_master_res && $ai_master_res->num_rows > 0) {
         $row_m = $ai_master_res->fetch_assoc();
         $ai_system_enabled = ($row_m['credential_value'] === 'true' || $row_m['credential_value'] === '1' || $row_m['credential_value'] === 'active');
     }

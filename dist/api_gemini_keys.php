@@ -110,6 +110,19 @@ if ($method === 'POST') {
         exit;
     }
 
+    // Helper to keep legacy AI_SYSTEM_ENABLED in sync
+    $syncMasterAi = function() use ($connection) {
+        $res = $connection->query("SELECT COUNT(*) AS cnt FROM gemini_api_keys WHERE status = 'active'");
+        $cnt = 0;
+        if ($res && $r = $res->fetch_assoc()) {
+            $cnt = (int)$r['cnt'];
+        }
+        $state = ($cnt > 0) ? 'true' : 'false';
+        $connection->query("INSERT INTO api_credentials (credential_key, credential_value, service_name) 
+                            VALUES ('AI_SYSTEM_ENABLED', '$state', 'AI Engine Master Switch') 
+                            ON DUPLICATE KEY UPDATE credential_value = '$state'");
+    };
+
     // Toggle status
     if ($action === 'toggle_status') {
         $id = (int)($input['id'] ?? 0);
@@ -120,6 +133,7 @@ if ($method === 'POST') {
             $stmt->execute();
             $stmt->close();
         }
+        $syncMasterAi();
         ob_end_clean();
         echo json_encode(['status' => 'success', 'message' => 'API Key status updated!']);
         exit;
@@ -147,6 +161,7 @@ if ($method === 'POST') {
         }
         $stmt->close();
 
+        $syncMasterAi();
         ob_end_clean();
         echo json_encode(['status' => 'success', 'message' => "Dedicated Gemini API keys table updated for {$pool} pool!"]);
         exit;

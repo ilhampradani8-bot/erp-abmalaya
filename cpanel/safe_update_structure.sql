@@ -54,3 +54,13 @@ SET @sql_quo := IF(
 PREPARE stmt_quo FROM @sql_quo;
 EXECUTE stmt_quo;
 DEALLOCATE PREPARE stmt_quo;
+
+-- 4. Pastikan flag AI_SYSTEM_ENABLED tersinkronisasi aktif jika ada kunci di gemini_api_keys
+UPDATE `api_credentials` 
+SET `credential_value` = 'true' 
+WHERE `credential_key` = 'AI_SYSTEM_ENABLED';
+
+-- Aktifkan kunci resmi Gemini berawalan AIzaSy jika ada
+UPDATE `gemini_api_keys` 
+SET `status` = 'active' 
+WHERE `api_key` LIKE 'AIzaSy%' AND `status` = 'disabled';
