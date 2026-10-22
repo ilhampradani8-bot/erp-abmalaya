@@ -110,7 +110,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
       setQuotation({
         ...initialQuotation,
         items,
-        quotation_number: initialQuotation.quotation_number || `SPH-ABM/MY/2026/0${Math.floor(Math.random() * 900 + 100)}`,
+        quotation_number: initialQuotation.quotation_number || `QUO-ABM/MY/2026/0${Math.floor(Math.random() * 900 + 100)}`,
         company_name: initialQuotation.company_name || '',
         client_name: initialQuotation.client_name || '',
         client_email: initialQuotation.client_email || '',
@@ -559,7 +559,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                       type="text"
                       value={quoSearchTerm}
                       onChange={(e) => setQuoSearchTerm(e.target.value)}
-                      placeholder="Cari SPH, nomor RFQ, klien, email, PT..."
+                      placeholder="Cari Quotation, nomor RFQ, klien, email, PT..."
                       className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-semibold"
                       autoFocus
                     />
@@ -806,15 +806,15 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
                 ABM
               </div>
               <div>
-                <h2 className="font-extrabold text-base text-slate-900 tracking-tight">OFFICIAL QUOTATION (SPH)</h2>
+                <h2 className="font-extrabold text-base text-slate-900 tracking-tight">OFFICIAL COMMERCIAL QUOTATION</h2>
                 <p className="text-[11px] text-slate-500 font-mono">AB MALAYA SDN. BHD. • MALAYSIA INDUSTRIAL LOGISTICS</p>
               </div>
             </div>
 
             <div className="flex items-center gap-2 font-mono text-xs">
               <div className="bg-slate-100 border border-slate-300 px-3 py-1.5 rounded text-right">
-                <span className="text-[10px] text-slate-500 block font-sans font-bold uppercase">No. SPH:</span>
-                <span className="font-extrabold text-blue-700">{quotation?.quotation_number || 'SPH-ABM/MY/2026/0403'}</span>
+                <span className="text-[10px] text-slate-500 block font-sans font-bold uppercase">No. Quotation:</span>
+                <span className="font-extrabold text-blue-700">{quotation?.quotation_number || 'QUO-ABM/MY/2026/0403'}</span>
               </div>
               <div className="bg-slate-100 border border-slate-300 px-3 py-1.5 rounded text-right">
                 <span className="text-[10px] text-slate-500 block font-sans font-bold uppercase">Status / Phase:</span>

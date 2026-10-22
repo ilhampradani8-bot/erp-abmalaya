@@ -45,8 +45,8 @@ try {
                 // Log history
                 $user_name = isset($_GET['user_name']) ? $_GET['user_name'] : 'Admin';
                 $user_email = isset($_GET['user_email']) ? $_GET['user_email'] : 'admin@abmalaya.com';
-                appendQuotationHistoryLog($db_conn, $id, 'Move to Junk', $user_name, $user_email, "User moved SPH quotation to Trash (Junk status).");
-                addSystemNotification($db_conn, "SPH Dipindahkan ke Sampah ({$id})", "{$user_name} memindahkan SPH {$id} ke folder sampah (Trash).", 'warning', 'sph', 'quotations_list');
+                appendQuotationHistoryLog($db_conn, $id, 'Move to Junk', $user_name, $user_email, "User moved quotation to Trash (Junk status).");
+                addSystemNotification($db_conn, "Quotation Dipindahkan ke Sampah ({$id})", "{$user_name} memindahkan Quotation {$id} ke folder sampah (Trash).", 'warning', 'quotation', 'quotations_list');
             }
         }
 
@@ -227,27 +227,11 @@ try {
         }
 
         // ── ACTION: APPROVE ──────────────────────────────────────────────────
-        if (isset($input['action']) && ($input['action'] === 'approve' || $input['action'] === 'acc_approval')) {
+        if (isset($input['action']) && $input['action'] === 'approve') {
             $quo_id  = isset($input['id']) ? trim($input['id']) : '';
-            $rfq_id_in = isset($input['rfq_id']) ? trim($input['rfq_id']) : '';
             $user_name  = isset($input['user_name']) ? $input['user_name'] : 'Admin';
             $user_email = isset($input['user_email']) ? $input['user_email'] : 'admin@abmalaya.com';
-            $note    = isset($input['note']) ? $input['note'] : 'ACC Approval dari Client Chat';
-
-            if (empty($quo_id) && !empty($rfq_id_in)) {
-                $clean_rfq_id = (int)str_replace(['GMAIL-LIVE-', 'RFQ-'], '', $rfq_id_in);
-                $rfq_str = 'RFQ-' . $clean_rfq_id;
-                $s_find = $db_conn->prepare("SELECT id FROM quotations WHERE rfq_id = ? OR rfq_id = ? ORDER BY id DESC LIMIT 1");
-                if ($s_find) {
-                    $s_find->bind_param("is", $clean_rfq_id, $rfq_str);
-                    $s_find->execute();
-                    $r_find = $s_find->get_result();
-                    if ($r_find && $row_f = $r_find->fetch_assoc()) {
-                        $quo_id = $row_f['id'];
-                    }
-                    $s_find->close();
-                }
-            }
+            $note    = isset($input['note']) ? $input['note'] : '';
 
             if (!empty($quo_id)) {
                 // Load current approved_by
@@ -265,7 +249,7 @@ try {
                 $upd = $db_conn->prepare("UPDATE quotations SET approved_by = ?, status = 'ready_send' WHERE id = ?");
                 if ($upd) { $upd->bind_param('ss', $new_json, $quo_id); $upd->execute(); $upd->close(); }
                 appendQuotationHistoryLog($db_conn, $quo_id, 'ACC Approval', $user_name, $user_email, "User memberikan ACC approval dan mengubah status ke Siap Kirim (ready_send). Note: {$note}");
-                addSystemNotification($db_conn, "ACC Approval SPH ({$quo_id})", "{$user_name} menyetujui SPH {$quo_id} dan siap untuk dikirim ke klien.", 'success', 'sph', 'quotations_list');
+                addSystemNotification($db_conn, "ACC Approval Quotation ({$quo_id})", "{$user_name} menyetujui Quotation {$quo_id} dan siap untuk dikirim ke klien.", 'success', 'quotation', 'quotations_list');
             }
             ob_end_clean();
             echo json_encode(['status' => 'success', 'message' => 'Approval recorded and status moved to ready_send.']);
@@ -282,7 +266,7 @@ try {
                 $upd = $db_conn->prepare("UPDATE quotations SET status = ? WHERE id = ?");
                 if ($upd) { $upd->bind_param('ss', $newStatus, $quo_id); $upd->execute(); $upd->close(); }
                 appendQuotationHistoryLog($db_conn, $quo_id, 'Status Update', $user_name, $user_email, "Status diubah menjadi: {$newStatus}");
-                addSystemNotification($db_conn, "Status SPH Berubah ({$quo_id})", "{$user_name} mengubah status SPH {$quo_id} menjadi '{$newStatus}'.", 'info', 'sph', 'quotations_list');
+                addSystemNotification($db_conn, "Status Quotation Berubah ({$quo_id})", "{$user_name} mengubah status Quotation {$quo_id} menjadi '{$newStatus}'.", 'info', 'quotation', 'quotations_list');
             }
             ob_end_clean();
             echo json_encode(['status' => 'success', 'message' => "Status updated to {$newStatus}"]);
@@ -297,8 +281,8 @@ try {
             if (!empty($quo_id)) {
                 $upd = $db_conn->prepare("UPDATE quotations SET status = 'draft' WHERE id = ?");
                 if ($upd) { $upd->bind_param('s', $quo_id); $upd->execute(); $upd->close(); }
-                appendQuotationHistoryLog($db_conn, $quo_id, 'Restore from Trash', $user_name, $user_email, "User memulihkan SPH dari Trash ke status Draft.");
-                addSystemNotification($db_conn, "SPH Dipulihkan dari Sampah ({$quo_id})", "{$user_name} memulihkan SPH {$quo_id} kembali ke status Draft.", 'info', 'sph', 'quotations_list');
+                appendQuotationHistoryLog($db_conn, $quo_id, 'Restore from Trash', $user_name, $user_email, "User memulihkan Quotation dari Trash ke status Draft.");
+                addSystemNotification($db_conn, "Quotation Dipulihkan dari Sampah ({$quo_id})", "{$user_name} memulihkan Quotation {$quo_id} kembali ke status Draft.", 'info', 'quotation', 'quotations_list');
             }
             ob_end_clean();
             echo json_encode(['status' => 'success', 'message' => 'Restored to Draft']);
@@ -308,33 +292,9 @@ try {
         $id = isset($input['id']) && !empty($input['id']) ? $input['id'] : 'QUO-' . time();
         $quo_num = isset($input['quotation_number']) && !empty($input['quotation_number']) ? $input['quotation_number'] : 'QUO-ABM/MY/2026/0' . rand(100, 999);
         
-        $rfq_id_val = null;
-        if (isset($input['rfq_id']) && !empty($input['rfq_id'])) {
-            $raw_in = trim((string)$input['rfq_id']);
-            // 1. Direct numeric check against rfq_requests.id
-            if (is_numeric($raw_in)) {
-                $c_id = (int)$raw_in;
-                $chk_id = $db_conn->query("SELECT id FROM rfq_requests WHERE id = {$c_id} LIMIT 1");
-                if ($chk_id && $row_c = $chk_id->fetch_assoc()) {
-                    $rfq_id_val = (int)$row_c['id'];
-                }
-            }
-            // 2. Search by rfq_number (handles 'RFQ-2072', 'GMAIL-LIVE-2072', etc.)
-            if (!$rfq_id_val) {
-                $clean_num = str_replace('GMAIL-LIVE-', 'RFQ-', $raw_in);
-                $clean_num2 = 'RFQ-' . str_replace(['GMAIL-LIVE-', 'RFQ-'], '', $raw_in);
-                $stmt_rfq = $db_conn->prepare("SELECT id FROM rfq_requests WHERE rfq_number = ? OR rfq_number = ? OR rfq_number = ? LIMIT 1");
-                if ($stmt_rfq) {
-                    $stmt_rfq->bind_param("sss", $raw_in, $clean_num, $clean_num2);
-                    $stmt_rfq->execute();
-                    $res_rfq = $stmt_rfq->get_result();
-                    if ($res_rfq && $row_rfq = $res_rfq->fetch_assoc()) {
-                        $rfq_id_val = (int)$row_rfq['id'];
-                    }
-                    $stmt_rfq->close();
-                }
-            }
-            // 3. Fallback: if not found, $rfq_id_val remains null so foreign key constraint NEVER fails!
+        $rfq_id_raw = null;
+        if (isset($input['rfq_id'])) {
+            $rfq_id_raw = (int)str_replace(['GMAIL-LIVE-', 'RFQ-'], '', $input['rfq_id']);
         }
 
         $raw_email = isset($input['client_email']) && !empty($input['client_email']) ? $input['client_email'] : (isset($input['sender_email']) ? $input['sender_email'] : 'client@abmalaya.com');
@@ -402,6 +362,8 @@ try {
         $notes = isset($input['notes']) && !empty($input['notes']) ? $input['notes'] : 'RFQ quotation record';
         $created_by = isset($input['created_by']) && !empty($input['created_by']) ? $input['created_by'] : 'Sesi Tidak Terdeteksi';
 
+        $rfq_id_val = ($rfq_id_raw > 0) ? (int)$rfq_id_raw : null;
+
         // Check if updating or inserting
         $exists_check = $db_conn->query("SELECT id FROM quotations WHERE id = '" . $db_conn->real_escape_string($id) . "' LIMIT 1");
         $is_update = ($exists_check && $exists_check->num_rows > 0);
@@ -424,158 +386,33 @@ try {
         $company_address = isset($input['company_address']) ? trim($input['company_address']) : '';
         $footer_text = isset($input['footer_text']) ? trim($input['footer_text']) : null;
 
-        // Auto-detect and ensure table columns exist in MySQL (with auto-fallback if ALTER fails)
-        $existing_cols = [];
-        $res_cols = $db_conn->query("SHOW COLUMNS FROM quotations");
-        if ($res_cols) {
-            while ($col_row = $res_cols->fetch_assoc()) {
-                $existing_cols[$col_row['Field']] = true;
-            }
+        $chk_ftr = $db_conn->query("SHOW COLUMNS FROM quotations LIKE 'footer_text'");
+        if ($chk_ftr && $chk_ftr->num_rows === 0) {
+            $db_conn->query("ALTER TABLE quotations ADD COLUMN footer_text TEXT DEFAULT NULL AFTER notes");
         }
 
-        $desired_cols = [
-            'company_address' => "ALTER TABLE quotations ADD COLUMN company_address TEXT DEFAULT NULL AFTER company_name",
-            'footer_text'     => "ALTER TABLE quotations ADD COLUMN footer_text TEXT DEFAULT NULL AFTER notes",
-            'source_file'     => "ALTER TABLE quotations ADD COLUMN source_file TEXT DEFAULT NULL",
-            'quotation_file'  => "ALTER TABLE quotations ADD COLUMN quotation_file TEXT DEFAULT NULL",
-            'client_phone'    => "ALTER TABLE quotations ADD COLUMN client_phone VARCHAR(50) DEFAULT NULL AFTER client_email",
-            'category_name'   => "ALTER TABLE quotations ADD COLUMN category_name VARCHAR(100) DEFAULT NULL AFTER company_name",
-            'impa_code'       => "ALTER TABLE quotations ADD COLUMN impa_code VARCHAR(20) DEFAULT NULL AFTER category_name",
-            'approved_by'     => "ALTER TABLE quotations ADD COLUMN approved_by TEXT DEFAULT NULL",
-            'history_log'     => "ALTER TABLE quotations ADD COLUMN history_log TEXT DEFAULT NULL",
-        ];
-
-        foreach ($desired_cols as $c_name => $alter_sql) {
-            if (!isset($existing_cols[$c_name])) {
-                @$db_conn->query($alter_sql);
-                $chk = $db_conn->query("SHOW COLUMNS FROM quotations LIKE '{$c_name}'");
-                if ($chk && $chk->num_rows > 0) {
-                    $existing_cols[$c_name] = true;
-                }
-            }
-        }
-
-        // Dynamically build INSERT INTO quotations query using only verified columns
-        $fields = [
-            'id'               => ['type' => 's', 'value' => $id],
-            'rfq_id'           => ['type' => 'i', 'value' => $rfq_id_val],
-            'quotation_number' => ['type' => 's', 'value' => $quo_num],
-            'client_name'      => ['type' => 's', 'value' => $client_name],
-            'client_email'     => ['type' => 's', 'value' => $client_email],
-        ];
-
-        if (isset($existing_cols['client_phone'])) {
-            $fields['client_phone'] = ['type' => 's', 'value' => $client_phone];
-        }
-
-        $fields['company_name'] = ['type' => 's', 'value' => $company_name];
-
-        if (isset($existing_cols['company_address'])) {
-            $fields['company_address'] = ['type' => 's', 'value' => $company_address];
-        }
-
-        if (isset($existing_cols['category_name']) && isset($input['category_name'])) {
-            $fields['category_name'] = ['type' => 's', 'value' => $input['category_name']];
-        }
-
-        if (isset($existing_cols['impa_code']) && isset($input['impa_code'])) {
-            $fields['impa_code'] = ['type' => 's', 'value' => $input['impa_code']];
-        }
-
-        $fields['date_issued']    = ['type' => 's', 'value' => $date_issued];
-        $fields['valid_until']    = ['type' => 's', 'value' => $valid_until];
-        $fields['subtotal']       = ['type' => 'd', 'value' => $subtotal];
-        $fields['discount_total'] = ['type' => 'd', 'value' => $discount_total];
-        $fields['tax_percent']    = ['type' => 'd', 'value' => $tax_percent];
-        $fields['tax_amount']     = ['type' => 'd', 'value' => $tax_amount];
-        $fields['grand_total']    = ['type' => 'd', 'value' => $grand_total];
-        $fields['notes']          = ['type' => 's', 'value' => $notes];
-
-        if (isset($existing_cols['footer_text'])) {
-            $fields['footer_text'] = ['type' => 's', 'value' => $footer_text];
-        }
-
-        if (isset($existing_cols['source_file'])) {
-            $fields['source_file'] = ['type' => 's', 'value' => $source_file];
-        }
-
-        if (isset($existing_cols['quotation_file'])) {
-            $fields['quotation_file'] = ['type' => 's', 'value' => $quotation_file];
-        }
-
-        $fields['status']     = ['type' => 's', 'value' => $status];
-        $fields['created_by'] = ['type' => 's', 'value' => $created_by];
-
-        $col_names = array_keys($fields);
-        $placeholders = array_fill(0, count($col_names), '?');
-        $update_clauses = [];
-        $types_str = '';
-        $values_arr = [];
-
-        foreach ($fields as $c_name => $c_data) {
-            $types_str .= $c_data['type'];
-            $values_arr[] = $c_data['value'];
-            if ($c_name !== 'id') {
-                if ($c_name === 'source_file' || $c_name === 'quotation_file') {
-                    $update_clauses[] = "{$c_name} = COALESCE(VALUES({$c_name}), {$c_name})";
-                } else {
-                    $update_clauses[] = "{$c_name} = VALUES({$c_name})";
-                }
-            }
-        }
-
-        $sql = "INSERT INTO quotations (" . implode(", ", $col_names) . ") VALUES (" . implode(", ", $placeholders) . ") ON DUPLICATE KEY UPDATE " . implode(", ", $update_clauses);
-
-        $stmt = $db_conn->prepare($sql);
+        $stmt = $db_conn->prepare("INSERT INTO quotations (id, rfq_id, quotation_number, client_name, client_email, client_phone, company_name, company_address, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, footer_text, source_file, quotation_file, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE rfq_id=VALUES(rfq_id), quotation_number=VALUES(quotation_number), client_name=VALUES(client_name), client_email=VALUES(client_email), client_phone=VALUES(client_phone), company_name=VALUES(company_name), company_address=VALUES(company_address), date_issued=VALUES(date_issued), valid_until=VALUES(valid_until), subtotal=VALUES(subtotal), discount_total=VALUES(discount_total), tax_percent=VALUES(tax_percent), tax_amount=VALUES(tax_amount), grand_total=VALUES(grand_total), notes=VALUES(notes), footer_text=VALUES(footer_text), source_file=COALESCE(VALUES(source_file), source_file), quotation_file=COALESCE(VALUES(quotation_file), quotation_file), status=VALUES(status), created_by=VALUES(created_by)");
+        
         if ($stmt) {
-            $stmt->bind_param($types_str, ...$values_arr);
-            if (!$stmt->execute()) {
-                throw new Exception("Quotation DB Save Failed: " . $stmt->error);
-            }
+            $stmt->bind_param("sisssssssdddddsssssss", $id, $rfq_id_val, $quo_num, $client_name, $client_email, $client_phone, $company_name, $company_address, $date_issued, $valid_until, $subtotal, $discount_total, $tax_percent, $tax_amount, $grand_total, $notes, $footer_text, $source_file, $quotation_file, $status, $created_by);
+            $stmt->execute();
             $stmt->close();
         } else {
             throw new Exception("MySQL Prepare Failed: " . $db_conn->error);
-        }
-
-        // Auto-update linked RFQ status to 'diproses' in database
-        if (!empty($rfq_id_val)) {
-            $db_conn->query("UPDATE rfq_requests SET status = 'diproses' WHERE id = {$rfq_id_val}");
         }
 
         // Log JSON history event with user identity!
         $user_name = isset($input['user_name']) ? $input['user_name'] : 'Admin';
         $user_email = isset($input['user_email']) ? $input['user_email'] : 'admin@abmalaya.com';
 
-        $action_log = $is_update ? 'Update SPH' : 'Create SPH';
-        $details_log = $is_update ? "User updated SPH details (Grand Total: RM {$grand_total})." : "User created SPH (Grand Total: RM {$grand_total}).";
+        $action_log = $is_update ? 'Update Quotation' : 'Create Quotation';
+        $details_log = $is_update ? "User updated Quotation details (Grand Total: RM {$grand_total})." : "User created Quotation (Grand Total: RM {$grand_total}).";
         appendQuotationHistoryLog($db_conn, $id, $action_log, $user_name, $user_email, $details_log);
-        addSystemNotification($db_conn, ($is_update ? "SPH Diperbarui ({$quo_num})" : "SPH Baru Dibuat ({$quo_num})"), "{$user_name} ({$user_email}) " . ($is_update ? "memperbarui data SPH" : "membuat penawaran SPH baru") . " untuk klien {$client_name} senilai RM " . number_format($grand_total, 2) . ".", 'success', 'sph', 'quotations_list');
+        addSystemNotification($db_conn, ($is_update ? "Quotation Diperbarui ({$quo_num})" : "Quotation Baru Dibuat ({$quo_num})"), "{$user_name} ({$user_email}) " . ($is_update ? "memperbarui data Quotation" : "membuat penawaran Quotation baru") . " untuk klien {$client_name} senilai RM " . number_format($grand_total, 2) . ".", 'success', 'quotation', 'quotations_list');
 
         if (isset($input['items']) && is_array($input['items'])) {
             $db_conn->query("DELETE FROM quotation_items WHERE quotation_id = '" . $db_conn->real_escape_string($id) . "'");
-
-            $qi_cols = [];
-            $res_qi = $db_conn->query("SHOW COLUMNS FROM quotation_items");
-            if ($res_qi) {
-                while ($c = $res_qi->fetch_assoc()) {
-                    $qi_cols[$c['Field']] = true;
-                }
-            }
-            if (!isset($qi_cols['offer'])) {
-                @$db_conn->query("ALTER TABLE quotation_items ADD COLUMN offer TEXT DEFAULT NULL AFTER specification");
-                $chk_qi = $db_conn->query("SHOW COLUMNS FROM quotation_items LIKE 'offer'");
-                if ($chk_qi && $chk_qi->num_rows > 0) {
-                    $qi_cols['offer'] = true;
-                }
-            }
-
-            $has_offer = isset($qi_cols['offer']);
-            if ($has_offer) {
-                $item_stmt = $db_conn->prepare("INSERT INTO quotation_items (quotation_id, product_code, category_code, impa_code, description, specification, offer, quantity, unit, unit_price, discount_percent, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            } else {
-                $item_stmt = $db_conn->prepare("INSERT INTO quotation_items (quotation_id, product_code, category_code, impa_code, description, specification, quantity, unit, unit_price, discount_percent, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            }
-
+            $item_stmt = $db_conn->prepare("INSERT INTO quotation_items (quotation_id, product_code, category_code, impa_code, description, specification, offer, quantity, unit, unit_price, discount_percent, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             if ($item_stmt) {
                 foreach ($input['items'] as $it) {
                     $p_code = isset($it['product_code']) ? trim($it['product_code']) : (isset($it['item_code']) ? trim($it['item_code']) : '');
@@ -609,22 +446,67 @@ try {
                     $p_price= isset($it['unit_price']) ? (float)$it['unit_price'] : 0.0;
                     $p_disc = isset($it['discount_percent']) ? (float)$it['discount_percent'] : 0.0;
                     $p_tot  = isset($it['total']) ? (float)$it['total'] : ($p_qty * $p_price);
-
-                    if ($has_offer) {
-                        $item_stmt->bind_param("sssssssdsddd", $id, $p_code, $c_code, $i_code, $p_desc, $p_spec, $p_offer, $p_qty, $p_unit, $p_price, $p_disc, $p_tot);
-                    } else {
-                        $item_stmt->bind_param("ssssssdsddd", $id, $p_code, $c_code, $i_code, $p_desc, $p_spec, $p_qty, $p_unit, $p_price, $p_disc, $p_tot);
-                    }
+                    $item_stmt->bind_param("sssssssdsddd", $id, $p_code, $c_code, $i_code, $p_desc, $p_spec, $p_offer, $p_qty, $p_unit, $p_price, $p_disc, $p_tot);
                     $item_stmt->execute();
                 }
                 $item_stmt->close();
             }
         }
 
+        // ── GENERATE & PERSIST SYNCHRONIZED QUOTATION PDF (Source of Truth for Preview & Sent Email) ──
+        require_once __DIR__ . '/pdf_generator_helper.php';
+        $safe_qname = preg_replace('/[^A-Za-z0-9_\-]/', '_', $quo_num) . '.pdf';
+        $target_pdf_path = __DIR__ . '/uploads/pdf/' . $safe_qname;
+        $q_full_data = [
+            'id' => $id,
+            'quotation_number' => $quo_num,
+            'client_name' => $client_name,
+            'client_email' => $client_email,
+            'client_phone' => $client_phone,
+            'company_name' => $company_name,
+            'company_address' => $company_address,
+            'date_issued' => $date_issued,
+            'valid_until' => $valid_until,
+            'subtotal' => $subtotal,
+            'discount_total' => $discount_total,
+            'tax_percent' => $tax_percent,
+            'tax_amount' => $tax_amount,
+            'grand_total' => $grand_total,
+            'notes' => $notes,
+            'items' => isset($input['items']) ? $input['items'] : []
+        ];
+        if (function_exists('createQuotationPdfFile')) {
+            createQuotationPdfFile($target_pdf_path, $q_full_data, $db_conn);
+            $db_conn->query("UPDATE quotations SET quotation_file = '/uploads/pdf/{$safe_qname}', pdf_created = 1, pdf_created_at = NOW() WHERE id = '" . $db_conn->real_escape_string($id) . "'");
+        }
+
+        // ── TWO-WAY VALIDATION: Verify quotation actually exists in database before linking RFQ ──
+        if (!empty($rfq_id_val) && $rfq_id_val > 0) {
+            $check_q_stmt = $db_conn->prepare("SELECT id, quotation_number FROM quotations WHERE id = ? LIMIT 1");
+            if ($check_q_stmt) {
+                $check_q_stmt->bind_param("s", $id);
+                $check_q_stmt->execute();
+                $res_check = $check_q_stmt->get_result();
+                if ($res_check && $res_check->num_rows > 0) {
+                    // Two-way validation SUCCESS: Verified in quotations table!
+                    $upd_rfq = $db_conn->prepare("UPDATE rfq_requests SET status = 'in_progress', quotation_id = ?, quotation_number = ?, ai_error = NULL WHERE id = ?");
+                    if ($upd_rfq) {
+                        $upd_rfq->bind_param("ssi", $id, $quo_num, $rfq_id_val);
+                        $upd_rfq->execute();
+                        $upd_rfq->close();
+                    }
+                } else {
+                    // Two-way validation FAILED: Record missing in quotations!
+                    $db_conn->query("UPDATE rfq_requests SET ai_error = 'Validasi 2-Arah Gagal: Quotation gagal terdaftar ke dalam tabel quotations' WHERE id = {$rfq_id_val}");
+                }
+                $check_q_stmt->close();
+            }
+        }
+
         ob_end_clean();
         echo json_encode([
             'status' => 'success',
-            'message' => 'Quotation saved to MySQL and RFQ status updated to diproses',
+            'message' => 'Quotation saved to MySQL and RFQ status validated to in_progress',
             'id' => $id,
             'quotation_number' => $quo_num
         ]);

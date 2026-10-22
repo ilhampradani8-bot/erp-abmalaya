@@ -129,14 +129,37 @@ if (!function_exists('autoGenerateQuotation')) {
         // 6. ⚡ Explicitly synchronize status in rfq_requests to 'in_progress' and ai_verified = 1
         $db_conn->query("UPDATE rfq_requests SET status = 'in_progress', ai_verified = 1 WHERE id = {$rfq_id}");
 
-        // 7. System notification
-        if (function_exists('addSystemNotification')) {
-            addSystemNotification($db_conn, "New SPH Draft #{$quo_num}", "Auto-generated quotation draft for {$company_name} ({$client_email}).", 'info', 'sph', 'quotations_list');
+        // 7. Generate synchronized quotation PDF file into uploads/pdf/
+        $pdf_helper = __DIR__ . '/public/pdf_generator_helper.php';
+        if (file_exists($pdf_helper)) {
+            require_once $pdf_helper;
+            $safe_qname = preg_replace('/[^A-Za-z0-9_\-]/', '_', $quo_num) . '.pdf';
+            $target_pdf_path = __DIR__ . '/uploads/pdf/' . $safe_qname;
+            if (function_exists('createQuotationPdfFile')) {
+                createQuotationPdfFile($target_pdf_path, [
+                    'id' => $quo_id,
+                    'quotation_number' => $quo_num,
+                    'client_name' => $client_name,
+                    'client_email' => $client_email,
+                    'company_name' => $company_name,
+                    'subtotal' => $subtotal,
+                    'tax_amount' => $tax_amount,
+                    'grand_total' => $grand_total,
+                    'date_issued' => $date_issued,
+                    'valid_until' => $valid_until,
+                ], $db_conn);
+                $db_conn->query("UPDATE quotations SET quotation_file = '/uploads/pdf/{$safe_qname}', pdf_created = 1, pdf_created_at = NOW() WHERE id = '{$quo_id}'");
+            }
         }
 
-        // 8. History log
+        // 8. System notification
+        if (function_exists('addSystemNotification')) {
+            addSystemNotification($db_conn, "New Quotation Draft #{$quo_num}", "Auto-generated quotation draft for {$company_name} ({$client_email}).", 'info', 'quotation', 'quotations_list');
+        }
+
+        // 9. History log
         if (function_exists('appendQuotationHistoryLog')) {
-            appendQuotationHistoryLog($db_conn, $quo_id, 'Create SPH (AI)', 'System Automation', null, "Draft SPH otomatis dibuat dari RFQ {$rfq_num} (Grand Total: RM {$grand_total}).");
+            appendQuotationHistoryLog($db_conn, $quo_id, 'Create Quotation (AI)', 'System Automation', null, "Draft Quotation otomatis dibuat dari RFQ {$rfq_num} (Grand Total: RM {$grand_total}).");
         }
 
         return $quo_id;

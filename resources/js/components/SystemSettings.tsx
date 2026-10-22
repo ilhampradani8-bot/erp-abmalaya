@@ -1858,7 +1858,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-amber-800 text-[10px] space-y-1">
                   <p className="font-bold">Software Fee Constraint Directive:</p>
                   <p>
-                    Fee software ditetapakan sebesar <strong>1.75%</strong> untuk setiap invoice SPH. Pengakumulasian akan otomatis terhenti (*Stop*) ketika jumlah akumulasi mencapai limit maksimum <strong>20.000</strong>.
+                    Fee software ditetapakan sebesar <strong>1.75%</strong> untuk setiap invoice / quotation. Pengakumulasian akan otomatis terhenti (*Stop*) ketika jumlah akumulasi mencapai limit maksimum <strong>20.000</strong>.
                   </p>
                 </div>
 
@@ -2380,7 +2380,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               <div className="flex items-center gap-2">
                 <Eye className="w-4 h-4 text-blue-600" />
                 <h3 className="font-extrabold text-xs text-slate-900">
-                  Pratinjau Layout SPH (Live Preview) — Template: <span className="uppercase text-blue-700 font-mono">{headerTemplate}</span>
+                  Pratinjau Layout Quotation (Live Preview) — Template: <span className="uppercase text-blue-700 font-mono">{headerTemplate}</span>
                 </h3>
               </div>
               <button
@@ -2393,7 +2393,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
 
             <div className="p-6 overflow-y-auto space-y-4 bg-slate-100 flex-1 text-xs">
               
-              {/* SPH Header Document Card Preview */}
+              {/* Quotation Header Document Card Preview */}
               <div className="bg-white p-6 rounded-md shadow-md border border-slate-300 space-y-5">
                 
                 {/* Header Branding */}
@@ -2408,7 +2408,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     </div>
                   </div>
                   <div className="text-right font-mono text-[11px]">
-                    <p className="font-bold text-blue-700 text-sm">SPH-ABM/MY/2026/0403</p>
+                    <p className="font-bold text-blue-700 text-sm">QUO-ABM/MY/2026/0403</p>
                     <p className="text-slate-500">Date: {new Date().toISOString().split('T')[0]}</p>
                   </div>
                 </div>

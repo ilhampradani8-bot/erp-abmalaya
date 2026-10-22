@@ -35,6 +35,8 @@ Desktop.ini
 
 # Local App Inbox Cache & Daemon Logs
 public/file_inbox/
+file_inbox/
 daemon/logs/
+scratch/
 
 deploy_package.zip

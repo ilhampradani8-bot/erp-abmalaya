@@ -35,7 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="font-extrabold text-blue-700 uppercase tracking-wide text-xs">
             {viewMode === 'inbox' && 'RFQ Inbox'}
             {viewMode === 'product_catalog' && 'Product Master Catalog'}
-            {viewMode === 'quotation_list' && 'Quotation Data (SPH Records)'}
+            {viewMode === 'quotation_list' && 'Quotation Records'}
             {viewMode === 'builder' && 'Quotation Builder'}
             {viewMode === 'notification_log' && 'Notifications Log & History'}
             {viewMode === 'doc_preview' && 'Document Preview (PDF)'}
@@ -51,7 +51,7 @@ export const Header: React.FC<HeaderProps> = ({
             className="flex items-center gap-1.5 bg-[#0099ec] hover:bg-[#0080ce] text-white font-extrabold text-[11px] px-3 py-1 rounded-none transition cursor-pointer shadow-2xs"
           >
             <PlusCircle className="w-3.5 h-3.5" />
-            <span>Create New SPH Quotation</span>
+            <span>Create New Quotation</span>
           </button>
         </div>
 

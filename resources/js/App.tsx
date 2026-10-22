@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, Component, ReactNode } from 'react';
-import { RFQ, Quotation, UserAccount, RFQStatus, SMTPConfig } from './types/erp';
+import { RFQ, Quotation, UserAccount, RFQStatus, SMTPConfig, isOutboundEmail } from './types/erp';
 import { initialRFQs, sampleQuotation } from './data/mockData';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -251,14 +251,25 @@ export const App: React.FC = () => {
       return;
     }
 
+    const isOut = isOutboundEmail(rfq);
+    const clientEmail = isOut
+      ? (rfq.recipient_email || rfq.sender_email || '')
+      : (rfq.sender_email || rfq.recipient_email || '');
+    const clientName = isOut
+      ? (rfq.company && !rfq.company.toLowerCase().includes('ab malaya') ? rfq.company : (clientEmail ? clientEmail.split('@')[0] : 'Client'))
+      : (rfq.sender_name || rfq.company || 'Client');
+    const companyName = isOut
+      ? (rfq.company && !rfq.company.toLowerCase().includes('ab malaya') ? rfq.company : '')
+      : (rfq.company || '');
+
     const newQuo: Quotation = {
       ...sampleQuotation,
       id: rfq.quotation_id || `QUO-${Date.now()}-${Math.floor(Math.random() * 9000 + 1000)}`,
       rfq_id: (rfq as any).db_id || rfq.id,
-      quotation_number: rfq.quotation_number || `SPH-ABM/MY/2026/0${Math.floor(Math.random() * 900 + 100)}`,
-      client_name: rfq.sender_name,
-      client_email: rfq.sender_email,
-      company_name: rfq.company,
+      quotation_number: rfq.quotation_number || `QUO-ABM/MY/2026/0${Math.floor(Math.random() * 900 + 100)}`,
+      client_name: clientName,
+      client_email: clientEmail,
+      company_name: companyName,
       date_issued: new Date().toISOString().split('T')[0],
       items: [
         {

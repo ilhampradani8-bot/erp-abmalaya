@@ -105,7 +105,7 @@ if ($shouldGenerate) {
                 $q_stmt->execute();
                 $q_res = $q_stmt->get_result();
                 if ($q_res && $q_row = $q_res->fetch_assoc()) {
-                    createQuotationPdfFile($pdfPath, $q_row);
+                    createQuotationPdfFile($pdfPath, $q_row, $connection);
                 }
                 $q_stmt->close();
             }
@@ -148,7 +148,7 @@ if ($type === 'quotation') {
                     : null;
                 
                 if (function_exists('appendRfqHistoryLog')) {
-                    appendRfqHistoryLog($connection, $clean_rfq_id, 'Generate PDF SPH', $actor_name, $actor_email, "Dokumen PDF SPH {$row_q['quotation_number']} berhasil digenerate.");
+                    appendRfqHistoryLog($connection, $clean_rfq_id, 'Generate PDF Quotation', $actor_name, $actor_email, "Dokumen PDF Quotation {$row_q['quotation_number']} berhasil digenerate.");
                 }
             }
         }

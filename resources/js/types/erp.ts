@@ -43,9 +43,19 @@ export interface RFQ {
   quotation_status?: string;
   approved_by?: string;
   is_acc_approved?: boolean;
-  quotation_grand_total?: number;
+  is_outbound?: boolean;
   replies?: Array<{ body: string; date: string; sender: string }>;
 }
+
+export const isOutboundEmail = (rfq: RFQ | null | undefined): boolean => {
+  if (!rfq) return false;
+  if (rfq.is_outbound) return true;
+  const sender = (rfq.sender_email || '').toLowerCase().trim();
+  const st = (rfq.status || '').toLowerCase().trim();
+  const isInternalSender = sender.includes('@abmalaya.com') || sender.includes('abmalayaindustry@gmail.com');
+  const isSentStatus = st === 'sent' || st === 'terkirim' || st === 'done_send' || st === 'siap_kirim' || st === 'penawaran_terkirim';
+  return isInternalSender || isSentStatus;
+};
 
 export interface QuotationItem {
   id: string;
@@ -109,6 +119,8 @@ export interface Quotation {
   approved_by?: string | null; // JSON string — array of approval entries
   category_name?: string | null;
   impa_code?: string | null;
+  quotation_file?: string | null;
+  pdf_created?: number | boolean;
 }
 
 

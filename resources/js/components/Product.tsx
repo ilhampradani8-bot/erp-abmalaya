@@ -1436,7 +1436,7 @@ export const Product: React.FC<ProductProps> = ({}) => {
                           </span>
                         ) : (
                           <span className="text-amber-800 bg-amber-100 px-1 py-0.5 font-bold">
-                            0 (Diisi saat SPH)
+                            0 (Diisi saat Quotation)
                           </span>
                         )}
                       </td>

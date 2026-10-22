@@ -47,15 +47,7 @@ try {
             $real_db_id = $row ? (int)$row['id'] : $clean_id;
             $real_rfq_num = $row ? $row['rfq_number'] : $rfq_num;
 
-            // 1. Update status and classification in rfq_requests table
-            $stmt = $db_conn->prepare("UPDATE rfq_requests SET status = 'in_progress', ai_verified = 1, ai_classification = 'client_rfq' WHERE id = ? OR rfq_number = ?");
-            if ($stmt) {
-                $stmt->bind_param("is", $real_db_id, $real_rfq_num);
-                $stmt->execute();
-                $stmt->close();
-            }
-
-            // 3. Find or Create Quotation record in MySQL database
+            // 1. Find or Create Quotation record in MySQL database first
             $quo_row = null;
             $stmt_q = $db_conn->prepare("SELECT * FROM quotations WHERE rfq_id = ? OR rfq_id = ? OR rfq_id = ? ORDER BY id DESC LIMIT 1");
             if ($stmt_q) {
@@ -97,7 +89,7 @@ try {
                     }
                 }
 
-                // Re-fetch created quotation
+                // Re-fetch created quotation to verify
                 $stmt_q2 = $db_conn->prepare("SELECT * FROM quotations WHERE id = ? LIMIT 1");
                 if ($stmt_q2) {
                     $stmt_q2->bind_param("s", $quo_id);
@@ -108,6 +100,39 @@ try {
                     }
                     $stmt_q2->close();
                 }
+            }
+
+            // 2. TWO-WAY VALIDATION: Verify that quotation row ACTUALLY exists in quotations table
+            if (!$quo_row) {
+                $v_err = "Validasi 2-Arah Gagal: Gagal membuat data penawaran di tabel quotations.";
+                $db_conn->query("UPDATE rfq_requests SET ai_error = '" . $db_conn->real_escape_string($v_err) . "' WHERE id = {$real_db_id}");
+                
+                // Log to system_notifications
+                $s_notif = $db_conn->prepare("INSERT INTO system_notifications (title, message, type, category, action_link) VALUES (?, ?, 'danger', 'daemon', 'inbox')");
+                if ($s_notif) {
+                    $t = "Validasi 2-Arah Gagal: RFQ #{$real_rfq_num}";
+                    $s_notif->bind_param("ss", $t, $v_err);
+                    $s_notif->execute();
+                    $s_notif->close();
+                }
+
+                ob_end_clean();
+                echo json_encode([
+                    'status' => 'error',
+                    'message' => $v_err,
+                    'error_type' => 'TWO_WAY_VALIDATION_FAILED'
+                ]);
+                exit;
+            }
+
+            // Two-Way Validation Passed! Confirmed exists in quotations list!
+            $final_quo_id = $quo_row['id'];
+            $final_quo_num = $quo_row['quotation_number'];
+            $stmt_up = $db_conn->prepare("UPDATE rfq_requests SET status = 'in_progress', quotation_id = ?, quotation_number = ?, ai_verified = 1, ai_classification = 'client_rfq', ai_error = NULL WHERE id = ? OR rfq_number = ?");
+            if ($stmt_up) {
+                $stmt_up->bind_param("ssis", $final_quo_id, $final_quo_num, $real_db_id, $real_rfq_num);
+                $stmt_up->execute();
+                $stmt_up->close();
             }
 
             // Load items for quotation
@@ -279,18 +304,29 @@ try {
             $orig_subject = '';
 
             // Try loading from rfq_requests table
-            $stmt_load = $db_conn->prepare("SELECT client_email, recipient_email, subject FROM rfq_requests WHERE id = ? OR rfq_number = ? LIMIT 1");
+            $stmt_load = $db_conn->prepare("SELECT client_email, recipient_email, subject, status FROM rfq_requests WHERE id = ? OR rfq_number = ? LIMIT 1");
+            $is_outbound_rfq = false;
             if ($stmt_load) {
                 $stmt_load->bind_param("is", $clean_id, $rfq_num);
                 $stmt_load->execute();
                 $res_load = $stmt_load->get_result();
                 if ($res_load && $res_load->num_rows > 0) {
                     $row = $res_load->fetch_assoc();
-                    if (empty($client_email)) {
-                        $client_email = $row['client_email'];
-                    }
                     $recipient_email = $row['recipient_email'];
                     $orig_subject = $row['subject'];
+                    $st_low = strtolower($row['status'] ?? '');
+                    $sender_low = strtolower($row['client_email'] ?? '');
+                    
+                    $is_outbound_rfq = ($st_low === 'sent' || $st_low === 'terkirim' || $st_low === 'done_send' || strpos($sender_low, '@abmalaya.com') !== false || strpos($sender_low, 'abmalayaindustry@gmail.com') !== false);
+                    
+                    if (empty($client_email) || strpos(strtolower($client_email), '@abmalaya.com') !== false || strpos(strtolower($client_email), 'abmalayaindustry@gmail.com') !== false) {
+                        // If this is an outbound email, destination client is strictly the recipient_email!
+                        if (!empty($row['recipient_email']) && filter_var($row['recipient_email'], FILTER_VALIDATE_EMAIL) !== false && strpos(strtolower($row['recipient_email']), '@abmalaya.com') === false) {
+                            $client_email = $row['recipient_email'];
+                        } elseif (!empty($row['client_email']) && strpos(strtolower($row['client_email']), '@abmalaya.com') === false) {
+                            $client_email = $row['client_email'];
+                        }
+                    }
                 }
                 $stmt_load->close();
             }
@@ -417,7 +453,7 @@ try {
                     $q_res = $connection->query("SELECT * FROM quotations WHERE id = '" . $connection->real_escape_string($quo_id) . "' OR quotation_number = '" . $connection->real_escape_string($quo_num) . "' LIMIT 1");
                     if ($q_res && $q_row = $q_res->fetch_assoc()) {
                         if (function_exists('createQuotationPdfFile')) {
-                            if (createQuotationPdfFile($target_file, $q_row)) {
+                            if (createQuotationPdfFile($target_file, $q_row, $connection)) {
                                 $attach_pdf_path = $target_file;
                                 $attach_pdf_name = $safe_qname;
                                 $connection->query("UPDATE quotations SET quotation_file = '/uploads/pdf/{$safe_qname}', pdf_created = 1 WHERE id = '" . $connection->real_escape_string($q_row['id']) . "'");
@@ -429,14 +465,23 @@ try {
 
             // 2. Try sending the real email via Gmail SMTP using sender chosen by user
             $smtp_err = '';
+            // For outbound or general replies, ensure smtp_from is an internal company address, never the client's email!
             $smtp_from = !empty($reply_sender) && filter_var($reply_sender, FILTER_VALIDATE_EMAIL) !== false
                 ? $reply_sender
-                : $recipient_email;
+                : ((!empty($recipient_email) && filter_var($recipient_email, FILTER_VALIDATE_EMAIL) && (strpos(strtolower($recipient_email), '@abmalaya.com') !== false || strpos(strtolower($recipient_email), 'abmalayaindustry@gmail.com') !== false))
+                    ? $recipient_email
+                    : 'sales@abmalaya.com');
 
             $validation_res = null;
             if (!empty($client_email)) {
                 if (!empty($orig_subject)) {
-                    $subject = stripos($orig_subject, 'Re:') === 0 ? $orig_subject : ("Re: " . $orig_subject);
+                    if ($is_outbound_rfq) {
+                        $subject = (stripos($orig_subject, 'Follow-up') === 0 || stripos($orig_subject, 'Fwd:') === 0 || stripos($orig_subject, 'Re:') === 0)
+                            ? $orig_subject
+                            : ("Follow-up: " . $orig_subject);
+                    } else {
+                        $subject = stripos($orig_subject, 'Re:') === 0 ? $orig_subject : ("Re: " . $orig_subject);
+                    }
                 } else if (!empty($quo_num)) {
                     $subject = "Commercial Price Quotation - {$quo_num} (AB MALAYA SDN. BHD.)";
                 } else {
@@ -576,113 +621,8 @@ try {
         'message' => $e->getMessage()
     ]);
 }
+require_once __DIR__ . '/pdf_generator_helper.php';
 
-if (!function_exists('createQuotationPdfFile')) {
-    function createQuotationPdfFile(string $filePath, array $quo): bool {
-        $qNum = $quo['quotation_number'] ?? 'QUO-001';
-        $cName = $quo['company_name'] ?? 'Client Company';
-        $pName = $quo['client_name'] ?? 'Sir/Madam';
-        $cEmail = $quo['client_email'] ?? '';
-        $date = $quo['date_issued'] ?? date('Y-m-d');
-        $total = number_format((float)($quo['grand_total'] ?? 0), 2);
-        
-        $items = [];
-        if (!empty($quo['items'])) {
-            $items = is_string($quo['items']) ? json_decode($quo['items'], true) : $quo['items'];
-        }
-        if (empty($items) && !empty($quo['items_details'])) {
-            $items = is_string($quo['items_details']) ? json_decode($quo['items_details'], true) : $quo['items_details'];
-        }
-        if (empty($items) || !is_array($items)) {
-            $items = [
-                [
-                    'description' => 'Commercial Product / Service Proposal as per RFQ',
-                    'quantity' => 1,
-                    'unit_price' => (float)($quo['grand_total'] ?? 0),
-                    'total' => (float)($quo['grand_total'] ?? 0)
-                ]
-            ];
-        }
-
-        $stream = "BT\n";
-        $stream .= "/F2 16 Tf\n 50 785 Td\n (AB MALAYA INDUSTRY) Tj\n";
-        $stream .= "/F1 9 Tf\n 0 -14 Td\n (Commercial Quotation & Engineering Solutions Provider) Tj\n";
-        $stream .= "0 -12 Td\n (Email: sales@abmalaya.com | Web: https://abmalaya.com) Tj\n";
-        $stream .= "ET\n";
-        $stream .= "0.5 w\n 50 745 m 545 745 l S\n";
-        $stream .= "BT\n";
-        $stream .= "/F2 13 Tf\n 50 720 Td\n (OFFICIAL COMMERCIAL QUOTATION (SPH)) Tj\n";
-        $stream .= "/F2 9 Tf\n 0 -18 Td\n (Quotation No : ) Tj\n /F1 9 Tf\n (" . addcslashes($qNum, "()\\") . ") Tj\n";
-        $stream .= "/F2 9 Tf\n 0 -14 Td\n (Date Issued  : ) Tj\n /F1 9 Tf\n (" . addcslashes($date, "()\\") . ") Tj\n";
-        $stream .= "/F2 9 Tf\n 0 -14 Td\n (Client Name  : ) Tj\n /F1 9 Tf\n (" . addcslashes($cName . ($pName ? " - Attn: " . $pName : ""), "()\\") . ") Tj\n";
-        if ($cEmail) {
-            $stream .= "/F2 9 Tf\n 0 -14 Td\n (Client Email : ) Tj\n /F1 9 Tf\n (" . addcslashes($cEmail, "()\\") . ") Tj\n";
-        }
-        $stream .= "ET\n";
-        $stream .= "0.9 0.92 0.95 rg\n 50 625 495 18 re f\n";
-        $stream .= "0 g\n";
-        $stream .= "BT\n";
-        $stream .= "/F2 8 Tf\n 55 630 Td\n (NO) Tj\n 25 0 Td\n (DESCRIPTION) Tj\n 260 0 Td\n (QTY) Tj\n 55 0 Td\n (UNIT PRICE (MYR)) Tj\n 85 0 Td\n (TOTAL (MYR)) Tj\n";
-        $stream .= "ET\n";
-        
-        $y = 608;
-        $idx = 1;
-        foreach ($items as $it) {
-            $desc = substr($it['description'] ?? $it['product_name'] ?? 'Item', 0, 48);
-            $qty = $it['quantity'] ?? 1;
-            $uPrice = number_format((float)($it['unit_price'] ?? 0), 2);
-            $iTot = number_format((float)($it['total'] ?? 0), 2);
-            
-            $stream .= "BT\n";
-            $stream .= "/F1 8 Tf\n 55 {$y} Td\n ({$idx}) Tj\n 25 0 Td\n (" . addcslashes($desc, "()\\") . ") Tj\n 260 0 Td\n ({$qty}) Tj\n 55 0 Td\n ({$uPrice}) Tj\n 85 0 Td\n ({$iTot}) Tj\n";
-            $stream .= "ET\n";
-            
-            $y -= 15;
-            $idx++;
-            if ($idx > 25) break;
-        }
-        
-        $stream .= "0.3 w\n 50 " . ($y + 8) . " m 545 " . ($y + 8) . " l S\n";
-        $stream .= "BT\n";
-        $stream .= "/F2 11 Tf\n 330 " . ($y - 12) . " Td\n (GRAND TOTAL : MYR {$total}) Tj\n";
-        $stream .= "/F2 8 Tf\n 50 110 Td\n (Terms & Conditions:) Tj\n";
-        $stream .= "/F1 8 Tf\n 0 -11 Td\n (1. Prices quoted in Malaysian Ringgit (MYR). Payment terms as per agreement.) Tj\n";
-        $stream .= "0 -10 Td\n (2. This is an electronically issued quotation verified by AB Malaya Industry ERP.) Tj\n";
-        $stream .= "/F2 8 Tf\n 380 90 Td\n (Authorized Signature:) Tj\n";
-        $stream .= "/F1 8 Tf\n 0 -24 Td\n (AB MALAYA SALES & COMMERCIAL TEAM) Tj\n";
-        $stream .= "ET\n";
-        
-        $objects = [];
-        $objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
-        $objects[2] = "<< /Type /Pages /Kids [3 0 R] /Count 1 >>";
-        $objects[3] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 6 0 R /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> >>";
-        $objects[4] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
-        $objects[5] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>";
-        
-        $streamLen = strlen($stream);
-        $objects[6] = "<< /Length {$streamLen} >>\nstream\n{$stream}\nendstream";
-        
-        $out = "%PDF-1.4\n";
-        $xref = [];
-        $xref[0] = "0000000000 65535 f \n";
-        
-        for ($i = 1; $i <= 6; $i++) {
-            $xref[$i] = sprintf("%010d 00000 n \n", strlen($out));
-            $out .= "{$i} 0 obj\n" . $objects[$i] . "\nendobj\n";
-        }
-        
-        $xrefStart = strlen($out);
-        $out .= "xref\n0 7\n";
-        for ($i = 0; $i <= 6; $i++) {
-            $out .= $xref[$i];
-        }
-        $out .= "trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n{$xrefStart}\n%%EOF";
-        
-        @mkdir(dirname($filePath), 0755, true);
-        @file_put_contents($filePath, $out);
-        return file_exists($filePath) && filesize($filePath) > 100;
-    }
-}
 
 /**
  * Sends an email with 2-Phase Machine Validation (Validasi Mesin 2x):

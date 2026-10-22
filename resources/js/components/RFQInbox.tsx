@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { RFQ, RFQStatus, EmailAttachment } from '../types/erp';
-import { Search, Mail, Send, CheckCircle2, Clock, Building, User, Phone, Loader2, Paperclip, Eye, ShieldCheck, RefreshCw, PlusCircle, FileType, Image as ImageIcon, Maximize2, AlertTriangle, X, ExternalLink, ChevronDown, ChevronUp, MoreVertical, Menu, Sparkles, Settings, Info, ArrowRightLeft, Copy, Download, Terminal, FileText, Trash2, Ban, ShieldAlert } from 'lucide-react';
+import { RFQ, RFQStatus, EmailAttachment, isOutboundEmail } from '../types/erp';
+import { Search, Mail, Send, CheckCircle2, Clock, Building, User, Phone, Loader2, Paperclip, Eye, ShieldCheck, RefreshCw, PlusCircle, FileType, Image as ImageIcon, Maximize2, AlertTriangle, X, ExternalLink, ChevronDown, ChevronUp, MoreVertical, Menu, Sparkles, Settings, Info, ArrowRightLeft, Copy, Download, Terminal, FileText, Trash2, Ban, ShieldAlert, ArrowUpRight, Folder } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
 interface RFQInboxProps {
@@ -225,7 +225,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
           accModalRfq.quotation_status = 'approved';
           const target = accModalRfq;
           setAccModalRfq(null);
-          setNotificationText(`Quotation SPH ${target.quotation_number || ''} approved (ACC)! Opening email reply editor...`);
+          setNotificationText(`Quotation ${target.quotation_number || ''} approved (ACC)! Opening email reply editor...`);
           setShowNotificationBanner(true);
           setTimeout(() => setShowNotificationBanner(false), 4000);
           onOpenEmailReply(target);
@@ -275,7 +275,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
       .then((res) => res.json())
       .then((resData) => {
         if (resData.status === 'success') {
-          setNotificationText(`SPH ${resData.quotation?.quotation_number || ''} linked successfully!`);
+          setNotificationText(`Quotation ${resData.quotation?.quotation_number || ''} linked successfully!`);
           setShowNotificationBanner(true);
           if (onRefreshLiveEmails) {
             onRefreshLiveEmails();
@@ -559,6 +559,9 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
     const isConvertedToQuotation = isInProgress || isSent || isDone;
 
+    if (activeMainTab === 'error') {
+      return Boolean(item.ai_error && item.ai_error.trim() !== '');
+    }
     if (activeMainTab === 'received') {
       return !isConvertedToQuotation;
     }
@@ -574,6 +577,10 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
     return true;
   }, [inboxRules, parsedStartDateLimit, parsedCutoffDate, selectedToFilter, searchTerm, activeMainTab]);
+
+  const errorCount = useMemo(() => {
+    return (rfqs || []).filter((r) => r.ai_error && r.ai_error.trim() !== '').length;
+  }, [rfqs]);
 
   const { detectedCount, unrecognizedCount, filteredRfqs } = useMemo(() => {
     let dCount = 0;
@@ -623,8 +630,17 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
   const getAttachmentPreviewUrl = (att: EmailAttachment | null) => {
     if (!att) return '';
-    if (att.url && att.url.startsWith('http')) return att.url;
-    const msgno = (selectedRfq as any)?.msgno || 403;
+    if (att.url) {
+      let cleanUrl = att.url;
+      // Strip localhost:8000 / 127.0.0.1:8000 if present so it works seamlessly on tunnel / production domain
+      cleanUrl = cleanUrl.replace(/^https?:\/\/(?:localhost|127\.0\.0\.1):8000/, '');
+      if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+        return cleanUrl;
+      }
+      return getApiUrl(cleanUrl);
+    }
+    const rfqIdClean = selectedRfq?.id ? String(selectedRfq.id).replace(/[^0-9]/g, '') : '';
+    const msgno = (selectedRfq as any)?.msgno || (selectedRfq as any)?.db_id || rfqIdClean || '';
     const part = att.part || 2;
     const fn = att.filename || 'attachment.pdf';
     const ext = att.extension || (fn.toLowerCase().endsWith('.png') ? 'png' : 'pdf');
@@ -673,7 +689,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
   const handleProcessRfqClick = (rfq: RFQ) => {
     if (rfq.quotation_id) {
-      setNotificationText(`SPH Quotation ${rfq.quotation_number || ''} sudah terhubung ke percakapan ini.`);
+      setNotificationText(`Quotation ${rfq.quotation_number || ''} sudah terhubung ke percakapan ini.`);
       setShowNotificationBanner(true);
       setTimeout(() => setShowNotificationBanner(false), 3000);
       return;
@@ -685,13 +701,20 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
   const handleDirectProcessQuotation = (targetRfq: RFQ) => {
     setIsOcrProcessing(true);
 
-    if (onUpdateRfqStatus) {
-      onUpdateRfqStatus(targetRfq.id, 'in_progress');
-    }
-
     const uniqueQuoId = targetRfq.quotation_id || `QUO-${Date.now()}-${Math.floor(Math.random() * 9000 + 1000)}`;
-    const quoNumber = targetRfq.quotation_number || `SPH-ABM/MY/2026/0${Math.floor(Math.random() * 900 + 100)}`;
+    const quoNumber = targetRfq.quotation_number || `QUO-ABM/MY/2026/0${Math.floor(Math.random() * 900 + 100)}`;
     const rfqRefId = (targetRfq as any).db_id || targetRfq.id;
+
+    const isTargetOutbound = isOutboundEmail(targetRfq);
+    const targetClientEmail = isTargetOutbound
+      ? (targetRfq.recipient_email || targetRfq.sender_email)
+      : targetRfq.sender_email;
+    const targetClientName = isTargetOutbound
+      ? (targetRfq.recipient_email ? targetRfq.recipient_email.split('@')[0].toUpperCase() : 'Partner Client')
+      : targetRfq.sender_name;
+    const targetCompanyName = isTargetOutbound
+      ? (targetRfq.recipient_email ? targetRfq.recipient_email.split('@')[1] : 'Partner Enterprise')
+      : (targetRfq.company || targetRfq.sender_name);
 
     fetch(getApiUrl('/api_quotations.php'), {
       method: 'POST',
@@ -700,9 +723,9 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
         id: uniqueQuoId,
         rfq_id: rfqRefId,
         quotation_number: quoNumber,
-        client_name: targetRfq.sender_name,
-        client_email: targetRfq.sender_email,
-        company_name: targetRfq.company || targetRfq.sender_name,
+        client_name: targetClientName,
+        client_email: targetClientEmail,
+        company_name: targetCompanyName,
         date_issued: new Date().toISOString().split('T')[0],
         status: 'in_progress',
         items: [
@@ -729,20 +752,29 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
       .then((res) => res.json())
       .then((resData) => {
         if (resData.status === 'error') {
-          alert('Failed to save quotation: ' + (resData.message || 'MySQL Error'));
+          const errMsg = 'Validasi 2-Arah Gagal: ' + (resData.message || 'MySQL Error saat menyimpan Quotation.');
+          targetRfq.ai_error = errMsg;
+          alert(errMsg);
           return;
         }
+        // Validated 2-way: Quotation successfully created!
         targetRfq.quotation_id = resData.id || targetRfq.quotation_id;
         targetRfq.quotation_number = resData.quotation_number || targetRfq.quotation_number;
         targetRfq.status = 'diproses';
-        setNotificationText(`RFQ from ${targetRfq.sender_name} in progress! Opening Quotation Builder...`);
+        targetRfq.ai_error = null;
+        if (onUpdateRfqStatus) {
+          onUpdateRfqStatus(targetRfq.id, 'in_progress');
+        }
+        setNotificationText(`RFQ from ${targetRfq.sender_name} valid terhubung ke Quotation! Membuka Quotation Builder...`);
         setShowNotificationBanner(true);
         setTimeout(() => setShowNotificationBanner(false), 4000);
         onCreateQuotationFromRfq(targetRfq);
       })
       .catch((err) => {
         console.error('Error saving quotation to MySQL:', err);
-        alert('Failed to connect to MySQL database while processing RFQ.');
+        const netErr = 'Validasi 2-Arah Gagal: Terputus dari basis data MySQL saat memproses Quotation.';
+        targetRfq.ai_error = netErr;
+        alert(netErr);
       })
       .finally(() => {
         setIsOcrProcessing(false);
@@ -919,17 +951,19 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 )}
               </div>
 
-              {/* STATUS DROPDOWN (Received, In Progress, Sent / Replied, Done) */}
+              {/* STATUS DROPDOWN (Received, In Progress, Sent / Replied, Done, Errors) */}
               <div className="relative ml-auto shrink-0">
                 <button
                   onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
                   className={`px-2.5 py-1 font-bold text-[11px] rounded-md transition cursor-pointer flex items-center gap-1 border ${
-                    activeMainTab === 'received'
-                      ? 'bg-blue-600 text-white shadow-2xs'
-                      : 'bg-indigo-600 text-white shadow-2xs'
+                    activeMainTab === 'error'
+                      ? 'bg-rose-600 text-white shadow-2xs border-rose-700'
+                      : activeMainTab === 'received'
+                      ? 'bg-blue-600 text-white shadow-2xs border-blue-700'
+                      : 'bg-indigo-600 text-white shadow-2xs border-indigo-700'
                   }`}
                   style={{ fontFamily: "'Eurostile', 'Microgramma D OT', 'Euro Stile', monospace" }}
-                  title="Filter by status: Received, In Progress, Sent, Done"
+                  title="Filter by status: Received, In Progress, Sent, Done, Daemon Errors"
                 >
                   <span>
                     {activeMainTab === 'received'
@@ -938,6 +972,8 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                       ? 'Status: In Progress'
                       : activeMainTab === 'siap_kirim'
                       ? 'Status: Sent / Replied'
+                      : activeMainTab === 'error'
+                      ? `Status: Errors (${errorCount})`
                       : 'Status: Done'}
                   </span>
                   <ChevronDown className="w-3 h-3 text-white/80" />
@@ -946,12 +982,13 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 {isStatusDropdownOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setIsStatusDropdownOpen(false)} />
-                    <div className="absolute right-0 mt-1.5 w-56 bg-white border border-slate-300 shadow-lg rounded-md overflow-hidden z-50 py-1 font-sans text-xs">
+                    <div className="absolute right-0 mt-1.5 w-60 bg-white border border-slate-300 shadow-lg rounded-md overflow-hidden z-50 py-1 font-sans text-xs">
                       {[
                         { id: 'received', label: 'Received' },
                         { id: 'diproses', label: 'In Progress' },
                         { id: 'siap_kirim', label: 'Sent / Replied' },
                         { id: 'done', label: 'Done' },
+                        { id: 'error', label: `Errors / Daemon Issues ${errorCount > 0 ? `(${errorCount})` : ''}`, isError: true },
                       ].map((st) => (
                         <button
                           key={st.id}
@@ -960,10 +997,17 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                             setIsStatusDropdownOpen(false);
                           }}
                           className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 transition cursor-pointer font-bold flex items-center justify-between ${
-                            activeMainTab === st.id ? 'text-blue-600 bg-blue-50/50' : 'text-slate-700'
+                            st.isError
+                              ? 'text-rose-700 bg-rose-50/70 hover:bg-rose-100/80 border-t border-rose-100'
+                              : activeMainTab === st.id
+                              ? 'text-blue-600 bg-blue-50/50'
+                              : 'text-slate-700'
                           }`}
                         >
-                          <span>{st.label}</span>
+                          <div className="flex items-center gap-1.5">
+                            {st.isError && <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />}
+                            <span>{st.label}</span>
+                          </div>
                           {activeMainTab === st.id && <span className="text-blue-600 font-extrabold">✓</span>}
                         </button>
                       ))}
@@ -1004,6 +1048,22 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 <span>OTHERS ({unrecognizedCount})</span>
               </button>
             </div>
+
+            {errorCount > 0 && activeMainTab !== 'error' && (
+              <div className="px-3 pb-2 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveMainTab('error')}
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 text-[10px] font-bold rounded cursor-pointer transition shadow-2xs"
+                >
+                  <div className="flex items-center gap-1.5 truncate">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                    <span className="truncate">{errorCount} Error Daemon / Validasi Terdeteksi</span>
+                  </div>
+                  <span className="bg-rose-600 text-white px-1.5 py-0.5 rounded font-extrabold text-[9px] shrink-0">Lihat List</span>
+                </button>
+              </div>
+            )}
 
           </div>
 
@@ -1090,59 +1150,90 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                         : 'hover:bg-slate-50 border-transparent'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-1 mb-1">
-                      <h3 className="font-bold text-xs text-slate-900 truncate pr-4">
-                        {item.company || item.sender_name}
-                      </h3>
-                      
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">
-                          {(item.date_received || '').split(' ')[0]}
-                        </span>
+                    {(() => {
+                      const isItemOutbound = isOutboundEmail(item);
+                      return (
+                        <div className="flex items-start justify-between gap-1 mb-1">
+                          <div className="min-w-0 pr-2">
+                            {isItemOutbound ? (
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="px-1.5 py-0.2 text-[8px] font-black rounded-xs bg-purple-700 text-white uppercase tracking-wider shrink-0 flex items-center gap-0.5">
+                                    <ArrowUpRight className="w-2.5 h-2.5" />
+                                    SENT
+                                  </span>
+                                  <h3 className="font-bold text-xs text-slate-900 truncate" title={`Kepada: ${item.recipient_email || 'Klien / Rekanan'}`}>
+                                    To: <span className="text-purple-950 font-extrabold">{item.recipient_email || 'Klien / Rekanan'}</span>
+                                  </h3>
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-medium truncate">
+                                  Dari: {item.sender_name || item.sender_email}
+                                </div>
+                              </div>
+                            ) : (
+                              <h3 className="font-bold text-xs text-slate-900 truncate pr-4">
+                                {item.company || item.sender_name}
+                              </h3>
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">
+                              {(item.date_received || '').split(' ')[0]}
+                            </span>
 
-                        <div className="relative">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveListKebabId(isKebabOpen ? null : item.id);
-                            }}
-                            className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition cursor-pointer rounded-sm"
-                          >
-                            <MoreVertical className="w-3.5 h-3.5" />
-                          </button>
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveListKebabId(isKebabOpen ? null : item.id);
+                                }}
+                                className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition cursor-pointer rounded-sm"
+                              >
+                                <MoreVertical className="w-3.5 h-3.5" />
+                              </button>
 
-                          {isKebabOpen && (
-                            <>
-                              <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setActiveListKebabId(null); }} />
-                              <div className="absolute right-0 top-6 w-44 bg-white border border-slate-300 shadow-xl py-1 z-50 animate-in fade-in slide-in-from-top-1 text-xs font-sans">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveListKebabId(null);
-                                    onSelectRfq(item);
-                                    handleProcessRfqClick(item);
-                                  }}
-                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-blue-50 hover:text-blue-700 font-semibold text-left"
-                                >
-                                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                                  <span>Process to SPH</span>
-                                </button>
+                              {isKebabOpen && (
+                                <>
+                                  <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setActiveListKebabId(null); }} />
+                                  <div className="absolute right-0 top-6 w-44 bg-white border border-slate-300 shadow-xl py-1 z-50 animate-in fade-in slide-in-from-top-1 text-xs font-sans">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveListKebabId(null);
+                                        onSelectRfq(item);
+                                        handleProcessRfqClick(item);
+                                      }}
+                                      className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-blue-50 hover:text-blue-700 font-semibold text-left"
+                                    >
+                                      <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                                      <span>Process to Quotation</span>
+                                    </button>
 
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveListKebabId(null);
-                                    onSelectRfq(item);
-                                    handleTriggerReply(item);
-                                  }}
-                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-emerald-50 hover:text-emerald-700 font-semibold text-left border-t border-slate-100"
-                                >
-                                  <Send className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>Reply Email</span>
-                                </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveListKebabId(null);
+                                        onSelectRfq(item);
+                                        handleTriggerReply(item);
+                                      }}
+                                      className="w-full flex items-center gap-2 px-3 py-1.5 text-slate-800 hover:bg-emerald-50 hover:text-emerald-700 font-semibold text-left border-t border-slate-100"
+                                    >
+                                      {isItemOutbound ? (
+                                        <>
+                                          <ArrowUpRight className="w-3.5 h-3.5 text-purple-600" />
+                                          <span>Teruskan / Follow-up</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Send className="w-3.5 h-3.5 text-emerald-600" />
+                                          <span>Reply Email</span>
+                                        </>
+                                      )}
+                                    </button>
 
                                 <button
                                   type="button"
@@ -1187,9 +1278,11 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                                 </div>
                               </>
                             )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
+                      );
+                    })()}
 
                     <div className="text-xs text-slate-800 font-bold mb-1 line-clamp-1">
                       {item.subject}
@@ -1400,25 +1493,25 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                           ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
                           : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300 animate-pulse'
                       } border font-extrabold text-xs px-3 py-1.5 rounded-md shadow-xs cursor-pointer transition`}
-                      title="Status ACC Approval SPH Quotation"
+                      title="Status ACC Approval Quotation"
                     >
                       <span>
                         {selectedRfq.is_acc_approved || selectedRfq.quotation_status === 'approved' || selectedRfq.quotation_status === 'acc' || selectedRfq.quotation_status === 'done_send'
-                          ? '✓ SPH ACC Approved'
-                          : '⚠️ SPH Belum di-ACC'}
+                          ? '✓ Quotation ACC Approved'
+                          : '⚠️ Quotation Belum di-ACC'}
                       </span>
                       <span className="text-[10px] font-mono opacity-80">({selectedRfq.quotation_number})</span>
                     </button>
                   )}
 
-                  {/* Process RFQ to SPH Button (Only shown if quotation not created yet) */}
+                  {/* Process RFQ to Quotation Button (Only shown if quotation not created yet) */}
                   {!selectedRfq.quotation_number && (
                     <button
                       onClick={() => handleProcessRfqClick(selectedRfq)}
                       className="flex items-center gap-1.5 bg-gradient-to-b from-[#00b4ff] to-[#0080d0] hover:from-[#00a2e8] hover:to-[#0070b8] text-white font-extrabold text-xs px-3.5 py-1.5 rounded-md border border-[#0060b0] shadow-sm cursor-pointer transition"
                     >
                       <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-                      <span>Process RFQ to SPH</span>
+                      <span>Process RFQ to Quotation</span>
                     </button>
                   )}
 
@@ -1436,16 +1529,30 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setIsPreviewActionsOpen(false)} />
                         <div className="absolute right-0 top-8 bg-white border border-slate-200 rounded-md shadow-xl py-1 z-50 w-44 text-xs font-bold text-slate-800">
-                          <button
-                            onClick={() => {
-                              setIsPreviewActionsOpen(false);
-                              handleTriggerReply(selectedRfq);
-                            }}
-                            className="w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer"
-                          >
-                            <Send className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span>Reply Email</span>
-                          </button>
+                          {(() => {
+                            const isSelectedOutbound = isOutboundEmail(selectedRfq);
+                            return (
+                              <button
+                                onClick={() => {
+                                  setIsPreviewActionsOpen(false);
+                                  handleTriggerReply(selectedRfq);
+                                }}
+                                className="w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer"
+                              >
+                                {isSelectedOutbound ? (
+                                  <>
+                                    <ArrowUpRight className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                    <span>Teruskan / Follow-up</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Send className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span>Reply Email</span>
+                                  </>
+                                )}
+                              </button>
+                            );
+                          })()}
                           <button
                             onClick={() => {
                               setIsPreviewActionsOpen(false);
@@ -1484,14 +1591,12 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
                   <div className="flex items-center gap-1.5">
                     <Mail className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span><strong>To:</strong> <span className="font-bold text-emerald-900">{(selectedRfq as any).recipient_email || 'mijdigital2026@gmail.com'}</span></span>
+                    <span><strong>To:</strong> <span className="font-bold text-emerald-900">{selectedRfq.recipient_email || 'abmalayaindustry@gmail.com'}</span></span>
                   </div>
 
-                  <div className="flex items-center justify-between sm:col-span-2 bg-slate-100/90 px-3 py-2 rounded-md border border-slate-200">
-                    <div className="flex items-center gap-2">
-                      <Building className="w-4 h-4 text-blue-700 shrink-0" />
-                      <span><strong>Perusahaan:</strong> <span className="font-extrabold text-slate-900">{selectedRfq.company || selectedRfq.sender_name}</span> ({selectedRfq.sender_email})</span>
-                    </div>
+                  <div className="flex items-center gap-1.5">
+                    <Building className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span><strong>Company:</strong> {selectedRfq.company || selectedRfq.sender_name}</span>
                   </div>
 
                   <div className="flex items-center gap-1.5">
@@ -1688,76 +1793,202 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
             </div>
 
             {/* Modal Body */}
-            <div className="flex-1 bg-slate-900 p-2 overflow-hidden flex items-center justify-center">
-              {previewAttachment.is_gdrive && (previewAttachment.is_folder || !previewAttachment.downloaded) ? (
-                <div className="flex flex-col items-center justify-center p-8 bg-slate-800 text-white space-y-4 max-w-lg mx-auto rounded-lg border border-slate-700 shadow-xl">
-                  <div className="w-16 h-16 bg-blue-900/40 text-blue-400 border border-blue-800 rounded-full flex items-center justify-center shadow-lg">
-                    <Paperclip className="w-8 h-8 animate-pulse" />
-                  </div>
-                  <h4 className="text-sm font-extrabold" style={{ fontFamily: "'Eurostile', monospace" }}>
-                    {previewAttachment.is_folder ? 'Google Drive Folder Link' : 'Google Drive / Docs Attachment Link'}
-                  </h4>
-                  <p className="text-xs text-slate-300 text-center leading-relaxed">
-                    {previewAttachment.is_folder
-                      ? 'This is a Google Drive folder link shared in the email. Folders cannot be downloaded directly — click below to open it in Google Drive.'
-                      : 'This file is linked from the email body. It has not been cached on our server yet. You can copy the original link or download it to the server.'}
-                  </p>
-                  
-                  <div className="flex flex-wrap gap-3 items-center justify-center w-full pt-2">
-                    {/* Copy Link Button */}
-                    <button
-                      onClick={() => {
-                        if (previewAttachment.original_url) {
-                          navigator.clipboard.writeText(previewAttachment.original_url);
-                          alert("Google Drive Link copied to clipboard!");
-                        }
-                      }}
-                      className="px-3.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs rounded transition flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copy Google Drive Link</span>
-                    </button>
-                    
-                    {/* Open in Drive (always) or Download to Server (only for files) */}
-                    {previewAttachment.is_folder ? (
-                      <a
-                        href={previewAttachment.original_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded transition flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        <span>Open Folder in Google Drive</span>
-                      </a>
-                    ) : (
-                      <button
-                        onClick={() => handleDownloadAttachment(previewAttachment)}
-                        disabled={downloadingAttachmentId !== null}
-                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                      >
-                        {downloadingAttachmentId !== null ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Download className="w-3.5 h-3.5" />
+            <div className="flex-1 bg-slate-900 p-0 overflow-hidden flex items-center justify-center relative">
+              {(() => {
+                const u = previewAttachment.original_url || previewAttachment.url || '';
+                const gdriveFolderId = (() => {
+                  const m = u.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+                  if (m) return m[1];
+                  const qm = u.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+                  if (qm && previewAttachment.is_folder) return qm[1];
+                  if (previewAttachment.id && previewAttachment.id.startsWith('gdrive-') && previewAttachment.is_folder) {
+                    return previewAttachment.id.replace('gdrive-', '');
+                  }
+                  return '';
+                })();
+
+                const gdriveFileId = (() => {
+                  const m = u.match(/\/(?:file\/d|document\/d|spreadsheets\/d|presentation\/d)\/([a-zA-Z0-9_-]+)/);
+                  if (m) return m[1];
+                  const qm = u.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+                  if (qm && !previewAttachment.is_folder) return qm[1];
+                  if (previewAttachment.id && previewAttachment.id.startsWith('gdrive-') && !previewAttachment.is_folder) {
+                    return previewAttachment.id.replace('gdrive-', '');
+                  }
+                  return '';
+                })();
+
+                // 1. Google Drive Folder Live View
+                if (previewAttachment.is_folder || (previewAttachment.is_gdrive && gdriveFolderId)) {
+                  const targetFolderId = gdriveFolderId || (previewAttachment.id ? previewAttachment.id.replace('gdrive-', '') : '');
+                  return (
+                    <div className="w-full h-full flex flex-col bg-slate-900">
+                      <div className="bg-slate-800 border-b border-slate-700 px-4 py-2 flex items-center justify-between text-xs text-slate-200 shrink-0">
+                        <div className="flex items-center gap-2">
+                          <Folder className="w-4 h-4 text-amber-400" />
+                          <span className="font-bold text-white">Google Drive Folder Viewer</span>
+                          <span className="text-[10px] bg-blue-900/60 text-blue-300 border border-blue-700/60 px-1.5 py-0.5 rounded font-mono">Interactive Web View</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              if (u) {
+                                navigator.clipboard.writeText(u);
+                                alert("Link folder Google Drive disalin ke clipboard!");
+                              }
+                            }}
+                            className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                          >
+                            <Copy className="w-3 h-3" />
+                            <span>Copy Link</span>
+                          </button>
+                          <a
+                            href={u}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[11px] font-bold flex items-center gap-1 transition cursor-pointer shadow-sm"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>Buka di Google Drive Tab Baru</span>
+                          </a>
+                        </div>
+                      </div>
+                      <div className="flex-1 w-full h-full bg-white relative">
+                        <iframe
+                          src={`https://drive.google.com/embeddedfolderview?id=${targetFolderId}#grid`}
+                          className="w-full h-full border-none bg-white"
+                          title="Google Drive Folder Explorer"
+                          sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-downloads"
+                        />
+                      </div>
+                    </div>
+                  );
+                }
+
+                // 2. Google Drive Single File (Not Yet Downloaded)
+                if (previewAttachment.is_gdrive && !previewAttachment.downloaded && gdriveFileId) {
+                  return (
+                    <div className="w-full h-full flex flex-col bg-slate-900">
+                      <div className="bg-slate-800 border-b border-slate-700 px-4 py-2 flex items-center justify-between text-xs text-slate-200 shrink-0">
+                        <div className="flex items-center gap-2">
+                          <Paperclip className="w-4 h-4 text-blue-400" />
+                          <span className="font-bold text-white truncate max-w-sm">{previewAttachment.filename}</span>
+                          <span className="text-[10px] bg-amber-900/60 text-amber-300 border border-amber-700/60 px-1.5 py-0.5 rounded font-mono">Google Drive Cloud Preview</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleDownloadAttachment(previewAttachment)}
+                            disabled={downloadingAttachmentId !== null}
+                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                          >
+                            {downloadingAttachmentId !== null ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                            <span>Download ke Server</span>
+                          </button>
+                          <a
+                            href={u}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[11px] font-bold flex items-center gap-1 transition cursor-pointer shadow-sm"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>Buka di Tab Baru</span>
+                          </a>
+                        </div>
+                      </div>
+                      <div className="flex-1 w-full h-full bg-white relative">
+                        <iframe
+                          src={`https://drive.google.com/file/d/${gdriveFileId}/preview`}
+                          className="w-full h-full border-none bg-white"
+                          title="Google Drive Document Viewer"
+                          sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-downloads"
+                        />
+                      </div>
+                    </div>
+                  );
+                }
+
+                // 3. Downloaded Excel / Spreadsheet File
+                const fnLower = (previewAttachment.filename || '').toLowerCase();
+                const isExcel = fnLower.endsWith('.xlsx') || fnLower.endsWith('.xls') || fnLower.endsWith('.csv');
+                if (isExcel) {
+                  const fileUrl = getAttachmentPreviewUrl(previewAttachment);
+                  return (
+                    <div className="flex flex-col items-center justify-center p-8 bg-slate-800 text-white space-y-4 max-w-md mx-auto rounded-lg border border-slate-700 shadow-xl text-center">
+                      <div className="w-16 h-16 bg-emerald-900/40 text-emerald-400 border border-emerald-800 rounded-full flex items-center justify-center shadow-lg">
+                        <FileText className="w-8 h-8" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-extrabold text-white" style={{ fontFamily: "'Eurostile', monospace" }}>
+                          {previewAttachment.filename}
+                        </h4>
+                        <p className="text-xs text-slate-300 mt-1">
+                          File Spreadsheet Excel tersimpan di server ({previewAttachment.filesize}).
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 justify-center pt-2">
+                        <a
+                          href={fileUrl}
+                          download={previewAttachment.filename}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded transition flex items-center gap-1.5 cursor-pointer shadow-md"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>Unduh File Excel</span>
+                        </a>
+                        {u && (
+                          <a
+                            href={u}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3.5 py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs rounded transition flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                            <span>Buka Link Asli</span>
+                          </a>
                         )}
-                        <span>Download File to Server</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ) : (previewAttachment.filename || '').toLowerCase().endsWith('.pdf') ? (
-                <iframe
-                  src={getAttachmentPreviewUrl(previewAttachment)}
-                  className="w-full h-full border-none shadow-lg bg-white"
-                  title="PDF Attachment Viewer"
-                />
-              ) : (
-                <img
-                  src={getAttachmentPreviewUrl(previewAttachment)}
-                  alt={previewAttachment.filename || 'Attachment'}
-                  className="max-w-full max-h-full object-contain shadow-2xl"
-                />
-              )}
+                      </div>
+                    </div>
+                  );
+                }
+
+                // 4. PDF Document Viewer
+                if (fnLower.endsWith('.pdf')) {
+                  const pdfUrl = getAttachmentPreviewUrl(previewAttachment);
+                  return (
+                    <object
+                      data={pdfUrl}
+                      type="application/pdf"
+                      className="w-full h-full border-none shadow-lg bg-white"
+                    >
+                      <iframe
+                        src={pdfUrl}
+                        className="w-full h-full border-none shadow-lg bg-white"
+                        title="PDF Attachment Viewer"
+                      >
+                        <div className="flex flex-col items-center justify-center h-full p-6 text-center text-slate-700 bg-slate-50">
+                          <p className="font-bold text-xs mb-2">Browser Anda memblokir preview PDF langsung.</p>
+                          <a
+                            href={pdfUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-xs inline-flex items-center gap-1.5 transition"
+                          >
+                            Buka Dokumen PDF di Tab Baru
+                          </a>
+                        </div>
+                      </iframe>
+                    </object>
+                  );
+                }
+
+                // 5. Image Viewer
+                return (
+                  <img
+                    src={getAttachmentPreviewUrl(previewAttachment)}
+                    alt={previewAttachment.filename || 'Attachment'}
+                    className="max-w-full max-h-full object-contain shadow-2xl"
+                  />
+                );
+              })()}
             </div>
 
             {/* Modal Footer */}
@@ -1843,7 +2074,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 <div className="bg-white p-4 border border-indigo-200 shadow-2xs space-y-2 rounded-sm">
                   <h4 className="font-bold text-indigo-950 text-xs border-b border-indigo-200 pb-2 flex items-center gap-2">
                     <Send className="w-3.5 h-3.5 text-indigo-650" />
-                    <span>Sent Email Reply (Outbound Quotation SPH)</span>
+                    <span>Sent Email Reply (Outbound Quotation)</span>
                   </h4>
                   <div className="bg-indigo-50/20 border border-indigo-100 p-4 rounded-sm space-y-2">
                     <div className="flex items-center justify-between text-[10px] font-bold text-indigo-850 border-b border-indigo-100 pb-1 mb-2">
@@ -2061,12 +2292,28 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
               </div>
             </div>
 
-            <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+            <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  const target = aiErrorModalData;
+                  setAiErrorModalData(null);
+                  if (target) {
+                    target.ai_error = null;
+                    handleDirectProcessQuotation(target);
+                  }
+                }}
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs cursor-pointer rounded-md shadow-sm transition flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Validasi Ulang & Buat Quotation</span>
+              </button>
+
               <button
                 onClick={() => setAiErrorModalData(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-extrabold text-xs cursor-pointer rounded-md shadow-sm transition"
+                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-extrabold text-xs cursor-pointer rounded-md shadow-sm transition"
               >
-                Close
+                Tutup
               </button>
             </div>
           </div>
@@ -2359,7 +2606,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
             <div className="bg-amber-500 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-white" />
-                <h3 className="font-extrabold text-sm">Konfirmasi ACC Approval SPH</h3>
+                <h3 className="font-extrabold text-sm">Konfirmasi ACC Approval Quotation</h3>
               </div>
               <button
                 type="button"
@@ -2372,7 +2619,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
             <div className="p-5 space-y-4 text-xs text-slate-700">
               <p className="leading-relaxed">
-                <strong>SPH No: {accModalRfq.quotation_number || 'Draft'}</strong> for client{' '}
+                <strong>Quotation No: {accModalRfq.quotation_number || 'Draft'}</strong> for client{' '}
                 <strong>{accModalRfq.sender_name || accModalRfq.company || 'Client'}</strong>
                 {accModalRfq.quotation_grand_total
                   ? ` with total RM ${Number(accModalRfq.quotation_grand_total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -2381,7 +2628,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
               </p>
 
               <div className="bg-amber-50 border-l-4 border-amber-500 p-3 text-amber-900 leading-relaxed rounded-r-md text-[11px]">
-                In accordance with system policy, Quotation SPH requires management ACC approval before being dispatched to the client via email.
+                In accordance with system policy, Quotation requires management ACC approval before being dispatched to the client via email.
               </div>
 
               <div className="space-y-1.5">

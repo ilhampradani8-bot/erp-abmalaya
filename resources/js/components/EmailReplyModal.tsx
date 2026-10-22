@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Quotation, RFQ } from '../types/erp';
-import { Mail, Send, Paperclip, CheckCircle2, X, Loader2, Sparkles, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Quotation, RFQ, isOutboundEmail } from '../types/erp';
+import { Mail, Send, Paperclip, CheckCircle2, X, Loader2, Sparkles, ShieldCheck, AlertTriangle, ArrowUpRight, Eye } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
 interface EmailReplyModalProps {
@@ -16,31 +16,68 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
   onClose,
   onSuccessSend,
 }) => {
-  const [toEmail, setToEmail] = useState(rfq.sender_email || quotation.client_email);
-  const [subject, setSubject] = useState(
-    `Re: ${rfq.subject} - Quotation Document (${quotation.quotation_number})`
-  );
-  const [body, setBody] = useState(
-    `Dear ${rfq.sender_name || quotation.client_name},\n` +
-    `${rfq.company || quotation.company_name}\n\n` +
-    `Thank you for your Request for Quotation (RFQ) submitted to AB Malaya Industry.\n\n` +
-    `Please find attached our official Quotation Document No. ${quotation.quotation_number} with a grand total of RM ${quotation.grand_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (inclusive of 11% tax) for your review.\n\n` +
-    `Quotation Summary:\n` +
-    `- Quotation No: ${quotation.quotation_number}\n` +
-    `- Valid Until: ${quotation.valid_until}\n` +
-    `- Grand Total: RM ${quotation.grand_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\n` +
-    `Should you have any questions regarding technical specifications or commercial terms, please feel free to reply to this email or contact us.\n\n` +
-    `Best regards,\n` +
-    `Sales & Business Development Team\n` +
-    `AB MALAYA INDUSTRY`
-  );
+  const isOutbound = isOutboundEmail(rfq);
 
-  const [attachPdf, setAttachPdf] = useState(true);
+  // If outbound / sent: we are forwarding/continuing communication to the destination recipient!
+  // NEVER reply to our own internal company sender (e.g. sales@abmalaya.com / info@abmalaya.com).
+  const initialToEmail = isOutbound
+    ? (rfq.recipient_email || quotation?.client_email || '')
+    : (rfq.sender_email || quotation?.client_email || '');
+
+  const initialFromEmail = isOutbound
+    ? (rfq.sender_email && rfq.sender_email.includes('@abmalaya.com') ? rfq.sender_email : 'sales@abmalaya.com')
+    : (rfq.recipient_email && rfq.recipient_email.includes('@abmalaya.com') ? rfq.recipient_email : 'sales@abmalaya.com');
+
+  const initialSubject = isOutbound
+    ? `Follow-up / Fwd: ${rfq.subject} - Quotation Document (${quotation.quotation_number})`
+    : `Re: ${rfq.subject} - Quotation Document (${quotation.quotation_number})`;
+
+  // Determine proper client name and company for greeting:
+  const recipientName = isOutbound
+    ? (quotation?.client_name && !quotation.client_name.toLowerCase().includes('ab malaya')
+        ? quotation.client_name
+        : (rfq.recipient_email ? rfq.recipient_email.split('@')[0].toUpperCase() : 'Bapak/Ibu Pimpinan Rekanan'))
+    : (rfq.sender_name || quotation?.client_name || 'Bapak/Ibu Klien');
+
+  const recipientCompany = isOutbound
+    ? (quotation?.company_name && !quotation.company_name.toLowerCase().includes('ab malaya')
+        ? quotation.company_name
+        : '')
+    : (rfq.company || quotation?.company_name || '');
+
+  const initialBody = isOutbound
+    ? `Dear ${recipientName},\n` +
+      `${recipientCompany ? recipientCompany + '\n\n' : '\n'}` +
+      `Bersama email ini kami meneruskan tindak lanjut terkait penawaran harga resmi (${quotation.quotation_number}) dari AB Malaya Industry.\n\n` +
+      `Berikut kami lampirkan dokumen penawaran harga resmi (Quotation) dengan total RM ${quotation.grand_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} untuk kebutuhan pengadaan terkait.\n\n` +
+      `Ringkasan Penawaran:\n` +
+      `- No. Quotation: ${quotation.quotation_number}\n` +
+      `- Berlaku Hingga: ${quotation.valid_until}\n` +
+      `- Grand Total: RM ${quotation.grand_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\n` +
+      `Apabila terdapat pertanyaan atau kebutuhan penyesuaian spesifikasi, silakan hubungi tim kami atau balas pesan ini.\n\n` +
+      `Best regards,\n` +
+      `Sales & Business Development Team\n` +
+      `AB MALAYA INDUSTRY`
+    : `Dear ${recipientName},\n` +
+      `${recipientCompany ? recipientCompany + '\n\n' : '\n'}` +
+      `Thank you for your Request for Quotation (RFQ) submitted to AB Malaya Industry.\n\n` +
+      `Please find attached our official Quotation Document No. ${quotation.quotation_number} with a grand total of RM ${quotation.grand_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (inclusive of 11% tax) for your review.\n\n` +
+      `Quotation Summary:\n` +
+      `- Quotation No: ${quotation.quotation_number}\n` +
+      `- Valid Until: ${quotation.valid_until}\n` +
+      `- Grand Total: RM ${quotation.grand_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\n` +
+      `Should you have any questions regarding technical specifications or commercial terms, please feel free to reply to this email or contact us.\n\n` +
+      `Best regards,\n` +
+      `Sales & Business Development Team\n` +
+      `AB MALAYA INDUSTRY`;
+
+  const [toEmail, setToEmail] = useState(initialToEmail);
+  const [subject, setSubject] = useState(initialSubject);
+  const [body, setBody] = useState(initialBody);
+  const [fromEmail, setFromEmail] = useState(initialFromEmail);
   const [sending, setSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
-  const [fromEmail, setFromEmail] = useState(
-    rfq.recipient_email || 'sales@abmalaya.com'
-  );
+  const [attachPdf, setAttachPdf] = useState(true);
 
   // AI Generation States
   const [aiPrompt, setAiPrompt] = useState('');
@@ -117,6 +154,9 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
     const finalBody = forceOnlyFile
       ? (body.trim() || `Bersama email ini kami lampirkan dokumen penawaran harga resmi (${quotation.quotation_number}) dari AB Malaya Industry.`)
       : body;
+    const targetAttachFile = attachPdf
+      ? (quotation.quotation_file || `${quotation.quotation_number.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`)
+      : null;
     fetch(getApiUrl('/api_rfq_status.php'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -127,7 +167,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
         reply_body: finalBody,
         reply_sender: fromEmail,
         target_client_email: toEmail,
-        attachment_file: attachPdf ? `${quotation.quotation_number.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf` : null,
+        attachment_file: targetAttachFile,
         user_name: 'Admin'
       })
     })
@@ -205,15 +245,24 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
       {/* Header */}
       <div className="p-4 bg-slate-900 border-b border-slate-950 flex items-center justify-between text-white shrink-0">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-md bg-emerald-900 text-emerald-300 border border-emerald-800">
-            <Mail className="w-5 h-5" />
+          <div className={`p-2 rounded-md ${isOutbound ? 'bg-purple-900 text-purple-300 border border-purple-800' : 'bg-emerald-900 text-emerald-300 border border-emerald-800'}`}>
+            {isOutbound ? <ArrowUpRight className="w-5 h-5" /> : <Mail className="w-5 h-5" />}
           </div>
           <div>
-            <h3 className="font-extrabold text-sm text-white" style={{ fontFamily: "'Eurostile', monospace" }}>
-              Reply Email & Send Quotation SPH
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-extrabold text-sm text-white" style={{ fontFamily: "'Eurostile', monospace" }}>
+                {isOutbound ? 'Meneruskan / Follow-up Pesan (Sent Email)' : 'Reply Email & Send Quotation'}
+              </h3>
+              {isOutbound && (
+                <span className="px-2 py-0.5 bg-purple-700/80 text-white rounded text-[9px] font-black uppercase tracking-wider">
+                  Outbound Sent Mode
+                </span>
+              )}
+            </div>
             <p className="text-[10px] text-slate-400">
-              Compose email response to the client along with the official SPH document attachment.
+              {isOutbound
+                ? `Email ini berstatus Terkirim (Sent). Pesan otomatis diteruskan ke alamat penerima (To: ${toEmail}), bukan ke pengirim internal.`
+                : 'Compose email response to the client along with the official Quotation document attachment.'}
             </p>
           </div>
         </div>
@@ -234,7 +283,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
           </div>
           <h4 className="text-lg font-extrabold text-slate-900">Email Dispatched Successfully!</h4>
           <p className="text-xs text-slate-600 max-w-md text-center leading-relaxed">
-            Quotation SPH <strong className="text-blue-700">{quotation.quotation_number}</strong> has been successfully dispatched to <strong className="text-slate-900">{toEmail}</strong>. Status updated to <span className="text-emerald-700 font-semibold">Quotation Sent</span>.
+            Quotation <strong className="text-blue-700">{quotation.quotation_number}</strong> has been successfully dispatched to <strong className="text-slate-900">{toEmail}</strong>. Status updated to <span className="text-emerald-700 font-semibold">Quotation Sent</span>.
           </p>
         </div>
       ) : (
@@ -243,14 +292,22 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
 
             {/* Left side: Standard Email Form */}
             <div className="lg:col-span-7 bg-white border border-slate-200 shadow-sm rounded-lg p-5 space-y-4">
-              <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2 flex items-center gap-1.5">
-                <Mail className="w-4 h-4 text-blue-600" />
-                <span>Email Message Editor</span>
+              <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Mail className="w-4 h-4 text-blue-600" />
+                  <span>{isOutbound ? 'Editor Meneruskan Pesan ke Klien' : 'Email Message Editor'}</span>
+                </div>
+                {isOutbound && (
+                  <span className="px-2 py-0.5 bg-purple-100 text-purple-800 border border-purple-300 rounded text-[9px] font-extrabold flex items-center gap-1">
+                    <ArrowUpRight className="w-3 h-3 text-purple-600" />
+                    Sent Email Mode (Kirim ke Recipient)
+                  </span>
+                )}
               </h4>
 
               {/* From Select */}
               <div>
-                <label className="block font-bold text-slate-700 text-xs mb-1">From (Sender Address)</label>
+                <label className="block font-bold text-slate-700 text-xs mb-1">From (Pengirim Internal Perusahaan)</label>
                 <select
                   value={fromEmail}
                   onChange={(e) => setFromEmail(e.target.value)}
@@ -264,7 +321,14 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
 
               {/* To */}
               <div>
-                <label className="block font-bold text-slate-700 text-xs mb-1">To (Recipient Address)</label>
+                <label className="block font-bold text-slate-700 text-xs mb-1 flex items-center justify-between">
+                  <span>To (Alamat Email Klien / Penerima)</span>
+                  {isOutbound && (
+                    <span className="text-[10px] text-purple-700 font-bold">
+                      ✓ Otomatis ke Penerima (To), bukan ke pengirim internal
+                    </span>
+                  )}
+                </label>
                 <input
                   type="email"
                   value={toEmail}
@@ -295,7 +359,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
                 />
               </div>
 
-              {/* PDF Attachment Flag */}
+              {/* PDF Attachment Flag & Direct Server File Preview */}
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-md flex items-center justify-between flex-wrap gap-2">
                 <label className="flex items-center gap-2.5 cursor-pointer select-none">
                   <input
@@ -306,10 +370,20 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
                   />
                   <span className="flex items-center gap-1.5 text-slate-800 font-bold text-xs">
                     <Paperclip className="w-4 h-4 text-amber-600" />
-                    Attach PDF SPH Document ({quotation.quotation_number}.pdf)
+                    Attach PDF Quotation Document ({quotation.quotation_number}.pdf)
                   </span>
                 </label>
                 <div className="flex items-center gap-2">
+                  <a
+                    href={getApiUrl(quotation.quotation_file || `/uploads/pdf/${quotation.quotation_number.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1 bg-white hover:bg-slate-100 text-blue-700 border border-slate-300 rounded text-[10px] font-bold flex items-center gap-1 shadow-2xs transition cursor-pointer"
+                    title="Buka dan pastikan berkas PDF resmi yang tersimpan di folder uploads/pdf/"
+                  >
+                    <Eye className="w-3 h-3 text-blue-600" />
+                    <span>Preview File PDF yang Dikirim</span>
+                  </a>
                   <span className="text-[9px] text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded font-mono font-bold">
                     Stamped PDF
                   </span>
@@ -423,7 +497,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
             ) : (
               <>
                 <Send className="w-4 h-4" />
-                <span>Send Email to Client</span>
+                <span>{isOutbound ? `Teruskan / Kirim ke Penerima (${toEmail})` : 'Send Email to Client'}</span>
               </>
             )}
           </button>

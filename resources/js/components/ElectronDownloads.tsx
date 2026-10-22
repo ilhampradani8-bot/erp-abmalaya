@@ -154,7 +154,7 @@ export const ElectronDownloads: React.FC = () => {
               <span>Direct Local Printing</span>
             </div>
             <p className="text-slate-600 text-[11px] leading-relaxed">
-              Print SPH Quotation documents directly to local printers without opening extra browser tabs.
+              Print Commercial Quotation documents directly to local printers without opening extra browser tabs.
             </p>
           </div>
 

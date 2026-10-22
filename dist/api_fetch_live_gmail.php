@@ -80,6 +80,16 @@ if (isset($_GET['download']) || isset($_GET['preview'])) {
         $cache_dir . "/msg_{$msgno}_part_{$part_no}_{$safe_fn}",
         $cache_dir . "/{$filename}",
         $cache_dir . "/{$safe_fn}",
+        __DIR__ . "/file_inbox/rfq-{$msgno}/{$filename}",
+        __DIR__ . "/file_inbox/rfq-{$msgno}/{$safe_fn}",
+        dirname(__DIR__) . "/file_inbox/rfq-{$msgno}/{$filename}",
+        dirname(__DIR__) . "/file_inbox/rfq-{$msgno}/{$safe_fn}",
+        dirname(__DIR__) . "/public/file_inbox/rfq-{$msgno}/{$filename}",
+        dirname(__DIR__) . "/public/file_inbox/rfq-{$msgno}/{$safe_fn}",
+        __DIR__ . "/file_inbox/live/{$filename}",
+        __DIR__ . "/file_inbox/live/{$safe_fn}",
+        dirname(__DIR__) . "/file_inbox/live/{$filename}",
+        dirname(__DIR__) . "/file_inbox/live/{$safe_fn}",
         __DIR__ . "/attachments/{$filename}",
         __DIR__ . "/attachments/{$safe_fn}",
         __DIR__ . "/attachments/msg_{$msgno}_part_{$part_no}_{$safe_fn}",
@@ -104,6 +114,32 @@ if (isset($_GET['download']) || isset($_GET['preview'])) {
         if (file_exists($cf) && is_file($cf) && filesize($cf) > 100) {
             $found_file = $cf;
             break;
+        }
+    }
+
+    // 1b. Check all subfolders inside file_inbox/ (e.g. file_inbox/rfq-48/)
+    if (!$found_file) {
+        $inbox_roots = [__DIR__ . '/file_inbox', dirname(__DIR__) . '/file_inbox', dirname(__DIR__) . '/public/file_inbox'];
+        foreach ($inbox_roots as $iroot) {
+            if (is_dir($iroot)) {
+                $subdirs = @scandir($iroot);
+                if ($subdirs) {
+                    foreach ($subdirs as $sd) {
+                        if ($sd === '.' || $sd === '..') continue;
+                        $fulld = $iroot . '/' . $sd;
+                        if (is_dir($fulld)) {
+                            if (file_exists($fulld . '/' . $filename) && filesize($fulld . '/' . $filename) > 100) {
+                                $found_file = $fulld . '/' . $filename;
+                                break 2;
+                            }
+                            if (file_exists($fulld . '/' . $safe_fn) && filesize($fulld . '/' . $safe_fn) > 100) {
+                                $found_file = $fulld . '/' . $safe_fn;
+                                break 2;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -142,8 +178,9 @@ if (isset($_GET['download']) || isset($_GET['preview'])) {
         }
     }
 
-    // Helper to stream binary file
+    // Helper to stream binary file safely in pure PHP (cPanel & Dev compatible)
     $streamFile = function($filePath, $displayFn, $fileExt, $cacheStatus = 'HIT-LOCAL-DISK') {
+        @ini_set('zlib.output_compression', 'Off');
         $mimes = [
             'pdf' => 'application/pdf',
             'png' => 'image/png',
@@ -154,20 +191,63 @@ if (isset($_GET['download']) || isset($_GET['preview'])) {
             'zip' => 'application/zip',
             'txt' => 'text/plain'
         ];
-        $contentType = isset($mimes[$fileExt]) ? $mimes[$fileExt] : 'application/octet-stream';
+        $contentType = isset($mimes[strtolower($fileExt)]) ? $mimes[strtolower($fileExt)] : 'application/octet-stream';
         
         while (ob_get_level() > 0) {
             @ob_end_clean();
         }
 
+        $fileSize = @filesize($filePath);
+        $raw_base = trim(basename($displayFn));
+        // Clean ASCII filename without spaces/quotes for strict RFC 6266 browser compatibility
+        $clean_ascii_fn = preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $raw_base);
+        if (empty($clean_ascii_fn) || $clean_ascii_fn === '.') {
+            $clean_ascii_fn = 'attachment.' . $fileExt;
+        }
+
         header('Access-Control-Allow-Origin: *');
         header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-        header('Access-Control-Allow-Headers: Content-Type');
+        header('Access-Control-Allow-Headers: Content-Type, Range');
+        header('Access-Control-Expose-Headers: Content-Range, Accept-Ranges, Content-Length');
         header('Content-Type: ' . $contentType);
-        header('Content-Length: ' . filesize($filePath));
-        header('Content-Disposition: inline; filename="' . rawurlencode(basename($displayFn)) . '"; filename*=UTF-8\'\'' . rawurlencode(basename($displayFn)));
+        header('X-Content-Type-Options: nosniff');
+        header('Accept-Ranges: bytes');
+        header('Content-Disposition: inline; filename="' . $clean_ascii_fn . '"; filename*=UTF-8\'\'' . rawurlencode($raw_base));
         header('X-Cache-Status: ' . $cacheStatus);
         header('Cache-Control: public, max-age=86400');
+
+        // Support HTTP 206 Partial Content for linear PDF streaming (Chrome PDF Viewer requirement)
+        if (isset($_SERVER['HTTP_RANGE']) && $fileSize > 0) {
+            $range = $_SERVER['HTTP_RANGE'];
+            if (preg_match('/bytes=(\d+)-(\d*)/', $range, $matches)) {
+                $start = intval($matches[1]);
+                $end = ($matches[2] !== '') ? intval($matches[2]) : ($fileSize - 1);
+                if ($start <= $end && $end < $fileSize) {
+                    $length = $end - $start + 1;
+                    header('HTTP/1.1 206 Partial Content', true, 206);
+                    header("Content-Range: bytes {$start}-{$end}/{$fileSize}");
+                    header("Content-Length: {$length}");
+                    $fp = @fopen($filePath, 'rb');
+                    if ($fp) {
+                        fseek($fp, $start);
+                        $buffer = 1024 * 64;
+                        while (!feof($fp) && ($pos = ftell($fp)) <= $end) {
+                            if ($pos + $buffer > $end) {
+                                $buffer = $end - $pos + 1;
+                            }
+                            echo fread($fp, $buffer);
+                            flush();
+                        }
+                        fclose($fp);
+                        exit;
+                    }
+                }
+            }
+        }
+
+        if ($fileSize > 0) {
+            header('Content-Length: ' . $fileSize);
+        }
         readfile($filePath);
         exit;
     };
@@ -303,7 +383,18 @@ if (isset($_GET['download']) || isset($_GET['preview'])) {
     }
 
     if ($saved_attachment_path && file_exists($saved_attachment_path) && filesize($saved_attachment_path) > 100) {
-        $streamFile($saved_attachment_path, $filename, $ext, 'MISS-SAVED-TO-CACHE');
+        if ($ext === 'pdf') {
+            $h_chk = @fopen($saved_attachment_path, 'r');
+            $magic_chk = $h_chk ? fread($h_chk, 4) : '';
+            if ($h_chk) fclose($h_chk);
+            if ($magic_chk !== '%PDF') {
+                @unlink($saved_attachment_path);
+                $saved_attachment_path = null;
+            }
+        }
+        if ($saved_attachment_path) {
+            $streamFile($saved_attachment_path, $filename, $ext, 'MISS-SAVED-TO-CACHE');
+        }
     }
 
     // 4. File not found: Return clean 404 text or SVG placeholder, NEVER dump the RFQs list JSON!
@@ -602,15 +693,46 @@ function appendGoogleDriveAttachments(&$attachments, $message_body, $rfq_id) {
         }
     }
     
-    // 5. drive.google.com/drive/folders/[FOLDER_ID] — folder only, cannot be bulk downloaded
+    // 5. drive.google.com/drive/folders/[FOLDER_ID]
     if (preg_match_all('/https:\/\/drive\.google\.com\/drive\/folders\/([a-zA-Z0-9_-]+)/i', $message_body, $matches)) {
         foreach (array_unique($matches[1]) as $id) {
             $links[] = [
                 'type' => 'folder',
                 'id' => $id,
                 'url' => "https://drive.google.com/drive/folders/" . $id,
-                'filename' => "gdrive_folder_" . substr($id, 0, 8)
+                'filename' => "Google Drive Folder (" . substr($id, 0, 8) . ")"
             ];
+
+            // Auto-scan files inside Google Drive folder via embeddedfolderview
+            $embed_url = "https://drive.google.com/embeddedfolderview?id=" . $id . "#grid";
+            $ch = curl_init($embed_url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_TIMEOUT        => 8,
+                CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            ]);
+            $folder_html = curl_exec($ch);
+            curl_close($ch);
+
+            if (!empty($folder_html)) {
+                if (preg_match_all('/<div class="flip-entry"[^>]*id="entry-([^"]+)".*?<div class="flip-entry-title">([^<]+)<\/div>/s', $folder_html, $em_matches, PREG_SET_ORDER)) {
+                    foreach ($em_matches as $em) {
+                        $f_id = trim($em[1]);
+                        $f_title = html_entity_decode(trim($em[2]), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                        if (strpos($f_title, '.') !== false && !empty($f_id)) {
+                            $is_xlsx = (stripos($f_title, '.xlsx') !== false || stripos($f_title, '.xls') !== false);
+                            $links[] = [
+                                'type' => $is_xlsx ? 'spreadsheet' : 'file',
+                                'id' => $f_id,
+                                'url' => "https://drive.google.com/uc?export=download&id=" . $f_id,
+                                'filename' => $f_title
+                            ];
+                        }
+                    }
+                }
+            }
         }
     }
     
@@ -626,6 +748,16 @@ function appendGoogleDriveAttachments(&$attachments, $message_body, $rfq_id) {
     }
     
     foreach ($links as $link) {
+        $att_id = 'gdrive-' . $link['id'];
+        $already_exists = false;
+        foreach ($attachments as $existing_att) {
+            if (($existing_att['id'] ?? '') === $att_id) {
+                $already_exists = true;
+                break;
+            }
+        }
+        if ($already_exists) continue;
+
         // Folders: external link only, cannot be downloaded
         if ($link['type'] === 'folder') {
             $attachments[] = [
@@ -644,8 +776,11 @@ function appendGoogleDriveAttachments(&$attachments, $message_body, $rfq_id) {
         }
         
         // Downloadable files (pdf / xlsx)
-        $ext = (strpos($link['filename'], '.xlsx') !== false) ? 'xlsx' : 'pdf';
-        $local_filename = $link['type'] . '_' . substr($link['id'], 0, 12) . '.' . $ext;
+        $ext = (stripos($link['filename'], '.xlsx') !== false) ? 'xlsx' : 'pdf';
+        $safe_title = preg_replace('/[^a-zA-Z0-9_\.-]/', '_', $link['filename']);
+        $local_filename = (!empty($safe_title) && strpos($safe_title, '.') !== false)
+            ? $safe_title
+            : ($link['type'] . '_' . substr($link['id'], 0, 12) . '.' . $ext);
         $dest_path = $rfq_dir . '/' . $local_filename;
         
         $downloaded = file_exists($dest_path);
@@ -1139,22 +1274,26 @@ try {
                 // 1. Real attachments stored in database
                 if (!empty($row['attachment_url']) && $row['attachment_url'] !== 'NONE') {
                     $att_url = trim($row['attachment_url']);
-                    $fn = 'Document.pdf';
-                    $ext = 'pdf';
-                    if (preg_match('/fn=([^&]+)/i', $att_url, $m_fn)) {
-                        $fn = urldecode($m_fn[1]);
-                        $ext = strtolower(pathinfo($fn, PATHINFO_EXTENSION)) ?: 'pdf';
+                    if (strpos($att_url, 'drive.google.com') !== false || strpos($att_url, 'docs.google.com') !== false) {
+                        appendGoogleDriveAttachments($attachments, $att_url, $row['id']);
                     } else {
-                        $fn = basename($att_url);
-                        $ext = strtolower(pathinfo($fn, PATHINFO_EXTENSION)) ?: 'pdf';
+                        $fn = 'Document.pdf';
+                        $ext = 'pdf';
+                        if (preg_match('/fn=([^&]+)/i', $att_url, $m_fn)) {
+                            $fn = urldecode($m_fn[1]);
+                            $ext = strtolower(pathinfo($fn, PATHINFO_EXTENSION)) ?: 'pdf';
+                        } else {
+                            $fn = basename($att_url);
+                            $ext = strtolower(pathinfo($fn, PATHINFO_EXTENSION)) ?: 'pdf';
+                        }
+                        $attachments[] = [
+                            'id' => 'att-db-' . $row['id'],
+                            'filename' => $fn,
+                            'filesize' => 'PDF Doc',
+                            'filetype' => $ext,
+                            'url' => $att_url
+                        ];
                     }
-                    $attachments[] = [
-                        'id' => 'att-db-' . $row['id'],
-                        'filename' => $fn,
-                        'filesize' => 'PDF Doc',
-                        'filetype' => $ext,
-                        'url' => $att_url
-                    ];
                 }
 
                 // 2. Google Drive attachments in body
@@ -1192,13 +1331,23 @@ try {
                     }
                 }
 
+                $sender_name = $row['client_name'] ?: 'Gmail Client';
+                $sender_email = $row['client_email'] ?: 'abmalayaindustry@gmail.com';
+                $rec_email = isset($row['recipient_email']) && !empty($row['recipient_email']) ? $row['recipient_email'] : 'abmalayaindustry@gmail.com';
+
+                if (strpos(strtolower($sender_email), '@abmalaya.com') !== false) {
+                    if (stripos($sender_name, 'nana') !== false || stripos($sender_name, 'thw') !== false) {
+                        $sender_name = (strpos(strtolower($sender_email), 'sales@') !== false) ? 'AB Malaya Sales' : 'AB Malaya Industry';
+                    }
+                }
+
                 $data[] = [
                     'id' => str_replace('RFQ-', 'GMAIL-LIVE-', $row['rfq_number']),
                     'db_id' => (int)$row['id'],
                     'rfq_number' => $row['rfq_number'],
-                    'sender_name' => $row['client_name'] ?: 'Gmail Client',
-                    'sender_email' => $row['client_email'] ?: 'abmalayaindustry@gmail.com',
-                    'recipient_email' => isset($row['recipient_email']) && !empty($row['recipient_email']) ? $row['recipient_email'] : 'abmalayaindustry@gmail.com',
+                    'sender_name' => $sender_name,
+                    'sender_email' => $sender_email,
+                    'recipient_email' => $rec_email,
                     'company' => $row['client_company'] ?: $row['client_name'],
                     'client_company' => $row['client_company'] ?? '',
                     'phone' => '',
@@ -1219,6 +1368,7 @@ try {
                     'approved_by' => $row['approved_by'] ?? null,
                     'is_acc_approved' => $is_acc,
                     'quotation_grand_total' => isset($row['quotation_grand_total']) ? (float)$row['quotation_grand_total'] : 0.0,
+                    'is_outbound' => (strtolower($row['status'] ?? '') === 'sent' || strpos(strtolower($row['client_email'] ?? ''), '@abmalaya.com') !== false || strpos(strtolower($row['client_email'] ?? ''), 'abmalayaindustry@gmail.com') !== false),
                     'labels' => $labels,
                     'attachments' => $attachments,
                     'reply_body' => $row['reply_body'] ?? null,
@@ -1937,12 +2087,44 @@ try {
                     $labels[] = 'Has File';
                 }
 
+                $item_st = ($is_bl === 1 || $row['status'] === 'deleted') ? 'deleted' : ($row['status'] ?: 'masuk');
+                $item_ai_error = isset($row['ai_error']) ? $row['ai_error'] : null;
+                $item_quo_id = $row['quotation_id'] ?? null;
+                $item_quo_num = $row['quotation_number'] ?? null;
+                $rfq_id_int = (int)$row['id'];
+                $rfq_num_str = $db_conn->real_escape_string(trim($row['rfq_number'] ?? ''));
+
+                // ── TWO-WAY VALIDATION FOR IN_PROGRESS STATUS ──
+                if (in_array(strtolower($item_st), ['in_progress', 'diproses', 'requisition', 'quotation_build'])) {
+                    // Check if quotation actually exists in quotations table
+                    $verify_quo = $db_conn->query("SELECT id, quotation_number FROM quotations WHERE rfq_id = {$rfq_id_int} OR rfq_id = '{$rfq_num_str}' OR id = '" . $db_conn->real_escape_string($item_quo_id ?? '') . "' LIMIT 1");
+                    
+                    if ($verify_quo && $verify_quo->num_rows > 0) {
+                        $v_row = $verify_quo->fetch_assoc();
+                        $item_quo_id = $v_row['id'];
+                        $item_quo_num = $v_row['quotation_number'];
+                    } else {
+                        // Two-way validation FAILED: Record is missing in quotations list!
+                        $item_ai_error = "Validasi 2-Arah Gagal: Status in_progress tidak valid karena tidak ada SPH di Quotation List (proses terputus/gagal). Silakan klik 'Process RFQ' ulang.";
+                        $db_conn->query("UPDATE rfq_requests SET status = 'masuk', ai_error = '" . $db_conn->real_escape_string($item_ai_error) . "' WHERE id = {$rfq_id_int}");
+                        $item_st = 'masuk'; // Self-healing rollback to inbox
+                    }
+                } else if (empty($item_quo_id)) {
+                    // Also auto-link quotation if one exists but was not linked yet
+                    $chk_any_quo = $db_conn->query("SELECT id, quotation_number FROM quotations WHERE rfq_id = {$rfq_id_int} OR rfq_id = '{$rfq_num_str}' LIMIT 1");
+                    if ($chk_any_quo && $chk_any_quo->num_rows > 0) {
+                        $q_row = $chk_any_quo->fetch_assoc();
+                        $item_quo_id = $q_row['id'];
+                        $item_quo_num = $q_row['quotation_number'];
+                    }
+                }
+
                 $data[] = [
                     'id' => str_replace('RFQ-', 'GMAIL-LIVE-', $row['rfq_number']),
-                    'db_id' => (int)$row['id'],
+                    'db_id' => $rfq_id_int,
                     'rfq_number' => $row['rfq_number'],
                     'sender_name' => $row['client_name'] ?: 'Gmail Client',
-                    'sender_email' => $row['client_email'] ?: 'abmalayaindustry@gmail.com',
+                    'sender_email' => $row['client_email'] ?: 'abmalayaaindustry@gmail.com',
                     'recipient_email' => isset($row['recipient_email']) && !empty($row['recipient_email']) ? $row['recipient_email'] : 'abmalayaindustry@gmail.com',
                     'company' => $row['client_company'] ?: $row['client_name'],
                     'client_company' => $row['client_company'] ?? '',
@@ -1954,12 +2136,16 @@ try {
                     'quantity_requested' => '1 Package',
                     'budget_estimate' => extractRealBudgetEstimate($row['message_body']),
                     'date_received' => date('Y-m-d H:i', strtotime($row['created_at'])),
-                    'status' => ($is_bl === 1 || $row['status'] === 'deleted') ? 'deleted' : ($row['status'] ?: 'masuk'),
+                    'status' => $item_st,
+                    'is_outbound' => (strtolower($item_st) === 'sent' || strpos(strtolower($row['client_email'] ?? ''), '@abmalaya.com') !== false || strpos(strtolower($row['client_email'] ?? ''), 'abmalayaindustry@gmail.com') !== false),
+                    'quotation_id' => $item_quo_id,
+                    'quotation_number' => $item_quo_num,
+                    'has_valid_quotation' => !empty($item_quo_id),
                     'is_blacklisted' => $is_bl,
                     'blacklist_reason' => $bl_reason,
                     'ai_verified' => $ai_verified,
                     'ai_classification' => $ai_classification,
-                    'ai_error' => isset($row['ai_error']) ? $row['ai_error'] : null,
+                    'ai_error' => $item_ai_error,
                     'labels' => $labels,
                     'attachments' => $attachments,
                     'reply_body' => $row['reply_body'] ?? null,
@@ -1972,8 +2158,8 @@ try {
                             'body' => $row['reply_body'],
                             'date' => $row['reply_date'] ?: $row['created_at'],
                             'sender' => $row['reply_sender'] ?: ($row['recipient_email'] ?: 'sales@abmalaya.com'),
-                            'quotation_id' => $row['quotation_id'] ?? null,
-                            'quotation_number' => $row['quotation_number'] ?? null
+                            'quotation_id' => $item_quo_id,
+                            'quotation_number' => $item_quo_num
                         ]
                     ] : []))
                 ];

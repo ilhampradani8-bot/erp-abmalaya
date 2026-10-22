@@ -45,8 +45,8 @@ try {
                 // Log history
                 $user_name = isset($_GET['user_name']) ? $_GET['user_name'] : 'Admin';
                 $user_email = isset($_GET['user_email']) ? $_GET['user_email'] : 'admin@abmalaya.com';
-                appendQuotationHistoryLog($db_conn, $id, 'Move to Junk', $user_name, $user_email, "User moved SPH quotation to Trash (Junk status).");
-                addSystemNotification($db_conn, "SPH Dipindahkan ke Sampah ({$id})", "{$user_name} memindahkan SPH {$id} ke folder sampah (Trash).", 'warning', 'sph', 'quotations_list');
+                appendQuotationHistoryLog($db_conn, $id, 'Move to Junk', $user_name, $user_email, "User moved quotation to Trash (Junk status).");
+                addSystemNotification($db_conn, "Quotation Dipindahkan ke Sampah ({$id})", "{$user_name} memindahkan Quotation {$id} ke folder sampah (Trash).", 'warning', 'quotation', 'quotations_list');
             }
         }
 
@@ -249,7 +249,7 @@ try {
                 $upd = $db_conn->prepare("UPDATE quotations SET approved_by = ?, status = 'ready_send' WHERE id = ?");
                 if ($upd) { $upd->bind_param('ss', $new_json, $quo_id); $upd->execute(); $upd->close(); }
                 appendQuotationHistoryLog($db_conn, $quo_id, 'ACC Approval', $user_name, $user_email, "User memberikan ACC approval dan mengubah status ke Siap Kirim (ready_send). Note: {$note}");
-                addSystemNotification($db_conn, "ACC Approval SPH ({$quo_id})", "{$user_name} menyetujui SPH {$quo_id} dan siap untuk dikirim ke klien.", 'success', 'sph', 'quotations_list');
+                addSystemNotification($db_conn, "ACC Approval Quotation ({$quo_id})", "{$user_name} menyetujui Quotation {$quo_id} dan siap untuk dikirim ke klien.", 'success', 'quotation', 'quotations_list');
             }
             ob_end_clean();
             echo json_encode(['status' => 'success', 'message' => 'Approval recorded and status moved to ready_send.']);
@@ -266,7 +266,7 @@ try {
                 $upd = $db_conn->prepare("UPDATE quotations SET status = ? WHERE id = ?");
                 if ($upd) { $upd->bind_param('ss', $newStatus, $quo_id); $upd->execute(); $upd->close(); }
                 appendQuotationHistoryLog($db_conn, $quo_id, 'Status Update', $user_name, $user_email, "Status diubah menjadi: {$newStatus}");
-                addSystemNotification($db_conn, "Status SPH Berubah ({$quo_id})", "{$user_name} mengubah status SPH {$quo_id} menjadi '{$newStatus}'.", 'info', 'sph', 'quotations_list');
+                addSystemNotification($db_conn, "Status Quotation Berubah ({$quo_id})", "{$user_name} mengubah status Quotation {$quo_id} menjadi '{$newStatus}'.", 'info', 'quotation', 'quotations_list');
             }
             ob_end_clean();
             echo json_encode(['status' => 'success', 'message' => "Status updated to {$newStatus}"]);
@@ -281,8 +281,8 @@ try {
             if (!empty($quo_id)) {
                 $upd = $db_conn->prepare("UPDATE quotations SET status = 'draft' WHERE id = ?");
                 if ($upd) { $upd->bind_param('s', $quo_id); $upd->execute(); $upd->close(); }
-                appendQuotationHistoryLog($db_conn, $quo_id, 'Restore from Trash', $user_name, $user_email, "User memulihkan SPH dari Trash ke status Draft.");
-                addSystemNotification($db_conn, "SPH Dipulihkan dari Sampah ({$quo_id})", "{$user_name} memulihkan SPH {$quo_id} kembali ke status Draft.", 'info', 'sph', 'quotations_list');
+                appendQuotationHistoryLog($db_conn, $quo_id, 'Restore from Trash', $user_name, $user_email, "User memulihkan Quotation dari Trash ke status Draft.");
+                addSystemNotification($db_conn, "Quotation Dipulihkan dari Sampah ({$quo_id})", "{$user_name} memulihkan Quotation {$quo_id} kembali ke status Draft.", 'info', 'quotation', 'quotations_list');
             }
             ob_end_clean();
             echo json_encode(['status' => 'success', 'message' => 'Restored to Draft']);
@@ -405,10 +405,10 @@ try {
         $user_name = isset($input['user_name']) ? $input['user_name'] : 'Admin';
         $user_email = isset($input['user_email']) ? $input['user_email'] : 'admin@abmalaya.com';
 
-        $action_log = $is_update ? 'Update SPH' : 'Create SPH';
-        $details_log = $is_update ? "User updated SPH details (Grand Total: RM {$grand_total})." : "User created SPH (Grand Total: RM {$grand_total}).";
+        $action_log = $is_update ? 'Update Quotation' : 'Create Quotation';
+        $details_log = $is_update ? "User updated Quotation details (Grand Total: RM {$grand_total})." : "User created Quotation (Grand Total: RM {$grand_total}).";
         appendQuotationHistoryLog($db_conn, $id, $action_log, $user_name, $user_email, $details_log);
-        addSystemNotification($db_conn, ($is_update ? "SPH Diperbarui ({$quo_num})" : "SPH Baru Dibuat ({$quo_num})"), "{$user_name} ({$user_email}) " . ($is_update ? "memperbarui data SPH" : "membuat penawaran SPH baru") . " untuk klien {$client_name} senilai RM " . number_format($grand_total, 2) . ".", 'success', 'sph', 'quotations_list');
+        addSystemNotification($db_conn, ($is_update ? "Quotation Diperbarui ({$quo_num})" : "Quotation Baru Dibuat ({$quo_num})"), "{$user_name} ({$user_email}) " . ($is_update ? "memperbarui data Quotation" : "membuat penawaran Quotation baru") . " untuk klien {$client_name} senilai RM " . number_format($grand_total, 2) . ".", 'success', 'quotation', 'quotations_list');
 
         if (isset($input['items']) && is_array($input['items'])) {
             $db_conn->query("DELETE FROM quotation_items WHERE quotation_id = '" . $db_conn->real_escape_string($id) . "'");
@@ -446,7 +446,6 @@ try {
                     $p_price= isset($it['unit_price']) ? (float)$it['unit_price'] : 0.0;
                     $p_disc = isset($it['discount_percent']) ? (float)$it['discount_percent'] : 0.0;
                     $p_tot  = isset($it['total']) ? (float)$it['total'] : ($p_qty * $p_price);
-
                     $item_stmt->bind_param("sssssssdsddd", $id, $p_code, $c_code, $i_code, $p_desc, $p_spec, $p_offer, $p_qty, $p_unit, $p_price, $p_disc, $p_tot);
                     $item_stmt->execute();
                 }
@@ -454,10 +453,60 @@ try {
             }
         }
 
+        // ── GENERATE & PERSIST SYNCHRONIZED QUOTATION PDF (Source of Truth for Preview & Sent Email) ──
+        require_once __DIR__ . '/pdf_generator_helper.php';
+        $safe_qname = preg_replace('/[^A-Za-z0-9_\-]/', '_', $quo_num) . '.pdf';
+        $target_pdf_path = __DIR__ . '/uploads/pdf/' . $safe_qname;
+        $q_full_data = [
+            'id' => $id,
+            'quotation_number' => $quo_num,
+            'client_name' => $client_name,
+            'client_email' => $client_email,
+            'client_phone' => $client_phone,
+            'company_name' => $company_name,
+            'company_address' => $company_address,
+            'date_issued' => $date_issued,
+            'valid_until' => $valid_until,
+            'subtotal' => $subtotal,
+            'discount_total' => $discount_total,
+            'tax_percent' => $tax_percent,
+            'tax_amount' => $tax_amount,
+            'grand_total' => $grand_total,
+            'notes' => $notes,
+            'items' => isset($input['items']) ? $input['items'] : []
+        ];
+        if (function_exists('createQuotationPdfFile')) {
+            createQuotationPdfFile($target_pdf_path, $q_full_data, $db_conn);
+            $db_conn->query("UPDATE quotations SET quotation_file = '/uploads/pdf/{$safe_qname}', pdf_created = 1, pdf_created_at = NOW() WHERE id = '" . $db_conn->real_escape_string($id) . "'");
+        }
+
+        // ── TWO-WAY VALIDATION: Verify quotation actually exists in database before linking RFQ ──
+        if (!empty($rfq_id_val) && $rfq_id_val > 0) {
+            $check_q_stmt = $db_conn->prepare("SELECT id, quotation_number FROM quotations WHERE id = ? LIMIT 1");
+            if ($check_q_stmt) {
+                $check_q_stmt->bind_param("s", $id);
+                $check_q_stmt->execute();
+                $res_check = $check_q_stmt->get_result();
+                if ($res_check && $res_check->num_rows > 0) {
+                    // Two-way validation SUCCESS: Verified in quotations table!
+                    $upd_rfq = $db_conn->prepare("UPDATE rfq_requests SET status = 'in_progress', quotation_id = ?, quotation_number = ?, ai_error = NULL WHERE id = ?");
+                    if ($upd_rfq) {
+                        $upd_rfq->bind_param("ssi", $id, $quo_num, $rfq_id_val);
+                        $upd_rfq->execute();
+                        $upd_rfq->close();
+                    }
+                } else {
+                    // Two-way validation FAILED: Record missing in quotations!
+                    $db_conn->query("UPDATE rfq_requests SET ai_error = 'Validasi 2-Arah Gagal: Quotation gagal terdaftar ke dalam tabel quotations' WHERE id = {$rfq_id_val}");
+                }
+                $check_q_stmt->close();
+            }
+        }
+
         ob_end_clean();
         echo json_encode([
             'status' => 'success',
-            'message' => 'Quotation saved to MySQL and RFQ status updated to diproses',
+            'message' => 'Quotation saved to MySQL and RFQ status validated to in_progress',
             'id' => $id,
             'quotation_number' => $quo_num
         ]);

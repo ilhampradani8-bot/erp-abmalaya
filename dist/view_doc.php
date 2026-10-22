@@ -84,7 +84,7 @@ $paperSettings = [
     'stamp_url' => '',
     'signature_url' => '',
     'header_image_url' => '',
-    'header_title' => 'SURAT PENAWARAN HARGA (SPH) / COMMERCIAL QUOTATION',
+    'header_title' => 'OFFICIAL COMMERCIAL QUOTATION',
     'footer_terms' => "1. 50% DP payment required after PO is issued.\n2. Remaining 50% payment upon delivery completion.\n3. Quotation valid for 14 days from issue date.",
     'header_color' => '#0080d0',
     'table_header_bg' => '#0070c0',
@@ -247,7 +247,7 @@ if ($type === 'invoice') {
                 $doc = [
                     'id' => $id,
                     'rfq_id' => $rfqRow['id'],
-                    'quotation_number' => strpos($id, 'QUO-') !== false ? $id : ('SPH-ABM/MY/' . date('Y') . '/' . rand(1000, 9999)),
+                    'quotation_number' => strpos($id, 'QUO-') !== false ? $id : ('QUO-ABM/MY/' . date('Y') . '/' . rand(1000, 9999)),
                     'client_name' => $rfqRow['client_name'] ?? 'Client',
                     'client_email' => $rfqRow['client_email'] ?? '',
                     'client_phone' => $rfqRow['client_phone'] ?? '',
@@ -489,7 +489,10 @@ $docRefNo = $type === 'invoice' ? ($doc['invoice_number'] ?? 'INV-ABM') : ($doc[
 $rawDate = !empty($doc['pdf_created_at']) ? $doc['pdf_created_at'] : (!empty($doc['date_issued']) ? $doc['date_issued'] : (!empty($doc['created_at']) ? $doc['created_at'] : date('Y-m-d')));
 $docDate = (!empty($rawDate) && $rawDate !== '0000-00-00 00:00:00') ? date('d/m/Y', strtotime($rawDate)) : date('d/m/Y');
 $validUntil = $doc['valid_until'] ?? '14 Days';
-$headerTitle = !empty($activeSettings['header_title']) ? $activeSettings['header_title'] : ($type === 'invoice' ? 'OFFICIAL INVOICE' : 'SURAT PENAWARAN HARGA (SPH) / COMMERCIAL QUOTATION');
+$headerTitle = !empty($activeSettings['header_title']) ? $activeSettings['header_title'] : ($type === 'invoice' ? 'OFFICIAL INVOICE' : 'OFFICIAL COMMERCIAL QUOTATION');
+if (stripos($headerTitle, 'SPH') !== false) {
+    $headerTitle = 'OFFICIAL COMMERCIAL QUOTATION';
+}
 $projectRef = $doc['project_reference'] ?? $doc['notes'] ?? $doc['category_name'] ?? 'INDUSTRIAL & MARITIME EQUIPMENT SUPPLY';
 
 $clientName = $doc['client_name'] ?? $doc['customer_name'] ?? $doc['contact_person'] ?? 'Valued Client';

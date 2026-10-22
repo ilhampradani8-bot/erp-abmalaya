@@ -15,93 +15,116 @@ endobj
 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
 endobj
 6 0 obj
-<< /Length 1458 >>
+<< /Length 1866 >>
 stream
 BT
 /F2 16 Tf
- 50 785 Td
+ 50 788 Td
  (AB MALAYA INDUSTRY) Tj
 /F1 9 Tf
- 0 -14 Td
+ 0 -13 Td
  (Commercial Quotation & Engineering Solutions Provider) Tj
-0 -12 Td
- (Email: sales@abmalaya.com | Web: https://abmalaya.com) Tj
+0 -11 Td
+ (Wisma Rampai, Jalan 34/26, 53300 Kuala Lumpur | Email: sales@abmalaya.com) Tj
 ET
-0.5 w
- 50 745 m 545 745 l S
+0.8 w
+ 0 0.44 0.75 RG
+ 50 750 m 545 750 l S
+ 0 0 0 RG
 BT
-/F2 13 Tf
- 50 720 Td
- (OFFICIAL COMMERCIAL QUOTATION (SPH)) Tj
-/F2 9 Tf
- 0 -18 Td
- (Quotation No : ) Tj
- /F1 9 Tf
+/F2 12 Tf
+ 50 726 Td
+ (OFFICIAL COMMERCIAL QUOTATION) Tj
+/F2 8.5 Tf
+ 0 -16 Td
+ (Quotation No  : ) Tj
+ /F1 8.5 Tf
  (SPH-ABM/MY/2026/0999) Tj
-/F2 9 Tf
- 0 -14 Td
- (Date Issued  : ) Tj
- /F1 9 Tf
+/F2 8.5 Tf
+ 0 -12 Td
+ (Date Issued   : ) Tj
+ /F1 8.5 Tf
  (2026-10-19) Tj
-/F2 9 Tf
- 0 -14 Td
- (Client Name  : ) Tj
- /F1 9 Tf
- (Test Co - Attn: Test Client) Tj
-/F2 9 Tf
- 0 -14 Td
- (Client Email : ) Tj
- /F1 9 Tf
- ({"selected":"test@example.com","options":[{"email":"test@example.com","source":"Primary Email"}]}) Tj
+/F2 8.5 Tf
+ 0 -12 Td
+ (Validity      : ) Tj
+ /F1 8.5 Tf
+ (14 Days) Tj
 ET
-0.9 0.92 0.95 rg
- 50 625 495 18 re f
-0 g
+BT
+/F2 8.5 Tf
+ 320 710 Td
+ (Client / Bill To:) Tj
+/F1 8.5 Tf
+ 0 -12 Td
+ (Test Co) Tj
+0 -11 Td
+ (Attn: Test Client) Tj
+0 -11 Td
+ (Email: {"selected":"test@example.com","options":[{"email":"test@example.com","source":"Primary Email"}]}) Tj
+ET
+0.0 0.44 0.75 rg
+ 50 630 495 18 re f
+ 1 1 1 rg
 BT
 /F2 8 Tf
- 55 630 Td
+ 55 635 Td
  (NO) Tj
- 25 0 Td
- (DESCRIPTION) Tj
- 260 0 Td
+ 24 0 Td
+ (DESCRIPTION & SPECIFICATION) Tj
+ 246 0 Td
  (QTY) Tj
- 55 0 Td
+ 45 0 Td
+ (UNIT) Tj
+ 40 0 Td
  (UNIT PRICE (MYR)) Tj
  85 0 Td
  (TOTAL (MYR)) Tj
 ET
+ 0 0 0 rg
 BT
-/F1 8 Tf
- 55 608 Td
+/F1 7.5 Tf
+ 55 612 Td
  (1) Tj
- 25 0 Td
- (Commercial Product / Service Proposal as per RFQ) Tj
- 260 0 Td
+ 24 0 Td
+ ([IMPA 63] RFQ PDLNG: PD/ENG/2026/102 ENGINE STOR) Tj
+ 246 0 Td
  (1) Tj
- 55 0 Td
+ 45 0 Td
+ (Package) Tj
+ 40 0 Td
  (0.00) Tj
  85 0 Td
  (0.00) Tj
 ET
-0.3 w
- 50 601 m 545 601 l S
+0.5 w
+ 0.8 0.8 0.8 RG
+ 50 604 m 545 604 l S
+ 0 0 0 RG
+0.93 0.95 0.98 rg
+ 330 574 215 22 re f
+ 0 0 0 rg
 BT
-/F2 11 Tf
- 330 581 Td
+/F2 9.5 Tf
+ 340 580 Td
  (GRAND TOTAL : MYR 0.00) Tj
+ET
+BT
 /F2 8 Tf
- 50 110 Td
+ 50 115 Td
  (Terms & Conditions:) Tj
-/F1 8 Tf
+/F1 7.5 Tf
  0 -11 Td
- (1. Prices quoted in Malaysian Ringgit (MYR). Payment terms as per agreement.) Tj
+ (1. All prices quoted in Malaysian Ringgit (MYR). Payment terms as agreed upon purchase order.) Tj
 0 -10 Td
- (2. This is an electronically issued quotation verified by AB Malaya Industry ERP.) Tj
+ (2. This is an official electronic commercial quotation issued by AB Malaya Industry ERP.) Tj
+0 -10 Td
+ (3. Goods offered are subject to stock availability and standard manufacturer warranty.) Tj
 /F2 8 Tf
- 380 90 Td
+ 380 95 Td
  (Authorized Signature:) Tj
 /F1 8 Tf
- 0 -24 Td
+ 0 -22 Td
  (AB MALAYA SALES & COMMERCIAL TEAM) Tj
 ET
 
@@ -119,5 +142,5 @@ xref
 trailer
 << /Size 7 /Root 1 0 R >>
 startxref
-1912
+2320
 %%EOF

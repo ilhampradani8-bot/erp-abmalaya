@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Quotation } from '../types/erp';
-import { Search, Plus, Eye, Edit, Send, RefreshCw, Loader2, Trash2, FileType, Check, Sparkles, CheckCircle2, Sliders, Clock, MoreVertical, History, X as CloseIcon, User, AlertTriangle, Printer, Image as ImageIcon, ShieldCheck, ScanLine, Info, Database, Activity, Terminal, Tag, Filter } from 'lucide-react';
+import { Search, Plus, Eye, Edit, Send, RefreshCw, Loader2, Trash2, FileType, FileText, Check, Sparkles, CheckCircle2, Sliders, Clock, MoreVertical, History, X as CloseIcon, User, AlertTriangle, Printer, Image as ImageIcon, ShieldCheck, ScanLine, Info, Database, Activity, Terminal, Tag, Filter } from 'lucide-react';
 
 import { getApiUrl } from '../utils/api';
 
@@ -276,7 +276,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   
   // System diagnostic & category info modal states
   const [isSystemInfoModalOpen, setIsSystemInfoModalOpen] = useState<boolean>(false);
-  const [infoModalTab, setInfoModalTab] = useState<'sph' | 'categories' | 'errors'>('sph');
+  const [infoModalTab, setInfoModalTab] = useState<'services' | 'categories' | 'errors'>('services');
   const [aiErrors, setAiErrors] = useState<any[]>([]);
   const [dynamicDaemons, setDynamicDaemons] = useState<any[]>([]);
   const [showAllDbColumns, setShowAllDbColumns] = useState<boolean>(false);
@@ -328,7 +328,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
     return q.company_name || 'Individual';
   };
 
-  const triggerSPHPrint = (quo: Quotation, _format: 'pdf' | 'png') => {
+  const triggerQuotationPrint = (quo: Quotation, _format: 'pdf' | 'png') => {
     const w = window.open('', '_blank');
     if (!w) return;
     
@@ -348,7 +348,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
       }).format(v || 0);
     };
     
-    // SPH Items
+    // Quotation Items
     const itemsHtml = (quo.items_details || []).map((it, idx) => `
       <tr>
         <td style="padding: 8px; border-bottom: 1px solid #d2d2d2; text-align: center; font-family: monospace;">${idx + 1}</td>
@@ -364,14 +364,14 @@ export const QuotationList: React.FC<QuotationListProps> = ({
     const docHtml = `
       <html>
         <head>
-          <title>SPH - ${quo.quotation_number}</title>
+          <title>Quotation - ${quo.quotation_number}</title>
           <style>
             body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #333; line-height: 1.4; }
             .header { display: flex; justify-content: space-between; border-bottom: 3px solid #333; padding-bottom: 20px; margin-bottom: 20px; }
             .logo-box { width: 60px; height: 60px; background: #333; color: white; font-weight: 900; font-size: 24px; display: flex; align-items: center; justify-content: center; margin-right: 15px; }
             .company-info h1 { font-size: 20px; margin: 0; text-transform: uppercase; font-weight: 900; }
             .company-info p { font-size: 11px; margin: 2px 0; color: #666; }
-            .sph-title { font-size: 12px; font-weight: 950; background: #333; color: white; padding: 4px 10px; display: inline-block; margin-bottom: 10px; }
+            .quo-title { font-size: 12px; font-weight: 950; background: #333; color: white; padding: 4px 10px; display: inline-block; margin-bottom: 10px; }
             .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; background: #f9f9f9; padding: 15px; border: 1px solid #ddd; margin-bottom: 20px; font-size: 12px; }
             .meta-grid span { color: #888; font-size: 10px; text-transform: uppercase; display: block; margin-bottom: 3px; }
             table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
@@ -398,7 +398,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               </div>
             </div>
             <div style="text-align: right;">
-              <span class="sph-title">OFFICIAL COMMERCIAL QUOTATION</span>
+              <span class="quo-title">OFFICIAL COMMERCIAL QUOTATION</span>
               <div style="font-family: monospace; font-weight: bold;">No: ${quo.quotation_number}</div>
               <div style="color: #666; font-size: 11px;">Date: ${quo.date_issued}</div>
             </div>
@@ -545,7 +545,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   }, []);
 
   const handleDeleteQuotation = (id: string) => {
-    if (!window.confirm('Are you sure you want to move this SPH Quotation to Trash (Junk status)?')) {
+    if (!window.confirm('Are you sure you want to move this Quotation to Trash (Junk status)?')) {
       return;
     }
 
@@ -582,7 +582,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
 
   const handleBatchDelete = () => {
     if (selectedIds.length === 0) return;
-    if (!window.confirm(`Are you sure you want to move the ${selectedIds.length} selected SPH quotations to Trash (Junk)?`)) {
+    if (!window.confirm(`Are you sure you want to move the ${selectedIds.length} selected quotations to Trash (Junk)?`)) {
       return;
     }
 
@@ -609,7 +609,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
         );
         setSelectedIds([]);
         setIsSelectionMode(false);
-        alert('Selected SPH items moved to Trash!');
+        alert('Selected quotations moved to Trash!');
       })
       .catch((err) => console.error('Batch delete error:', err))
       .finally(() => setIsLoading(false));
@@ -641,7 +641,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
         setSelectedIds([]);
         setIsSelectionMode(false);
         setShowBatchStatusDropdown(false);
-        alert(`Selected SPH items status updated to ${newStatus}!`);
+        alert(`Selected quotation items status updated to ${newStatus}!`);
       })
       .catch((err) => console.error('Batch status update error:', err))
       .finally(() => setIsLoading(false));
@@ -765,7 +765,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
             <Search className="w-3.5 h-3.5 absolute left-3 top-2 text-slate-500" />
             <input
               type="search"
-              placeholder="Search SPH ID, company..."
+              placeholder="Search Quotation ID, company..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-white border border-[#a0a0a0] rounded-full pl-9 pr-3 py-1 text-xs text-[#3d3d3d] focus:outline-none focus:border-[#0099ec] shadow-inner font-sans"
@@ -800,7 +800,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   className="w-full text-left px-3.5 py-2 hover:bg-gradient-to-b hover:from-[#00b4ff] hover:to-[#0080d0] hover:text-white transition flex items-center gap-2 cursor-pointer font-bold text-[#3d3d3d]"
                 >
                   <Plus className="w-3.5 h-3.5 text-[#0080d0]" />
-                  <span>New SPH</span>
+                  <span>New Quotation</span>
                 </button>
                 
                 <button
@@ -812,7 +812,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   className="w-full text-left px-3.5 py-2 hover:bg-gradient-to-b hover:from-[#00b4ff] hover:to-[#0080d0] hover:text-white transition flex items-center gap-2 cursor-pointer font-bold text-[#3d3d3d]"
                 >
                   <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{isSelectionMode ? 'Exit Selection' : 'Select SPH Items'}</span>
+                  <span>{isSelectionMode ? 'Exit Selection' : 'Select Quotations'}</span>
                 </button>
 
                 {/* Database Full Column Toggle */}
@@ -849,7 +849,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
         <div className="bg-gradient-to-b from-[#e2e8f0] to-[#cbd5e1] border-b border-[#94a3b8] px-4 py-2 flex items-center justify-between text-xs text-slate-800 font-sans shadow-inner shrink-0 z-10">
           <div className="flex items-center gap-2">
             <span className="bg-[#0080d0] text-white font-extrabold px-2 py-0.5 rounded-full text-[10px] animate-pulse">
-              {selectedIds.length} SPH Selected
+              {selectedIds.length} Quotations Selected
             </span>
           </div>
           
@@ -901,7 +901,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
         {isLoading ? (
           <div className="py-24 text-center space-y-2">
             <Loader2 className="w-7 h-7 text-[#0099ec] animate-spin mx-auto" />
-            <p className="text-xs font-bold text-slate-600">Fetching SPH quotations from MySQL database...</p>
+            <p className="text-xs font-bold text-slate-600">Fetching quotations from MySQL database...</p>
           </div>
         ) : (
           <div className="w-full overflow-x-auto border-t border-b border-[rgba(0,0,0,0.2)]">
@@ -922,7 +922,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                     )}
                   </th>
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-16 text-center">ID (DB)</th>}
-                  <th className="p-2.5 border-r border-slate-800 w-28">SPH Number</th>
+                  <th className="p-2.5 border-r border-slate-800 w-28">Quotation No.</th>
                   <th className="p-2.5 border-r border-slate-800 w-44">IMPA Category</th>
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-20 text-center">RFQ ID</th>}
 
@@ -1005,7 +1005,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                         {shortenQuotationNumber(q.quotation_number || q.id)}
                       </td>
 
-                      {/* IMPA Category Column (Next to SPH Number / ID DB) */}
+                      {/* IMPA Category Column (Next to Quotation No. / ID DB) */}
                       <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">
                         {q.impa_code || q.category_name ? (
                           <span
@@ -1240,7 +1240,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                               onEditQuotation(q);
                             }}
                             className="p-1 text-blue-600 hover:text-blue-900 hover:bg-blue-100 rounded-md transition cursor-pointer"
-                            title="Edit SPH in Quotation Builder"
+                            title="Edit Quotation in Quotation Builder"
                           >
                             <Edit className="w-3.5 h-3.5" />
                           </button>
@@ -1281,12 +1281,27 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setOpenRowActionId(null);
+                                    const pdfUrl = `/api_pdf.php?id=${encodeURIComponent(q.id)}&action=stream`;
+                                    window.open(getApiUrl(pdfUrl), '_blank');
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-slate-100 text-[#3d3d3d] transition flex items-center gap-2 cursor-pointer font-semibold"
+                                  title="Buka berkas file PDF yang tersimpan di folder uploads/pdf/"
+                                >
+                                  <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Preview File PDF (uploads/pdf/)</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenRowActionId(null);
                                     onPreviewDoc(q);
                                   }}
                                   className="w-full text-left px-3.5 py-2 hover:bg-slate-100 text-[#3d3d3d] transition flex items-center gap-2 cursor-pointer font-semibold"
                                 >
-                                  <Eye className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>Preview PDF</span>
+                                  <FileText className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>Lihat Dokumen Quotation</span>
                                 </button>
                                 
                                 <button
@@ -1299,7 +1314,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                   className="w-full text-left px-3.5 py-2 hover:bg-slate-100 text-[#3d3d3d] transition flex items-center gap-2 cursor-pointer font-semibold"
                                 >
                                   <Send className="w-3.5 h-3.5 text-purple-600" />
-                                  <span>Send SPH Email</span>
+                                  <span>Send Quotation Email</span>
                                 </button>
                                 
                                 <button
@@ -1371,7 +1386,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                 <History className="w-5 h-5 text-amber-600 animate-pulse" />
                 <div>
                   <h3 className="font-extrabold text-sm text-[#3d3d3d]">Quotation Audit Trail History</h3>
-                  <p className="text-[10px] text-slate-500 font-mono">SPH ID: {selectedHistoryQuotation.quotation_number}</p>
+                  <p className="text-[10px] text-slate-500 font-mono">Quotation ID: {selectedHistoryQuotation.quotation_number}</p>
                 </div>
               </div>
               <button
@@ -1401,7 +1416,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                   return (
                     <div className="py-12 text-center text-slate-400 text-xs font-bold space-y-1">
                       <Clock className="w-6 h-6 mx-auto text-slate-300 animate-bounce" />
-                      <p>No history trail recorded for this SPH quotation.</p>
+                      <p>No history trail recorded for this quotation.</p>
                     </div>
                   );
                 }
@@ -1487,7 +1502,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                 <div className="flex items-center gap-2">
                   <FileType className="w-4 h-4 text-[#0080d0]" />
                   <div>
-                    <h3 className="font-extrabold text-xs text-[#3d3d3d]">Full Info — SPH Quotation</h3>
+                    <h3 className="font-extrabold text-xs text-[#3d3d3d]">Full Info — Commercial Quotation</h3>
                     <select
                       value={activeQuotation.id}
                       onChange={(e) => {
@@ -1822,7 +1837,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                       </div>
                     </div>
 
-                    {/* Unified Items Table (Combined SPH & AI OCR Extracted Items with Full Specification Columns) */}
+                    {/* Unified Items Table (Combined Quotation & AI OCR Extracted Items with Full Specification Columns) */}
                     <div className="pt-3 space-y-2">
                       <div className="flex justify-between items-center">
                         <span className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">Line Items Specification & Details</span>
@@ -1843,8 +1858,8 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                           } catch (e) {}
                         }
 
-                        const hasSphItems = Array.isArray(activeQuotation.items_details) && activeQuotation.items_details.length > 0;
-                        const displayItems = hasSphItems ? activeQuotation.items_details! : [];
+                        const hasQuotationItems = Array.isArray(activeQuotation.items_details) && activeQuotation.items_details.length > 0;
+                        const displayItems = hasQuotationItems ? activeQuotation.items_details! : [];
 
                         return (
                           <div className="border-t border-b border-slate-200 overflow-x-auto">
@@ -1864,7 +1879,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100">
-                                {hasSphItems ? (
+                                {hasQuotationItems ? (
                                   displayItems.map((item, idx) => (
                                     <tr key={idx} className="hover:bg-slate-50">
                                       <td className="py-2 px-2 text-center font-mono text-slate-400">{idx + 1}</td>
@@ -2034,7 +2049,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                     ) : (
                       <div className="py-20 text-center text-slate-400 font-bold space-y-1">
                         <Clock className="w-8 h-8 mx-auto text-slate-300" />
-                        <p>This SPH was created manually without a linked IMAP Gmail RFQ email source.</p>
+                        <p>This quotation was created manually without a linked IMAP Gmail RFQ email source.</p>
                       </div>
                     )}
                   </>
@@ -2218,17 +2233,17 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                 {/* Direct Print Buttons toolbar */}
                 <div className="flex gap-1.5">
                   <button
-                    onClick={() => triggerSPHPrint(activeQuotation, 'pdf')}
+                    onClick={() => triggerQuotationPrint(activeQuotation, 'pdf')}
                     className="bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-[#e6e6e6] text-[#3d3d3d] font-bold text-xs p-1.5 rounded border border-[#a0a0a0] transition cursor-pointer flex items-center justify-center gap-1"
-                    title="Print / Save SPH PDF"
+                    title="Print / Save Quotation PDF"
                   >
                     <Printer className="w-3.5 h-3.5 text-blue-600" />
                     <span className="hidden sm:inline">PDF</span>
                   </button>
                   <button
-                    onClick={() => triggerSPHPrint(activeQuotation, 'png')}
+                    onClick={() => triggerQuotationPrint(activeQuotation, 'png')}
                     className="bg-gradient-to-b from-[#fafafa] to-[#eaeaea] hover:bg-[#e6e6e6] text-[#3d3d3d] font-bold text-xs p-1.5 rounded border border-[#a0a0a0] transition cursor-pointer flex items-center justify-center gap-1"
-                    title="Save SPH PNG image"
+                    title="Save Quotation PNG image"
                   >
                     <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
 
@@ -2290,7 +2305,7 @@ onClick={() => {
             {/* Modal Tab Headers */}
             <div className="flex border-b border-slate-200 bg-slate-100 px-3 py-1 shrink-0 gap-1">
               {[
-                { id: 'sph', label: 'Background Services' },
+                { id: 'services', label: 'Background Services' },
                 { id: 'categories', label: 'IMPA Category Blueprints' },
                 { id: 'errors', label: 'Document Scanning Activity' },
               ].map((tab) => (
@@ -2311,7 +2326,7 @@ onClick={() => {
             {/* Modal Scroll Content */}
             <div className="flex-1 p-4 overflow-y-auto text-xs text-slate-700 space-y-4 bg-slate-50/50">
               
-              {infoModalTab === 'sph' && (
+              {infoModalTab === 'services' && (
                 <div className="space-y-4 font-sans">
                   {/* Status Summary Bar */}
                   <div className="bg-white p-3 border border-slate-200 rounded-none shadow-2xs flex items-center justify-between">

@@ -82,7 +82,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({
             User Login Sessions & Activity Log — abmalaya.com
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Select and activate team user sessions. All SPH & login activity is automatically logged.
+            Select and activate team user sessions. All quotation & login activity is automatically logged.
           </p>
         </div>
 

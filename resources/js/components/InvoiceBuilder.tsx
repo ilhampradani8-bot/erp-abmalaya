@@ -3330,7 +3330,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
                       <span>Bagaimana cara cepat membuat invoice dari penawaran harga (Quotation)?</span>
                     </h5>
                     <p className="text-[11.5px] text-slate-600 leading-relaxed">
-                      Cukup klik dropdown <strong>Load from Quotation</strong> di bilah atas, lalu pilih nomor SPH yang disetujui. Semua data item, harga, nama perusahaan, dan alamat penagihan akan terisi otomatis dalam 1 detik.
+                      Cukup klik dropdown <strong>Load from Quotation</strong> di bilah atas, lalu pilih nomor Quotation yang disetujui. Semua data item, harga, nama perusahaan, dan alamat penagihan akan terisi otomatis dalam 1 detik.
                     </p>
                   </div>
 

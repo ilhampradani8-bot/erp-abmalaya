@@ -75,7 +75,7 @@ export const Trash: React.FC<TrashProps> = ({
   };
 
   const handleRestoreQuotation = (id: string) => {
-    if (!window.confirm('Restore SPH Quotation back to Draft status?')) return;
+    if (!window.confirm('Restore Quotation back to Draft status?')) return;
 
     const payload = {
       id: id,
@@ -98,18 +98,18 @@ export const Trash: React.FC<TrashProps> = ({
               prev.map((q) => (q.id === id ? { ...q, status: 'draft' } : q))
             );
           }
-          setNotification('SPH Quotation restored to Draft successfully!');
+          setNotification('Quotation restored to Draft successfully!');
           setTimeout(() => setNotification(null), 4000);
           if (onRefresh) onRefresh();
         } else {
-          alert('Error restoring SPH: ' + (data.message || 'Unknown error'));
+          alert('Error restoring quotation: ' + (data.message || 'Unknown error'));
         }
       })
-      .catch((err) => console.error('Restore SPH error:', err));
+      .catch((err) => console.error('Restore quotation error:', err));
   };
 
   const handlePermanentDeleteQuotation = (id: string) => {
-    if (!window.confirm('WARNING: Delete this SPH permanently from the database? This action cannot be undone.')) return;
+    if (!window.confirm('WARNING: Delete this quotation permanently from the database? This action cannot be undone.')) return;
 
     fetch(getApiUrl(`/api_quotations.php?action=delete&id=${encodeURIComponent(id)}&force=true`), {
       method: 'DELETE',
@@ -120,14 +120,14 @@ export const Trash: React.FC<TrashProps> = ({
           if (setQuotations) {
             setQuotations((prev) => prev.filter((q) => q.id !== id));
           }
-          setNotification('SPH Quotation permanently deleted.');
+          setNotification('Quotation permanently deleted.');
           setTimeout(() => setNotification(null), 4000);
           if (onRefresh) onRefresh();
         } else {
-          alert('Error deleting SPH: ' + (data.message || 'Unknown error'));
+          alert('Error deleting quotation: ' + (data.message || 'Unknown error'));
         }
       })
-      .catch((err) => console.error('Permanent delete SPH error:', err));
+      .catch((err) => console.error('Permanent delete quotation error:', err));
   };
 
   const handleRestoreProduct = (id: number, name: string) => {
@@ -194,7 +194,7 @@ export const Trash: React.FC<TrashProps> = ({
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>SPH Quotations ({quotations.filter(q => (q.status || 'draft').toLowerCase() === 'junk').length})</span>
+              <span>Quotations ({quotations.filter(q => (q.status || 'draft').toLowerCase() === 'junk').length})</span>
             </button>
 
             <button
@@ -215,7 +215,7 @@ export const Trash: React.FC<TrashProps> = ({
             <Search className="w-3.5 h-3.5 absolute left-3 top-2 text-slate-500" />
             <input
               type="search"
-              placeholder={activeTab === 'quotations' ? "Search trash SPH..." : "Search trash products..."}
+              placeholder={activeTab === 'quotations' ? "Search trash quotations..." : "Search trash products..."}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-white border border-[#a0a0a0] rounded-full pl-9 pr-3 py-1 text-xs text-[#3d3d3d] focus:outline-none shadow-inner font-sans"
@@ -255,7 +255,7 @@ export const Trash: React.FC<TrashProps> = ({
           junkQuotations.length === 0 ? (
             <div className="py-24 text-center text-slate-400 text-xs space-y-2">
               <AlertTriangle className="w-8 h-8 text-slate-300 mx-auto" />
-              <p className="font-bold text-slate-600">Quotations Trash is empty. No junked SPH records found.</p>
+              <p className="font-bold text-slate-600">Quotations Trash is empty. No junked quotation records found.</p>
             </div>
           ) : (
             <div className="w-full overflow-x-auto border-t border-b border-[rgba(0,0,0,0.2)] min-w-full">
@@ -263,7 +263,7 @@ export const Trash: React.FC<TrashProps> = ({
                 <thead className="sticky top-0 z-10 bg-gradient-to-b from-[#DFDFDF] to-[#EDEDED] border-b border-[rgba(0,0,0,0.15)] text-[#626262] font-semibold text-[11px] uppercase tracking-wide shadow-2xs">
                   <tr>
                     <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-8 text-center">No</th>
-                    <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-36 font-mono">SPH Number</th>
+                    <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-36 font-mono">Quotation No.</th>
                     <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)]">Client Company & Contact</th>
                     <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-28 text-center font-mono">Date Issued</th>
                     <th className="p-2.5 border-r border-[rgba(0,0,0,0.1)] w-44 text-right font-mono">Grand Total (RM)</th>
@@ -301,7 +301,7 @@ export const Trash: React.FC<TrashProps> = ({
                           <button
                             onClick={() => handleRestoreQuotation(q.id)}
                             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-2.5 py-1 rounded transition flex items-center gap-1 cursor-pointer shadow-xs"
-                            title="Restore SPH back to draft list"
+                            title="Restore quotation back to draft list"
                           >
                             <RotateCcw className="w-3 h-3" />
                             <span>Restore</span>

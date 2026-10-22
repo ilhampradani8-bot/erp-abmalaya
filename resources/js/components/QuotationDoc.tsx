@@ -1,6 +1,7 @@
 import React from 'react';
 import { Quotation } from '../types/erp';
 import { Printer, Send, ArrowLeft } from 'lucide-react';
+import { getApiUrl } from '../utils/api';
 
 interface QuotationDocProps {
   quotation: Quotation;
@@ -66,12 +67,23 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
         </button>
 
         <div className="flex items-center gap-2.5">
+          <a
+            href={getApiUrl(safeQuotation.quotation_file || `/uploads/pdf/${(safeQuotation.quotation_number || safeQuotation.id || '').replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs px-4 py-2 transition cursor-pointer shadow-2xs"
+            title="Buka berkas file PDF resmi di folder server /uploads/pdf/"
+          >
+            <Printer className="w-4 h-4 text-emerald-400" />
+            <span>Buka Berkas PDF Server</span>
+          </a>
+
           <button
             onClick={handlePrint}
             className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 transition cursor-pointer shadow-2xs"
           >
             <Printer className="w-4 h-4 text-white" />
-            <span>Print / Export SPH PDF</span>
+            <span>Print / Save Quotation</span>
           </button>
 
           {onSendEmail && (
@@ -111,10 +123,10 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
 
           <div className="text-right shrink-0">
             <span className="inline-block bg-slate-900 text-white text-xs font-extrabold px-3 py-1 uppercase tracking-wider mb-2">
-              OFFICIAL QUOTATION (SPH)
+              OFFICIAL COMMERCIAL QUOTATION
             </span>
             <div className="text-xs font-mono font-bold text-slate-800">
-              No: {safeQuotation.quotation_number || safeQuotation.id || 'SPH-ABM/MY/2026/0403'}
+              No: {safeQuotation.quotation_number || safeQuotation.id || 'QUO-ABM/MY/2026/0403'}
             </div>
             <div className="text-[11px] text-slate-500">
               Date: {safeQuotation.date_issued || new Date().toISOString().split('T')[0]}
@@ -191,7 +203,7 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
           <div className="w-full sm:w-1/2 space-y-3 text-xs">
             <div className="bg-slate-50 p-3.5 border border-slate-200">
               <strong className="block text-slate-900 mb-1">Quotation Notes & Terms:</strong>
-              <p className="text-slate-600 leading-relaxed">{safeQuotation.notes || 'Standard SPH terms apply.'}</p>
+              <p className="text-slate-600 leading-relaxed">{safeQuotation.notes || 'Standard Quotation terms apply.'}</p>
             </div>
           </div>
 
