@@ -31,7 +31,7 @@ $defaults = [
     ['SOFTWARE_FEE_PERCENT', '1.75', 'System Fee'],
     ['SOFTWARE_FEE_MAX_LIMIT', '20000', 'System Fee'],
     ['SOFTWARE_FEE_CURRENT_ACCUMULATED', '1245.50', 'System Fee'],
-    ['DOC_HEADER_TITLE', 'SURAT PENAWARAN HARGA (SPH) / COMMERCIAL QUOTATION', 'Document'],
+    ['DOC_HEADER_TITLE', 'COMMERCIAL QUOTATION (QUO)', 'Document'],
     ['DOC_HEADER_COLOR', '#0080d0', 'Document'],
     ['DOC_FOOTER_TERMS', "1. 50% DP payment required after PO is issued.\n2. Remaining 50% payment upon delivery completion.\n3. Quotation valid for 14 days from issue date.", 'Document'],
     ['DOC_TAX_PERCENT', '11', 'Document'],

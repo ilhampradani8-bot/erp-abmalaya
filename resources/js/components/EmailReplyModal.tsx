@@ -36,8 +36,8 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
   const recipientName = isOutbound
     ? (quotation?.client_name && !quotation.client_name.toLowerCase().includes('ab malaya')
         ? quotation.client_name
-        : (rfq.recipient_email ? rfq.recipient_email.split('@')[0].toUpperCase() : 'Bapak/Ibu Pimpinan Rekanan'))
-    : (rfq.sender_name || quotation?.client_name || 'Bapak/Ibu Klien');
+        : (rfq.recipient_email ? rfq.recipient_email.split('@')[0].toUpperCase() : 'Valued Client'))
+    : (rfq.sender_name || quotation?.client_name || 'Valued Client');
 
   const recipientCompany = isOutbound
     ? (quotation?.company_name && !quotation.company_name.toLowerCase().includes('ab malaya')
@@ -48,13 +48,12 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
   const initialBody = isOutbound
     ? `Dear ${recipientName},\n` +
       `${recipientCompany ? recipientCompany + '\n\n' : '\n'}` +
-      `Bersama email ini kami meneruskan tindak lanjut terkait penawaran harga resmi (${quotation.quotation_number}) dari AB Malaya Industry.\n\n` +
-      `Berikut kami lampirkan dokumen penawaran harga resmi (Quotation) dengan total RM ${quotation.grand_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} untuk kebutuhan pengadaan terkait.\n\n` +
-      `Ringkasan Penawaran:\n` +
-      `- No. Quotation: ${quotation.quotation_number}\n` +
-      `- Berlaku Hingga: ${quotation.valid_until}\n` +
+      `Further to our previous correspondence, please find attached our official Quotation Document No. ${quotation.quotation_number} from AB Malaya Industry for your procurement requirements.\n\n` +
+      `Commercial Quotation Summary:\n` +
+      `- Quotation No: ${quotation.quotation_number}\n` +
+      `- Valid Until: ${quotation.valid_until}\n` +
       `- Grand Total: RM ${quotation.grand_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\n` +
-      `Apabila terdapat pertanyaan atau kebutuhan penyesuaian spesifikasi, silakan hubungi tim kami atau balas pesan ini.\n\n` +
+      `Should you have any questions or require modifications to the technical specifications or scope of supply, please feel free to reply directly to this email.\n\n` +
       `Best regards,\n` +
       `Sales & Business Development Team\n` +
       `AB MALAYA INDUSTRY`
@@ -152,7 +151,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
   const handleSend = (forceOnlyFile = false) => {
     setSending(true);
     const finalBody = forceOnlyFile
-      ? (body.trim() || `Bersama email ini kami lampirkan dokumen penawaran harga resmi (${quotation.quotation_number}) dari AB Malaya Industry.`)
+      ? (body.trim() || `Please find attached our official Quotation Document No. ${quotation.quotation_number} from AB Malaya Industry.`)
       : body;
     const targetAttachFile = attachPdf
       ? (quotation.quotation_file || `${quotation.quotation_number.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`)
@@ -251,7 +250,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-extrabold text-sm text-white" style={{ fontFamily: "'Eurostile', monospace" }}>
-                {isOutbound ? 'Meneruskan / Follow-up Pesan (Sent Email)' : 'Reply Email & Send Quotation'}
+                {isOutbound ? 'Forward / Follow-up Message (Outbound Sent)' : 'Reply Email & Send Quotation'}
               </h3>
               {isOutbound && (
                 <span className="px-2 py-0.5 bg-purple-700/80 text-white rounded text-[9px] font-black uppercase tracking-wider">
@@ -261,7 +260,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
             </div>
             <p className="text-[10px] text-slate-400">
               {isOutbound
-                ? `Email ini berstatus Terkirim (Sent). Pesan otomatis diteruskan ke alamat penerima (To: ${toEmail}), bukan ke pengirim internal.`
+                ? `This email is marked as Outbound (Sent). Follow-up message will be dispatched directly to the recipient address (To: ${toEmail}).`
                 : 'Compose email response to the client along with the official Quotation document attachment.'}
             </p>
           </div>
@@ -295,19 +294,19 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
               <h4 className="font-bold text-slate-900 text-xs border-b border-slate-100 pb-2 flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <Mail className="w-4 h-4 text-blue-600" />
-                  <span>{isOutbound ? 'Editor Meneruskan Pesan ke Klien' : 'Email Message Editor'}</span>
+                  <span>{isOutbound ? 'Forward Message Editor' : 'Email Message Editor'}</span>
                 </div>
                 {isOutbound && (
                   <span className="px-2 py-0.5 bg-purple-100 text-purple-800 border border-purple-300 rounded text-[9px] font-extrabold flex items-center gap-1">
                     <ArrowUpRight className="w-3 h-3 text-purple-600" />
-                    Sent Email Mode (Kirim ke Recipient)
+                    Sent Email Mode (Send to Recipient)
                   </span>
                 )}
               </h4>
 
               {/* From Select */}
               <div>
-                <label className="block font-bold text-slate-700 text-xs mb-1">From (Pengirim Internal Perusahaan)</label>
+                <label className="block font-bold text-slate-700 text-xs mb-1">From (Internal Company Sender)</label>
                 <select
                   value={fromEmail}
                   onChange={(e) => setFromEmail(e.target.value)}
@@ -322,10 +321,10 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
               {/* To */}
               <div>
                 <label className="block font-bold text-slate-700 text-xs mb-1 flex items-center justify-between">
-                  <span>To (Alamat Email Klien / Penerima)</span>
+                  <span>To (Client / Recipient Email Address)</span>
                   {isOutbound && (
                     <span className="text-[10px] text-purple-700 font-bold">
-                      ✓ Otomatis ke Penerima (To), bukan ke pengirim internal
+                      ✓ Auto-targeted to Recipient (To), not internal sender
                     </span>
                   )}
                 </label>
@@ -375,14 +374,14 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
                 </label>
                 <div className="flex items-center gap-2">
                   <a
-                    href={getApiUrl(quotation.quotation_file || `/uploads/pdf/${quotation.quotation_number.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`)}
+                    href={getApiUrl(`/api_pdf.php?type=quotation&id=${encodeURIComponent(quotation.id || quotation.quotation_number)}&action=stream`)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="px-2.5 py-1 bg-white hover:bg-slate-100 text-blue-700 border border-slate-300 rounded text-[10px] font-bold flex items-center gap-1 shadow-2xs transition cursor-pointer"
-                    title="Buka dan pastikan berkas PDF resmi yang tersimpan di folder uploads/pdf/"
+                    title="Open and preview official PDF document stored on server uploads/pdf/"
                   >
                     <Eye className="w-3 h-3 text-blue-600" />
-                    <span>Preview File PDF yang Dikirim</span>
+                    <span>Preview Attached PDF File</span>
                   </a>
                   <span className="text-[9px] text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded font-mono font-bold">
                     Stamped PDF
@@ -421,7 +420,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
                   rows={4}
                   value={aiPrompt}
                   onChange={(e) => setAiPrompt(e.target.value)}
-                  placeholder='e.g., "Request client to specify local port shipping date details, and thank them for choosing PT Abmalaya Nusa Sejahtera."'
+                  placeholder='e.g., "Request client to specify local port shipping date details, and thank them for choosing AB Malaya Industry."'
                   className="w-full bg-white border border-slate-300 rounded-md p-2.5 text-xs text-slate-800 leading-relaxed focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 />
               </div>
@@ -497,7 +496,7 @@ export const EmailReplyModal: React.FC<EmailReplyModalProps> = ({
             ) : (
               <>
                 <Send className="w-4 h-4" />
-                <span>{isOutbound ? `Teruskan / Kirim ke Penerima (${toEmail})` : 'Send Email to Client'}</span>
+                <span>{isOutbound ? `Forward / Send to Recipient (${toEmail})` : 'Send Email to Client'}</span>
               </>
             )}
           </button>

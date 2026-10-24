@@ -53,43 +53,62 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
     }
   ];
 
+  const [viewType, setViewType] = React.useState<'server_doc' | 'interactive'>('server_doc');
+
   return (
-    <div className="w-full p-6 sm:p-8 bg-slate-100 min-h-[calc(100vh-53px)] space-y-6 font-sans overflow-y-auto h-full">
+    <div className="w-full p-4 sm:p-6 bg-slate-100 min-h-[calc(100vh-53px)] space-y-4 font-sans overflow-y-auto h-full">
       
       {/* Top Action Toolbar (Hidden during Print) */}
-      <div className="no-print pb-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4 w-full bg-white p-4 border shadow-2xs">
+      <div className="no-print pb-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 w-full bg-white p-3.5 border shadow-2xs rounded-lg">
         <button
           onClick={handleBackNavigation}
-          className="flex items-center gap-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 transition cursor-pointer border border-slate-300"
+          className="flex items-center gap-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 transition cursor-pointer border border-slate-300 rounded"
         >
           <ArrowLeft className="w-4 h-4 text-slate-600" />
           <span>Back to Quotation Builder</span>
         </button>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-md shadow-2xs border border-slate-300 bg-slate-100 p-0.5 text-xs font-bold">
+            <button
+              type="button"
+              onClick={() => setViewType('server_doc')}
+              className={`px-3 py-1.5 rounded transition ${viewType === 'server_doc' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-700 hover:text-slate-900'}`}
+            >
+              📄 Exact Official Document (Server View)
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewType('interactive')}
+              className={`px-3 py-1.5 rounded transition ${viewType === 'interactive' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-700 hover:text-slate-900'}`}
+            >
+              📝 Draft Sheet View
+            </button>
+          </div>
+
           <a
-            href={getApiUrl(safeQuotation.quotation_file || `/uploads/pdf/${(safeQuotation.quotation_number || safeQuotation.id || '').replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`)}
+            href={getApiUrl(`/api_pdf.php?type=quotation&id=${encodeURIComponent(safeQuotation.id || safeQuotation.quotation_number || '')}&action=stream`)}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs px-4 py-2 transition cursor-pointer shadow-2xs"
-            title="Buka berkas file PDF resmi di folder server /uploads/pdf/"
+            className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-3.5 py-2 transition cursor-pointer shadow-2xs rounded"
+            title="Open and verify the exact PDF file stored in folder server uploads/pdf/"
           >
             <Printer className="w-4 h-4 text-emerald-400" />
-            <span>Buka Berkas PDF Server</span>
+            <span>Open Stored PDF File</span>
           </a>
 
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 transition cursor-pointer shadow-2xs"
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3.5 py-2 transition cursor-pointer shadow-2xs rounded"
           >
             <Printer className="w-4 h-4 text-white" />
-            <span>Print / Save Quotation</span>
+            <span>Print / Save</span>
           </button>
 
           {onSendEmail && (
             <button
               onClick={onSendEmail}
-              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 shadow-2xs transition cursor-pointer"
+              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 shadow-2xs transition cursor-pointer rounded"
             >
               <Send className="w-4 h-4 text-white" />
               <span>Send via Email</span>
@@ -98,10 +117,17 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
         </div>
       </div>
 
-      {/* Official Quotation Document Sheet (Printable Area, Full Width Edge to Edge) */}
-      <div id="quotation-pdf-document" className="bg-white text-slate-900 p-8 sm:p-12 font-sans border border-slate-300 shadow-xl w-full max-w-5xl mx-auto">
-        
-        {/* Letterhead Header */}
+      {viewType === 'server_doc' ? (
+        <div className="w-full bg-white border border-slate-300 rounded-lg shadow-xl overflow-hidden min-h-[85vh]">
+          <iframe
+            src={getApiUrl(`/view_doc.php?type=quotation&id=${encodeURIComponent(safeQuotation.id || safeQuotation.quotation_number || '')}`)}
+            className="w-full h-[88vh] border-0"
+            title="Official Quotation Server Preview"
+          />
+        </div>
+      ) : (
+        <div id="quotation-pdf-document" className="bg-white text-slate-900 p-8 sm:p-12 font-sans border border-slate-300 shadow-xl w-full max-w-5xl mx-auto">
+          {/* Letterhead Header */}
         <div className="flex items-start justify-between border-b-2 border-slate-900 pb-6 mb-6">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 bg-slate-900 text-white font-black text-2xl flex items-center justify-center tracking-wider shrink-0">
@@ -252,8 +278,8 @@ export const QuotationDoc: React.FC<QuotationDocProps> = ({
             <p className="text-slate-500">Head of Sales & Business Development</p>
           </div>
         </div>
-
       </div>
+      )}
 
     </div>
   );

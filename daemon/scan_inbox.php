@@ -78,7 +78,7 @@ $GLOBALS['exhausted_keys'] = []; // key => unix timestamp kapan boleh dicoba lag
 function classifyEmail(string $subject, string $body, string $sender, array $key_list): array {
     $body_short = mb_substr($body, 0, 1500);
     $prompt = "You are a professional logistics AI assistant for AB Malaya industry.\n"
-            . "Determine if this email is a genuine client request for quote/SPH (client_rfq) or spam/junk (junk).\n\n"
+            . "Determine if this email is a genuine client request for quotation / RFQ (client_rfq) or spam/junk (junk).\n\n"
             . "=== CRITICAL RULES ===\n"
             . "1. CLASSIFY AS 'client_rfq' ONLY IF it is an incoming purchase request or RFQ from an external client wanting to buy products/services.\n"
             . "2. CLASSIFY AS 'junk' IF the email is: internal outgoing email, request for tender extension, RFI follow-up sent by sales, bank receipt, newsletter, promotion, social media, system alert, password reset, bounce message.\n"
@@ -218,7 +218,7 @@ function autoGenerateQuotation($db_conn, $rfq_row, $items, $item_requested) {
     }
 
     $quo_id = 'QUO-' . time() . '-' . rand(10, 99);
-    $quo_num = 'SPH-ABM/MY/2026/0' . rand(100, 999);
+    $quo_num = 'QUO-ABM/MY/' . date('Y') . '/0' . rand(100, 999);
     
     $client_email = $rfq_row['client_email'];
     $client_name = explode('@', $client_email)[0];
@@ -232,11 +232,10 @@ function autoGenerateQuotation($db_conn, $rfq_row, $items, $item_requested) {
 
     $subtotal = 0.00;
     $items_created = 0;
-    $tax_percent = 11.00;
-
-    $stmt_quo = $db_conn->prepare("INSERT INTO quotations (id, rfq_id, quotation_number, client_name, client_email, company_name, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, status, ocr_scan_status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0.00, ?, 0.00, 0.00, ?, 'in_progress', 'pending', ?)");
+    $uuid = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x', mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0x0fff) | 0x4000, mt_rand(0, 0x3fff) | 0x8000, mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff));
+    $stmt_quo = $db_conn->prepare("INSERT INTO quotations (id, uuid, rfq_id, quotation_number, client_name, client_email, company_name, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, status, ocr_scan_status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0.00, ?, 0.00, 0.00, ?, 'in_progress', 'pending', ?)");
     if ($stmt_quo) {
-        $stmt_quo->bind_param("sissssssdss", $quo_id, $rfq_id, $quo_num, $client_name, $client_email, $company_name, $date_issued, $valid_until, $tax_percent, $notes, $created_by);
+        $stmt_quo->bind_param("ssissssssdss", $quo_id, $uuid, $rfq_id, $quo_num, $client_name, $client_email, $company_name, $date_issued, $valid_until, $tax_percent, $notes, $created_by);
         if (!$stmt_quo->execute()) {
             daemon_log("  -> ERROR executing parent quotation insert: " . $stmt_quo->error);
             return;
@@ -305,8 +304,8 @@ function autoGenerateQuotation($db_conn, $rfq_row, $items, $item_requested) {
         $stmt_upd->bind_param("ddds", $subtotal, $tax_amount, $grand_total, $quo_id);
         $stmt_upd->execute();
         $stmt_upd->close();
-        daemon_log("  -> SUCCESS: Created SPH #{$quo_num} with status 'requisition'.");
-        appendQuotationHistoryLog($db_conn, $quo_id, 'Create SPH (AI)', 'Sistem Daemon', null, "Klasifikasi RFQ selesai dan draft SPH berhasil dibuat (Grand Total: RM {$grand_total}).");
+        daemon_log("  -> SUCCESS: Created Quotation #{$quo_num} with status 'requisition'.");
+        appendQuotationHistoryLog($db_conn, $quo_id, 'Create Quotation (AI)', 'Daemon System', null, "RFQ classification complete and Quotation draft successfully created (Grand Total: RM {$grand_total}).");
     }
 }
 
@@ -425,9 +424,9 @@ while ($row = $res->fetch_assoc()) {
         
         if ($verified) {
             if ($classification === 'client_rfq') {
-                appendRfqHistoryLog($db_conn, $rfq_num, 'Lolos Verification', 'Sistem Daemon', null, 'Email berhasil diklasifikasikan sebagai Permintaan SPH (client_rfq) dan draf Quotation dibuat.');
+                appendRfqHistoryLog($db_conn, $rfq_num, 'Passed Verification', 'Daemon System', null, 'Email successfully classified as Quotation Request (client_rfq) and Quotation draft created.');
             } else {
-                appendRfqHistoryLog($db_conn, $rfq_num, 'Klasifikasi (AI)', 'Sesi Daemon Otomatis', null, 'Email diklasifikasikan sebagai Spam (junk).');
+                appendRfqHistoryLog($db_conn, $rfq_num, 'Classification (AI)', 'Daemon System', null, 'Email classified as Spam (junk).');
             }
         }
     }

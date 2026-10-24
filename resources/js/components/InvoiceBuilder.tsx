@@ -1230,7 +1230,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({
             </select>
           </div>
 
-          {/* SPH / QUOTATIONS SELECTOR DROPDOWN */}
+          {/* QUOTATIONS SELECTOR DROPDOWN */}
           <div className="flex items-center gap-1.5">
             <span className="font-bold text-slate-700 text-[11px]">Load from Quotation:</span>
             <select

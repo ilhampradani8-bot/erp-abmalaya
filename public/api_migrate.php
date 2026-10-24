@@ -22,7 +22,7 @@ $connection->query("CREATE TABLE IF NOT EXISTS system_paper_settings (
     stamp_url LONGTEXT,
     signature_url LONGTEXT DEFAULT NULL,
     header_image_url LONGTEXT DEFAULT NULL,
-    header_title VARCHAR(255) DEFAULT 'SURAT PENAWARAN HARGA (SPH) / COMMERCIAL QUOTATION',
+    header_title VARCHAR(255) DEFAULT 'OFFICIAL COMMERCIAL QUOTATION',
     footer_terms TEXT,
     header_color VARCHAR(50) DEFAULT '#0080d0',
     default_notes TEXT,

@@ -97,6 +97,9 @@ $distIndex = __DIR__ . '/dist/index.html';
 $publicIndex = __DIR__ . '/index.html';
 
 if ($uri === '/' || strpos($uri, 'adminer') === false) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
     if (file_exists($distIndex)) {
         header('Content-Type: text/html; charset=utf-8');
         readfile($distIndex);

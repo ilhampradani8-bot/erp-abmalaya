@@ -16,6 +16,9 @@ export interface EmailAttachment {
 
 export interface RFQ {
   id: string;
+  uuid?: string;
+  email_uid?: number | string;
+  message_id?: string;
   sender_name: string;
   sender_email: string;
   company: string;
@@ -79,6 +82,7 @@ export type QuotationStatus = 'draft' | 'terkirim' | 'disetujui' | 'ditolak' | '
 
 export interface Quotation {
   id: string;
+  uuid?: string;
   rfq_id?: string;
   quotation_number: string;
   client_name: string;

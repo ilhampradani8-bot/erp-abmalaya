@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Quotation } from '../types/erp';
-import { Search, Plus, Eye, Edit, Send, RefreshCw, Loader2, Trash2, FileType, FileText, Check, Sparkles, CheckCircle2, Sliders, Clock, MoreVertical, History, X as CloseIcon, User, AlertTriangle, Printer, Image as ImageIcon, ShieldCheck, ScanLine, Info, Database, Activity, Terminal, Tag, Filter } from 'lucide-react';
+import { Search, Plus, Eye, Edit, Send, RefreshCw, Loader2, Trash2, FileType, FileText, Check, Sparkles, CheckCircle2, Sliders, Clock, MoreVertical, History, X as CloseIcon, User, AlertTriangle, Printer, Image as ImageIcon, ShieldCheck, ScanLine, Info, Database, Activity, Terminal, Tag, Filter, Copy } from 'lucide-react';
 
 import { getApiUrl } from '../utils/api';
 
@@ -71,6 +71,19 @@ const cleanEmailBodyText = (text?: string): string => {
   return result;
 };
 
+const sanitizeQuotation = (q: Quotation): Quotation => {
+  if (!q) return q;
+  return {
+    ...q,
+    quotation_number: q.quotation_number
+      ? q.quotation_number.replace(/^SPH[\-_]/i, 'QUO-').replace(/SPH-/gi, 'QUO-').replace(/SPH\//gi, 'QUO/')
+      : q.quotation_number,
+    quotation_file: q.quotation_file
+      ? q.quotation_file.replace(/SPH/gi, 'QUO')
+      : q.quotation_file
+  };
+};
+
 export const QuotationList: React.FC<QuotationListProps> = ({
   onEditQuotation,
   onPreviewDoc,
@@ -81,7 +94,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
   hasFetched,
   currentUser,
 }) => {
-  const [quotations, setQuotations] = useState<Quotation[]>(cachedQuotations || []);
+  const [quotations, setQuotations] = useState<Quotation[]>(() => (cachedQuotations || []).map(sanitizeQuotation));
   const [isLoading, setIsLoading] = useState<boolean>(!hasFetched && cachedQuotations.length === 0);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'all' | 'requisition' | 'draft' | 'quotation' | 'acc' | 'done' | 'junk'>('all');
@@ -303,14 +316,15 @@ export const QuotationList: React.FC<QuotationListProps> = ({
 
   const shortenQuotationNumber = (num: string) => {
     if (!num) return '';
-    if (num.includes('/')) {
-      const parts = num.split('/');
+    const cleanNum = num.replace(/^SPH[\-_]/i, 'QUO-').replace(/SPH-/gi, 'QUO-');
+    if (cleanNum.includes('/')) {
+      const parts = cleanNum.split('/');
       return parts[parts.length - 1];
     }
-    if (num.length > 10) {
-      return '...' + num.slice(-6);
+    if (cleanNum.length > 10) {
+      return '...' + cleanNum.slice(-6);
     }
-    return num;
+    return cleanNum;
   };
 
   const getQuotationCompany = (q: Quotation) => {
@@ -517,11 +531,12 @@ export const QuotationList: React.FC<QuotationListProps> = ({
       })
       .then((resData) => {
         if (resData && resData.status === 'success' && Array.isArray(resData.data)) {
-          const jsonStr = JSON.stringify(resData.data);
+          const sanitized = resData.data.map(sanitizeQuotation);
+          const jsonStr = JSON.stringify(sanitized);
           if (prevQuotationsJsonRef.current !== jsonStr) {
             prevQuotationsJsonRef.current = jsonStr;
-            setQuotations(resData.data);
-            setCachedQuotations(resData.data);
+            setQuotations(sanitized);
+            setCachedQuotations(sanitized);
           }
         }
       })
@@ -529,6 +544,20 @@ export const QuotationList: React.FC<QuotationListProps> = ({
       .finally(() => {
         if (!isSilent) setIsLoading(false);
       });
+  };
+
+  const fetchQuotationByUuid = async (uuid: string): Promise<Quotation | null> => {
+    try {
+      const res = await fetch(getApiUrl(`/api_quotations.php?action=get&uuid=${encodeURIComponent(uuid)}`));
+      const resData = await res.json();
+      if (resData && resData.status === 'success' && resData.data) {
+        return sanitizeQuotation(resData.data as Quotation);
+      }
+      return null;
+    } catch (err) {
+      console.error('Fetch quotation by UUID error:', err);
+      return null;
+    }
   };
 
   useEffect(() => {
@@ -588,8 +617,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
 
     setIsLoading(true);
     const promises = selectedIds.map((id) => {
+      const targetQuo = quotations.find((q) => q.id === id);
       const payload = {
         id: id,
+        uuid: targetQuo?.uuid || id,
         status: 'junk',
         action: 'delete',
         user_name: 'Admin',
@@ -619,8 +650,10 @@ export const QuotationList: React.FC<QuotationListProps> = ({
     if (selectedIds.length === 0) return;
     setIsLoading(true);
     const promises = selectedIds.map((id) => {
+      const targetQuo = quotations.find((q) => q.id === id);
       const payload = {
         id: id,
+        uuid: targetQuo?.uuid || id,
         status: newStatus,
         action: 'status_update',
         user_name: 'Admin',
@@ -671,6 +704,8 @@ export const QuotationList: React.FC<QuotationListProps> = ({
       const term = searchTerm.toLowerCase();
       const matchesSearch =
         (q.quotation_number || '').toLowerCase().includes(term) ||
+        (q.uuid || '').toLowerCase().includes(term) ||
+        (q.id || '').toLowerCase().includes(term) ||
         (q.company_name || '').toLowerCase().includes(term) ||
         (q.client_name || '').toLowerCase().includes(term) ||
         (q.client_email || '').toLowerCase().includes(term) ||
@@ -922,6 +957,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                     )}
                   </th>
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-16 text-center">ID (DB)</th>}
+                  {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-28 text-center font-mono">UUID</th>}
                   <th className="p-2.5 border-r border-slate-800 w-28">Quotation No.</th>
                   <th className="p-2.5 border-r border-slate-800 w-44">IMPA Category</th>
                   {showAllDbColumns && <th className="p-2.5 border-r border-slate-800 w-20 text-center">RFQ ID</th>}
@@ -950,7 +986,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
               <tbody>
                 {filteredQuotations.length === 0 ? (
                   <tr>
-                    <td colSpan={showAllDbColumns ? 24 : 12} className="py-20 text-center text-slate-400 text-xs space-y-2 bg-white">
+                    <td colSpan={showAllDbColumns ? 25 : 12} className="py-20 text-center text-slate-400 text-xs space-y-2 bg-white">
                       <FileType className="w-8 h-8 text-slate-300 mx-auto" />
                       <p className="font-bold text-slate-600">No quotation data found in this view.</p>
                     </td>
@@ -998,6 +1034,27 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                       {showAllDbColumns && (
                         <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center font-mono text-[11px] font-bold text-slate-500">
                           {q.id}
+                        </td>
+                      )}
+
+                      {showAllDbColumns && (
+                        <td className="p-2.5 border-r border-[rgba(0,0,0,0.1)] text-center font-mono text-[10px] text-slate-600 truncate max-w-[130px]" title={q.uuid || q.id}>
+                          <div className="flex items-center justify-center gap-1">
+                            <span className="truncate">{q.uuid || q.id}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const val = q.uuid || q.id;
+                                navigator.clipboard?.writeText(val);
+                                alert(`UUID Quotation disalin:\n${val}`);
+                              }}
+                              title="Salin UUID"
+                              className="text-slate-400 hover:text-blue-600 p-0.5 cursor-pointer"
+                            >
+                              <Copy className="w-3 h-3" />
+                            </button>
+                          </div>
                         </td>
                       )}
 
@@ -1343,6 +1400,21 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                                 >
                                   <Database className="w-3.5 h-3.5 text-blue-600" />
                                   <span>View Full Record (DB)</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenRowActionId(null);
+                                    const quoUuid = q.uuid || q.id;
+                                    navigator.clipboard?.writeText(quoUuid);
+                                    alert(`UUID Quotation disalin:\n${quoUuid}`);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-slate-100 text-[#3d3d3d] transition flex items-center gap-2 cursor-pointer font-semibold"
+                                >
+                                  <Copy className="w-3.5 h-3.5 text-slate-600" />
+                                  <span>Salin UUID Quotation</span>
                                 </button>
                                 
                                 <div className="border-t border-slate-100 my-1"></div>
@@ -1711,6 +1783,47 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                     {/* Client & Document Details (Flat Rows with Left Border Highlights) */}
                     <div className="pt-3 space-y-3">
                       <div className="grid grid-cols-3 gap-x-4 gap-y-2.5">
+                        <div className="border-l-2 border-cyan-500 pl-2.5">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Quotation UUID</h4>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const val = activeQuotation.uuid || activeQuotation.id;
+                                  if (!val) return;
+                                  const refreshed = await fetchQuotationByUuid(val);
+                                  if (refreshed) {
+                                    setQuotations((prev) => prev.map((q) => (q.id === refreshed.id ? refreshed : q)));
+                                    setSelectedInfoQuotation(refreshed);
+                                    alert(`Data Quotation berhasil diambil via Get UUID:\n${val}`);
+                                  } else {
+                                    alert(`Gagal mengambil data UUID: ${val}`);
+                                  }
+                                }}
+                                className="text-cyan-700 hover:text-cyan-900 font-bold text-[9px] flex items-center gap-0.5 cursor-pointer"
+                                title="Ambil ulang data terbaru via Get UUID"
+                              >
+                                <RefreshCw className="w-2.5 h-2.5" /> Get UUID
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const val = activeQuotation.uuid || activeQuotation.id;
+                                  navigator.clipboard?.writeText(val);
+                                  alert(`UUID Quotation disalin:\n${val}`);
+                                }}
+                                className="text-cyan-700 hover:text-cyan-900 font-bold text-[9px] flex items-center gap-0.5 cursor-pointer"
+                                title="Salin UUID"
+                              >
+                                <Copy className="w-2.5 h-2.5" /> Salin
+                              </button>
+                            </div>
+                          </div>
+                          <p className="font-mono font-bold text-slate-800 text-[10px] truncate" title={activeQuotation.uuid || activeQuotation.id}>
+                            {activeQuotation.uuid || activeQuotation.id}
+                          </p>
+                        </div>
                         <div className="border-l-2 border-blue-500 pl-2.5">
                           <h4 className="text-[9px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Company Name</h4>
                           <p className="font-bold text-[#0080d0] text-xs">{getQuotationCompany(activeQuotation)}</p>
@@ -1762,7 +1875,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                               fetch(getApiUrl('/api_quotations.php'), {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ id: activeQuotation.id, client_email: updatedJson })
+                                body: JSON.stringify({ id: activeQuotation.id, uuid: activeQuotation.uuid || activeQuotation.id, client_email: updatedJson })
                               }).catch(err => console.error('Save email update error:', err));
                             };
 
@@ -2198,6 +2311,7 @@ export const QuotationList: React.FC<QuotationListProps> = ({
                             body: JSON.stringify({
                               action: 'approve',
                               id: activeQuotation.id,
+                              uuid: activeQuotation.uuid || activeQuotation.id,
                               user_name: userName,
                               user_email: userEmail,
                               note: accNote
@@ -2633,7 +2747,24 @@ onClick={() => {
                     <Database className="w-3.5 h-3.5" />
                     <span>Tabel MySQL: quotations</span>
                   </span>
-                  <span className="text-[10px] font-mono text-slate-400">Record ID: {selectedFullDbQuotation.id}</span>
+                  <div className="flex items-center gap-3 text-[10px] font-mono text-slate-400">
+                    <span>Record ID: {selectedFullDbQuotation.id}</span>
+                    <span className="text-cyan-300 flex items-center gap-1">
+                      UUID: {selectedFullDbQuotation.uuid || selectedFullDbQuotation.id}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const u = selectedFullDbQuotation.uuid || selectedFullDbQuotation.id;
+                          navigator.clipboard?.writeText(u);
+                          alert(`UUID disalin: ${u}`);
+                        }}
+                        title="Copy UUID"
+                        className="hover:text-white p-0.5 cursor-pointer"
+                      >
+                        <Copy className="w-3 h-3" />
+                      </button>
+                    </span>
+                  </div>
                 </div>
                 <div className="p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 bg-white">
                   {Object.entries(selectedFullDbQuotation).map(([key, val]) => {

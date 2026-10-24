@@ -135,7 +135,7 @@ try {
             $info_diag = 'Prosesor OCR Vision AI aktif.';
         } elseif ($base_name === 'api_quotations.php') {
             $status_label = 'ACTIVE';
-            $desc = 'Mesin CRUD SPH Penawaran Harga';
+            $desc = 'Mesin CRUD Commercial Quotation';
             $info_diag = 'Koneksi database MySQL abmalaya_erp terhubung.';
         }
 

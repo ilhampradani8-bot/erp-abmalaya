@@ -432,6 +432,13 @@ export const App: React.FC = () => {
               pendingCount={pendingCount}
               onNewQuotation={handleNewQuotation}
               onToggleMobileSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+              onNavigateView={(mode) => setViewMode(mode as any)}
+              onOpenGuide={() => {
+                setViewMode('system_settings');
+                setTimeout(() => {
+                  window.dispatchEvent(new CustomEvent('navigate_settings_tab', { detail: 'user_guide' }));
+                }, 50);
+              }}
             />
           )}
 

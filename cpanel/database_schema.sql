@@ -32,7 +32,7 @@ CREATE TABLE `api_credentials` (
   `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `credential_key` (`credential_key`)
-) ENGINE=InnoDB AUTO_INCREMENT=5633 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6392 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -76,6 +76,7 @@ CREATE TABLE `clients` (
   `postal_code` varchar(50) DEFAULT NULL,
   `country` varchar(100) DEFAULT 'Malaysia',
   `tax_id` varchar(100) DEFAULT NULL,
+  `logo_url` text DEFAULT NULL,
   `notes` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
@@ -317,7 +318,7 @@ CREATE TABLE `quotation_items` (
   PRIMARY KEY (`id`),
   KEY `quotation_id` (`quotation_id`),
   CONSTRAINT `quotation_items_ibfk_1` FOREIGN KEY (`quotation_id`) REFERENCES `quotations` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=443 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=445 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -329,6 +330,7 @@ DROP TABLE IF EXISTS `quotations`;
 /*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `quotations` (
   `id` varchar(50) NOT NULL,
+  `uuid` varchar(64) DEFAULT NULL,
   `quotation_number` varchar(50) NOT NULL,
   `rfq_id` int(11) DEFAULT NULL,
   `client_name` varchar(100) NOT NULL,
@@ -348,6 +350,7 @@ CREATE TABLE `quotations` (
   `notes` text DEFAULT NULL,
   `footer_text` text DEFAULT NULL,
   `status` varchar(50) NOT NULL DEFAULT 'draft',
+  `approval_logs` longtext DEFAULT NULL,
   `ocr_scan_status` varchar(20) DEFAULT 'pending',
   `ocr_scan_result` longtext DEFAULT NULL,
   `approved_by` text DEFAULT NULL,
@@ -361,6 +364,7 @@ CREATE TABLE `quotations` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `quotation_number` (`quotation_number`),
   KEY `rfq_id` (`rfq_id`),
+  KEY `idx_quotations_uuid` (`uuid`),
   CONSTRAINT `quotations_ibfk_1` FOREIGN KEY (`rfq_id`) REFERENCES `rfq_requests` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -396,6 +400,9 @@ DROP TABLE IF EXISTS `rfq_requests`;
 /*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `rfq_requests` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
+  `uuid` varchar(64) DEFAULT NULL,
+  `email_uid` bigint(20) DEFAULT NULL,
+  `message_id` varchar(255) DEFAULT NULL,
   `rfq_number` varchar(50) NOT NULL,
   `client_name` varchar(100) NOT NULL,
   `client_email` varchar(100) NOT NULL,
@@ -421,7 +428,10 @@ CREATE TABLE `rfq_requests` (
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
-  UNIQUE KEY `rfq_number` (`rfq_number`)
+  UNIQUE KEY `rfq_number` (`rfq_number`),
+  KEY `idx_rfq_uuid` (`uuid`),
+  KEY `idx_rfq_email_uid` (`email_uid`),
+  KEY `idx_rfq_message_id` (`message_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=107 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -440,8 +450,14 @@ CREATE TABLE `spreadsheet_backups` (
   `service_account_email` varchar(255) DEFAULT 'erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com',
   `key_filename` varchar(255) DEFAULT 'erp-abmalaya-connect-0fc0c4cb6314.json',
   `is_primary` tinyint(1) DEFAULT 1,
+  `is_auto_backup` tinyint(1) DEFAULT 1,
+  `backup_interval_minutes` int(11) DEFAULT 60,
   `status` varchar(20) DEFAULT 'active',
   `last_synced_at` datetime DEFAULT NULL,
+  `last_backup_at` datetime DEFAULT NULL,
+  `last_status` varchar(50) DEFAULT NULL,
+  `last_error_message` text DEFAULT NULL,
+  `total_rows_backed_up` int(11) DEFAULT 0,
   `created_at` datetime DEFAULT current_timestamp(),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -525,7 +541,7 @@ CREATE TABLE `system_notifications` (
   `action_link` varchar(255) DEFAULT NULL,
   `created_at` datetime DEFAULT current_timestamp(),
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -608,7 +624,7 @@ CREATE TABLE `user_sessions` (
   UNIQUE KEY `token` (`token`),
   KEY `token_2` (`token`),
   KEY `expires_at` (`expires_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -642,4 +658,4 @@ CREATE TABLE `users` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-10-19 19:49:50
+-- Dump completed on 2026-10-22 19:45:36

@@ -154,7 +154,7 @@ try {
         addSystemNotification($db_conn, 'AI RFQ Classification Active', "Verified & classified {$verified_rfqs} incoming inquiries using Gemini AI models.", 'info', 'ai', 'rfq_inbox');
     }
 
-    // ── STEP 3: Auto-create Quotations SPH for verified RFQs ──────────────────
+    // ── STEP 3: Auto-create Commercial Quotations for verified RFQs ──────────────────
     $created_quos = 0;
     require_once __DIR__ . '/auto_quotation_helper.php';
 
@@ -174,7 +174,7 @@ try {
             }
         }
     }
-    $logs['quotation_sync'] = "Auto-created {$created_quos} new SPH Quotation(s).";
+    $logs['quotation_sync'] = "Auto-created {$created_quos} new Commercial Quotation(s).";
 
     // ── STEP 4: Pure PHP AI Vision OCR & Document Extraction ───────────────────
     $scanned_quos = 0;

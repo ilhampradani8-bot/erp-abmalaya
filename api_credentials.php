@@ -31,14 +31,13 @@ $defaults = [
     ['SOFTWARE_FEE_PERCENT', '1.75', 'System Fee'],
     ['SOFTWARE_FEE_MAX_LIMIT', '20000', 'System Fee'],
     ['SOFTWARE_FEE_CURRENT_ACCUMULATED', '1245.50', 'System Fee'],
-    ['DOC_HEADER_TITLE', 'SURAT PENAWARAN HARGA (SPH) / COMMERCIAL QUOTATION', 'Document'],
+    ['DOC_HEADER_TITLE', 'COMMERCIAL QUOTATION (QUO)', 'Document'],
     ['DOC_HEADER_COLOR', '#0080d0', 'Document'],
     ['DOC_FOOTER_TERMS', "1. 50% DP payment required after PO is issued.\n2. Remaining 50% payment upon delivery completion.\n3. Quotation valid for 14 days from issue date.", 'Document'],
     ['DOC_TAX_PERCENT', '11', 'Document'],
     ['DOC_DEFAULT_DISCOUNT', '0', 'Document'],
     ['DOC_CURRENCY', 'MYR', 'Document'],
     ['DOC_VALID_UNTIL', '14 Days', 'Document'],
-    ['CLIENT_CHAT_START_DATE', '2026-08-27', 'Client Chat Settings'],
 ];
 
 foreach ($defaults as $def) {
@@ -124,29 +123,16 @@ if ($method === 'POST') {
         exit;
     }
 
-    // Support Batch Save (accepts 'items', 'batch', 'data', or direct array)
-    $batch_items = null;
-    if (isset($input['items']) && is_array($input['items'])) {
-        $batch_items = $input['items'];
-    } elseif (isset($input['batch']) && is_array($input['batch'])) {
-        $batch_items = $input['batch'];
-    } elseif (isset($input['data']) && is_array($input['data'])) {
-        $batch_items = $input['data'];
-    } elseif (is_array($input) && isset($input[0]) && is_array($input[0])) {
-        $batch_items = $input;
-    }
-
-    if ($batch_items !== null) {
+    // Support Batch Save
+    if (isset($input['action']) && $input['action'] === 'save_batch' && isset($input['items']) && is_array($input['items'])) {
         $stmt = $connection->prepare("INSERT INTO api_credentials (credential_key, credential_value, service_name) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE credential_value = VALUES(credential_value), service_name = VALUES(service_name)");
-        $saved_count = 0;
-        foreach ($batch_items as $item) {
+        foreach ($input['items'] as $item) {
             $k = isset($item['credential_key']) ? trim($item['credential_key']) : '';
             $v = isset($item['credential_value']) ? trim($item['credential_value']) : '';
             $s = isset($item['service_name']) ? trim($item['service_name']) : 'System Setting';
             if (!empty($k)) {
                 $stmt->bind_param("sss", $k, $v, $s);
                 $stmt->execute();
-                $saved_count++;
             }
         }
         $stmt->close();
@@ -154,7 +140,7 @@ if ($method === 'POST') {
         ob_end_clean();
         echo json_encode([
             'status' => 'success',
-            'message' => "Batch settings ({$saved_count} items) saved successfully to MySQL database!"
+            'message' => 'Batch settings saved successfully to MySQL database!'
         ]);
         exit;
     }

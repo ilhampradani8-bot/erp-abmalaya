@@ -16,28 +16,28 @@ try {
 
     // DELETE QUOTATION RECORD
     if ($_SERVER['REQUEST_METHOD'] === 'DELETE' || (isset($_GET['action']) && $_GET['action'] === 'delete')) {
-        $id = isset($_GET['id']) ? $_GET['id'] : '';
+        $id = isset($_GET['uuid']) && !empty($_GET['uuid']) ? $_GET['uuid'] : (isset($_GET['id']) ? $_GET['id'] : '');
         if (empty($id)) {
             $raw = file_get_contents('php://input');
             $input = json_decode($raw, true);
-            $id = isset($input['id']) ? $input['id'] : '';
+            $id = isset($input['uuid']) && !empty($input['uuid']) ? $input['uuid'] : (isset($input['id']) ? $input['id'] : '');
         }
 
         if (!empty($id)) {
             $force = isset($_GET['force']) && $_GET['force'] === 'true';
             if ($force) {
                 // Permanent delete
-                $stmt = $db_conn->prepare("DELETE FROM quotations WHERE id = ?");
+                $stmt = $db_conn->prepare("DELETE FROM quotations WHERE id = ? OR uuid = ?");
                 if ($stmt) {
-                    $stmt->bind_param("s", $id);
+                    $stmt->bind_param("ss", $id, $id);
                     $stmt->execute();
                     $stmt->close();
                 }
             } else {
                 // Move to junk status
-                $stmt = $db_conn->prepare("UPDATE quotations SET status = 'junk' WHERE id = ?");
+                $stmt = $db_conn->prepare("UPDATE quotations SET status = 'junk' WHERE id = ? OR uuid = ?");
                 if ($stmt) {
-                    $stmt->bind_param("s", $id);
+                    $stmt->bind_param("ss", $id, $id);
                     $stmt->execute();
                     $stmt->close();
                 }
@@ -116,12 +116,22 @@ try {
             }
         }
 
-        // Fetch quotations (including new OCR and ACC columns)
-        $res = $db_conn->query("SELECT *, ocr_scan_status, ocr_scan_result, approved_by, history_log FROM quotations ORDER BY created_at DESC");
+        // Fetch quotations (including new OCR, ACC columns, and support for filtering by uuid or id)
+        $where_quo = "";
+        if (isset($_GET['uuid']) && !empty($_GET['uuid'])) {
+            $safe_u = $db_conn->real_escape_string(trim($_GET['uuid']));
+            $where_quo = "WHERE uuid = '{$safe_u}' OR id = '{$safe_u}'";
+        } else if (isset($_GET['id']) && !empty($_GET['id'])) {
+            $safe_i = $db_conn->real_escape_string(trim($_GET['id']));
+            $where_quo = "WHERE id = '{$safe_i}' OR uuid = '{$safe_i}'";
+        }
+
+        $res = $db_conn->query("SELECT *, ocr_scan_status, ocr_scan_result, approved_by, history_log FROM quotations {$where_quo} ORDER BY created_at DESC");
         $data = [];
         if ($res && $res->num_rows > 0) {
             while ($row = $res->fetch_assoc()) {
                 $quo_id = $row['id'];
+                $row['uuid'] = !empty($row['uuid']) ? $row['uuid'] : $row['id'];
                 
                 $items_arr = isset($all_quotation_items[$quo_id]) ? $all_quotation_items[$quo_id] : [];
                 $unregistered_count = 0;
@@ -210,6 +220,18 @@ try {
             @ob_end_clean();
         }
         header('Content-Type: application/json; charset=utf-8');
+        
+        // Single quotation retrieval via action=get
+        if (isset($_GET['action']) && $_GET['action'] === 'get') {
+            $single = !empty($data) ? $data[0] : null;
+            echo json_encode([
+                'status' => 'success',
+                'data' => $single,
+                'uuid' => $single ? ($single['uuid'] ?? $single['id']) : null
+            ], JSON_UNESCAPED_UNICODE | (defined('JSON_INVALID_UTF8_SUBSTITUTE') ? JSON_INVALID_UTF8_SUBSTITUTE : 0));
+            exit;
+        }
+
         echo json_encode([
             'status' => 'success',
             'fetched_count' => count($data),
@@ -228,16 +250,32 @@ try {
 
         // ── ACTION: APPROVE ──────────────────────────────────────────────────
         if (isset($input['action']) && $input['action'] === 'approve') {
-            $quo_id  = isset($input['id']) ? trim($input['id']) : '';
+            $quo_id  = isset($input['uuid']) && !empty($input['uuid']) ? trim($input['uuid']) : (isset($input['id']) ? trim($input['id']) : '');
             $user_name  = isset($input['user_name']) ? $input['user_name'] : 'Admin';
             $user_email = isset($input['user_email']) ? $input['user_email'] : 'admin@abmalaya.com';
             $note    = isset($input['note']) ? $input['note'] : '';
 
+            $real_uuid = $quo_id;
+            $real_id = $quo_id;
+
             if (!empty($quo_id)) {
                 // Load current approved_by
                 $cur = [];
-                $s = $db_conn->prepare("SELECT approved_by FROM quotations WHERE id = ?");
-                if ($s) { $s->bind_param('s', $quo_id); $s->execute(); $r = $s->get_result(); if ($r && $r->num_rows > 0) { $row = $r->fetch_assoc(); if (!empty($row['approved_by'])) { $cur = json_decode($row['approved_by'], true) ?: []; } } $s->close(); }
+                $s = $db_conn->prepare("SELECT id, uuid, approved_by FROM quotations WHERE id = ? OR uuid = ? LIMIT 1");
+                if ($s) { 
+                    $s->bind_param('ss', $quo_id, $quo_id); 
+                    $s->execute(); 
+                    $r = $s->get_result(); 
+                    if ($r && $r->num_rows > 0) { 
+                        $row = $r->fetch_assoc(); 
+                        $real_id = $row['id'];
+                        $real_uuid = !empty($row['uuid']) ? $row['uuid'] : $row['id'];
+                        if (!empty($row['approved_by'])) { 
+                            $cur = json_decode($row['approved_by'], true) ?: []; 
+                        } 
+                    } 
+                    $s->close(); 
+                }
 
                 $cur[] = [
                     'timestamp'  => date('Y-m-d H:i:s'),
@@ -246,51 +284,84 @@ try {
                     'note'       => $note
                 ];
                 $new_json = json_encode($cur, JSON_UNESCAPED_UNICODE);
-                $upd = $db_conn->prepare("UPDATE quotations SET approved_by = ?, status = 'ready_send' WHERE id = ?");
-                if ($upd) { $upd->bind_param('ss', $new_json, $quo_id); $upd->execute(); $upd->close(); }
-                appendQuotationHistoryLog($db_conn, $quo_id, 'ACC Approval', $user_name, $user_email, "User memberikan ACC approval dan mengubah status ke Siap Kirim (ready_send). Note: {$note}");
-                addSystemNotification($db_conn, "ACC Approval Quotation ({$quo_id})", "{$user_name} menyetujui Quotation {$quo_id} dan siap untuk dikirim ke klien.", 'success', 'quotation', 'quotations_list');
+                $upd = $db_conn->prepare("UPDATE quotations SET approved_by = ?, status = 'ready_send' WHERE id = ? OR uuid = ?");
+                if ($upd) { $upd->bind_param('sss', $new_json, $quo_id, $quo_id); $upd->execute(); $upd->close(); }
+                appendQuotationHistoryLog($db_conn, $real_id, 'ACC Approval', $user_name, $user_email, "User memberikan ACC approval dan mengubah status ke Siap Kirim (ready_send). Note: {$note}");
+                addSystemNotification($db_conn, "ACC Approval Quotation ({$real_id})", "{$user_name} menyetujui Quotation {$real_id} dan siap untuk dikirim ke klien.", 'success', 'quotation', 'quotations_list');
             }
             ob_end_clean();
-            echo json_encode(['status' => 'success', 'message' => 'Approval recorded and status moved to ready_send.']);
+            echo json_encode(['status' => 'success', 'message' => 'Approval recorded and status moved to ready_send.', 'id' => $real_id, 'uuid' => $real_uuid]);
             exit;
         }
 
         // ── ACTION: STATUS UPDATE ────────────────────────────────────────────
         if (isset($input['action']) && $input['action'] === 'status_update') {
-            $quo_id    = isset($input['id']) ? trim($input['id']) : '';
+            $quo_id    = isset($input['uuid']) && !empty($input['uuid']) ? trim($input['uuid']) : (isset($input['id']) ? trim($input['id']) : '');
             $newStatus = isset($input['status']) ? $input['status'] : 'draft';
             $user_name  = isset($input['user_name']) ? $input['user_name'] : 'Admin';
             $user_email = isset($input['user_email']) ? $input['user_email'] : 'admin@abmalaya.com';
+            $real_id = $quo_id;
+            $real_uuid = $quo_id;
             if (!empty($quo_id)) {
-                $upd = $db_conn->prepare("UPDATE quotations SET status = ? WHERE id = ?");
-                if ($upd) { $upd->bind_param('ss', $newStatus, $quo_id); $upd->execute(); $upd->close(); }
-                appendQuotationHistoryLog($db_conn, $quo_id, 'Status Update', $user_name, $user_email, "Status diubah menjadi: {$newStatus}");
-                addSystemNotification($db_conn, "Status Quotation Berubah ({$quo_id})", "{$user_name} mengubah status Quotation {$quo_id} menjadi '{$newStatus}'.", 'info', 'quotation', 'quotations_list');
+                $chk = $db_conn->prepare("SELECT id, uuid FROM quotations WHERE id = ? OR uuid = ? LIMIT 1");
+                if ($chk) {
+                    $chk->bind_param('ss', $quo_id, $quo_id);
+                    $chk->execute();
+                    $res_c = $chk->get_result();
+                    if ($res_c && $res_c->num_rows > 0) {
+                        $rc = $res_c->fetch_assoc();
+                        $real_id = $rc['id'];
+                        $real_uuid = !empty($rc['uuid']) ? $rc['uuid'] : $rc['id'];
+                    }
+                    $chk->close();
+                }
+
+                $upd = $db_conn->prepare("UPDATE quotations SET status = ? WHERE id = ? OR uuid = ?");
+                if ($upd) { $upd->bind_param('sss', $newStatus, $quo_id, $quo_id); $upd->execute(); $upd->close(); }
+                appendQuotationHistoryLog($db_conn, $real_id, 'Status Update', $user_name, $user_email, "Status diubah menjadi: {$newStatus}");
+                addSystemNotification($db_conn, "Status Quotation Berubah ({$real_id})", "{$user_name} mengubah status Quotation {$real_id} menjadi '{$newStatus}'.", 'info', 'quotation', 'quotations_list');
             }
             ob_end_clean();
-            echo json_encode(['status' => 'success', 'message' => "Status updated to {$newStatus}"]);
+            echo json_encode(['status' => 'success', 'message' => "Status updated to {$newStatus}", 'id' => $real_id, 'uuid' => $real_uuid]);
             exit;
         }
 
         // ── ACTION: RESTORE (from Trash) ─────────────────────────────────────
         if (isset($input['action']) && $input['action'] === 'restore') {
-            $quo_id    = isset($input['id']) ? trim($input['id']) : '';
+            $quo_id    = isset($input['uuid']) && !empty($input['uuid']) ? trim($input['uuid']) : (isset($input['id']) ? trim($input['id']) : '');
             $user_name  = isset($input['user_name']) ? $input['user_name'] : 'Admin';
             $user_email = isset($input['user_email']) ? $input['user_email'] : 'admin@abmalaya.com';
+            $real_id = $quo_id;
+            $real_uuid = $quo_id;
             if (!empty($quo_id)) {
-                $upd = $db_conn->prepare("UPDATE quotations SET status = 'draft' WHERE id = ?");
-                if ($upd) { $upd->bind_param('s', $quo_id); $upd->execute(); $upd->close(); }
-                appendQuotationHistoryLog($db_conn, $quo_id, 'Restore from Trash', $user_name, $user_email, "User memulihkan Quotation dari Trash ke status Draft.");
-                addSystemNotification($db_conn, "Quotation Dipulihkan dari Sampah ({$quo_id})", "{$user_name} memulihkan Quotation {$quo_id} kembali ke status Draft.", 'info', 'quotation', 'quotations_list');
+                $chk = $db_conn->prepare("SELECT id, uuid FROM quotations WHERE id = ? OR uuid = ? LIMIT 1");
+                if ($chk) {
+                    $chk->bind_param('ss', $quo_id, $quo_id);
+                    $chk->execute();
+                    $res_c = $chk->get_result();
+                    if ($res_c && $res_c->num_rows > 0) {
+                        $rc = $res_c->fetch_assoc();
+                        $real_id = $rc['id'];
+                        $real_uuid = !empty($rc['uuid']) ? $rc['uuid'] : $rc['id'];
+                    }
+                    $chk->close();
+                }
+
+                $upd = $db_conn->prepare("UPDATE quotations SET status = 'draft' WHERE id = ? OR uuid = ?");
+                if ($upd) { $upd->bind_param('ss', $quo_id, $quo_id); $upd->execute(); $upd->close(); }
+                appendQuotationHistoryLog($db_conn, $real_id, 'Restore from Trash', $user_name, $user_email, "User memulihkan Quotation dari Trash ke status Draft.");
+                addSystemNotification($db_conn, "Quotation Dipulihkan dari Sampah ({$real_id})", "{$user_name} memulihkan Quotation {$real_id} kembali ke status Draft.", 'info', 'quotation', 'quotations_list');
             }
             ob_end_clean();
-            echo json_encode(['status' => 'success', 'message' => 'Restored to Draft']);
+            echo json_encode(['status' => 'success', 'message' => 'Restored to Draft', 'id' => $real_id, 'uuid' => $real_uuid]);
             exit;
         }
 
         $id = isset($input['id']) && !empty($input['id']) ? $input['id'] : 'QUO-' . time();
+        $uuid = isset($input['uuid']) && !empty($input['uuid']) ? $input['uuid'] : (isset($input['id']) && !empty($input['id']) ? $input['id'] : sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x', mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0x0fff) | 0x4000, mt_rand(0, 0x3fff) | 0x8000, mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)));
         $quo_num = isset($input['quotation_number']) && !empty($input['quotation_number']) ? $input['quotation_number'] : 'QUO-ABM/MY/2026/0' . rand(100, 999);
+        $quo_num = str_ireplace(['SPH-', 'SPH/'], ['QUO-', 'QUO/'], $quo_num);
+        $quo_num = preg_replace('/^SPH[\\-_]/i', 'QUO-', $quo_num);
         
         $rfq_id_raw = null;
         if (isset($input['rfq_id'])) {
@@ -365,8 +436,14 @@ try {
         $rfq_id_val = ($rfq_id_raw > 0) ? (int)$rfq_id_raw : null;
 
         // Check if updating or inserting
-        $exists_check = $db_conn->query("SELECT id FROM quotations WHERE id = '" . $db_conn->real_escape_string($id) . "' LIMIT 1");
+        $exists_check = $db_conn->query("SELECT id, uuid FROM quotations WHERE id = '" . $db_conn->real_escape_string($id) . "' OR (uuid IS NOT NULL AND uuid != '' AND uuid = '" . $db_conn->real_escape_string($uuid) . "') LIMIT 1");
         $is_update = ($exists_check && $exists_check->num_rows > 0);
+        if ($is_update && ($row_ex = $exists_check->fetch_assoc())) {
+            $id = $row_ex['id'];
+            if (empty($input['uuid']) && !empty($row_ex['uuid'])) {
+                $uuid = $row_ex['uuid'];
+            }
+        }
 
         $client_phone = isset($input['client_phone']) && !empty($input['client_phone']) ? $input['client_phone'] : (isset($input['phone']) ? $input['phone'] : null);
 
@@ -391,10 +468,10 @@ try {
             $db_conn->query("ALTER TABLE quotations ADD COLUMN footer_text TEXT DEFAULT NULL AFTER notes");
         }
 
-        $stmt = $db_conn->prepare("INSERT INTO quotations (id, rfq_id, quotation_number, client_name, client_email, client_phone, company_name, company_address, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, footer_text, source_file, quotation_file, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE rfq_id=VALUES(rfq_id), quotation_number=VALUES(quotation_number), client_name=VALUES(client_name), client_email=VALUES(client_email), client_phone=VALUES(client_phone), company_name=VALUES(company_name), company_address=VALUES(company_address), date_issued=VALUES(date_issued), valid_until=VALUES(valid_until), subtotal=VALUES(subtotal), discount_total=VALUES(discount_total), tax_percent=VALUES(tax_percent), tax_amount=VALUES(tax_amount), grand_total=VALUES(grand_total), notes=VALUES(notes), footer_text=VALUES(footer_text), source_file=COALESCE(VALUES(source_file), source_file), quotation_file=COALESCE(VALUES(quotation_file), quotation_file), status=VALUES(status), created_by=VALUES(created_by)");
+        $stmt = $db_conn->prepare("INSERT INTO quotations (id, uuid, rfq_id, quotation_number, client_name, client_email, client_phone, company_name, company_address, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, footer_text, source_file, quotation_file, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE uuid=COALESCE(VALUES(uuid), uuid), rfq_id=VALUES(rfq_id), quotation_number=VALUES(quotation_number), client_name=VALUES(client_name), client_email=VALUES(client_email), client_phone=VALUES(client_phone), company_name=VALUES(company_name), company_address=VALUES(company_address), date_issued=VALUES(date_issued), valid_until=VALUES(valid_until), subtotal=VALUES(subtotal), discount_total=VALUES(discount_total), tax_percent=VALUES(tax_percent), tax_amount=VALUES(tax_amount), grand_total=VALUES(grand_total), notes=VALUES(notes), footer_text=VALUES(footer_text), source_file=COALESCE(VALUES(source_file), source_file), quotation_file=COALESCE(VALUES(quotation_file), quotation_file), status=VALUES(status), created_by=VALUES(created_by)");
         
         if ($stmt) {
-            $stmt->bind_param("sisssssssdddddsssssss", $id, $rfq_id_val, $quo_num, $client_name, $client_email, $client_phone, $company_name, $company_address, $date_issued, $valid_until, $subtotal, $discount_total, $tax_percent, $tax_amount, $grand_total, $notes, $footer_text, $source_file, $quotation_file, $status, $created_by);
+            $stmt->bind_param("ssisssssssdddddsssssss", $id, $uuid, $rfq_id_val, $quo_num, $client_name, $client_email, $client_phone, $company_name, $company_address, $date_issued, $valid_until, $subtotal, $discount_total, $tax_percent, $tax_amount, $grand_total, $notes, $footer_text, $source_file, $quotation_file, $status, $created_by);
             $stmt->execute();
             $stmt->close();
         } else {
@@ -456,6 +533,8 @@ try {
         // ── GENERATE & PERSIST SYNCHRONIZED QUOTATION PDF (Source of Truth for Preview & Sent Email) ──
         require_once __DIR__ . '/pdf_generator_helper.php';
         $safe_qname = preg_replace('/[^A-Za-z0-9_\-]/', '_', $quo_num) . '.pdf';
+        $safe_qname = str_ireplace('SPH', 'QUO', $safe_qname);
+        $safe_qname = preg_replace('/^SPH[\\-_]/i', 'QUO_', $safe_qname);
         $target_pdf_path = __DIR__ . '/uploads/pdf/' . $safe_qname;
         $q_full_data = [
             'id' => $id,
@@ -508,6 +587,7 @@ try {
             'status' => 'success',
             'message' => 'Quotation saved to MySQL and RFQ status validated to in_progress',
             'id' => $id,
+            'uuid' => $uuid,
             'quotation_number' => $quo_num
         ]);
         exit;

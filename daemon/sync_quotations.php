@@ -33,7 +33,7 @@ function syncVerifiedClientRfqsToQuotations($db_conn) {
 
         if (!$quo_exists) {
             $quo_id = 'QUO-' . time() . '-' . rand(100, 999) . '-' . $processed;
-            $quo_num = 'SPH-ABM/MY/2026/0' . rand(100, 999);
+            $quo_num = 'QUO-ABM/MY/' . date('Y') . '/0' . rand(100, 999);
             
             $client_email = $row['client_email'];
             $client_name = explode('@', $client_email)[0];
@@ -46,10 +46,11 @@ function syncVerifiedClientRfqsToQuotations($db_conn) {
             $notes = $item_requested ?: $row['subject'];
             $created_by = 'System Automation Daemon';
             $tax_percent = 11.00;
+            $uuid = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x', mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0x0fff) | 0x4000, mt_rand(0, 0x3fff) | 0x8000, mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff));
 
-            $stmt_quo = $db_conn->prepare("INSERT INTO quotations (id, rfq_id, quotation_number, client_name, client_email, company_name, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, status, ocr_scan_status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0.00, ?, 0.00, 0.00, ?, 'in_progress', 'pending', ?)");
+            $stmt_quo = $db_conn->prepare("INSERT INTO quotations (id, uuid, rfq_id, quotation_number, client_name, client_email, company_name, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, status, ocr_scan_status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0.00, ?, 0.00, 0.00, ?, 'in_progress', 'pending', ?)");
             if ($stmt_quo) {
-                $stmt_quo->bind_param("sissssssdss", $quo_id, $rfq_id, $quo_num, $client_name, $client_email, $company_name, $date_issued, $valid_until, $tax_percent, $notes, $created_by);
+                $stmt_quo->bind_param("ssissssssdss", $quo_id, $uuid, $rfq_id, $quo_num, $client_name, $client_email, $company_name, $date_issued, $valid_until, $tax_percent, $notes, $created_by);
                 if ($stmt_quo->execute()) {
                     $desc = $item_requested ?: 'Industrial Equipment Specification';
                     $stmt_item = $db_conn->prepare("INSERT INTO quotation_items (quotation_id, description, quantity, unit, unit_price, discount_percent, total) VALUES (?, ?, 1.00, 'Package', 0.00, 0.00, 0.00)");

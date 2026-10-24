@@ -136,7 +136,7 @@ try {
         logo_url LONGTEXT,
         stamp_url LONGTEXT,
         header_image_url LONGTEXT DEFAULT NULL,
-        header_title VARCHAR(255) DEFAULT 'SURAT PENAWARAN HARGA (SPH) / QUOTATION',
+        header_title VARCHAR(255) DEFAULT 'OFFICIAL COMMERCIAL QUOTATION',
         footer_terms TEXT,
         header_color VARCHAR(50) DEFAULT '#0080d0',
         default_notes TEXT,

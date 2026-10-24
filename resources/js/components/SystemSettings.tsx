@@ -6,7 +6,8 @@ import {
   FileText, Sliders, Bot, AlertTriangle, 
   Plus, Edit3, Trash2, Percent, ExternalLink, 
   Activity, Layers, Server, Cpu, Calendar, ScanLine,
-  Cloud, RefreshCw, ShieldCheck, Copy, Check
+  Cloud, RefreshCw, ShieldCheck, Copy, Check,
+  BookOpen, HelpCircle, ChevronDown, Search, ArrowRight, Mail
 } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
@@ -31,9 +32,9 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
   smtpConfig,
   onSaveSmtpConfig,
 }) => {
-  // 8 Tabs: 'credentials' | 'ai' | 'cloud_sync' | 'default_fee' | 'paper' | 'inbox_rules' | 'database' | 'quotation_settings'
+  // 9 Tabs: 'credentials' | 'ai' | 'cloud_sync' | 'default_fee' | 'paper' | 'inbox_rules' | 'database' | 'quotation_settings' | 'user_guide'
   const [activeTab, setActiveTab] = useState<
-    'credentials' | 'ai' | 'cloud_sync' | 'default_fee' | 'paper' | 'inbox_rules' | 'database' | 'quotation_settings'
+    'credentials' | 'ai' | 'cloud_sync' | 'default_fee' | 'paper' | 'inbox_rules' | 'database' | 'quotation_settings' | 'user_guide'
   >('credentials');
 
   // Cloud Sync & Multi-Spreadsheet Backup State
@@ -168,6 +169,11 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
     defaultDiscount: 0,
     validUntil: '14 Days'
   });
+
+  // ── Tab 9: User Guide & Documentation State ────────────────────────────────
+  const [guideSearch, setGuideSearch] = useState('');
+  const [guideCategory, setGuideCategory] = useState<'all' | 'workflow' | 'smtp' | 'ai' | 'cloud' | 'paper' | 'inbox' | 'database' | 'faq'>('all');
+  const [expandedFaqId, setExpandedFaqId] = useState<number | null>(null);
 
   const [showPlainKeyMap, setShowPlainKeyMap] = useState<Record<string, boolean>>({});
 
@@ -659,35 +665,95 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         </div>
       )}
 
-      {/* 8 Tab Navigation Header */}
-      <div className="bg-white border-b border-slate-200 px-4 pt-3 flex gap-1 overflow-x-auto select-none shadow-xs">
-        {[
-          { id: 'credentials', label: '1. SMTP Credential', icon: Key },
-          { id: 'ai', label: '2. AI Engine & Keys', icon: Bot },
-          { id: 'cloud_sync', label: '3. Cloud Sync & Backup', icon: Cloud },
-          { id: 'default_fee', label: '4. Default Setting (Fee)', icon: Percent },
-          { id: 'paper', label: '5. Setting Paper', icon: FileText },
-          { id: 'inbox_rules', label: '6. Inbox Rules', icon: Sliders },
-          { id: 'database', label: '7. Database', icon: Database },
-          { id: 'quotation_settings', label: '8. Setting Quotation', icon: Layers },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`px-3 py-2 text-[10px] font-extrabold rounded-t-md transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                isActive
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 border-t border-x border-slate-200'
-              }`}
-            >
-              <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-slate-500'}`} />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
+      {/* Top Header Title & MySQL Status Strip */}
+      <div className="bg-white border-b border-slate-200 px-4 py-2 flex flex-wrap items-center justify-between gap-3 select-none">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
+            <span>ERP System Settings</span>
+          </h1>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            MySQL 8.0 Live
+          </span>
+          <span className="hidden sm:inline text-slate-300 text-xs font-light">|</span>
+          <span className="hidden md:inline text-[10px] text-slate-500 font-medium">
+            Pusat konfigurasi server, kredensial AI, database, sinkronisasi, dan panduan lengkap
+          </span>
+        </div>
+
+        {/* Tombol Guide Persis di Sebelah ERP System Settings / MySQL 8.0 Live */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('user_guide')}
+            className={`px-3.5 py-1 text-xs font-black rounded-md transition flex items-center gap-2 cursor-pointer shadow-xs border ${
+              activeTab === 'user_guide'
+                ? 'bg-amber-500 text-slate-950 border-amber-600 ring-2 ring-amber-400'
+                : 'bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 hover:from-amber-500 hover:to-amber-500 text-slate-950 border-amber-500'
+            }`}
+            title="Buka Buku Panduan Penggunaan & Penjelasan Sistem ERP"
+          >
+            <BookOpen className="w-4 h-4 text-slate-950" />
+            <span>📖 Panduan & Penjelasan</span>
+            <span className="bg-slate-900 text-amber-300 text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase">GUIDE</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 9 Tab Navigation Header */}
+      <div className="bg-white border-b border-slate-200 px-4 pt-3 flex items-center justify-between gap-2 overflow-x-auto select-none shadow-xs">
+        <div className="flex items-center gap-1">
+          {[
+            { id: 'credentials', label: '1. SMTP Credential', icon: Key },
+            { id: 'ai', label: '2. AI Engine & Keys', icon: Bot },
+            { id: 'cloud_sync', label: '3. Cloud Sync & Backup', icon: Cloud },
+            { id: 'default_fee', label: '4. Default Setting (Fee)', icon: Percent },
+            { id: 'paper', label: '5. Setting Paper', icon: FileText },
+            { id: 'inbox_rules', label: '6. Inbox Rules', icon: Sliders },
+            { id: 'database', label: '7. Database', icon: Database },
+            { id: 'quotation_settings', label: '8. Setting Quotation', icon: Layers },
+            { id: 'user_guide', label: '9. Panduan & Guide', icon: BookOpen },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            const isGuide = tab.id === 'user_guide';
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`px-3 py-2 text-[10px] font-extrabold rounded-t-md transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  isActive
+                    ? isGuide
+                      ? 'bg-amber-500 text-slate-950 font-black shadow-xs ring-1 ring-amber-600'
+                      : 'bg-blue-600 text-white shadow-xs'
+                    : isGuide
+                    ? 'bg-amber-100 text-amber-900 hover:bg-amber-200 font-extrabold border-t border-x border-amber-300'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 border-t border-x border-slate-200'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${isActive ? (isGuide ? 'text-slate-950' : 'text-white') : (isGuide ? 'text-amber-800' : 'text-slate-500')}`} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="shrink-0 pb-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab('user_guide')}
+            className={`px-3.5 py-1.5 text-xs font-black rounded-md transition flex items-center gap-2 cursor-pointer shadow-xs border ${
+              activeTab === 'user_guide'
+                ? 'bg-amber-500 text-slate-950 border-amber-600 ring-2 ring-amber-400'
+                : 'bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 hover:from-amber-500 hover:to-amber-500 text-slate-950 border-amber-400'
+            }`}
+            title="Buka Buku Panduan Penggunaan & Penjelasan Sistem ERP"
+          >
+            <BookOpen className="w-4 h-4 text-slate-950" />
+            <span>📖 Panduan & Penjelasan</span>
+            <span className="bg-slate-900 text-amber-300 text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase">GUIDE</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Body Content Scroll Container */}
@@ -1903,7 +1969,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
           </div>
         )}
 
-        {/* ── TAB 4: SETTING PAPER & BRANDING + SPH HEADER STYLE ──────────────────────── */}
+        {/* ── TAB 4: SETTING PAPER & BRANDING + QUOTATION HEADER STYLE ──────────────────────── */}
         {activeTab === 'paper' && (
           <div className="space-y-4 max-w-4xl mx-auto">
             <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-xs space-y-4 font-sans">
@@ -1922,7 +1988,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 </button>
               </div>
 
-              {/* SPH Header Choice Selector */}
+              {/* Quotation Header Choice Selector */}
               <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-md space-y-2">
                 <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">Quotation Header Layout Template Options:</label>
                 <div className="grid grid-cols-3 gap-3">
@@ -2273,6 +2339,522 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             </div>
           </div>
         )}
+
+        {/* ── TAB 9: USER GUIDE & PANDUAN PENGGUNAAN SISTEM ──────────────── */}
+        {activeTab === 'user_guide' && (
+          <div className="space-y-6 max-w-5xl mx-auto font-sans pb-10">
+            
+            {/* Header Hero Banner */}
+            <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white p-6 rounded-xl border border-blue-800/40 shadow-lg space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="inline-flex items-center gap-2 bg-amber-400 text-slate-950 px-2.5 py-0.5 rounded font-black text-[11px] uppercase tracking-wide">
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Dokumentasi Resmi & Panduan Operasional</span>
+                  </div>
+                  <h2 className="text-xl md:text-2xl font-black tracking-tight text-white">
+                    Buku Panduan Penggunaan & Penjelasan Sistem ERP
+                  </h2>
+                  <p className="text-xs text-blue-200/90 leading-relaxed max-w-2xl">
+                    Panduan terintegrasi alur kerja RFQ Inbox, klasifikasi AI Gemini, pembuatan Quotation, integrasi SMTP Gmail, backup Google Sheets, dan pemecahan masalah teknis.
+                  </p>
+                </div>
+
+                {/* Quick Stats Pill */}
+                <div className="flex items-center gap-2 shrink-0 bg-white/10 backdrop-blur-md p-2 rounded-lg border border-white/15">
+                  <div className="text-center px-3 border-r border-white/20">
+                    <span className="block text-lg font-black text-amber-300 font-mono">8</span>
+                    <span className="text-[10px] text-blue-200 uppercase font-bold">Modul Utama</span>
+                  </div>
+                  <div className="text-center px-3">
+                    <span className="block text-lg font-black text-emerald-400 font-mono">100%</span>
+                    <span className="text-[10px] text-blue-200 uppercase font-bold">Otomatisasi</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Search & Category Filter Toolbar */}
+              <div className="pt-2 border-t border-white/10 flex flex-col sm:flex-row items-center gap-3">
+                <div className="relative flex-1 w-full">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={guideSearch}
+                    onChange={(e) => setGuideSearch(e.target.value)}
+                    placeholder="Cari topik panduan (contoh: App Password, Gemini API, Kop Surat, Invoice, Backup, Port 587)..."
+                    className="w-full bg-slate-800/90 border border-slate-700 rounded-lg pl-9 pr-8 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition"
+                  />
+                  {guideSearch && (
+                    <button
+                      onClick={() => setGuideSearch('')}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white text-xs font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto text-[11px] font-bold">
+                  {[
+                    { id: 'all', label: 'Semua Topik' },
+                    { id: 'workflow', label: '🚀 Alur Kerja' },
+                    { id: 'smtp', label: '✉️ Gmail SMTP' },
+                    { id: 'ai', label: '🤖 AI & OCR' },
+                    { id: 'cloud', label: '☁️ Cloud Sync' },
+                    { id: 'paper', label: '📄 Dokumen & Kop' },
+                    { id: 'faq', label: '❓ FAQ & Kendala' }
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setGuideCategory(cat.id as any)}
+                      className={`px-3 py-1.5 rounded-md whitespace-nowrap transition cursor-pointer ${
+                        guideCategory === cat.id
+                          ? 'bg-amber-400 text-slate-950 font-black shadow-xs'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* ── SECTION 1: VISUAL WORKFLOW PIPELINE ───────────────────── */}
+            {(guideCategory === 'all' || guideCategory === 'workflow') && (!guideSearch || 'workflow alur kerja pipeline proses'.includes(guideSearch.toLowerCase())) && (
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700 font-bold">
+                      🚀
+                    </div>
+                    <div>
+                      <h3 className="font-black text-sm text-slate-900">Alur Kerja Utama Sistem ERP AB Malaya</h3>
+                      <p className="text-[11px] text-slate-500">Pipeline otomatis dari penerimaan email RFQ hingga penerbitan Faktur (Invoice).</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-extrabold bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">
+                    End-to-End Pipeline
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                  {/* Step 1 */}
+                  <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 hover:border-blue-400 transition space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[10px] font-black bg-blue-600 text-white px-2 py-0.5 rounded">LANGKAH 1</span>
+                      <Mail className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <h4 className="font-extrabold text-slate-900 text-xs">Penarikan Email Masuk</h4>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Daemon IMAP menarik email baru dari server Gmail menggunakan nomor pesan UID permanen agar urutan tidak bergeser.
+                    </p>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 hover:border-purple-400 transition space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[10px] font-black bg-purple-600 text-white px-2 py-0.5 rounded">LANGKAH 2</span>
+                      <Sliders className="w-4 h-4 text-purple-600" />
+                    </div>
+                    <h4 className="font-extrabold text-slate-900 text-xs">Penyaringan Filter Rule</h4>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Aturan filter otomatis membuang email noreply, promosi sosial media, dan email pemberitahuan instansi pemerintah (LHDN).
+                    </p>
+                  </div>
+
+                  {/* Step 3 */}
+                  <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 hover:border-emerald-400 transition space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[10px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded">LANGKAH 3</span>
+                      <Bot className="w-4 h-4 text-emerald-600" />
+                    </div>
+                    <h4 className="font-extrabold text-slate-900 text-xs">Klasifikasi AI Gemini</h4>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Gemini 2.5 Flash memilah isi pesan secara cerdas: memisahkan permintaan pengadaan barang klien (Client RFQ) dari email sampah.
+                    </p>
+                  </div>
+
+                  {/* Step 4 */}
+                  <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 hover:border-amber-400 transition space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[10px] font-black bg-amber-600 text-white px-2 py-0.5 rounded">LANGKAH 4</span>
+                      <ScanLine className="w-4 h-4 text-amber-600" />
+                    </div>
+                    <h4 className="font-extrabold text-slate-900 text-xs">OCR Vision Item Extraction</h4>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Lampiran PDF atau gambar spesifikasi barang dibaca otomatis oleh Vision AI untuk mengekstrak nama barang, kuantitas, dan satuan.
+                    </p>
+                  </div>
+
+                  {/* Step 5 */}
+                  <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 hover:border-indigo-400 transition space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[10px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded">LANGKAH 5</span>
+                      <Layers className="w-4 h-4 text-indigo-600" />
+                    </div>
+                    <h4 className="font-extrabold text-slate-900 text-xs">Quotation Builder & Markup</h4>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Staf mengonfirmasi harga modal, mencocokkan kode katalog IMPA Marine, menambahkan software fee markup, dan diskon.
+                    </p>
+                  </div>
+
+                  {/* Step 6 */}
+                  <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 hover:border-rose-400 transition space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[10px] font-black bg-rose-600 text-white px-2 py-0.5 rounded">LANGKAH 6</span>
+                      <ShieldCheck className="w-4 h-4 text-rose-600" />
+                    </div>
+                    <h4 className="font-extrabold text-slate-900 text-xs">ACC Approval & PDF Generate</h4>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Dokumen penawaran divalidasi oleh akun berwenang sebelum berkas PDF resmi ber-kop dan berstempel AB Malaya diterbitkan.
+                    </p>
+                  </div>
+
+                  {/* Step 7 */}
+                  <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 hover:border-teal-400 transition space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[10px] font-black bg-teal-600 text-white px-2 py-0.5 rounded">LANGKAH 7</span>
+                      <RefreshCw className="w-4 h-4 text-teal-600" />
+                    </div>
+                    <h4 className="font-extrabold text-slate-900 text-xs">Pengiriman Email Resmi</h4>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Pengiriman langsung ke klien via SMTP dengan validasi mesin 2-Stage Handshake (DNS MX Check + Queue Code 250 OK).
+                    </p>
+                  </div>
+
+                  {/* Step 8 */}
+                  <div className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 hover:border-emerald-400 transition space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[10px] font-black bg-emerald-700 text-white px-2 py-0.5 rounded">LANGKAH 8</span>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    </div>
+                    <h4 className="font-extrabold text-slate-900 text-xs">Auto-Generate Invoice</h4>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Setelah penawaran disetujui (deal), satu klik akan otomatis membuat Faktur Tagihan (Invoice) resmi dengan rincian rekening bank.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── SECTION 2: PRACTICAL GUIDES BY TAB ────────────────────── */}
+            <div className="space-y-4">
+              
+              {/* Tab 1: SMTP Credentials */}
+              {(guideCategory === 'all' || guideCategory === 'smtp') && (!guideSearch || 'smtp gmail credential password port 587 tls email'.includes(guideSearch.toLowerCase())) && (
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Key className="w-5 h-5 text-blue-600" />
+                      <h3 className="font-extrabold text-sm text-slate-900">1. Panduan Konfigurasi SMTP & Email Gmail</h3>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('credentials')}
+                      className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded font-bold text-xs flex items-center gap-1 cursor-pointer transition w-fit"
+                    >
+                      <span>Buka Tab 1: SMTP Credential</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 text-xs text-slate-700 leading-relaxed">
+                    <p>
+                      <strong>Mengapa membutuhkan App Password?</strong> Akun Google/Gmail mewajibkan autentikasi 2 langkah (2-Step Verification) dan tidak mengizinkan password login akun biasa untuk koneksi aplikasi SMTP demi keamanan.
+                    </p>
+                    
+                    <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200 space-y-2">
+                      <span className="font-bold text-slate-900 block text-[11.5px]">Langkah Membuat Google App Password (16 Huruf):</span>
+                      <ol className="list-decimal pl-5 space-y-1 text-[11px] text-slate-600 font-medium">
+                        <li>Buka akun Google Anda di <a href="https://myaccount.google.com/security" target="_blank" rel="noreferrer" className="text-blue-600 underline font-bold">myaccount.google.com/security</a>.</li>
+                        <li>Pastikan fitur <strong>Verifikasi 2 Langkah (2-Step Verification)</strong> sudah berstatus <strong>Aktif</strong>.</li>
+                        <li>Cari menu <strong>Sandi Aplikasi (App Passwords)</strong> di kotak pencarian Google Account.</li>
+                        <li>Beri nama aplikasi, misalnya: <code className="bg-white px-1 border border-slate-300 rounded font-bold">AB Malaya ERP</code>, lalu klik <strong>Buat (Generate)</strong>.</li>
+                        <li>Salin 16 karakter kode sandi yang muncul (contoh: <code className="bg-white px-1 border border-slate-300 rounded font-bold text-blue-700">tbsq icqa kece qaoz</code>).</li>
+                        <li>Tempelkan ke kolom <strong>App Password</strong> pada Tab 1 Settings ERP, lalu klik <strong>Save Credentials</strong> dan tekan tombol <strong>Test Connection</strong>.</li>
+                      </ol>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pt-1 text-[11px]">
+                      <span className="px-2 py-1 bg-slate-100 border border-slate-200 rounded font-mono text-slate-700"><strong>Host:</strong> smtp.gmail.com</span>
+                      <span className="px-2 py-1 bg-slate-100 border border-slate-200 rounded font-mono text-slate-700"><strong>Port:</strong> 587 (TLS Recommended)</span>
+                      <span className="px-2 py-1 bg-slate-100 border border-slate-200 rounded font-mono text-slate-700"><strong>Sender:</strong> mijdigital2026@gmail.com</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: AI Engine & Keys */}
+              {(guideCategory === 'all' || guideCategory === 'ai') && (!guideSearch || 'ai gemini keys api studio quota rate limit ocr'.includes(guideSearch.toLowerCase())) && (
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Bot className="w-5 h-5 text-purple-600" />
+                      <h3 className="font-extrabold text-sm text-slate-900">2. Panduan AI Engine & Manajemen Kunci Gemini</h3>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('ai')}
+                      className="px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded font-bold text-xs flex items-center gap-1 cursor-pointer transition w-fit"
+                    >
+                      <span>Buka Tab 2: AI Engine & Keys</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 text-xs text-slate-700 leading-relaxed">
+                    <p>
+                      Sistem ERP AB Malaya dilengkapi dengan <strong>Dual Pool AI Engine</strong> untuk memastikan kinerja tidak terganggu jika satu pool mencapai batas kuota:
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                      <div className="p-3 bg-blue-50/60 rounded-lg border border-blue-200 space-y-1">
+                        <span className="font-black text-blue-900 block text-[11px] uppercase">Pool 1: Email Inbox AI Classifier</span>
+                        <p className="text-[11px] text-slate-600">
+                          Digunakan untuk membaca subjek dan teks email pengirim, lalu mengklasifikasikan apakah pesan tersebut adalah <strong>Client RFQ</strong> (Permintaan Penawaran) atau iklan sampah.
+                        </p>
+                      </div>
+
+                      <div className="p-3 bg-purple-50/60 rounded-lg border border-purple-200 space-y-1">
+                        <span className="font-black text-purple-900 block text-[11px] uppercase">Pool 2: OCR Vision Document Scanner</span>
+                        <p className="text-[11px] text-slate-600">
+                          Digunakan untuk membaca berkas visual lampiran PDF, foto, dan formulir teknis kapal/kilang, lalu mengekstrak tabel nama barang, nomor suku cadang, kuantitas, dan satuan ke draf penawaran.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-amber-50 p-3 rounded border border-amber-200 text-amber-950 text-[11px] space-y-1">
+                      <strong>Cara Menambah Kunci Baru:</strong> Dapatkan kunci gratis dari <a href="https://aistudio.google.com" target="_blank" rel="noreferrer" className="text-blue-700 underline font-bold">Google AI Studio (aistudio.google.com)</a>. Klik tombol <em>Add New AI Key</em> pada Tab 2 dan masukkan kunci yang berawalan <code className="bg-white px-1 border border-amber-300 rounded font-mono">AIzaSy...</code>. Sistem otomatis merotasi kunci cadangan jika terjadi limit harian.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 3: Cloud Sync & Backup */}
+              {(guideCategory === 'all' || guideCategory === 'cloud') && (!guideSearch || 'cloud sync backup google sheet spreadsheet service account'.includes(guideSearch.toLowerCase())) && (
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Cloud className="w-5 h-5 text-teal-600" />
+                      <h3 className="font-extrabold text-sm text-slate-900">3. Panduan Sinkronisasi Cloud & Backup Google Spreadsheet</h3>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('cloud_sync')}
+                      className="px-3 py-1 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded font-bold text-xs flex items-center gap-1 cursor-pointer transition w-fit"
+                    >
+                      <span>Buka Tab 3: Cloud Sync</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 text-xs text-slate-700 leading-relaxed">
+                    <p>
+                      Sistem mencadangkan data katalog produk, penawaran harga, dan kontak klien secara otomatis ke Google Spreadsheet agar dapat diakses oleh tim tanpa harus masuk ke server database.
+                    </p>
+
+                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1.5 text-[11px]">
+                      <span className="font-bold text-slate-900 block">PENTING: Akses Izin Google Sheet (Service Account)</span>
+                      <p className="text-slate-600">
+                        Agar backup dapat menulis baris ke Spreadsheet Anda, Anda <strong>WAJIB</strong> membagikan spreadsheet (Share) ke email Service Account resmi berikut dengan hak akses <strong>Editor</strong>:
+                      </p>
+                      <div className="bg-white p-2 border border-slate-300 rounded font-mono font-bold text-blue-700 flex items-center justify-between">
+                        <span>erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com</span>
+                        <button
+                          onClick={() => handleCopyEmail('erp-abmalaya@erp-abmalaya-connect.iam.gserviceaccount.com')}
+                          className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded text-[10px] cursor-pointer"
+                        >
+                          {isCopiedEmail ? 'Tersalin ✓' : 'Salin Email'}
+                        </button>
+                      </div>
+                      <p className="text-slate-500 text-[10px]">
+                        Spreadsheet ID diambil dari URL Google Sheets di antara <code className="bg-slate-200 px-1 rounded">/d/</code> dan <code className="bg-slate-200 px-1 rounded">/edit</code>.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 5: Paper, Kop Surat & Branding */}
+              {(guideCategory === 'all' || guideCategory === 'paper') && (!guideSearch || 'paper kop surat logo stempel tanda tangan pdf font margin'.includes(guideSearch.toLowerCase())) && (
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-indigo-600" />
+                      <h3 className="font-extrabold text-sm text-slate-900">4. Panduan Format Dokumen, Kop Surat & Branding Perusahaan</h3>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('paper')}
+                      className="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded font-bold text-xs flex items-center gap-1 cursor-pointer transition w-fit"
+                    >
+                      <span>Buka Tab 5: Setting Paper</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 text-xs text-slate-700 leading-relaxed">
+                    <p>
+                      Tab <strong>Setting Paper</strong> mengatur tampilan berkas resmi PDF Quotation dan Faktur Penjualan yang dilihat langsung oleh klien AB Malaya:
+                    </p>
+
+                    <ul className="list-disc pl-5 space-y-1 text-[11px] text-slate-600">
+                      <li><strong>Logo Resmi Dokumen:</strong> Dianjurkan berformat PNG transparan resolusi 160x60 px. Akan muncul di pojok kiri atas kop surat penawaran.</li>
+                      <li><strong>Stempel Resmi Perusahaan:</strong> Format PNG transparan ukuran 120x120 px. Ditampilkan di bagian tanda tangan otorisasi penawaran harga.</li>
+                      <li><strong>Tanda Tangan PIC (Signature):</strong> Mengunggah tanda tangan digital transparan untuk mempercepat persetujuan resmi.</li>
+                      <li><strong>Nomor Rekening Bank:</strong> Rincian akun bank resmi (Public Bank / Maybank) untuk informasi instruksi pembayaran di kaki surat.</li>
+                      <li><strong>Margin & Ukuran Kertas:</strong> Standar format A4 dengan margin 14-18mm untuk keterbacaan cetak dokumen resmi yang rapi.</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 6: Filter Rules */}
+              {(guideCategory === 'all' || guideCategory === 'inbox') && (!guideSearch || 'filter rules noreply tanggal cutoff blacklist rfq inbox'.includes(guideSearch.toLowerCase())) && (
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Sliders className="w-5 h-5 text-amber-600" />
+                      <h3 className="font-extrabold text-sm text-slate-900">5. Panduan Aturan Filter & Penyaringan RFQ Inbox</h3>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('inbox_rules')}
+                      className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded font-bold text-xs flex items-center gap-1 cursor-pointer transition w-fit"
+                    >
+                      <span>Buka Tab 6: Inbox Rules</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 text-xs text-slate-700 leading-relaxed">
+                    <p>
+                      Mencegah inbox email penuh oleh ribuan email lama atau pesan otomatis sistem yang tidak relevan dengan penjualan:
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-[11px]">
+                      <div className="p-2.5 bg-slate-50 border border-slate-200 rounded">
+                        <strong className="text-slate-900 block mb-0.5">Filter Tanggal (Cutoff)</strong>
+                        <span className="text-slate-600">Email yang diterima sebelum tanggal filter (misal: 2026-08-27) otomatis disembunyikan agar inbox tetap bersih.</span>
+                      </div>
+                      <div className="p-2.5 bg-slate-50 border border-slate-200 rounded">
+                        <strong className="text-slate-900 block mb-0.5">Blokir No-Reply & Medsos</strong>
+                        <span className="text-slate-600">Otomatis menyingkirkan pesan otomatis LinkedIn, Facebook, newsletter, dan akun do-not-reply.</span>
+                      </div>
+                      <div className="p-2.5 bg-slate-50 border border-slate-200 rounded">
+                        <strong className="text-slate-900 block mb-0.5">Prioritaskan Berkas PDF</strong>
+                        <span className="text-slate-600">Memberikan lencana badge prioritas untuk pesan yang memiliki lampiran spesifikasi teknis barang.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 7: Database & cPanel */}
+              {(guideCategory === 'all' || guideCategory === 'database') && (!guideSearch || 'database mysql cpanel migrasi schema alter table adminer'.includes(guideSearch.toLowerCase())) && (
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Database className="w-5 h-5 text-emerald-600" />
+                      <h3 className="font-extrabold text-sm text-slate-900">6. Panduan Database MySQL, Adminer & Migrasi cPanel</h3>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('database')}
+                      className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded font-bold text-xs flex items-center gap-1 cursor-pointer transition w-fit"
+                    >
+                      <span>Buka Tab 7: Database</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 text-xs text-slate-700 leading-relaxed">
+                    <p>
+                      Semua data penawaran, klien, dan log tersimpan di database MariaDB/MySQL <code>abmalaya_erp</code>.
+                    </p>
+
+                    <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200 space-y-2 text-[11px]">
+                      <span className="font-bold text-slate-900 block">Cara Migrasi Aman ke Hosting / cPanel Produksi:</span>
+                      <ul className="list-disc pl-5 space-y-1 text-slate-600">
+                        <li><strong>Database Baru:</strong> Import berkas <code className="bg-white px-1 border border-slate-300 rounded font-mono font-bold text-blue-700">cpanel/database_schema.sql</code> melalui phpMyAdmin cPanel untuk instalasi awal.</li>
+                        <li><strong>Database Berjalan (Update Versi):</strong> Jalankan skrip <code className="bg-white px-1 border border-slate-300 rounded font-mono font-bold text-emerald-700">cpanel/safe_update_structure.sql</code>. Skrip ini <strong>TIDAK MENGHAPUS / MERESET DATA</strong> lama, melainkan hanya menambahkan kolom atau tabel baru yang dibutuhkan.</li>
+                        <li><strong>Adminer Panel:</strong> Anda dapat mengelola database langsung dari browser melalui menu Tab Database &gt; Open Adminer Panel.</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── SECTION 3: FAQ & TROUBLESHOOTING ─────────────────────── */}
+              {(guideCategory === 'all' || guideCategory === 'faq') && (!guideSearch || 'faq kendala solusi error 503 limit app password save profil'.includes(guideSearch.toLowerCase())) && (
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-4">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                    <HelpCircle className="w-5 h-5 text-amber-600" />
+                    <div>
+                      <h3 className="font-extrabold text-sm text-slate-900">Pusat Solusi Masalah & FAQ (Troubleshooting)</h3>
+                      <p className="text-[11px] text-slate-500">Jawaban cepat atas kendala yang paling sering ditanyakan oleh staf.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    {[
+                      {
+                        id: 1,
+                        q: 'Kenapa muncul error "Failed to save profile: API Error: Call to a member function bind_param() on bool"?',
+                        a: 'Error ini terjadi jika struktur tabel clients di database belum memiliki kolom logo_url. Masalah ini telah diperbaiki secara tuntas: kolom logo_url sudah ditambahkan ke database MySQL dan kueri penyimpanan di api_clients.php sudah diselaraskan langsung tanpa memerlukan runtime alter table.'
+                      },
+                      {
+                        id: 2,
+                        q: 'Apa arti status "WAITING_AI_LIMIT" saat proses ekstraksi dokumen atau pemindaian inbox?',
+                        a: 'Status WAITING_AI_LIMIT muncul ketika kunci Google Gemini gratis Anda telah mencapai batas rate-limit per menit (RPM) atau kuota per hari (RPD). Anda tidak perlu khawatir: daemon otomasi secara otomatis memasukkan dokumen tersebut ke antrean coba-lagi (re-queue) dan akan otomatis memprosesnya kembali setelah jendela batas kuota terbuka.'
+                      },
+                      {
+                        id: 3,
+                        q: 'Bagaimana mengatasi error "503 - Tunnel Unavailable" saat membuka link aplikasi dari luar?',
+                        a: 'Pesan 503 menandakan proses tunnel penghubung (Localtunnel atau Cloudflared) di server sempat terputus. Pastikan proses tunnel tetap berjalan di latar belakang (background daemon). Anda juga dapat menggunakan link alternatif Cloudflare Tunnel yang lebih stabil tanpa memerlukan password IP.'
+                      },
+                      {
+                        id: 4,
+                        q: 'Mengapa email dari klien lama tidak muncul di daftar RFQ Inbox?',
+                        a: 'Periksa pengaturan di Tab 6: Inbox Rules pada kolom "Tanggal Mulai Penarikan Email (Fetch Start Date)". Jika tanggal disetel ke masa sekarang (misal: 2026-08-27), maka semua email sebelum tanggal tersebut otomatis disaring agar tidak mencemari daftar aktif pengadaan barang.'
+                      },
+                      {
+                        id: 5,
+                        q: 'Bagaimana cara mengubah harga satuan modal dan menambahkan Software Fee?',
+                        a: 'Buka menu Quotation Builder saat mengedit penawaran harga. Anda dapat mengisi modal barang di kolom Unit Price. Sistem akan otomatis menghitung Software Markup Fee sesuai persentase yang disetel di Tab 4: Default Setting (Fee).'
+                      }
+                    ].map((faq) => {
+                      const isExpanded = expandedFaqId === faq.id;
+                      return (
+                        <div
+                          key={faq.id}
+                          className="border border-slate-200 rounded-lg overflow-hidden transition"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setExpandedFaqId(isExpanded ? null : faq.id)}
+                            className="w-full p-3 text-left font-bold text-slate-900 bg-slate-50/80 hover:bg-slate-100 flex items-center justify-between gap-3 cursor-pointer"
+                          >
+                            <span className="flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-black flex items-center justify-center shrink-0">
+                                {faq.id}
+                              </span>
+                              <span>{faq.q}</span>
+                            </span>
+                            <ChevronDown className={`w-4 h-4 text-slate-500 shrink-0 transition-transform ${isExpanded ? 'rotate-180 text-blue-600' : ''}`} />
+                          </button>
+
+                          {isExpanded && (
+                            <div className="p-3.5 bg-white border-t border-slate-200 text-slate-700 text-[11.5px] leading-relaxed">
+                              {faq.a}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+          </div>
+        )}
       </div>
 
       {/* ── AI KEY EDIT / ADD POPUP MODAL ─────────────────────────────────── */}
@@ -2371,7 +2953,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
           </div>
         </div>
       )}
-      {/* POP-UP MODAL: LIVE PREVIEW SPH HEADER LAYOUT */}
+      {/* POP-UP MODAL: LIVE PREVIEW QUOTATION HEADER LAYOUT */}
       {isPreviewModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in font-sans">
           <div className="bg-white border border-slate-300 w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden rounded-md">

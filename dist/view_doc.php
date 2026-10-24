@@ -486,6 +486,8 @@ function clean_email_str($emailRaw) {
 }
 
 $docRefNo = $type === 'invoice' ? ($doc['invoice_number'] ?? 'INV-ABM') : ($doc['quotation_number'] ?? $doc['ref_no'] ?? 'ABM/QUO/2026-001');
+$docRefNo = str_ireplace(['SPH-', 'SPH/'], ['QUO-', 'QUO/'], $docRefNo);
+$docRefNo = preg_replace('/^SPH[\-_]/i', 'QUO-', $docRefNo);
 $rawDate = !empty($doc['pdf_created_at']) ? $doc['pdf_created_at'] : (!empty($doc['date_issued']) ? $doc['date_issued'] : (!empty($doc['created_at']) ? $doc['created_at'] : date('Y-m-d')));
 $docDate = (!empty($rawDate) && $rawDate !== '0000-00-00 00:00:00') ? date('d/m/Y', strtotime($rawDate)) : date('d/m/Y');
 $validUntil = $doc['valid_until'] ?? '14 Days';

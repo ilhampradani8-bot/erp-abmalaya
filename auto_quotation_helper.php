@@ -3,7 +3,7 @@
  * ERP AB Malaya - Auto Quotation Generation Helper
  * File: public/auto_quotation_helper.php
  *
- * Standalone, pure PHP helper to automatically convert incoming RFQs into SPH Quotations
+ * Standalone, pure PHP helper to automatically convert incoming RFQs into Commercial Quotations
  * with status 'in_progress' without depending on missing CLI/daemon paths.
  */
 
@@ -48,10 +48,11 @@ if (!function_exists('autoGenerateQuotation')) {
         $subtotal = 0.00;
         $items_created = 0;
 
-        // 3. Insert parent quotation draft with status 'in_progress'
-        $stmt_quo = $db_conn->prepare("INSERT INTO quotations (id, rfq_id, quotation_number, client_name, client_email, company_name, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, status, ocr_scan_status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0.00, ?, 0.00, 0.00, ?, 'in_progress', 'pending', ?)");
+        // 3. Insert parent quotation draft with status 'in_progress' and permanent UUID
+        $quo_uuid = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x', mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0x0fff) | 0x4000, mt_rand(0, 0x3fff) | 0x8000, mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff));
+        $stmt_quo = $db_conn->prepare("INSERT INTO quotations (id, uuid, rfq_id, quotation_number, client_name, client_email, company_name, date_issued, valid_until, subtotal, discount_total, tax_percent, tax_amount, grand_total, notes, status, ocr_scan_status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0.00, 0.00, ?, 0.00, 0.00, ?, 'in_progress', 'pending', ?)");
         if ($stmt_quo) {
-            $stmt_quo->bind_param("sissssssdss", $quo_id, $rfq_id, $quo_num, $client_name, $client_email, $company_name, $date_issued, $valid_until, $tax_percent, $notes, $created_by);
+            $stmt_quo->bind_param("ssissssssdss", $quo_id, $quo_uuid, $rfq_id, $quo_num, $client_name, $client_email, $company_name, $date_issued, $valid_until, $tax_percent, $notes, $created_by);
             if (!$stmt_quo->execute()) {
                 error_log("Failed to insert auto-quotation: " . $stmt_quo->error);
                 $stmt_quo->close();

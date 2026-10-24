@@ -75,7 +75,7 @@ $res = $db_conn->query("
 ");
 
 if (!$res || $res->num_rows === 0) {
-    daemon_log('No pending, skipped, or waiting SPH Quotations to scan. Exiting.');
+    daemon_log('No pending, skipped, or waiting Quotations to scan. Exiting.');
     exit(0);
 }
 
@@ -93,7 +93,7 @@ while ($row = $res->fetch_assoc()) {
     $quo_id = $row['id'];
     $file_url = $row['attachment_url'] ?? '';
     
-    daemon_log("Starting AI OCR/Text Extraction for SPH: {$quo_id} — Attachment: " . ($file_url ?: 'NONE (Text Inquiry)'));
+    daemon_log("Starting AI OCR/Text Extraction for Quotation: {$quo_id} — Attachment: " . ($file_url ?: 'NONE (Text Inquiry)'));
     
     // Mark as processing
     $db_conn->query("UPDATE quotations SET ocr_scan_status = 'processing' WHERE id = '{$quo_id}'");
@@ -116,7 +116,7 @@ while ($row = $res->fetch_assoc()) {
     $new_status   = in_array($inner_status, ['done', 'low_quality']) ? 'done' : (in_array($inner_status, ['waiting', 'waiting_ai_limit']) ? 'waiting_ai_limit' : 'error');
 
     if ($new_status === 'waiting_ai_limit') {
-        daemon_log("Scan result for SPH {$quo_id}: WAITING_AI_LIMIT (Gemini API rate limited — Re-queued for auto-retry)");
+        daemon_log("Scan result for Quotation {$quo_id}: WAITING_AI_LIMIT (Gemini API rate limited — Re-queued for auto-retry)");
     }
 
     // Update phone & email if extracted

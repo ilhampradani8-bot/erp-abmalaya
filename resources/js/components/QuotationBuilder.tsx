@@ -63,7 +63,15 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
       .then((res) => res.json())
       .then((resData) => {
         if (resData.status === 'success' && Array.isArray(resData.data)) {
-          let list = resData.data;
+          let list = resData.data.map((q: any) => ({
+            ...q,
+            quotation_number: q.quotation_number
+              ? q.quotation_number.replace(/^SPH[\-_]/i, 'QUO-').replace(/SPH-/gi, 'QUO-').replace(/SPH\//gi, 'QUO/')
+              : q.quotation_number,
+            quotation_file: q.quotation_file
+              ? q.quotation_file.replace(/SPH/gi, 'QUO')
+              : q.quotation_file
+          }));
           const cur = activeQuo || quotation || initialQuotation;
           if (cur && cur.id && !list.some((q: any) => q.id === cur.id)) {
             list = [{ ...cur, quotation_number: cur.quotation_number || cur.id }, ...list];
@@ -107,10 +115,14 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
         }
       ];
 
+      const sanitizedQuoNum = (initialQuotation.quotation_number || `QUO-ABM/MY/2026/0${Math.floor(Math.random() * 900 + 100)}`)
+        .replace(/^SPH[\-_]/i, 'QUO-')
+        .replace(/SPH-/gi, 'QUO-')
+        .replace(/SPH\//gi, 'QUO/');
       setQuotation({
         ...initialQuotation,
         items,
-        quotation_number: initialQuotation.quotation_number || `QUO-ABM/MY/2026/0${Math.floor(Math.random() * 900 + 100)}`,
+        quotation_number: sanitizedQuoNum,
         company_name: initialQuotation.company_name || '',
         client_name: initialQuotation.client_name || '',
         client_email: initialQuotation.client_email || '',
@@ -446,12 +458,23 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
 
   const saveQuotationToMySQL = (quo: Quotation, callback?: () => void) => {
     setIsSavingMySQL(true);
+    const cleanQuoNum = (quo.quotation_number || '')
+      .replace(/^SPH[\-_]/i, 'QUO-')
+      .replace(/SPH-/gi, 'QUO-')
+      .replace(/SPH\//gi, 'QUO/');
+    const cleanQuoFile = (quo.quotation_file || '').replace(/SPH/gi, 'QUO');
     const payload = {
       ...quo,
+      quotation_number: cleanQuoNum || quo.quotation_number,
+      quotation_file: cleanQuoFile || undefined,
+      uuid: quo.uuid || (quo.id ? quo.id : undefined),
       status: (quo.status && (quo.status === 'terkirim' || quo.status === 'penawaran_terkirim' || quo.status === 'deal')) ? quo.status : 'siap_kirim',
       user_name: currentUser?.name || 'Admin',
       user_email: currentUser?.email || 'admin@abmalaya.com',
     };
+    if (cleanQuoNum && cleanQuoNum !== quo.quotation_number) {
+      setQuotation((prev) => (prev ? { ...prev, quotation_number: cleanQuoNum } : prev));
+    }
     fetch(getApiUrl('/api_quotations.php'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -460,6 +483,9 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
       .then((res) => res.json())
       .then((resData) => {
         console.log('Save Quotation response:', resData);
+        if (resData.uuid && quotation) {
+          setQuotation((prev) => (prev ? { ...prev, uuid: resData.uuid } : prev));
+        }
         setSaveSuccessMessage(`Quotation ${quo.quotation_number} saved successfully!`);
         setTimeout(() => setSaveSuccessMessage(null), 4000);
         loadQuotationsListFromMySQL();
@@ -497,6 +523,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
     if (!term) return true;
     return (
       (q.quotation_number || '').toLowerCase().includes(term) ||
+      (q.uuid || '').toLowerCase().includes(term) ||
       (q.company_name || '').toLowerCase().includes(term) ||
       (q.client_name || '').toLowerCase().includes(term) ||
       (q.client_email || '').toLowerCase().includes(term) ||
@@ -506,9 +533,9 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
     );
   });
 
-  const selectedQuoObj = savedQuotations.find((q) => q.id === selectedQuoId) || 
-    (quotation?.id === selectedQuoId ? quotation : null) || 
-    (initialQuotation?.id === selectedQuoId ? initialQuotation : null);
+  const selectedQuoObj = savedQuotations.find((q) => q.id === selectedQuoId || (q.uuid && q.uuid === selectedQuoId)) || 
+    (quotation?.id === selectedQuoId || quotation?.uuid === selectedQuoId ? quotation : null) || 
+    (initialQuotation?.id === selectedQuoId || initialQuotation?.uuid === selectedQuoId ? initialQuotation : null);
 
   return (
     <div className="w-full h-full bg-[#f0f0f0] overflow-y-auto flex flex-col font-sans p-0 m-0">
@@ -517,7 +544,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-b from-[#fcfcfc] to-[#c6c6c6] px-4 py-2 border-b border-[#7b7b7b] shrink-0 w-full shadow-xs">
         
         <div className="flex items-center gap-3 text-xs">
-          {/* SEARCHABLE SPH / RFQ DROPDOWN */}
+          {/* SEARCHABLE QUOTATION / RFQ DROPDOWN */}
           <div className="relative">
             <button
               type="button"
@@ -794,7 +821,7 @@ export const QuotationBuilder: React.FC<QuotationBuilderProps> = ({
         </div>
       )}
 
-      {/* SPH HEADER INFO CARD: LOGO, FROM (AB MALAYA), TO (CLIENT), & MYSQL METADATA */}
+      {/* QUOTATION HEADER INFO CARD: LOGO, FROM (AB MALAYA), TO (CLIENT), & MYSQL METADATA */}
       <div className="bg-white border-b border-[#dbdbdb] p-4 shadow-xs shrink-0 w-full font-sans">
         
         <div className="max-w-7xl mx-auto space-y-4">

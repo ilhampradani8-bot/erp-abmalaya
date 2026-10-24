@@ -92,7 +92,7 @@ export const NotificationLog: React.FC<NotificationLogProps> = ({
     // 1. Direct match on action_link with alias normalization
     if (link === 'rfq_inbox' || link === 'inbox' || cat === 'rfq' || cat === 'inbox') {
       onNavigateView('inbox');
-    } else if (link === 'quotations_list' || link === 'quotation_list' || cat === 'sph' || cat === 'quotation') {
+    } else if (link === 'quotations_list' || link === 'quotation_list' || cat === 'quo' || cat === 'quotation') {
       onNavigateView('quotation_list');
     } else if (link === 'invoice_builder' || cat === 'invoice') {
       onNavigateView('invoice_builder');

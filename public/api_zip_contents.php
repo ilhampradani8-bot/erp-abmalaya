@@ -12,6 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // 1. Resolve target ZIP file from query params or POST body
 $action = isset($_GET['action']) ? trim($_GET['action']) : 'list';
 $fn = isset($_GET['fn']) ? trim($_GET['fn']) : '';
+$uid = isset($_GET['uid']) ? trim($_GET['uid']) : '';
 $msgno = isset($_GET['msgno']) ? trim($_GET['msgno']) : '';
 $entry = isset($_GET['entry']) ? trim($_GET['entry']) : '';
 $url = isset($_GET['url']) ? trim($_GET['url']) : '';
@@ -19,6 +20,7 @@ $url = isset($_GET['url']) ? trim($_GET['url']) : '';
 if (empty($fn) && !empty($url)) {
     parse_str(parse_url($url, PHP_URL_QUERY) ?? '', $qp);
     if (!empty($qp['fn'])) $fn = $qp['fn'];
+    if (!empty($qp['uid'])) $uid = $qp['uid'];
     if (!empty($qp['msgno'])) $msgno = $qp['msgno'];
 }
 
@@ -27,9 +29,11 @@ $base_clean = preg_replace('/[^a-zA-Z0-9]/', '', pathinfo($fn, PATHINFO_FILENAME
 
 // Candidate files on disk
 $candidate_files = [
+    __DIR__ . "/attachments/uid_{$uid}_part_2_{$safe_fn}",
     __DIR__ . "/attachments/msg_{$msgno}_part_2_{$safe_fn}",
     __DIR__ . "/attachments/{$fn}",
     __DIR__ . "/attachments/{$safe_fn}",
+    dirname(__DIR__) . "/public/attachments/uid_{$uid}_part_2_{$safe_fn}",
     dirname(__DIR__) . "/public/attachments/msg_{$msgno}_part_2_{$safe_fn}",
     dirname(__DIR__) . "/public/attachments/{$fn}",
     dirname(__DIR__) . "/public/attachments/{$safe_fn}",

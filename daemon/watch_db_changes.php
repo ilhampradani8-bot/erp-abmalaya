@@ -89,33 +89,33 @@ if ($res_quo && $res_quo->num_rows > 0) {
         if ($state['initialized']) {
             if (!isset($state['quo_statuses'][$q_id])) {
                 // New quotation created
-                $msg = "New SPH quotation draft #{$q_num} has been created for {$company}.";
-                addSystemNotification($db_conn, "New SPH Draft #{$q_num}", $msg, "info", "sph", "quotations_list");
-                daemon_watch_log("Detected new SPH #{$q_num} for {$company}");
+                $msg = "New quotation draft #{$q_num} has been created for {$company}.";
+                addSystemNotification($db_conn, "New Quotation Draft #{$q_num}", $msg, "info", "quotation", "quotations_list");
+                daemon_watch_log("Detected new Quotation #{$q_num} for {$company}");
             } else {
                 $old_status = $state['quo_statuses'][$q_id]['status'] ?? '';
                 if ($old_status !== $status) {
                     // Status changed!
                     $type = 'info';
-                    $title = "SPH Status Updated #{$q_num}";
+                    $title = "Quotation Status Updated #{$q_num}";
                     if (in_array($status, ['approved', 'acc', 'disetujui'])) {
                         $type = 'success';
                         $title = "ACC Manager Approved #{$q_num}";
-                        $msg = "SPH quotation #{$q_num} ({$company}) has been approved by ACC Manager.";
+                        $msg = "Quotation #{$q_num} ({$company}) has been approved by ACC Manager.";
                     } elseif ($status === 'junk') {
                         $type = 'warning';
-                        $title = "SPH Moved to Trash #{$q_num}";
-                        $msg = "SPH quotation #{$q_num} ({$company}) moved to Trash / Junk folder.";
+                        $title = "Quotation Moved to Trash #{$q_num}";
+                        $msg = "Quotation #{$q_num} ({$company}) moved to Trash / Junk folder.";
                     } elseif (in_array($status, ['done_send', 'sent', 'terkirim'])) {
                         $type = 'success';
-                        $title = "SPH Quotation Sent #{$q_num}";
-                        $msg = "SPH quotation document #{$q_num} sent to client {$company}.";
+                        $title = "Quotation Sent #{$q_num}";
+                        $msg = "Quotation document #{$q_num} sent to client {$company}.";
                     } else {
-                        $msg = "Status for SPH quotation #{$q_num} ({$company}) updated from '{$old_status}' to '{$status}'.";
+                        $msg = "Status for Quotation #{$q_num} ({$company}) updated from '{$old_status}' to '{$status}'.";
                     }
 
-                    addSystemNotification($db_conn, $title, $msg, $type, "sph", "quotations_list");
-                    daemon_watch_log("Status change detected for SPH #{$q_num}: {$old_status} -> {$status}");
+                    addSystemNotification($db_conn, $title, $msg, $type, "quotation", "quotations_list");
+                    daemon_watch_log("Status change detected for Quotation #{$q_num}: {$old_status} -> {$status}");
                 }
             }
         }

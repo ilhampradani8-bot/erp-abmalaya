@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { RFQ, RFQStatus, EmailAttachment, isOutboundEmail } from '../types/erp';
-import { Search, Mail, Send, CheckCircle2, Clock, Building, User, Phone, Loader2, Paperclip, Eye, ShieldCheck, RefreshCw, PlusCircle, FileType, Image as ImageIcon, Maximize2, AlertTriangle, X, ExternalLink, ChevronDown, ChevronUp, MoreVertical, Menu, Sparkles, Settings, Info, ArrowRightLeft, Copy, Download, Terminal, FileText, Trash2, Ban, ShieldAlert, ArrowUpRight, Folder } from 'lucide-react';
+import { Search, Mail, Send, CheckCircle2, Clock, Building, User, Phone, Loader2, Paperclip, Eye, ShieldCheck, RefreshCw, PlusCircle, FileType, Image as ImageIcon, Maximize2, AlertTriangle, X, ExternalLink, ChevronDown, ChevronUp, MoreVertical, Menu, Sparkles, Settings, Info, ArrowRightLeft, Copy, Download, Terminal, FileText, Trash2, Ban, ShieldAlert, ArrowUpRight, Folder, BookOpen } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
 interface RFQInboxProps {
@@ -827,7 +827,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
           {/* Header Bar */}
           <div className="p-3 border-b border-slate-200 bg-slate-50 space-y-2 shrink-0">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {onToggleMobileSidebar && (
                   <button onClick={onToggleMobileSidebar} className="md:hidden p-1 text-slate-600">
                     <Menu className="w-4 h-4" />
@@ -837,6 +837,35 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                 <span className="bg-amber-500 text-white font-extrabold text-[10px] px-1.5 py-0.5 rounded">
                   {filteredRfqs.length}
                 </span>
+
+                {/* Direct Shortcut to Settings & Guide right from Inbox */}
+                {onNavigateView && (
+                  <div className="flex items-center gap-1.5 ml-1">
+                    <button
+                      type="button"
+                      onClick={() => onNavigateView('system_settings')}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 cursor-pointer shadow-2xs transition"
+                      title="Buka Pengaturan Sistem (System Settings)"
+                    >
+                      <Settings className="w-3 h-3 text-slate-600" />
+                      <span>Settings</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onNavigateView('system_settings');
+                        setTimeout(() => {
+                          window.dispatchEvent(new CustomEvent('navigate_settings_tab', { detail: 'user_guide' }));
+                        }, 50);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10.5px] font-black bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 hover:from-amber-500 hover:to-amber-500 text-slate-950 border border-amber-500 shadow-2xs cursor-pointer transition hover:scale-105"
+                      title="Buka Buku Panduan & Penjelasan Sistem"
+                    >
+                      <BookOpen className="w-3 h-3 text-slate-950" />
+                      <span>📖 Guide</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-1.5">
@@ -1162,8 +1191,8 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                                     <ArrowUpRight className="w-2.5 h-2.5" />
                                     SENT
                                   </span>
-                                  <h3 className="font-bold text-xs text-slate-900 truncate" title={`Kepada: ${item.recipient_email || 'Klien / Rekanan'}`}>
-                                    To: <span className="text-purple-950 font-extrabold">{item.recipient_email || 'Klien / Rekanan'}</span>
+                                  <h3 className="font-bold text-xs text-slate-900 truncate" title={`To: ${item.recipient_email || 'Client / Partner'}`}>
+                                    To: <span className="text-purple-950 font-extrabold">{item.recipient_email || 'Client / Partner'}</span>
                                   </h3>
                                 </div>
                                 <div className="text-[10px] text-slate-500 font-medium truncate">
@@ -1476,7 +1505,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
 
                 <div className="flex items-center gap-2 shrink-0 relative">
                   
-                  {/* SPH ACC Status Badge in Chat Header */}
+                  {/* Quotation ACC Status Badge in Chat Header */}
                   {selectedRfq.quotation_number && (
                     <button
                       type="button"
@@ -1493,12 +1522,12 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                           ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
                           : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300 animate-pulse'
                       } border font-extrabold text-xs px-3 py-1.5 rounded-md shadow-xs cursor-pointer transition`}
-                      title="Status ACC Approval Quotation"
+                      title="Quotation ACC Approval Status"
                     >
                       <span>
                         {selectedRfq.is_acc_approved || selectedRfq.quotation_status === 'approved' || selectedRfq.quotation_status === 'acc' || selectedRfq.quotation_status === 'done_send'
                           ? '✓ Quotation ACC Approved'
-                          : '⚠️ Quotation Belum di-ACC'}
+                          : '⚠️ Quotation Pending ACC Approval'}
                       </span>
                       <span className="text-[10px] font-mono opacity-80">({selectedRfq.quotation_number})</span>
                     </button>
@@ -1542,7 +1571,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
                                 {isSelectedOutbound ? (
                                   <>
                                     <ArrowUpRight className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                                    <span>Teruskan / Follow-up</span>
+                                    <span>Forward / Follow-up</span>
                                   </>
                                 ) : (
                                   <>
@@ -2606,7 +2635,7 @@ export const RFQInbox: React.FC<RFQInboxProps> = ({
             <div className="bg-amber-500 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-white" />
-                <h3 className="font-extrabold text-sm">Konfirmasi ACC Approval Quotation</h3>
+                <h3 className="font-extrabold text-sm">Confirm Quotation ACC Approval</h3>
               </div>
               <button
                 type="button"

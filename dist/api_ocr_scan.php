@@ -110,7 +110,7 @@ try {
                         $client_n = $rfq_row['client_name'] ?: ($input['client_name'] ?? 'Client');
                         $client_e = $rfq_row['client_email'] ?: ($input['client_email'] ?? '');
                         $company_n = $rfq_row['company'] ?: ($input['company_name'] ?? '');
-                        $quo_num = !empty($input['quotation_number']) ? $input['quotation_number'] : ('SPH-ABM/MY/2026/0' . rand(100, 999));
+                        $quo_num = !empty($input['quotation_number']) ? $input['quotation_number'] : ('QUO-ABM/MY/' . date('Y') . '/0' . rand(100, 999));
                         $att_url = !empty($rfq_row['attachment_url']) ? $rfq_row['attachment_url'] : ($input['attachment_url'] ?? 'NONE');
                         $notes_txt = !empty($input['notes']) ? $input['notes'] : ($rfq_row['item_requested'] ?: ($rfq_row['message_body'] ?? ''));
 
@@ -152,7 +152,7 @@ try {
             $client_n = trim((string)($input['client_name'] ?? 'Client'));
             $client_e = trim((string)($input['client_email'] ?? ''));
             $company_n = trim((string)($input['company_name'] ?? ''));
-            $quo_num = trim((string)($input['quotation_number'] ?? ('SPH-ABM/MY/2026/0' . rand(100, 999))));
+            $quo_num = trim((string)($input['quotation_number'] ?? ('QUO-ABM/MY/' . date('Y') . '/0' . rand(100, 999))));
             $att_url = trim((string)($input['attachment_url'] ?? 'NONE'));
             $notes_txt = trim((string)($input['notes'] ?? ''));
             $rfq_id_val = !empty($input['rfq_id']) ? $input['rfq_id'] : null;
@@ -401,7 +401,22 @@ function performOCRScan(string $file_url, array $key_list, array $quo_context): 
         $mime = $mime_map[$ext] ?? 'application/octet-stream';
 
         $file_data = false;
-        if (strpos($file_url, 'msgno=') !== false) {
+        $uid = $qp['uid'] ?? '';
+        if ($uid) {
+            $files = glob(__DIR__ . '/attachments/uid_' . $uid . '_*');
+            if (!empty($files)) {
+                foreach ($files as $fpath) {
+                    if (file_exists($fpath) && strtolower(pathinfo($fpath, PATHINFO_EXTENSION)) === $ext) {
+                        $file_data = file_get_contents($fpath);
+                        break;
+                    }
+                }
+                if ($file_data === false && file_exists($files[0])) {
+                    $file_data = file_get_contents($files[0]);
+                }
+            }
+        }
+        if ($file_data === false && strpos($file_url, 'msgno=') !== false) {
             $msgno = $qp['msgno'] ?? '';
             if ($msgno) {
                 $files = glob(__DIR__ . '/attachments/msg_' . $msgno . '_*');
@@ -657,7 +672,7 @@ PROMPT;
                 $errors[] = '[' . $model_name . '] Key …' . substr($api_key, -6) . ': HTTP 429 (rate limited)';
                 // ── Step 4: AI Rate Limit / Waiting Retry Handler ─────────────────────────
                 // Strict Policy: 100% of items MUST be extracted by Gemini AI. No native fallback item parsing allowed.
-                // If AI is rate limited or unavailable, re-queue SPH in database with 'waiting_ai_limit' status for background retry.
+                // If AI is rate limited or unavailable, re-queue Quotation in database with 'waiting_ai_limit' status for background retry.
                 return [
                     'scan_status'     => 'waiting_ai_limit',
                     'scan_confidence' => 'waiting (Tesseract OCR OK — Menunggu AI Limit Reset)',

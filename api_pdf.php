@@ -65,6 +65,8 @@ if ($type === 'invoice') {
 
 // Clean filename for PDF output
 $safeFilename = preg_replace('/[^A-Za-z0-9_\-]/', '_', $refNo) . '.pdf';
+$safeFilename = str_ireplace('SPH', 'QUO', $safeFilename);
+$safeFilename = preg_replace('/^SPH[\\-_]/i', 'QUO_', $safeFilename);
 $pdfDir = __DIR__ . '/uploads/pdf/';
 if (!file_exists($pdfDir)) {
     @mkdir($pdfDir, 0777, true);

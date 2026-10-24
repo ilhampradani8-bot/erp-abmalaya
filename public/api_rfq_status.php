@@ -163,12 +163,12 @@ try {
             }
 
             // 4. Log history
-            appendRfqHistoryLog($db_conn, $clean_id, 'Pindah Manual oleh User / Admin', $user_name, $user_email, 'Email dipindahkan secara manual oleh user dari tab general (Others) ke Requisition, dan draf SPH dibuat secara otomatis.');
+            appendRfqHistoryLog($db_conn, $clean_id, 'Manual Move by User / Admin', $user_name, $user_email, 'Email manually moved by user to Requisition, and Quotation draft auto-generated.');
 
             ob_end_clean();
             echo json_encode([
                 'status' => 'success',
-                'message' => 'RFQ successfully moved to Requisition and Quotation/SPH auto-generated in database',
+                'message' => 'RFQ successfully moved to Requisition and Quotation auto-generated in database',
                 'rfq_id' => $rfq_id_raw,
                 'quotation' => $quo_row
             ]);
@@ -701,8 +701,8 @@ function send_validated_email(
     // Attachment Integrity Check
     if ($attachment_path) {
         if (!file_exists($attachment_path)) {
-            $result['stage1'] = ['passed' => false, 'details' => "Berkas lampiran PDF SPH ({$attachment_path}) tidak ditemukan di server."];
-            $result['error'] = "Validasi Mesin 1 Gagal: Berkas lampiran PDF tidak ditemukan.";
+            $result['stage1'] = ['passed' => false, 'details' => "PDF Quotation attachment ({$attachment_path}) not found on server."];
+            $result['error'] = "Machine Stage 1 Check Failed: PDF attachment file not found.";
             return $result;
         }
         if (filesize($attachment_path) === 0) {
@@ -763,9 +763,9 @@ function send_validated_email(
                 $pdf_data = file_get_contents($attachment_path);
                 $base64_pdf = chunk_split(base64_encode($pdf_data));
                 $msg_body .= "--{$boundary}\r\n";
-                $msg_body .= "Content-Type: application/pdf; name=\"" . ($attachment_filename ?: 'SPH_Quotation.pdf') . "\"\r\n";
+                $msg_body .= "Content-Type: application/pdf; name=\"" . ($attachment_filename ?: 'QUO_Commercial_Quotation.pdf') . "\"\r\n";
                 $msg_body .= "Content-Transfer-Encoding: base64\r\n";
-                $msg_body .= "Content-Disposition: attachment; filename=\"" . ($attachment_filename ?: 'SPH_Quotation.pdf') . "\"\r\n\r\n";
+                $msg_body .= "Content-Disposition: attachment; filename=\"" . ($attachment_filename ?: 'QUO_Commercial_Quotation.pdf') . "\"\r\n\r\n";
                 $msg_body .= $base64_pdf . "\r\n";
                 $msg_body .= "--{$boundary}--";
             } else {
@@ -864,9 +864,9 @@ function send_validated_email(
             $base64_pdf = chunk_split(base64_encode($pdf_data));
 
             $msg_body .= "--{$boundary}\r\n";
-            $msg_body .= "Content-Type: application/pdf; name=\"" . ($attachment_filename ?: 'SPH_Quotation.pdf') . "\"\r\n";
+            $msg_body .= "Content-Type: application/pdf; name=\"" . ($attachment_filename ?: 'QUO_Commercial_Quotation.pdf') . "\"\r\n";
             $msg_body .= "Content-Transfer-Encoding: base64\r\n";
-            $msg_body .= "Content-Disposition: attachment; filename=\"" . ($attachment_filename ?: 'SPH_Quotation.pdf') . "\"\r\n\r\n";
+            $msg_body .= "Content-Disposition: attachment; filename=\"" . ($attachment_filename ?: 'QUO_Commercial_Quotation.pdf') . "\"\r\n\r\n";
             $msg_body .= $base64_pdf . "\r\n";
             $msg_body .= "--{$boundary}--";
 

@@ -20,28 +20,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/db_connect.php';
 $connection = isset($conn) ? $conn : $db_conn;
 
-// Schema Self-Healing: Ensure missing columns and client_signatories table exist
-try {
-    $colRes = @$connection->query("SHOW COLUMNS FROM clients LIKE 'received_by_name'");
-    if ($colRes && $colRes->num_rows === 0) {
-        @$connection->query("ALTER TABLE clients ADD COLUMN received_by_name VARCHAR(255) NULL AFTER notes");
-        @$connection->query("ALTER TABLE clients ADD COLUMN received_by_designation VARCHAR(255) NULL AFTER received_by_name");
-    }
-
-    @$connection->query("CREATE TABLE IF NOT EXISTS client_signatories (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        client_id INT DEFAULT 0,
-        company_name VARCHAR(255) NOT NULL,
-        name VARCHAR(255) NOT NULL,
-        designation VARCHAR(255) NULL,
-        is_default TINYINT(1) DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_client_id (client_id),
-        INDEX idx_company_name (company_name(100))
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-} catch (Throwable $ignore) {
-    // Graceful fallback
+// Ensure received_by columns exist in clients table
+$chkReceived = $connection->query("SHOW COLUMNS FROM clients LIKE 'received_by_name'");
+if ($chkReceived && $chkReceived->num_rows === 0) {
+    @$connection->query("ALTER TABLE clients ADD COLUMN received_by_name VARCHAR(255) DEFAULT NULL, ADD COLUMN received_by_designation VARCHAR(255) DEFAULT NULL");
 }
+
 
 // Helper to compute official company logo from domain / email
 function computeCompanyLogoUrl($email) {
@@ -228,44 +212,28 @@ function autoSyncClientsFromRfqsAndQuotations($connection) {
 try {
     $method = $_SERVER['REQUEST_METHOD'];
 
-    // Check if client_signatories table exists
-    $hasSignatoriesTable = false;
-    $chkSig = @$connection->query("SHOW TABLES LIKE 'client_signatories'");
-    if ($chkSig && $chkSig->num_rows > 0) {
-        $hasSignatoriesTable = true;
-    }
-
-    // Check if received_by_name column exists in clients
-    $hasReceivedByCols = false;
-    $chkCol = @$connection->query("SHOW COLUMNS FROM clients LIKE 'received_by_name'");
-    if ($chkCol && $chkCol->num_rows > 0) {
-        $hasReceivedByCols = true;
-    }
-
     // Handle Signatories API (GET)
     if ($method === 'GET' && isset($_GET['action']) && $_GET['action'] === 'signatories') {
         $comp = trim($_GET['company_name'] ?? '');
         $clientId = intval($_GET['client_id'] ?? 0);
         $signatories = [];
 
-        if ($hasSignatoriesTable) {
-            if (!empty($comp) || $clientId > 0) {
-                $stmt = $connection->prepare("SELECT * FROM client_signatories WHERE (client_id > 0 AND client_id = ?) OR (company_name != '' AND LOWER(TRIM(company_name)) = LOWER(TRIM(?))) ORDER BY is_default DESC, id ASC");
-                if ($stmt) {
-                    $stmt->bind_param("is", $clientId, $comp);
-                    $stmt->execute();
-                    $res = $stmt->get_result();
-                    while ($row = $res->fetch_assoc()) {
-                        $signatories[] = $row;
-                    }
-                    $stmt->close();
+        if (!empty($comp) || $clientId > 0) {
+            $stmt = $connection->prepare("SELECT * FROM client_signatories WHERE (client_id > 0 AND client_id = ?) OR (company_name != '' AND LOWER(TRIM(company_name)) = LOWER(TRIM(?))) ORDER BY is_default DESC, id ASC");
+            if ($stmt) {
+                $stmt->bind_param("is", $clientId, $comp);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                while ($row = $res->fetch_assoc()) {
+                    $signatories[] = $row;
                 }
-            } else {
-                $res = $connection->query("SELECT * FROM client_signatories ORDER BY company_name ASC, is_default DESC, id ASC");
-                if ($res) {
-                    while ($row = $res->fetch_assoc()) {
-                        $signatories[] = $row;
-                    }
+                $stmt->close();
+            }
+        } else {
+            $res = $connection->query("SELECT * FROM client_signatories ORDER BY company_name ASC, is_default DESC, id ASC");
+            if ($res) {
+                while ($row = $res->fetch_assoc()) {
+                    $signatories[] = $row;
                 }
             }
         }
@@ -288,17 +256,15 @@ try {
                 $cId = intval($row['id']);
                 $cName = trim($row['company_name'] ?? '');
                 $sigs = [];
-                if ($hasSignatoriesTable) {
-                    $sStmt = $connection->prepare("SELECT * FROM client_signatories WHERE client_id = ? OR LOWER(TRIM(company_name)) = LOWER(TRIM(?)) ORDER BY is_default DESC, id ASC");
-                    if ($sStmt) {
-                        $sStmt->bind_param("is", $cId, $cName);
-                        $sStmt->execute();
-                        $sRes = $sStmt->get_result();
-                        while ($sRow = $sRes->fetch_assoc()) {
-                            $sigs[] = $sRow;
-                        }
-                        $sStmt->close();
+                $sStmt = $connection->prepare("SELECT * FROM client_signatories WHERE client_id = ? OR LOWER(TRIM(company_name)) = LOWER(TRIM(?)) ORDER BY is_default DESC, id ASC");
+                if ($sStmt) {
+                    $sStmt->bind_param("is", $cId, $cName);
+                    $sStmt->execute();
+                    $sRes = $sStmt->get_result();
+                    while ($sRow = $sRes->fetch_assoc()) {
+                        $sigs[] = $sRow;
                     }
+                    $sStmt->close();
                 }
                 $row['signatories'] = $sigs;
                 $clients[] = $row;
@@ -325,11 +291,6 @@ try {
 
         // 1. ADD / SAVE SIGNATORY ACTION
         if ($action === 'add_signatory' || $action === 'save_signatory') {
-            if (!$hasSignatoriesTable) {
-                ob_end_clean();
-                echo json_encode(['status' => 'error', 'message' => 'client_signatories table is not initialized yet']);
-                exit;
-            }
 
             $sigId = intval($data['id'] ?? 0);
             $clientId = intval($data['client_id'] ?? 0);
@@ -353,11 +314,17 @@ try {
 
             if ($sigId > 0) {
                 $stmt = $connection->prepare("UPDATE client_signatories SET client_id=?, company_name=?, name=?, designation=?, is_default=? WHERE id=?");
+                if (!$stmt) {
+                    throw new Exception("Database prepare failed for signatory update: " . $connection->error);
+                }
                 $stmt->bind_param("isssii", $clientId, $companyName, $name, $designation, $isDefault, $sigId);
                 $stmt->execute();
                 $stmt->close();
             } else {
                 $stmt = $connection->prepare("INSERT INTO client_signatories (client_id, company_name, name, designation, is_default) VALUES (?, ?, ?, ?, ?)");
+                if (!$stmt) {
+                    throw new Exception("Database prepare failed for signatory insert: " . $connection->error);
+                }
                 $stmt->bind_param("isssi", $clientId, $companyName, $name, $designation, $isDefault);
                 $stmt->execute();
                 $sigId = $stmt->insert_id;
@@ -365,7 +332,7 @@ try {
             }
 
             // Also update primary client received_by_name / designation if empty or marked default
-            if ($hasReceivedByCols && (!empty($companyName) || $clientId > 0)) {
+            if (!empty($companyName) || $clientId > 0) {
                 $stmtUp = $connection->prepare("UPDATE clients SET received_by_name=?, received_by_designation=? WHERE id=? OR LOWER(TRIM(company_name))=LOWER(TRIM(?))");
                 if ($stmtUp) {
                     $stmtUp->bind_param("ssis", $name, $designation, $clientId, $companyName);
@@ -393,7 +360,7 @@ try {
         // 2. DELETE SIGNATORY ACTION
         if ($action === 'delete_signatory') {
             $sigId = intval($data['id'] ?? 0);
-            if ($hasSignatoriesTable && $sigId > 0) {
+            if ($sigId > 0) {
                 $stmt = $connection->prepare("DELETE FROM client_signatories WHERE id = ?");
                 if ($stmt) {
                     $stmt->bind_param("i", $sigId);
@@ -496,14 +463,12 @@ try {
                 $getOld->close();
             }
 
-            // Update existing record with dynamic column checking
-            if ($hasReceivedByCols) {
-                $stmt = $connection->prepare("UPDATE clients SET company_name=?, client_name=?, email=?, phone=?, address_line1=?, address_line2=?, city=?, state=?, postal_code=?, country=?, tax_id=?, logo_url=?, notes=?, received_by_name=?, received_by_designation=? WHERE id=?");
-                $stmt->bind_param("sssssssssssssssi", $company_name, $client_name, $email, $phone, $address_line1, $address_line2, $city, $state, $postal_code, $country, $tax_id, $logo_url, $notes, $received_by_name, $received_by_designation, $targetId);
-            } else {
-                $stmt = $connection->prepare("UPDATE clients SET company_name=?, client_name=?, email=?, phone=?, address_line1=?, address_line2=?, city=?, state=?, postal_code=?, country=?, tax_id=?, logo_url=?, notes=? WHERE id=?");
-                $stmt->bind_param("sssssssssssssi", $company_name, $client_name, $email, $phone, $address_line1, $address_line2, $city, $state, $postal_code, $country, $tax_id, $logo_url, $notes, $targetId);
+            // Update existing record
+            $stmt = $connection->prepare("UPDATE clients SET company_name=?, client_name=?, email=?, phone=?, address_line1=?, address_line2=?, city=?, state=?, postal_code=?, country=?, tax_id=?, logo_url=?, notes=?, received_by_name=?, received_by_designation=? WHERE id=?");
+            if (!$stmt) {
+                throw new Exception("Database prepare failed for client update: " . $connection->error);
             }
+            $stmt->bind_param("sssssssssssssssi", $company_name, $client_name, $email, $phone, $address_line1, $address_line2, $city, $state, $postal_code, $country, $tax_id, $logo_url, $notes, $received_by_name, $received_by_designation, $targetId);
 
             if ($stmt->execute()) {
                 // Also sync updated company_name, client_name, & phone to quotations and rfq_requests tables
@@ -534,9 +499,9 @@ try {
                     // Update rfq_requests table
                     if (!empty($allEmails)) {
                         $inClause = implode(',', array_fill(0, count($allEmails), '?'));
-                        $sqlRfq = "UPDATE rfq_requests SET company = ?, sender_name = COALESCE(NULLIF(?, ''), sender_name), phone = COALESCE(NULLIF(?, ''), phone) WHERE sender_email IN ($inClause)";
+                        $sqlRfq = "UPDATE rfq_requests SET client_company = ?, client_name = COALESCE(NULLIF(?, ''), client_name), client_phone = COALESCE(NULLIF(?, ''), client_phone) WHERE client_email IN ($inClause)";
                         if (!empty($oldCompName)) {
-                            $sqlRfq .= " OR company = ?";
+                            $sqlRfq .= " OR client_company = ?";
                         }
                         $stmtRfq = $connection->prepare($sqlRfq);
                         if ($stmtRfq) {
@@ -561,14 +526,12 @@ try {
                 exit;
             }
         } else {
-            // Insert new client record with dynamic column checking
-            if ($hasReceivedByCols) {
-                $stmt = $connection->prepare("INSERT INTO clients (company_name, client_name, email, phone, address_line1, address_line2, city, state, postal_code, country, tax_id, logo_url, notes, received_by_name, received_by_designation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmt->bind_param("sssssssssssssss", $company_name, $client_name, $email, $phone, $address_line1, $address_line2, $city, $state, $postal_code, $country, $tax_id, $logo_url, $notes, $received_by_name, $received_by_designation);
-            } else {
-                $stmt = $connection->prepare("INSERT INTO clients (company_name, client_name, email, phone, address_line1, address_line2, city, state, postal_code, country, tax_id, logo_url, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmt->bind_param("sssssssssssss", $company_name, $client_name, $email, $phone, $address_line1, $address_line2, $city, $state, $postal_code, $country, $tax_id, $logo_url, $notes);
+            // Insert new client record
+            $stmt = $connection->prepare("INSERT INTO clients (company_name, client_name, email, phone, address_line1, address_line2, city, state, postal_code, country, tax_id, logo_url, notes, received_by_name, received_by_designation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            if (!$stmt) {
+                throw new Exception("Database prepare failed for client insert: " . $connection->error);
             }
+            $stmt->bind_param("sssssssssssssss", $company_name, $client_name, $email, $phone, $address_line1, $address_line2, $city, $state, $postal_code, $country, $tax_id, $logo_url, $notes, $received_by_name, $received_by_designation);
 
             if ($stmt->execute()) {
                 $newId = $stmt->insert_id;

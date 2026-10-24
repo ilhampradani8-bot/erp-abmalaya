@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserAccount } from '../types/erp';
-import { Mail, FileText, FileCheck, Users, Settings, ChevronRight, Check, PanelLeftClose, PanelLeft, FileSpreadsheet, Package, Bell, Trash2, Download, Receipt } from 'lucide-react';
+import { Mail, FileText, FileCheck, Users, Settings, ChevronRight, Check, PanelLeftClose, PanelLeft, FileSpreadsheet, Package, Bell, Trash2, Download, Receipt, BookOpen } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 
 interface SidebarProps {
@@ -158,8 +158,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'system_settings',
       label: 'System Settings',
       icon: Settings,
-      badge: null,
-      badgeColor: '',
+      badge: '⚙️ Settings',
+      badgeColor: 'bg-slate-200 text-slate-800 border border-slate-300 font-extrabold',
+    },
+    {
+      id: 'user_guide',
+      label: 'Panduan & Guide',
+      icon: BookOpen,
+      badge: 'GUIDE',
+      badgeColor: 'bg-amber-400 text-slate-950 font-black shadow-xs',
     },
   ];
 
@@ -285,7 +292,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 key={item.id}
                 onClick={() => {
-                  setViewMode(item.id);
+                  if (item.id === 'user_guide') {
+                    setViewMode('system_settings');
+                    setTimeout(() => {
+                      window.dispatchEvent(new CustomEvent('navigate_settings_tab', { detail: 'user_guide' }));
+                    }, 50);
+                  } else {
+                    setViewMode(item.id);
+                  }
                   if (setIsMobileOpen) setIsMobileOpen(false);
                 }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition cursor-pointer ${

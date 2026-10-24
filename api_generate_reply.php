@@ -240,7 +240,7 @@ try {
             $reply_text  = "Kepada {$client_name}" . ($client_company ? " ({$client_company})" : "") . ",\n\n";
             $reply_text .= "Terima kasih atas pertanyaan penawaran harga (RFQ) yang telah disampaikan kepada AB MALAYA SDN. BHD.\n\n";
             $reply_text .= "Sehubungan dengan permohonan tersebut, bersama ini kami lampirkan dokumen penawaran resmi kami:\n";
-            $reply_text .= "• Nomor Sebutharga / SPH : " . ($quo_number ?: 'SPH-ABM/MY/2026') . "\n";
+            $reply_text .= "• Nomor Sebutharga / Quotation : " . ($quo_number ?: 'QUO-ABM/MY/' . date('Y')) . "\n";
             $reply_text .= "• Tarikh Dikeluarkan      : " . ($quo_issued ?: date('Y-m-d')) . "\n";
             if (!empty($quo_valid)) {
                 $reply_text .= "• Tempoh Sah Laku        : " . $quo_valid . "\n";
@@ -258,7 +258,7 @@ try {
             $reply_text  = "Dear {$client_name}" . ($client_company ? " ({$client_company})" : "") . ",\n\n";
             $reply_text .= "Thank you for reaching out to AB MALAYA SDN. BHD. regarding your commercial quotation inquiry.\n\n";
             $reply_text .= "We are pleased to submit our formal quotation for your consideration:\n";
-            $reply_text .= "• Quotation Reference : " . ($quo_number ?: 'SPH-ABM/MY/2026') . "\n";
+            $reply_text .= "• Quotation Reference : " . ($quo_number ?: 'QUO-ABM/MY/' . date('Y')) . "\n";
             $reply_text .= "• Date Issued         : " . ($quo_issued ?: date('Y-m-d')) . "\n";
             if (!empty($quo_valid)) {
                 $reply_text .= "• Validity Period     : " . $quo_valid . "\n";
